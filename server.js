@@ -45,6 +45,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieSession(sessionConfig));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Favicon inline (evita 404 del browser)
+app.get('/favicon.ico', (req, res) => {
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.send('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🏛️</text></svg>');
+});
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 300,
