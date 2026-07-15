@@ -54,15 +54,22 @@ router.get('/login/callback', async (req, res) => {
     try {
       decoded = jwt.verify(token, JWT_SECRET);
     } catch {
-      // Si no es nuestro JWT, decodificar sin verificar (PlacetaID token)
       decoded = jwt.decode(token);
     }
 
-    const dip = decoded?.dip || userJson || req.query.dip;
+    // Extraer datos del usuario (user es un JSON string de PlacetaID)
+    let userData = null;
+    try { if (userJson) userData = JSON.parse(decodeURIComponent(userJson)); } catch {}
+    if (!userData && req.query.user) {
+      try { userData = JSON.parse(decodeURIComponent(req.query.user)); } catch {}
+    }
+
+    const dip = decoded?.dip || userData?.dip || req.query.dip;
     if (!dip) {
+      console.error('[Auth] No se pudo extraer DIP de:', { decoded, userData, query: req.query });
       return res.render('auth/login', {
         titulo: 'Admin Placeta - Error', layout: false,
-        error: 'No se pudo obtener el DIP del usuario'
+        error: 'No se pudo obtener el DIP del usuario. Asegúrate de usar PlacetaID.'
       });
     }
 
@@ -71,11 +78,9 @@ router.get('/login/callback', async (req, res) => {
 
     // Si no existe en CRM, usar datos de PlacetaID
     if (!usuario) {
-      let userData = null;
-      try { userData = JSON.parse(userJson); } catch {}
       usuario = {
         dip: dip,
-        nombre_real: userData?.nombre || decoded?.nombre || 'Usuario PlacetaID',
+        nombre_real: userData?.nombre || decoded?.nombre || dip,
         email: userData?.email || decoded?.email || '',
         alias: dip,
         estado: 'activo',
