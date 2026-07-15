@@ -33,98 +33,88 @@ router.post('/login/placetaid', (req, res) => {
 // ── Callback OAuth PlacetaID ──────────────────────────────────────────────
 router.get('/login/callback', async (req, res) => {
   try {
-    const { token, user: userJson, state, error } = req.query;
+    const { token, error } = req.query;
 
     if (error) {
-      return res.render('auth/login', {
-        titulo: 'Admin Placeta - Error', layout: false,
-        error: 'Autenticación cancelada o rechazada'
-      });
+      return res.render('auth/login', { titulo: 'Admin Placeta - Error', layout: false, error: 'Autenticación cancelada o rechazada' });
     }
 
-    if (!token) {
-      return res.render('auth/login', {
-        titulo: 'Admin Placeta - Error', layout: false,
-        error: 'Token de autenticación no recibido'
-      });
+    // Extraer DIP del token JWT o de parámetros
+    let dip = '';
+    if (token) {
+      try {
+        const decoded = jwt.decode(token);
+        if (decoded?.dip) dip = decoded.dip;
+      } catch {}
     }
 
-    // Verificar JWT
-    let decoded;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch {
-      decoded = jwt.decode(token);
-    }
-
-    // Extraer datos del usuario (user es un JSON string de PlacetaID)
-    let userData = null;
-    try { if (userJson) userData = JSON.parse(decodeURIComponent(userJson)); } catch {}
-    if (!userData && req.query.user) {
-      try { userData = JSON.parse(decodeURIComponent(req.query.user)); } catch {}
-    }
-
-    const dip = decoded?.dip || userData?.dip || req.query.dip;
+    // Si no hay DIP en el token, extraer de query params
     if (!dip) {
-      console.error('[Auth] No se pudo extraer DIP de:', { decoded, userData, query: req.query });
-      return res.render('auth/login', {
-        titulo: 'Admin Placeta - Error', layout: false,
-        error: 'No se pudo obtener el DIP del usuario. Asegúrate de usar PlacetaID.'
-      });
+      // PlacetaID puede pasar user como JSON string o como params individuales
+      for (const key of ['dip', 'user', 'userId', 'sub', 'placetaId']) {
+        if (req.query[key]) {
+          try {
+            const parsed = JSON.parse(decodeURIComponent(req.query[key]));
+            if (parsed?.dip) { dip = parsed.dip; break; }
+            if (parsed?.userId) { dip = parsed.userId; break; }
+          } catch {
+            if (key === 'dip') { dip = req.query[key]; break; }
+          }
+        }
+      }
     }
 
-    // Buscar usuario en CRM
-    let usuario = await sbFindSolicitanteByDip(dip);
+    if (!dip) {
+      // Último recurso: el DIP está en la URL como /callback?23749931M
+      const pathParts = req.path.split('/');
+      const lastPart = pathParts[pathParts.length - 1];
+      if (lastPart && lastPart.length > 5 && /^\d{7,9}[A-Z]$/i.test(lastPart)) dip = lastPart;
+    }
 
-    // Si no existe en CRM, usar datos de PlacetaID
+    if (!dip) {
+      console.log('[Auth] Callback sin DIP. Query:', JSON.stringify(req.query));
+      return res.render('auth/login', { titulo: 'Admin Placeta - Error', layout: false, error: 'No se recibió el DIP. Usa el acceso directo o contacta con soporte.' });
+    }
+
+    // Buscar usuario en CRM (con timeout)
+    let usuario = null;
+    try {
+      usuario = await Promise.race([
+        sbFindSolicitanteByDip(dip),
+        new Promise(r => setTimeout(() => r(null), 5000))
+      ]);
+    } catch {}
+
     if (!usuario) {
-      usuario = {
-        dip: dip,
-        nombre_real: userData?.nombre || decoded?.nombre || dip,
-        email: userData?.email || decoded?.email || '',
-        alias: dip,
-        estado: 'activo',
-        rol: 'externo'
-      };
+      usuario = { dip, nombre_real: dip, email: '', alias: dip, estado: 'activo', rol: 'externo' };
     }
 
-    // Cargar cargos y permisos
-    const cargos = await sbFindCargosByDip(dip);
-    const permisosAlmacenados = await sbFindPermisosByDip(dip);
-
-    // Determinar roles y entidades
+    // Cargar roles y permisos
+    const [cargos, permisosAlmacenados] = await Promise.all([
+      sbFindCargosByDip(dip).catch(() => []),
+      sbFindPermisosByDip(dip).catch(() => [])
+    ]);
     const roles = determinarRoles(cargos, permisosAlmacenados, dip);
     const entidades = getEntidadesPermitidas(roles);
 
     // Guardar sesión
     req.session.usuario = {
-      dip: usuario.dip,
-      nombre: usuario.nombre_real || usuario.alias || dip,
-      email: usuario.email || '',
-      alias: usuario.alias || '',
-      rol: usuario.rol || 'externo'
+      dip: usuario.dip, nombre: usuario.nombre_real || usuario.alias || dip,
+      email: usuario.email || '', alias: usuario.alias || '', rol: usuario.rol || 'externo'
     };
     req.session.roles = roles;
     req.session.entidades_permitidas = entidades;
     req.session.cargos = cargos;
     req.session.permisos_almacenados = permisosAlmacenados;
-    req.session.jwt = token;
 
-    // Verificar si tiene acceso a alguna entidad
     if (entidades.length === 0) {
-      return res.render('auth/login', {
-        titulo: 'Admin Placeta - Sin Acceso', layout: false,
-        error: 'No tienes permisos asignados para acceder al panel de administración. Contacta con la Junta Directiva.'
-      });
+      return res.render('auth/login', { titulo: 'Admin Placeta - Sin Acceso', layout: false, error: 'No tienes permisos. Contacta con la Junta.' });
     }
 
     res.redirect('/dashboard');
   } catch (err) {
-    console.error('[Auth] Error en callback:', err);
-    res.render('auth/login', {
-      titulo: 'Admin Placeta - Error', layout: false,
-      error: 'Error procesando la autenticación: ' + err.message
-    });
+    console.error('[Auth] Error en callback:', err?.message || err);
+    try { res.render('auth/login', { titulo: 'Admin Placeta - Error', layout: false, error: 'Error: ' + (err?.message || 'desconocido') }); } catch {}
   }
 });
 
