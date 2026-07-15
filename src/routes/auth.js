@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { sbFindSolicitanteByDip, sbFindCargosByDip, sbFindPermisosByDip } from '../config/db.js';
 import { determinarRoles, getEntidadesPermitidas } from '../config/permisos.js';
 
-const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'admin-placeta-jwt-secret-2026';
+
+const router = Router();
 const PLACETAID_URL = process.env.PLACETAID_AUTH_URL || 'https://id.laplaceta.org';
 const CLIENT_ID = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
 
@@ -97,15 +98,14 @@ router.get('/login/callback', async (req, res) => {
     const roles = determinarRoles(cargos, permisosAlmacenados, dip);
     const entidades = getEntidadesPermitidas(roles);
 
-    // Guardar sesión
-    req.session.usuario = {
-      dip: usuario.dip, nombre: usuario.nombre_real || usuario.alias || dip,
-      email: usuario.email || '', alias: usuario.alias || '', rol: usuario.rol || 'externo'
-    };
-    req.session.roles = roles;
-    req.session.entidades_permitidas = entidades;
-    req.session.cargos = cargos;
-    req.session.permisos_almacenados = permisosAlmacenados;
+    // Guardar sesión en cookie JWT
+    res.saveSession({
+      usuario: {
+        dip: usuario.dip, nombre: usuario.nombre_real || usuario.alias || dip,
+        email: usuario.email || '', alias: usuario.alias || '', rol: usuario.rol || 'externo'
+      },
+      roles, entidades_permitidas: entidades, cargos, permisos_almacenados
+    });
 
     if (entidades.length === 0) {
       return res.render('auth/login', { titulo: 'Admin Placeta - Sin Acceso', layout: false, error: 'No tienes permisos. Contacta con la Junta.' });
@@ -131,17 +131,15 @@ router.post('/login/demo', async (req, res) => {
     const roles = determinarRoles([], [], dip);
     const entidades = getEntidadesPermitidas(roles);
 
-    // Guardar sesión
-    req.session.usuario = {
-      dip: usuario.dip, nombre: usuario.nombre_real || dip,
-      email: usuario.email || '', alias: usuario.alias || dip, rol: usuario.rol || 'externo'
-    };
-    req.session.roles = roles;
-    req.session.entidades_permitidas = entidades;
-    req.session.cargos = [];
-    req.session.permisos_almacenados = [];
+    // Guardar sesión en cookie JWT y redirect
+    res.saveSession({
+      usuario: {
+        dip: usuario.dip, nombre: usuario.nombre_real || dip,
+        email: usuario.email || '', alias: usuario.alias || dip, rol: usuario.rol || 'externo'
+      },
+      roles, entidades_permitidas: entidades, cargos: [], permisos_almacenados: []
+    });
 
-    // REDIRECT DIRECTO (la cookie se setea con el redirect)
     res.redirect('/dashboard');
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -150,12 +148,12 @@ router.post('/login/demo', async (req, res) => {
 
 // ── Logout ─────────────────────────────────────────────────────────────────
 router.get('/logout', (req, res) => {
-  req.session = null;
+  res.clearSession();
   res.redirect('/login');
 });
 
 router.post('/logout', (req, res) => {
-  req.session = null;
+  res.clearSession();
   res.json({ success: true, redirect: '/login' });
 });
 

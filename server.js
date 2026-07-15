@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import express from 'express';
-import cookieSession from 'cookie-session';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import crypto from 'crypto';
@@ -25,17 +25,38 @@ import apiRoutes from './src/routes/api.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3002;
+const JWT_SECRET = process.env.JWT_SECRET || 'admin-placeta-jwt-secret-2026';
+const SESSION_EXPIRY = '8h';
 
-// ── Config Sesión ─────────────────────────────────────────────────────────
-const sessionConfig = {
-  name: 'admin-placeta-session',
-  secret: process.env.SESSION_SECRET || 'admin-placeta-secret-2026',
-  maxAge: 8 * 60 * 60 * 1000, // 8 horas
-  httpOnly: true,
-  sameSite: 'lax',
-  secure: process.env.NODE_ENV === 'production',
-  overwrite: true
-};
+// ── Middleware Sesión vía JWT en Cookie ────────────────────────────────────
+app.use(cookieParser());
+app.use((req, res, next) => {
+  req.session = req.session || {};
+  const token = req.cookies?.['admin_token'];
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.session = decoded;
+    } catch {
+      res.clearCookie('admin_token');
+    }
+  }
+  // Helper para guardar sesión en cookie
+  res.saveSession = (data) => {
+    const token = jwt.sign(data, JWT_SECRET, { expiresIn: SESSION_EXPIRY });
+    res.cookie('admin_token', token, {
+      httpOnly: true, sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 8 * 60 * 60 * 1000,
+      path: '/'
+    });
+  };
+  res.clearSession = () => {
+    req.session = {};
+    res.clearCookie('admin_token', { path: '/' });
+  };
+  next();
+});
 
 // ── Middleware Global ──────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
