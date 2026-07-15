@@ -118,31 +118,50 @@ router.get('/login/callback', async (req, res) => {
   }
 });
 
-// ── Login Directo (demo/desarrollo) ────────────────────────────────────────
+// ── Login Directo (demo/desarrollo) - SIN DEPENDER DE SUPABASE ─────────────
 router.post('/login/demo', async (req, res) => {
   try {
     const { dip } = req.body;
     if (!dip) return res.status(400).json({ error: 'DIP requerido' });
 
-    const usuario = await sbFindSolicitanteByDip(dip);
-    if (!usuario) return res.status(401).json({ error: 'DIP no encontrado' });
+    // Construir usuario directamente (no requiere Supabase)
+    const usuario = {
+      dip,
+      nombre_real: dip,
+      email: '',
+      alias: dip,
+      estado: 'activo',
+      rol: 'externo'
+    };
 
-    const cargos = await sbFindCargosByDip(dip);
-    const permisosAlmacenados = await sbFindPermisosByDip(dip);
-    const roles = determinarRoles(cargos, permisosAlmacenados, dip);
+    // Intentar obtener nombre de Supabase (no crítico si falla)
+    try {
+      const sbUser = await Promise.race([
+        sbFindSolicitanteByDip(dip),
+        new Promise(r => setTimeout(() => r(null), 3000))
+      ]);
+      if (sbUser) {
+        usuario.nombre_real = sbUser.nombre_real || sbUser.alias || dip;
+        usuario.email = sbUser.email || '';
+        usuario.alias = sbUser.alias || dip;
+      }
+    } catch {}
+
+    // Roles desde sistema de permisos (usa SUPERADMIN_DIPS hardcodeado)
+    const roles = determinarRoles([], [], dip);
     const entidades = getEntidadesPermitidas(roles);
 
     req.session.usuario = {
       dip: usuario.dip,
-      nombre: usuario.nombre_real || usuario.alias || dip,
+      nombre: usuario.nombre_real || dip,
       email: usuario.email || '',
-      alias: usuario.alias || '',
+      alias: usuario.alias || dip,
       rol: usuario.rol || 'externo'
     };
     req.session.roles = roles;
     req.session.entidades_permitidas = entidades;
-    req.session.cargos = cargos;
-    req.session.permisos_almacenados = permisosAlmacenados;
+    req.session.cargos = [];
+    req.session.permisos_almacenados = [];
 
     res.json({ success: true, redirect: '/dashboard', entidades });
   } catch (err) {
