@@ -17,7 +17,7 @@
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Tipo</th><th>Solicitante</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <thead><tr><th>ID</th><th>Tipo</th><th>Solicitante</th><th>Fecha</th><th>Estado</th><th>Acciones</th><th>Docs</th></tr></thead>
     <tbody id="tablaTramites">
       <% 
       const tramitesMock = [
@@ -41,6 +41,7 @@
           <button class="btn-sm btn-primary" onclick='tramitar("<%= t.id %>")'>▶️ Tramitar</button>
           <% } %>
         </td>
+        <td><button class="btn-sm btn-secondary" onclick="verDocsDe('tramite','<%= t.id %>','administracion','<%= t.id %>')">📄</button></td>
       </tr>
       <% }) %>
     </tbody>

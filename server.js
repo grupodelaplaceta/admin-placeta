@@ -22,6 +22,7 @@ import juntaRoutes from './src/routes/junta.js';
 import administracionRoutes from './src/routes/administracion.js';
 import apiRoutes from './src/routes/api.js';
 import documentosRoutes from './src/routes/documentos.js';
+import empresasRoutes from './src/routes/empresas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -120,6 +121,10 @@ app.use('/administracion', verificarSesion, verificarAccesoEntidad('administraci
 // API REST
 app.use('/api', apiRoutes);
 app.use(documentosRoutes); // /api/:entidad/documentos...
+app.use('/junta', empresasRoutes);
+app.use('/administracion', empresasRoutes);
+// También accesible desde banco
+app.use('/banco', empresasRoutes);
 
 // ── Landing / Login ────────────────────────────────────────────────────────
 app.get('/', (req, res) => {

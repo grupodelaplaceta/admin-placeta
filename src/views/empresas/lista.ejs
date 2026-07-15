@@ -1,0 +1,138 @@
+<div class="info-card mb-16">
+  <h4>🏢 Gestión de Empresas y EIP</h4>
+  <p>Registro mercantil del ecosistema GDLP. Gestiona altas, bajas, socios y porcentajes de participación. Las cuentas bancarias se detectan automáticamente al vincularse por EIP.</p>
+</div>
+
+<div class="flex gap-8 mb-16 flex-wrap">
+  <button class="btn-primary" onclick="nuevaEmpresa()">🏢 Nueva Empresa</button>
+  <input type="text" id="filtroEmpresas" class="form-input" placeholder="🔍 Buscar por nombre o EIP..." style="width:260px;max-width:100%" oninput="filtrarEmpresas()">
+</div>
+
+<% if (empresas.length === 0) { %>
+<div class="empty-state">
+  <div class="empty-icon">🏢</div>
+  <h3>Sin empresas registradas</h3>
+  <p>Usa el botón "Nueva Empresa" para dar de alta la primera.</p>
+</div>
+<% } else { %>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Empresa</th>
+        <th>EIP</th>
+        <th>IBAN</th>
+        <th>Saldo</th>
+        <th>Socios</th>
+        <th>Cuentas Vinculadas</th>
+        <th>Compliance</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody id="tablaEmpresas">
+      <% empresas.forEach(e => { %>
+      <tr class="fila-empresa">
+        <td><strong><%= e.nombre %></strong></td>
+        <td><span class="badge badge-purple"><%= e.eip %></span></td>
+        <td class="text-mono"><%= e.iban %></td>
+        <td><strong><%= e.saldo.toLocaleString() %></strong> Pz</td>
+        <td>
+          <% if (e.socios.length === 0) { %><span style="color:#999;font-size:12px">—</span><% } %>
+          <% e.socios.forEach(s => { %>
+            <div style="font-size:12px;margin-bottom:2px"><%= s.nombre %> <span class="badge badge-info" style="font-size:9px">Socio</span></div>
+          <% }) %>
+        </td>
+        <td>
+          <% if (e.cuentasVinculadas.length === 0) { %><span style="color:#999;font-size:12px">—</span><% } %>
+          <% e.cuentasVinculadas.forEach(cv => { %>
+            <div style="font-size:11px;margin-bottom:2px"><%= cv.nombre %> <span class="text-mono" style="font-size:10px"><%= cv.iban %></span></div>
+          <% }) %>
+        </td>
+        <td><span class="badge <%= e.compliance === 'Clear' ? 'badge-success' : 'badge-warning' %>"><%= e.compliance || 'Pending' %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick="verEmpresa('<%= e.eip %>','<%= e.nombre.replace(/'/g,"\\'") %>','<%= e.id %>')">👁️</button>
+          <button class="btn-sm btn-secondary" onclick="anadirSocio('<%= e.eip %>','<%= e.nombre.replace(/'/g,"\\'") %>')">👥 Socio</button>
+          <button class="btn-sm btn-primary" onclick="verDocsDe('empresa','<%= e.id %>','<%= entidad_actual %>','<%= e.nombre.replace(/'/g,"\\'").slice(0,20) %>')">📄</button>
+          <button class="btn-sm btn-secondary" onclick="bajaEmpresa('<%= e.id %>','<%= e.nombre.replace(/'/g,"\\'") %>')">❌</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<p style="font-size:12px;color:#999;margin-top:8px">Total: <strong><%= total %></strong> empresas</p>
+<% } %>
+
+<script>
+function nuevaEmpresa() {
+  mostrarModal('🏢 Nueva Empresa', `
+    <p style="margin-bottom:12px;color:#666">Registra una nueva empresa en el sistema:</p>
+    <input type="text" id="empNombre" class="form-input" placeholder="Nombre de la empresa" style="margin-bottom:8px">
+    <input type="text" id="empEip" class="form-input" placeholder="EIP (ej: EIP-A3F7C2)" style="margin-bottom:8px">
+    <input type="text" id="empDip" class="form-input" placeholder="DIP del representante" style="margin-bottom:12px">
+    <button class="btn-primary" onclick="crearEmpresa()">💾 Crear Empresa</button>
+  `);
+}
+
+async function crearEmpresa() {
+  const nombre = document.getElementById('empNombre')?.value;
+  const eip = document.getElementById('empEip')?.value;
+  const dip = document.getElementById('empDip')?.value;
+  if (!nombre || !eip) return mostrarToast('Nombre y EIP requeridos', 'error');
+  try {
+    const r = await apiFetch('/api/empresas/crear', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, eip, dipRepresentante: dip })
+    });
+    mostrarToast('✅ Empresa ' + nombre + ' creada', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch(e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
+function verEmpresa(eip, nombre, id) {
+  mostrarModal('🏢 ' + nombre, `
+    <p><strong>EIP:</strong> ${eip}</p>
+    <p><strong>ID:</strong> ${id}</p>
+    <p><strong>Estado:</strong> Activa</p>
+    <hr style="margin:12px 0;border:none;border-top:1px solid #f0ecf8">
+    <button class="btn-secondary btn-sm" onclick="anadirSocio('${eip}','${nombre}')">👥 Gestionar Socios</button>
+    <button class="btn-primary btn-sm mt-8" onclick="verDocsDe('empresa','${id}','<%= entidad_actual %>','${nombre.slice(0,20)}')">📄 Documentos</button>
+  `);
+}
+
+function anadirSocio(eip, nombre) {
+  mostrarModal('👥 Añadir Socio — ' + nombre, `
+    <p style="margin-bottom:12px;color:#666">Vincula una cuenta personal como socia de la empresa:</p>
+    <input type="text" id="socioDip" class="form-input" placeholder="DIP del socio" style="margin-bottom:8px">
+    <input type="number" id="socioPorcentaje" class="form-input" placeholder="% de participación" style="margin-bottom:12px">
+    <button class="btn-primary" onclick="guardarSocio('${eip}')">💾 Añadir Socio</button>
+  `);
+}
+
+async function guardarSocio(eip) {
+  const dip = document.getElementById('socioDip')?.value;
+  const porcentaje = document.getElementById('socioPorcentaje')?.value || 0;
+  if (!dip) return mostrarToast('DIP requerido', 'error');
+  try {
+    await apiFetch('/api/empresas/' + eip + '/socio', {
+      method: 'POST', body: JSON.stringify({ dip, porcentaje: parseInt(porcentaje) })
+    });
+    mostrarToast('✅ Socio añadido a ' + eip, 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch(e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
+function bajaEmpresa(id, nombre) {
+  if (!confirm('¿Dar de baja la empresa "' + nombre + '"?')) return;
+  fetch('/api/empresas/' + id + '/baja', { method: 'POST' })
+    .then(() => { mostrarToast('✅ Empresa dada de baja', 'success'); setTimeout(() => location.reload(), 1000); })
+    .catch(e => mostrarToast('Error: ' + e.message, 'error'));
+}
+
+function filtrarEmpresas() {
+  const q = document.getElementById('filtroEmpresas').value.toLowerCase();
+  document.querySelectorAll('.fila-empresa').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>

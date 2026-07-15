@@ -8,7 +8,7 @@
 <% } else { %>
 <div class="table-container">
   <table>
-    <thead><tr><th>Tipo</th><th>Cuenta</th><th>Mensaje</th><th>Acción</th></tr></thead>
+    <thead><tr><th>Tipo</th><th>Cuenta</th><th>Mensaje</th><th>Acción</th><th>Docs</th></tr></thead>
     <tbody>
       <% alertas.forEach(a => { %>
       <tr>
@@ -16,6 +16,7 @@
         <td class="text-mono"><%= a.cuenta?.id || '—' %></td>
         <td><%= a.mensaje %></td>
         <td><a href="/banco/cuentas/<%= a.cuenta?.id %>" class="btn-link">Inspeccionar</a></td>
+        <td><button class="btn-sm btn-secondary" onclick="verDocsDe('alerta','<%= a.cuenta?.id || '—' %>','banco','alerta')">📄</button></td>
       </tr>
       <% }) %>
     </tbody>

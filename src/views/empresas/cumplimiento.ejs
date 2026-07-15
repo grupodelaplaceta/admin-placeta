@@ -1,0 +1,92 @@
+<div class="info-card mb-16">
+  <h4>📊 Cumplimiento Fiscal — Capítulo IV</h4>
+  <p>Límites de capital, IRM, IGF, IVA y cotizaciones según la normativa vigente del GDLP.</p>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= empresas.length %></span><span class="stat-label">Empresas</span></div>
+  <div class="stat-card"><span class="stat-value"><%= empresas.filter(e=>e.compliance==='Clear').length %></span><span class="stat-label">Compliance OK</span></div>
+  <div class="stat-card"><span class="stat-value"><%= empresas.filter(e=>e.saldo>10000000).length %></span><span class="stat-label">Exceso Capital</span></div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Empresa</th>
+        <th>EIP</th>
+        <th>Saldo</th>
+        <th>Límite Capital</th>
+        <th>Exceso</th>
+        <th>Compliance</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% empresas.forEach(e => { %>
+      <% const limite = e.tipo === 'Business' ? 10000000 : 500000; %>
+      <% const exceso = e.saldo > limite ? e.saldo - limite : 0; %>
+      <tr>
+        <td><strong><%= e.nombre || '—' %></strong></td>
+        <td><span class="badge badge-purple"><%= e.eip || '—' %></span></td>
+        <td><strong><%= (e.saldo || 0).toLocaleString() %></strong> Pz</td>
+        <td><%= limite.toLocaleString() %> Pz</td>
+        <td>
+          <% if (exceso > 0) { %>
+          <span class="badge badge-danger"><%= exceso.toLocaleString() %> Pz ⚠️</span>
+          <% } else { %>
+          <span style="color:#999">—</span>
+          <% } %>
+        </td>
+        <td><span class="badge <%= e.compliance === 'Clear' ? 'badge-success' : 'badge-warning' %>"><%= e.compliance || 'Pending' %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick="mostrarModal('📊 Informe Fiscal',\`
+            <p><strong>Empresa:</strong> <%= e.nombre || '—' %></p>
+            <p><strong>EIP:</strong> ${e.eip || '—'}</p>
+            <p><strong>Saldo actual:</strong> <%= (e.saldo||0).toLocaleString() %> Pz</p>
+            <p><strong>Límite legal:</strong> <%= limite.toLocaleString() %> Pz</p>
+            <p><strong>Exceso:</strong> \${${exceso} > 0 ? '⚠️ ' + ${exceso}.toLocaleString() + ' Pz' : '✅ Ninguno'}</p>
+            <p><strong>Sanción aplicable:</strong> \${${exceso} > 0 ? '225.000 Pz (Art. 4.1)' : '—'}</p>
+            <hr style="margin:12px 0;border:none;border-top:1px solid #f0ecf8">
+            <p style="font-size:12px;color:#888">IVA 12% | IRM e IGF según patrimonio medio mensual</p>
+          \`)">📊 Informe</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<div class="info-card mt-16">
+  <h4>📜 Resumen Normativo Aplicable</h4>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px">
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:13px">Art. 4.1 — Límites Capital</strong>
+      <p style="font-size:11px;color:#666;margin-top:4px">Personal: 500.000 Pz · Empresa: 10.000.000 Pz</p>
+    </div>
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:13px">Art. 4.2 — Saldos Negativos</strong>
+      <p style="font-size:11px;color:#666;margin-top:4px">Día 6+: 25.000 Pz · Día 30+: 125.000 Pz</p>
+    </div>
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:13px">Art. 4.3-4.4 — IVA 12%</strong>
+      <p style="font-size:11px;color:#666;margin-top:4px">Tasa transf. máx 12% · IVA 12% sobre productos</p>
+    </div>
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:13px">Art. 4.5 — Cotizaciones</strong>
+      <p style="font-size:11px;color:#666;margin-top:4px">Hasta 1.700 Pz: 15% · 1.701-3.000: 21% · 3.001+: 35%</p>
+    </div>
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:13px">Art. 4.7 — SMI / Salario Máx</strong>
+      <p style="font-size:11px;color:#666;margin-top:4px">SMI: 150 Pz · Salario Máximo: 1.750 Pz</p>
+    </div>
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:13px">Art. 4.8-4.11 — IRM</strong>
+      <p style="font-size:11px;color:#666;margin-top:4px">Impuesto Regulación Monetaria sobre IA</p>
+    </div>
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:13px">Art. 4.12-4.16 — IGF</strong>
+      <p style="font-size:11px;color:#666;margin-top:4px">Impuesto Grandes Fortunas progresivo</p>
+    </div>
+  </div>
+</div>
