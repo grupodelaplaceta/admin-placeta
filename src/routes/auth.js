@@ -118,52 +118,31 @@ router.get('/login/callback', async (req, res) => {
   }
 });
 
-// ── Login Directo (demo/desarrollo) - SIN DEPENDER DE SUPABASE ─────────────
+// ── Login Directo (demo/desarrollo) - CON REDIRECT DIRECTO ────────────────
 router.post('/login/demo', async (req, res) => {
   try {
     const { dip } = req.body;
     if (!dip) return res.status(400).json({ error: 'DIP requerido' });
 
     // Construir usuario directamente (no requiere Supabase)
-    const usuario = {
-      dip,
-      nombre_real: dip,
-      email: '',
-      alias: dip,
-      estado: 'activo',
-      rol: 'externo'
-    };
-
-    // Intentar obtener nombre de Supabase (no crítico si falla)
-    try {
-      const sbUser = await Promise.race([
-        sbFindSolicitanteByDip(dip),
-        new Promise(r => setTimeout(() => r(null), 3000))
-      ]);
-      if (sbUser) {
-        usuario.nombre_real = sbUser.nombre_real || sbUser.alias || dip;
-        usuario.email = sbUser.email || '';
-        usuario.alias = sbUser.alias || dip;
-      }
-    } catch {}
+    const usuario = { dip, nombre_real: dip, email: '', alias: dip, estado: 'activo', rol: 'externo' };
 
     // Roles desde sistema de permisos (usa SUPERADMIN_DIPS hardcodeado)
     const roles = determinarRoles([], [], dip);
     const entidades = getEntidadesPermitidas(roles);
 
+    // Guardar sesión
     req.session.usuario = {
-      dip: usuario.dip,
-      nombre: usuario.nombre_real || dip,
-      email: usuario.email || '',
-      alias: usuario.alias || dip,
-      rol: usuario.rol || 'externo'
+      dip: usuario.dip, nombre: usuario.nombre_real || dip,
+      email: usuario.email || '', alias: usuario.alias || dip, rol: usuario.rol || 'externo'
     };
     req.session.roles = roles;
     req.session.entidades_permitidas = entidades;
     req.session.cargos = [];
     req.session.permisos_almacenados = [];
 
-    res.json({ success: true, redirect: '/dashboard', entidades });
+    // REDIRECT DIRECTO (la cookie se setea con el redirect)
+    res.redirect('/dashboard');
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -64,15 +64,17 @@
       if (!dip) { alert('Introduce un DIP'); return; }
 
       try {
-        const r = await fetch('/login/demo', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dip })
-        });
-        const data = await r.json();
-        if (data.redirect) window.location.href = data.redirect;
-        else document.getElementById('errorContainer').textContent = data.error || 'Error de autenticación';
-        document.getElementById('errorContainer').style.display = 'block';
+        // Enviar como formulario (permite redirect 302 con cookies)
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/login/demo';
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'dip';
+        input.value = dip;
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
       } catch (err) {
         document.getElementById('errorContainer').textContent = 'Error de conexión';
         document.getElementById('errorContainer').style.display = 'block';
