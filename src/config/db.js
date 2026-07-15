@@ -7,42 +7,54 @@ import { supabase } from './supabase.js';
 
 export async function sbFindSolicitanteByDip(dip) {
   if (!supabase) return null;
-  const { data } = await supabase.from('solicitantes').select('*').eq('dip', dip).maybeSingle().catch(() => null);
-  return data;
+  try {
+    const { data } = await supabase.from('solicitantes').select('*').eq('dip', dip).maybeSingle();
+    return data;
+  } catch { return null; }
 }
 
 export async function sbFindSolicitanteByEmail(email) {
   if (!supabase) return null;
-  const { data } = await supabase.from('solicitantes').select('*').eq('email', email).maybeSingle().catch(() => null);
-  return data;
+  try {
+    const { data } = await supabase.from('solicitantes').select('*').eq('email', email).maybeSingle();
+    return data;
+  } catch { return null; }
 }
 
 export async function sbListSolicitantes(filters = {}) {
   if (!supabase) return [];
-  let query = supabase.from('solicitantes').select('*');
-  if (filters.estado) query = query.eq('estado', filters.estado);
-  if (filters.rol) query = query.eq('rol', filters.rol);
-  if (filters.limit) query = query.limit(filters.limit);
-  const { data } = await query.catch(() => []);
-  return data || [];
+  try {
+    let query = supabase.from('solicitantes').select('*');
+    if (filters.estado) query = query.eq('estado', filters.estado);
+    if (filters.rol) query = query.eq('rol', filters.rol);
+    if (filters.limit) query = query.limit(filters.limit);
+    const { data } = await query;
+    return data || [];
+  } catch { return []; }
 }
 
 export async function sbFindJuniorByDip(dip) {
   if (!supabase) return null;
-  const { data } = await supabase.from('junior_menores').select('*').eq('dip', dip).maybeSingle().catch(() => null);
-  return data;
+  try {
+    const { data } = await supabase.from('junior_menores').select('*').eq('dip', dip).maybeSingle();
+    return data;
+  } catch { return null; }
 }
 
 export async function sbFindCargosByDip(dip) {
   if (!supabase) return [];
-  const { data } = await supabase.from('cargos_junta').select('*').eq('dip', dip).eq('activo', true).catch(() => []);
-  return data || [];
+  try {
+    const { data } = await supabase.from('cargos_junta').select('*').eq('dip', dip).eq('activo', true);
+    return data || [];
+  } catch { return []; }
 }
 
 export async function sbFindPermisosByDip(dip) {
   if (!supabase) return [];
-  const { data } = await supabase.from('permisos_administracion').select('*').eq('dip', dip).eq('activo', true).catch(() => []);
-  return data || [];
+  try {
+    const { data } = await supabase.from('permisos_administracion').select('*').eq('dip', dip).eq('activo', true);
+    return data || [];
+  } catch { return []; }
 }
 
 // ── API Banco ─────────────────────────────────────────────────────────────
