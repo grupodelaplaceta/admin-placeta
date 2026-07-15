@@ -1,3 +1,5 @@
+<%- include('../parciales/guia-rol', { entidad_actual: 'tributos', roles }) %>
+
 <div class="stats-grid">
   <div class="stat-card"><span class="stat-value"><%= totalContribuyentes %></span><span class="stat-label">Contribuyentes</span></div>
   <div class="stat-card"><span class="stat-value"><%= ingresos.toLocaleString() %></span><span class="stat-label">Base Imponible (Pz)</span></div>
@@ -9,11 +11,5 @@
   <a href="/tributos/inspeccion" class="btn-secondary">🔍 Inspección Automática</a>
   <a href="/tributos/incidencias" class="btn-secondary">⚠️ Incidencias</a>
   <a href="/tributos/regimenes" class="btn-secondary">📋 Regímenes</a>
-</div>
-
-<div style="background:var(--surface);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);margin-top:24px">
-  <p style="font-size:13px;color:var(--text-light)">
-    <% if (esAdmin) { %><span class="badge badge-success">✅ Admin</span> Acceso completo a tributos.<% } %>
-    <% if (esInspector) { %><span class="badge badge-info">🔍 Inspector</span> Acceso limitado a inspección y contribuyentes.<% } %>
-  </p>
+  <a href="/tributos/trabajadores" class="btn-secondary">👥 Trabajadores</a>
 </div>

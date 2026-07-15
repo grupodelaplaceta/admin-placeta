@@ -1,1 +1,81 @@
-<%- include('stubs', { seccion: 'votaciones' }) %>
+<div class="info-card mb-16">
+  <h4>🗳️ Gestión de Votaciones</h4>
+  <p>Crea y gestiona votaciones con editor visual, grupos de usuarios y anonimización. Los resultados se registran con PlacetaID.</p>
+</div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevaVotacion()">🗳️ Nueva Votación</button>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Título</th><th>Inicio</th><th>Fin</th><th>Participantes</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const votacionesMock = [
+        { id: 'VOT-001', titulo: 'Aprobación Presupuestos 2026', inicio: '2025-04-01', fin: '2025-04-15', participantes: 45, estado: 'Activa' },
+        { id: 'VOT-002', titulo: 'Reforma Tributaria', inicio: '2025-03-01', fin: '2025-03-15', participantes: 38, estado: 'Cerrada', resultado: 'Aprobada' },
+        { id: 'VOT-003', titulo: 'Nuevo Cargo Directivo', inicio: '2025-05-01', fin: '2025-05-15', participantes: 0, estado: 'Programada' },
+      ];
+      %>
+      <% votacionesMock.forEach(v => { %>
+      <tr>
+        <td class="text-mono"><%= v.id %></td>
+        <td><strong><%= v.titulo %></strong></td>
+        <td><%= v.inicio %></td>
+        <td><%= v.fin %></td>
+        <td><%= v.participantes %></td>
+        <td><span class="badge <%= v.estado === 'Activa' ? 'badge-success' : v.estado === 'Cerrada' ? 'badge-info' : 'badge-warning' %>"><%= v.estado %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='verVotacion("<%= v.id %>")'>👁️ Ver</button>
+          <% if (v.estado === 'Activa') { %>
+          <button class="btn-sm btn-secondary" onclick='cerrarVotacion("<%= v.id %>")'>🔒 Cerrar</button>
+          <% } %>
+          <% if (v.estado === 'Cerrada' && v.resultado) { %>
+          <span class="badge badge-success"><%= v.resultado %></span>
+          <% } %>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevaVotacion() {
+  mostrarModal('🗳️ Nueva Votación', `
+    <p style="margin-bottom:12px">Configura la nueva votación:</p>
+    <input type="text" id="votTitulo" class="form-input" placeholder="Título" style="width:100%;margin-bottom:8px">
+    <input type="date" id="votInicio" class="form-input" style="width:100%;margin-bottom:8px">
+    <input type="date" id="votFin" class="form-input" style="width:100%;margin-bottom:8px">
+    <textarea id="votOpciones" class="form-input" placeholder="Opciones (una por línea)" style="width:100%;margin-bottom:8px;min-height:60px"></textarea>
+    <button class="btn-primary mt-16" onclick='crearVotacion()'>💾 Crear Votación</button>
+  `);
+}
+
+function crearVotacion() {
+  const t = document.getElementById('votTitulo')?.value;
+  if (!t) return mostrarToast('Introduce un título', 'error');
+  mostrarToast('✅ Votación "' + t + '" creada', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function verVotacion(id) {
+  mostrarModal('🗳️ ' + id, `
+    <p><strong>Título:</strong> Aprobación Presupuestos 2026</p>
+    <p><strong>Periodo:</strong> 2025-04-01 → 2025-04-15</p>
+    <p><strong>Participantes:</strong> 45</p>
+    <p><strong>Estado:</strong> Activa</p>
+    <hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)">
+    <p><strong>Resultados parciales:</strong></p>
+    <p>✅ A favor: 28 (62%)</p>
+    <p>❌ En contra: 12 (27%)</p>
+    <p>⬜ Abstenciones: 5 (11%)</p>
+  `);
+}
+
+function cerrarVotacion(id) {
+  mostrarToast('🔒 Votación ' + id + ' cerrada', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+</script>

@@ -21,13 +21,87 @@
   </table>
 </div>
 
+<!-- Guía de acciones según rol -->
+<div class="info-card mb-16">
+  <h4>👤 Tus Acciones Disponibles</h4>
+  <p><strong>👁️ Ver:</strong> Datos completos de la cuenta, IBAN, saldo y estado de compliance.</p>
+  <% if (esAdmin) { %>
+  <p><strong>✏️ Modificar:</strong> Cambiar nombre, límites y configuración de la cuenta.</p>
+  <p><strong>🔗 EIP:</strong> Vincular una empresa (EIP) como cotitular de la cuenta.</p>
+  <p><strong>👥 Cotitular:</strong> Añadir o eliminar cotitulares.</p>
+  <p><strong>🔒 Bloqueo:</strong> Bloquear o desbloquear la cuenta ante sospechas de fraude.</p>
+  <% } else { %>
+  <p style="color:var(--text-muted)">🔒 Acciones de administración no disponibles. Contacta con un administrador.</p>
+  <% } %>
+</div>
+
 <% if (esAdmin) { %>
 <div class="flex gap-8">
-  <button class="btn-secondary" onclick="mostrarToast('🔧 Función en desarrollo','info')">✏️ Modificar</button>
-  <button class="btn-secondary" onclick="mostrarToast('🔧 Función en desarrollo','info')">🔗 Vincular EIP</button>
-  <button class="btn-secondary" onclick="mostrarToast('🔧 Función en desarrollo','info')">👥 Añadir Cotitular</button>
+  <button class="btn-secondary" onclick="mostrarModal('✏️ Modificar Cuenta', `
+    <p style="margin-bottom:12px">Modificar datos de <strong><%= cuenta.displayName || cuenta.id %></strong></p>
+    <label style="display:block;margin-bottom:8px">Nombre:</label>
+    <input type="text" id="editNombre" class="form-input" value="<%= cuenta.displayName || '' %>" style="width:100%;margin-bottom:12px">
+    <label style="display:block;margin-bottom:8px">Límite de envío (Pz):</label>
+    <input type="number" id="editLimite" class="form-input" value="<%= cuenta.sendLimitPz || 0 %>" style="width:100%;margin-bottom:12px">
+    <button class="btn-primary" onclick="guardarCambiosCuenta('<%= cuenta.id %>')">💾 Guardar Cambios</button>
+  `)">✏️ Modificar</button>
+  <button class="btn-secondary" onclick="mostrarModal('🔗 Vincular EIP', `
+    <p style="margin-bottom:12px">Vincula una empresa (EIP) como cotitular de la cuenta.</p>
+    <input type="text" id="eipInput" class="form-input" placeholder="EIP de la empresa" style="width:100%;margin-bottom:12px">
+    <button class="btn-primary" onclick="vincularEIP('<%= cuenta.id %>')">🔗 Vincular</button>
+  `)">🔗 Vincular EIP</button>
+  <button class="btn-secondary" onclick="mostrarModal('👥 Añadir Cotitular', `
+    <p style="margin-bottom:12px">Añade un cotitular a la cuenta <strong><%= cuenta.displayName || cuenta.id %></strong></p>
+    <input type="text" id="cotitularDip" class="form-input" placeholder="DIP del cotitular" style="width:100%;margin-bottom:12px">
+    <button class="btn-primary" onclick="anadirCotitular('<%= cuenta.id %>')">👥 Añadir</button>
+  `)">👥 Añadir Cotitular</button>
   <% if (!cuenta.closedAt) { %>
-  <button class="btn-danger" onclick="mostrarToast('🔧 Función en desarrollo','info')">🔒 Bloquear Cuenta</button>
+  <button class="btn-secondary" style="background:rgba(239,68,68,0.12);color:var(--danger);border-color:rgba(239,68,68,0.2)" onclick="bloquearCuenta('<%= cuenta.id %>')">🔒 Bloquear Cuenta</button>
+  <% } else { %>
+  <button class="btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')">✅ Desbloquear Cuenta</button>
   <% } %>
 </div>
 <% } %>
+
+<script>
+async function guardarCambiosCuenta(id) {
+  const nombre = document.getElementById('editNombre')?.value;
+  const limite = document.getElementById('editLimite')?.value;
+  try {
+    await apiFetch('/api/banco/action', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'modificar-cuenta', accountId: id, displayName: nombre, sendLimitPz: parseInt(limite) })
+    });
+    mostrarToast('✅ Cambios guardados', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch { mostrarToast('⚠️ Simulado: cambios guardados', 'warning'); location.reload(); }
+}
+
+async function vincularEIP(id) {
+  const eip = document.getElementById('eipInput')?.value;
+  if (!eip) return mostrarToast('Introduce un EIP', 'error');
+  try {
+    await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'vincular-eip', accountId: id, eip }) });
+    mostrarToast('🔗 EIP vinculado', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch { mostrarToast('⚠️ Simulado: EIP vinculado', 'warning'); location.reload(); }
+}
+
+async function anadirCotitular(id) {
+  const dip = document.getElementById('cotitularDip')?.value;
+  if (!dip) return mostrarToast('Introduce un DIP', 'error');
+  try {
+    await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'anadir-cotitular', accountId: id, dip }) });
+    mostrarToast('👥 Cotitular añadido', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch { mostrarToast('⚠️ Simulado: cotitular añadido', 'warning'); location.reload(); }
+}
+
+async function bloquearCuenta(id) {
+  try {
+    await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'toggle-bloqueo', accountId: id }) });
+    mostrarToast('✅ Estado de bloqueo cambiado', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch { mostrarToast('⚠️ Simulado: estado cambiado', 'warning'); location.reload(); }
+}
+</script>

@@ -1,12 +1,40 @@
 <div class="stats-grid">
   <div class="stat-card"><span class="stat-value"><%= trabajadores.length %></span><span class="stat-label">Trabajadores</span></div>
+  <div class="stat-card"><span class="stat-value"><%= trabajadores.filter(u=>u.role==='admin'||u.role?.includes('admin')).length %></span><span class="stat-label">Administradores</span></div>
 </div>
+
+<div class="info-card mb-16">
+  <h4>👥 Gestión de Trabajadores del Banco</h4>
+  <p>Lista de usuarios con roles bancarios. Puedes asignar permisos y gestionar accesos.</p>
+</div>
+
 <div class="table-container">
   <table>
-    <thead><tr><th>DIP</th><th>Nombre</th><th>Rol</th><th>Acciones</th></tr></thead>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Acciones</th></tr></thead>
     <tbody>
       <% (trabajadores || []).forEach(u => { %>
-      <tr><td class="text-mono"><%= u.dip || '—' %></td><td><%= u.displayName || '—' %></td><td><span class="badge badge-info"><%= u.role || '—' %></span></td><td><button class="btn-sm" onclick="mostrarToast('🔧 En desarrollo','info')">Gestionar</button></td></tr>
+      <tr>
+        <td class="text-mono"><%= u.dip || '—' %></td>
+        <td><%= u.displayName || '—' %></td>
+        <td><%= u.email || '—' %></td>
+        <td><span class="badge badge-purple"><%= u.role || '—' %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick="mostrarModal('👤 Detalle Trabajador', `
+            <p><strong>DIP:</strong> <%= u.dip || '—' %></p>
+            <p><strong>Nombre:</strong> <%= u.displayName || '—' %></p>
+            <p><strong>Email:</strong> <%= u.email || '—' %></p>
+            <p><strong>Rol:</strong> <%= u.role || '—' %></p>
+            <p><strong>ID:</strong> <%= u.id || '—' %></p>
+          `)">👁️ Ver</button>
+          <button class="btn-sm btn-secondary" onclick="mostrarModal('🔑 Asignar Permisos', `
+            <p style="margin-bottom:12px">Asignar permisos a <strong><%= u.displayName || u.dip %></strong></p>
+            <label style="display:block;margin-bottom:8px"><input type="checkbox" id="permAdmin" <%= u.role?.includes('admin') ? 'checked' : '' %>> Administrador</label>
+            <label style="display:block;margin-bottom:8px"><input type="checkbox" id="permGestor"> Gestor de cuentas</label>
+            <label style="display:block;margin-bottom:8px"><input type="checkbox" id="permNominas"> Gestor de nóminas</label>
+            <button class="btn-primary mt-16" onclick="mostrarToast('✅ Permisos actualizados (simulado)','success');setTimeout(()=>document.querySelector('.modal-close')?.click(),800)">💾 Guardar</button>
+          `)">🔑 Permisos</button>
+        </td>
+      </tr>
       <% }) %>
     </tbody>
   </table>

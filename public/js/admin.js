@@ -19,7 +19,7 @@ async function apiFetch(url, opts = {}) {
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function mostrarToast(mensaje, tipo = 'info') {
-  const colors = { success: '#336E45', error: '#FF3333', info: '#3A00E1', warning: '#D6CE52' };
+  const colors = { success: '#22a06b', error: '#d03131', info: '#3f00d8', warning: '#d7a02d' };
   const existing = document.querySelector('.admin-toast');
   if (existing) existing.remove();
 
@@ -31,7 +31,7 @@ function mostrarToast(mensaje, tipo = 'info') {
     padding: 14px 24px; border-radius: 10px; font-weight: 600;
     font-size: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     animation: slideIn 0.3s ease-out;
-    font-family: 'Inter', sans-serif; max-width: 400px;
+    font-family: 'Outfit', sans-serif; max-width: 400px; border: 1px solid rgba(255,255,255,0.15);
   `;
   toast.textContent = mensaje;
   document.body.appendChild(toast);
@@ -103,9 +103,10 @@ style.textContent = `
     backdrop-filter: blur(4px);
   }
   .modal-window {
-    background: #fff; border-radius: 12px; padding: 32px;
+    background: #fff; border: 1px solid #e5e7eb;
+    border-radius: 16px; padding: 32px;
     max-width: 500px; width: 90%; max-height: 85vh; overflow: auto;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
     animation: modalIn 0.25s ease-out;
   }
   @keyframes modalIn {
@@ -113,8 +114,8 @@ style.textContent = `
     to { transform: scale(1) translateY(0); opacity: 1; }
   }
   .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  .modal-header h3 { font-weight: 700; font-size: 18px; }
-  .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #6b7280; }
-  .modal-body { font-size: 14px; color: #374151; }
+  .modal-header h3 { font-weight: 700; font-size: 18px; color: #111; }
+  .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
+  .modal-body { font-size: 14px; color: #444; }
 `;
 document.head.appendChild(style);

@@ -1,3 +1,47 @@
-<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
-  <p>Gestión de trabajadores de Tributos — en desarrollo.</p>
+<div class="info-card mb-16">
+  <h4>👥 Trabajadores de Tributos</h4>
+  <p>Gestión del personal de la entidad de Tributos. Visualiza inspectores, administradores y personal de soporte.</p>
 </div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Cargo</th><th>Departamento</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const trabajadoresMock = [
+        { dip: '11111111D', nombre: 'Alba García', cargo: 'Administradora Tributos', dept: 'Tributos' },
+        { dip: '23749931M', nombre: 'Mikel Ibáñez', cargo: 'Inspector Jefe', dept: 'Tributos' },
+        { dip: '12345678Z', nombre: 'Carlos López', cargo: 'Inspector', dept: 'Inspección' },
+        { dip: '87654321X', nombre: 'Ana Martínez', cargo: 'Gestor Tributario', dept: 'Gestión' },
+      ];
+      %>
+      <% trabajadoresMock.forEach(t => { %>
+      <tr>
+        <td class="text-mono"><%= t.dip %></td>
+        <td><%= t.nombre %></td>
+        <td><%= t.cargo %></td>
+        <td><%= t.dept %></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='verTrabajadorTrib("<%= t.dip %>", "<%= t.nombre %>")'>👁️ Ver</button>
+          <button class="btn-sm btn-secondary" onclick="mostrarToast('📨 Notificación enviada','success')">📨 Contactar</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function verTrabajadorTrib(dip, nombre) {
+  mostrarModal('👤 Detalle: ' + nombre, `
+    <p><strong>DIP:</strong> ${dip}</p>
+    <p><strong>Nombre:</strong> ${nombre}</p>
+    <p><strong>Departamento:</strong> Tributos</p>
+    <p><strong>Acceso:</strong> Sistema de Tributos</p>
+    <div class="actions">
+      <button class="btn-secondary" onclick="mostrarToast('📨 Notificación enviada','success')">📨 Enviar Mensaje</button>
+      <button class="btn-secondary" onclick="mostrarToast('🔑 Permisos actualizados','success')">🔑 Gestión Accesos</button>
+    </div>
+  `);
+}
+</script>

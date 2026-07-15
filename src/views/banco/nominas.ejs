@@ -1,20 +1,90 @@
 <div class="stats-grid">
   <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Contratos Nómina</span></div>
+  <div class="stat-card"><span class="stat-value"><%= nominas.filter(n=>n.active).length %></span><span class="stat-label">Activos</span></div>
+  <div class="stat-card"><span class="stat-value"><%= nominas.filter(n=>!n.active).length %></span><span class="stat-label">Inactivos</span></div>
+</div>
+
+<!-- Guía de rol -->
+<div class="info-card mb-16">
+  <h4>👤 Guía rápida — Gestión de Nóminas</h4>
+  <p>Como <strong>gestor bancario</strong>, puedes ver los contratos de nómina activos. Los <strong>administradores</strong> pueden activar/desactivar contratos y gestionar pagos.</p>
 </div>
 
 <% if (nominas.length === 0) { %>
-<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
+<div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+  <div style="font-size:64px;margin-bottom:16px">📄</div>
   <p>No hay contratos de nómina registrados.</p>
+  <div class="actions" style="justify-content:center">
+    <button class="btn-primary" onclick="mostrarModal('📄 Nueva Nómina', `
+      <p style="margin-bottom:12px">Introduce los datos para crear un nuevo contrato de nómina:</p>
+      <input type="text" id="newNominaEmpleado" class="form-input" placeholder="DIP del empleado" style="margin-bottom:8px;width:100%">
+      <input type="text" id="newNominaEntidad" class="form-input" placeholder="ID Entidad (ej: BGLDP)" style="margin-bottom:8px;width:100%">
+      <input type="number" id="newNominaSalario" class="form-input" placeholder="Salario mensual (Pz)" style="margin-bottom:8px;width:100%">
+      <button class="btn-primary mt-16" onclick='crearNomina()'>📄 Crear Contrato</button>
+    `)">📄 Nuevo Contrato</button>
+  </div>
 </div>
 <% } else { %>
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Empleado</th><th>Entidad</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <thead><tr><th>ID</th><th>Empleado</th><th>Entidad</th><th>Salario</th><th>Estado</th><th>Acciones</th></tr></thead>
     <tbody>
       <% nominas.forEach(n => { %>
-      <tr><td class="text-mono"><%= n.id %></td><td><%= n.displayName || '—' %></td><td><%= n.entityId || '—' %></td><td><span class="badge <%= n.active ? 'badge-success' : 'badge-danger' %>"><%= n.active ? 'Activo' : 'Inactivo' %></span></td><td><button class="btn-sm" onclick="mostrarToast('🔧 En desarrollo','info')">Gestionar</button></td></tr>
+      <tr>
+        <td class="text-mono"><%= n.id %></td>
+        <td><%= n.displayName || '—' %></td>
+        <td><%= n.entityId || '—' %></td>
+        <td><%= n.salary ? n.salary.toLocaleString() + ' Pz' : '—' %></td>
+        <td><span class="badge <%= n.active ? 'badge-success' : 'badge-danger' %>"><%= n.active ? 'Activo' : 'Inactivo' %></span></td>
+        <td>
+          <button class="btn-sm <%= n.active ? 'btn-secondary' : 'btn-primary' %>" onclick="toggleNomina('<%= n.id %>', <%= !n.active %>)">
+            <%= n.active ? '❌ Desactivar' : '✅ Activar' %>
+          </button>
+          <button class="btn-sm btn-secondary" onclick="mostrarModal('📄 Detalle Nómina', `
+            <p><strong>ID:</strong> <%= n.id %></p>
+            <p><strong>Empleado:</strong> <%= n.displayName || '—' %></p>
+            <p><strong>Entidad:</strong> <%= n.entityId || '—' %></p>
+            <p><strong>Salario:</strong> <%= n.salary ? n.salary.toLocaleString() + ' Pz' : '—' %></p>
+            <p><strong>Estado:</strong> <%= n.active ? '✅ Activo' : '❌ Inactivo' %></p>
+            <p><strong>Creado:</strong> <%= n.createdAt ? new Date(n.createdAt).toLocaleDateString() : '—' %></p>
+          `)">👁️ Ver</button>
+        </td>
+      </tr>
       <% }) %>
     </tbody>
   </table>
 </div>
 <% } %>
+
+<script>
+async function toggleNomina(id, activar) {
+  try {
+    const result = await apiFetch('/api/banco/action', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'toggle-nomina', nominaId: id, active: activar })
+    });
+    if (result && !result.error) {
+      mostrarToast(activar ? '✅ Nómina activada' : '❌ Nómina desactivada', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      mostrarToast('⚠️ Simulado: cambios guardados localmente', 'warning');
+      location.reload();
+    }
+  } catch { mostrarToast('⚠️ No disponible offline', 'warning'); }
+}
+
+async function crearNomina() {
+  const emp = document.getElementById('newNominaEmpleado')?.value;
+  const ent = document.getElementById('newNominaEntidad')?.value;
+  const sal = document.getElementById('newNominaSalario')?.value;
+  if (!emp) return mostrarToast('Introduce el DIP del empleado', 'error');
+  try {
+    await apiFetch('/api/banco/action', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'crear-nomina', empleadoDip: emp, entityId: ent, salary: parseInt(sal) || 0 })
+    });
+    mostrarToast('✅ Nómina creada', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch { mostrarToast('⚠️ Simulado: nómina creada localmente', 'warning'); location.reload(); }
+}
+</script>

@@ -1,3 +1,8 @@
+<div class="info-card mb-16">
+  <h4>🏛️ Panel de Administración de La Placeta</h4>
+  <p>Bienvenido, <strong><%= usuario.nombre %></strong>. Selecciona una entidad para comenzar a gestionar. Tus roles determinan qué acciones puedes realizar en cada entidad.</p>
+</div>
+
 <div class="dashboard-grid">
   <!-- Entidades -->
   <% if (entidades_permitidas && entidades_permitidas.includes('banco')) { %>
@@ -48,10 +53,10 @@
 <!-- Info de sesión -->
 <div class="session-info">
   <div class="info-card">
-    <h4>👤 Sesión actual</h4>
+    <h4>👤 Tu Sesión</h4>
     <p><strong><%= usuario.nombre %></strong> · DIP: <code><%= usuario.dip %></code></p>
     <p>Roles: <strong><%= (roles || []).join(', ') || 'Sin roles asignados' %></strong></p>
     <p>Entidades: <strong><%= (entidades_permitidas || []).join(', ') || 'Ninguna' %></strong></p>
-    <p class="info-footer">Contacta con la Junta Directiva si necesitas acceso a más entidades.</p>
+    <p class="info-footer">💡 Si no ves todas las entidades, solicita los permisos adecuados a la Junta Directiva.</p>
   </div>
 </div>

@@ -1,1 +1,99 @@
-<%- include('stubs', { seccion: 'reclamaciones' }) %>
+<div class="info-card mb-16">
+  <h4>📨 Buzón de Reclamaciones</h4>
+  <p>Gestiona las quejas, sugerencias y reclamaciones ciudadanas. Puedes revisar, responder y cerrar cada caso.</p>
+</div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevaReclamacion()">📨 Nueva Reclamación</button>
+  <select id="filtroReclEstado" class="form-input" style="width:auto" onchange="location.href='?estado='+this.value">
+    <option value="">📋 Todos los estados</option>
+    <option value="Abierta">🟢 Abiertas</option>
+    <option value="En trámite">🟡 En trámite</option>
+    <option value="Resuelta">✅ Resueltas</option>
+    <option value="Cerrada">🔒 Cerradas</option>
+  </select>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Ciudadano</th><th>Asunto</th><th>Fecha</th><th>Estado</th><th>Prioridad</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const reclamosMock = [
+        { id: 'REC-001', ciudadano: 'Juan Pérez', asunto: 'Error en cálculo de tributos', fecha: '2025-03-15', estado: 'Abierta', prioridad: 'Alta' },
+        { id: 'REC-002', ciudadano: 'María López', asunto: 'Solicitud de revisión de multa', fecha: '2025-03-10', estado: 'En trámite', prioridad: 'Media' },
+        { id: 'REC-003', ciudadano: 'Carlos Ruiz', asunto: 'Queja sobre atención al público', fecha: '2025-03-05', estado: 'Resuelta', prioridad: 'Baja' },
+        { id: 'REC-004', ciudadano: 'Ana García', asunto: 'Duplicado de IBAN', fecha: '2025-02-28', estado: 'Cerrada', prioridad: 'Alta' },
+      ];
+      %>
+      <% reclamosMock.forEach(r => { %>
+      <tr>
+        <td class="text-mono"><%= r.id %></td>
+        <td><%= r.ciudadano %></td>
+        <td><%= r.asunto %></td>
+        <td><%= r.fecha %></td>
+        <td><span class="badge <%= r.estado === 'Abierta' ? 'badge-danger' : r.estado === 'En trámite' ? 'badge-warning' : r.estado === 'Resuelta' ? 'badge-success' : 'badge-info' %>"><%= r.estado %></span></td>
+        <td><span class="badge <%= r.prioridad === 'Alta' ? 'badge-danger' : r.prioridad === 'Media' ? 'badge-warning' : 'badge-info' %>"><%= r.prioridad %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='verReclamacion("<%= r.id %>")'>👁️ Ver</button>
+          <% if (r.estado !== 'Cerrada') { %>
+          <button class="btn-sm btn-primary" onclick='responderReclamacion("<%= r.id %>")'>📨 Responder</button>
+          <% } %>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevaReclamacion() {
+  mostrarModal('📨 Nueva Reclamación', `
+    <p style="margin-bottom:12px">Registra una nueva reclamación:</p>
+    <input type="text" id="reclCiudadano" class="form-input" placeholder="Nombre del ciudadano" style="width:100%;margin-bottom:8px">
+    <input type="text" id="reclAsunto" class="form-input" placeholder="Asunto" style="width:100%;margin-bottom:8px">
+    <textarea id="reclDesc" class="form-input" placeholder="Descripción detallada" style="width:100%;margin-bottom:8px;min-height:80px"></textarea>
+    <select id="reclPrioridad" class="form-input" style="width:100%;margin-bottom:8px">
+      <option value="Baja">Baja</option>
+      <option value="Media">Media</option>
+      <option value="Alta">Alta</option>
+    </select>
+    <button class="btn-primary mt-16" onclick='guardarReclamacion()'>💾 Registrar</button>
+  `);
+}
+
+function guardarReclamacion() {
+  const a = document.getElementById('reclAsunto')?.value;
+  if (!a) return mostrarToast('Introduce un asunto', 'error');
+  mostrarToast('✅ Reclamación registrada', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function verReclamacion(id) {
+  mostrarModal('📨 Reclamación ' + id, `
+    <p><strong>ID:</strong> ${id}</p>
+    <p><strong>Ciudadano:</strong> Juan Pérez</p>
+    <p><strong>Asunto:</strong> Error en cálculo de tributos</p>
+    <p><strong>Fecha:</strong> 2025-03-15</p>
+    <p><strong>Estado:</strong> Abierta</p>
+    <p><strong>Prioridad:</strong> Alta</p>
+    <hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)">
+    <p><strong>Descripción:</strong> El ciudadano reporta una discrepancia en el cálculo de sus tributos del último periodo.</p>
+  `);
+}
+
+function responderReclamacion(id) {
+  mostrarModal('📨 Responder: ' + id, `
+    <p style="margin-bottom:12px">Redacta tu respuesta:</p>
+    <textarea id="respRecl" class="form-input" placeholder="Escribe tu respuesta..." style="width:100%;min-height:100px;margin-bottom:12px"></textarea>
+    <button class="btn-primary" onclick='enviarRespuesta()'>📨 Enviar Respuesta</button>
+  `);
+}
+
+function enviarRespuesta() {
+  const r = document.getElementById('respRecl')?.value;
+  if (!r) return mostrarToast('Escribe una respuesta', 'error');
+  mostrarToast('✅ Respuesta enviada al ciudadano', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+</script>

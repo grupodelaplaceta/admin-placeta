@@ -1,5 +1,85 @@
-<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
-  <div style="font-size:64px;margin-bottom:16px">⚠️</div>
-  <p>Módulo de incidencias en desarrollo.</p>
-  <p style="font-size:12px;margin-top:8px">Próximamente: reclamaciones, modificación de declaraciones, aprobación ciudadana.</p>
+<div class="info-card mb-16">
+  <h4>⚠️ Gestión de Incidencias</h4>
+  <p>Revisa y gestiona las incidencias detectadas en declaraciones. Puedes crear nuevas incidencias, resolverlas o escalarlas.</p>
 </div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevaIncidencia()">⚠️ Nueva Incidencia</button>
+  <button class="btn-secondary" onclick="document.getElementById('filtroInc').value='';filtrarIncidencias()">🔄 Mostrar todas</button>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Declaración</th><th>Tipo</th><th>Descripción</th><th>Estado</th><th>Prioridad</th><th>Acciones</th></tr></thead>
+    <tbody id="tablaIncidencias">
+      <% 
+      const incidenciasMock = [
+        { id: 'INC-001', declId: 'DEC-0001', tipo: 'Discrepancia', desc: 'Base declarada no coincide con ingresos', estado: 'Abierta', prioridad: 'Alta' },
+        { id: 'INC-002', declId: 'DEC-0003', tipo: 'Documentación', desc: 'Falta justificante de gastos', estado: 'En revisión', prioridad: 'Media' },
+        { id: 'INC-003', declId: 'DEC-0005', tipo: 'Aplazamiento', desc: 'Solicitud de aplazamiento de pago', estado: 'Pendiente', prioridad: 'Baja' },
+      ];
+      %>
+      <% incidenciasMock.forEach(inc => { %>
+      <tr class="fila-incidencia">
+        <td class="text-mono"><%= inc.id %></td>
+        <td class="text-mono"><%= inc.declId %></td>
+        <td><%= inc.tipo %></td>
+        <td><%= inc.desc %></td>
+        <td><span class="badge <%= inc.estado === 'Abierta' ? 'badge-danger' : inc.estado === 'En revisión' ? 'badge-warning' : 'badge-info' %>"><%= inc.estado %></span></td>
+        <td><span class="badge <%= inc.prioridad === 'Alta' ? 'badge-danger' : inc.prioridad === 'Media' ? 'badge-warning' : 'badge-info' %>"><%= inc.prioridad %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='verIncidencia("<%= inc.id %>")'>👁️ Ver</button>
+          <button class="btn-sm btn-primary" onclick='resolverIncidencia("<%= inc.id %>")'>✅ Resolver</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevaIncidencia() {
+  mostrarModal('⚠️ Nueva Incidencia', `
+    <p style="margin-bottom:12px">Registra una nueva incidencia:</p>
+    <input type="text" id="incDecl" class="form-input" placeholder="ID Declaración" style="width:100%;margin-bottom:8px">
+    <select id="incTipo" class="form-input" style="width:100%;margin-bottom:8px">
+      <option value="Discrepancia">Discrepancia</option>
+      <option value="Documentación">Falta documentación</option>
+      <option value="Aplazamiento">Aplazamiento</option>
+      <option value="Error">Error en datos</option>
+      <option value="Reclamación">Reclamación</option>
+    </select>
+    <textarea id="incDesc" class="form-input" placeholder="Descripción" style="width:100%;margin-bottom:8px;min-height:80px"></textarea>
+    <button class="btn-primary mt-16" onclick='crearIncidencia()'>💾 Registrar</button>
+  `);
+}
+
+function crearIncidencia() {
+  const d = document.getElementById('incDecl')?.value;
+  const t = document.getElementById('incTipo')?.value;
+  const desc = document.getElementById('incDesc')?.value;
+  if (!d || !desc) return mostrarToast('Completa los campos requeridos', 'error');
+  mostrarToast('⚠️ Incidencia registrada en ' + d, 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function verIncidencia(id) {
+  mostrarModal('⚠️ Incidencia ' + id, `
+    <p><strong>ID:</strong> ${id}</p>
+    <p><strong>Declaración:</strong> DEC-0001</p>
+    <p><strong>Tipo:</strong> Discrepancia</p>
+    <p><strong>Descripción:</strong> Base declarada no coincide con ingresos registrados.</p>
+    <p><strong>Estado:</strong> Abierta</p>
+    <p><strong>Prioridad:</strong> Alta</p>
+    <div class="actions">
+      <button class="btn-primary" onclick='resolverIncidencia("${id}")'>✅ Resolver</button>
+      <button class="btn-secondary">📨 Notificar</button>
+    </div>
+  `);
+}
+
+function resolverIncidencia(id) {
+  mostrarToast('✅ Incidencia ' + id + ' resuelta', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+</script>

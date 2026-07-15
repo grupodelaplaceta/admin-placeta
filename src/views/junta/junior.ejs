@@ -1,1 +1,71 @@
-<%- include('stubs', { seccion: 'junior' }) %>
+<div class="info-card mb-16">
+  <h4>🧒 Usuarios Placeta Junior</h4>
+  <p>Gestión de menores, control parental y autorizaciones. Revisa las cuentas infantiles y sus tutores legales.</p>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Tutor Legal</th><th>Cuenta</th><th>Saldo</th><th>Control Parental</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const juniorMock = [
+        { dip: 'J-00001', nombre: 'Lucas García', tutor: 'Alba García (11111111D)', cuenta: 'GDLP-AP-42-017', saldo: 150, cp: 'Activo' },
+        { dip: 'J-00002', nombre: 'Sofía López', tutor: 'Carlos López (12345678Z)', cuenta: 'GDLP-AP-58-243', saldo: 75, cp: 'Activo' },
+        { dip: 'J-00003', nombre: 'Martín Ruiz', tutor: 'Ana Martínez (87654321X)', cuenta: '—', saldo: 0, cp: 'Pendiente' },
+      ];
+      %>
+      <% juniorMock.forEach(j => { %>
+      <tr>
+        <td class="text-mono"><%= j.dip %></td>
+        <td><%= j.nombre %></td>
+        <td><%= j.tutor %></td>
+        <td class="text-mono"><%= j.cuenta %></td>
+        <td><%= j.saldo %> Pz</td>
+        <td><span class="badge <%= j.cp === 'Activo' ? 'badge-success' : 'badge-warning' %>"><%= j.cp %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='verJunior("<%= j.dip %>")'>👁️ Ver</button>
+          <button class="btn-sm btn-secondary" onclick='gestionarCP("<%= j.dip %>")'>🔒 Control Parental</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function verJunior(dip) {
+  mostrarModal('🧒 Usuario Junior: ' + dip, `
+    <p><strong>DIP:</strong> ${dip}</p>
+    <p><strong>Nombre:</strong> Lucas García</p>
+    <p><strong>Tutor:</strong> Alba García (11111111D)</p>
+    <p><strong>Cuenta:</strong> GDLP-AP-42-017</p>
+    <p><strong>Saldo:</strong> 150 Pz</p>
+    <p><strong>IBAN:</strong> GDLP-AP-42-017 (Cuenta Child)</p>
+    <hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)">
+    <p><strong>Titular:</strong> Lucas García</p>
+    <p><strong>Cotitular:</strong> Alba García (Tutor Legal)</p>
+  `);
+}
+
+function gestionarCP(dip) {
+  mostrarModal('🔒 Control Parental: ' + dip, `
+    <p style="margin-bottom:12px">Configura los límites parentales:</p>
+    <label style="display:block;margin-bottom:8px">
+      <input type="checkbox" id="cpLimite" checked> Límite de gasto semanal
+    </label>
+    <input type="number" id="cpLimiteValor" class="form-input" value="50" placeholder="Cantidad máxima (Pz)" style="width:100%;margin-bottom:8px">
+    <label style="display:block;margin-bottom:8px">
+      <input type="checkbox" id="cpNotif" checked> Notificar al tutor cada transacción
+    </label>
+    <label style="display:block;margin-bottom:8px">
+      <input type="checkbox" id="cpHorario"> Restringir horario (8:00-20:00)
+    </label>
+    <button class="btn-primary mt-16" onclick='guardarCP()'>💾 Guardar Configuración</button>
+  `);
+}
+
+function guardarCP() {
+  mostrarToast('✅ Control parental actualizado', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+</script>

@@ -1,1 +1,94 @@
-<%- include('stubs', { seccion: 'cargos' }) %>
+<div class="info-card mb-16">
+  <h4>👤 Gestión de Cargos</h4>
+  <p>Asigna y gestiona los cargos institucionales, departamentos y permisos asociados.</p>
+</div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevoCargo()">👤 Nuevo Cargo</button>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Cargo</th><th>Departamento</th><th>Desde</th><th>Activo</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const cargosMock = [
+        { dip: '23749931M', nombre: 'Mikel Ibáñez', cargo: 'Presidente', dept: 'Presidencia', desde: '2024-01-01', activo: true },
+        { dip: '11111111D', nombre: 'Alba García', cargo: 'Vicepresidenta', dept: 'Presidencia', desde: '2024-01-01', activo: true },
+        { dip: '12345678Z', nombre: 'Carlos López', cargo: 'Secretario', dept: 'Secretaría', desde: '2024-06-01', activo: true },
+        { dip: '87654321X', nombre: 'Ana Martínez', cargo: 'Director Tributos', dept: 'Tributos', desde: '2024-03-01', activo: true },
+      ];
+      %>
+      <% cargosMock.forEach(c => { %>
+      <tr>
+        <td class="text-mono"><%= c.dip %></td>
+        <td><%= c.nombre %></td>
+        <td><strong><%= c.cargo %></strong></td>
+        <td><%= c.dept %></td>
+        <td><%= c.desde %></td>
+        <td><span class="badge <%= c.activo ? 'badge-success' : 'badge-danger' %>"><%= c.activo ? 'Activo' : 'Inactivo' %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='editarCargo("<%= c.dip %>")'>✏️ Editar</button>
+          <button class="btn-sm <%= c.activo ? 'btn-secondary' : 'btn-primary' %>" onclick='toggleCargo("<%= c.dip %>", <%= !c.activo %>)'><%= c.activo ? '⏸️ Suspender' : '▶️ Reactivar' %></button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevoCargo() {
+  mostrarModal('👤 Nuevo Cargo', `
+    <p style="margin-bottom:12px">Asignar un nuevo cargo:</p>
+    <input type="text" id="carDip" class="form-input" placeholder="DIP" style="width:100%;margin-bottom:8px">
+    <input type="text" id="carNombre" class="form-input" placeholder="Nombre completo" style="width:100%;margin-bottom:8px">
+    <select id="carCargo" class="form-input" style="width:100%;margin-bottom:8px">
+      <option value="Presidente">Presidente</option>
+      <option value="Vicepresidente">Vicepresidente</option>
+      <option value="Secretario">Secretario</option>
+      <option value="Director">Director</option>
+      <option value="Funcionario">Funcionario</option>
+    </select>
+    <select id="carDept" class="form-input" style="width:100%;margin-bottom:8px">
+      <option value="Presidencia">Presidencia</option>
+      <option value="Secretaría">Secretaría</option>
+      <option value="Tributos">Tributos</option>
+      <option value="Banco">Banco</option>
+      <option value="Administración">Administración</option>
+    </select>
+    <button class="btn-primary mt-16" onclick='guardarCargo()'>💾 Asignar Cargo</button>
+  `);
+}
+
+function guardarCargo() {
+  const d = document.getElementById('carDip')?.value;
+  if (!d) return mostrarToast('Introduce un DIP', 'error');
+  mostrarToast('✅ Cargo asignado correctamente', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function editarCargo(dip) {
+  mostrarModal('✏️ Editar Cargo: ' + dip, `
+    <p style="margin-bottom:12px">Modifica los datos del cargo:</p>
+    <select id="editCargo" class="form-input" style="width:100%;margin-bottom:8px">
+      <option>Presidente</option>
+      <option>Vicepresidente</option>
+      <option>Secretario</option>
+      <option>Director</option>
+      <option>Funcionario</option>
+    </select>
+    <button class="btn-primary mt-16" onclick='guardarEditCargo()'>💾 Guardar</button>
+  `);
+}
+
+function guardarEditCargo() {
+  mostrarToast('✅ Cargo actualizado', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+
+function toggleCargo(dip, activar) {
+  mostrarToast(activar ? '✅ Cargo reactivado' : '⏸️ Cargo suspendido', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+</script>

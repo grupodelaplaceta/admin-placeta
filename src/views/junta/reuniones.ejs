@@ -1,1 +1,86 @@
-<%- include('stubs', { seccion: 'reuniones' }) %>
+<div class="info-card mb-16">
+  <h4>🤝 Gestión de Reuniones</h4>
+  <p>Convocatoria, actas con firma PlacetaID y gestión de acuerdos. Puedes crear nuevas reuniones y registrar actas.</p>
+</div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevaReunion()">🤝 Nueva Reunión</button>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Título</th><th>Fecha</th><th>Convocante</th><th>Asistentes</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const reunionesMock = [
+        { id: 'REU-001', titulo: 'Consejo de Gobierno', fecha: '2025-04-15', convocante: 'Presidente', asistentes: 8, estado: 'Planificada' },
+        { id: 'REU-002', titulo: 'Comité de Tributos', fecha: '2025-04-10', convocante: 'Admin Tributos', asistentes: 5, estado: 'Acta pendiente' },
+        { id: 'REU-003', titulo: 'Revisión Anual', fecha: '2025-03-20', convocante: 'Presidente', asistentes: 12, estado: 'Acta firmada' },
+      ];
+      %>
+      <% reunionesMock.forEach(r => { %>
+      <tr>
+        <td class="text-mono"><%= r.id %></td>
+        <td><strong><%= r.titulo %></strong></td>
+        <td><%= r.fecha %></td>
+        <td><%= r.convocante %></td>
+        <td><%= r.asistentes %></td>
+        <td><span class="badge <%= r.estado === 'Acta firmada' ? 'badge-success' : r.estado === 'Acta pendiente' ? 'badge-warning' : 'badge-info' %>"><%= r.estado %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='verReunion("<%= r.id %>")'>👁️ Ver</button>
+          <button class="btn-sm btn-secondary" onclick='gestionarActa("<%= r.id %>")'>📄 Acta</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevaReunion() {
+  mostrarModal('🤝 Nueva Reunión', `
+    <p style="margin-bottom:12px">Convocar una nueva reunión:</p>
+    <input type="text" id="reuTitulo" class="form-input" placeholder="Título" style="width:100%;margin-bottom:8px">
+    <input type="date" id="reuFecha" class="form-input" style="width:100%;margin-bottom:8px">
+    <textarea id="reuOrden" class="form-input" placeholder="Orden del día" style="width:100%;margin-bottom:8px;min-height:80px"></textarea>
+    <button class="btn-primary mt-16" onclick='crearReunion()'>💾 Crear Convocatoria</button>
+  `);
+}
+
+function crearReunion() {
+  const t = document.getElementById('reuTitulo')?.value;
+  if (!t) return mostrarToast('Introduce un título', 'error');
+  mostrarToast('✅ Reunión convocada: ' + t, 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function verReunion(id) {
+  mostrarModal('🤝 ' + id, `
+    <p><strong>Título:</strong> Consejo de Gobierno</p>
+    <p><strong>Fecha:</strong> 2025-04-15</p>
+    <p><strong>Convocante:</strong> Presidencia</p>
+    <p><strong>Estado:</strong> Planificada</p>
+    <hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)">
+    <p><strong>Orden del día:</strong></p>
+    <ul>
+      <li>Aprobación del acta anterior</li>
+      <li>Revisión de presupuestos</li>
+      <li>Nuevas medidas tributarias</li>
+      <li>Ruegos y preguntas</li>
+    </ul>
+  `);
+}
+
+function gestionarActa(id) {
+  mostrarModal('📄 Acta de ' + id, `
+    <p style="margin-bottom:12px">Redacta el acta de la reunión:</p>
+    <textarea id="actaContent" class="form-input" placeholder="Contenido del acta..." style="width:100%;min-height:120px;margin-bottom:12px"></textarea>
+    <button class="btn-primary" onclick='firmarActa()'>✍️ Firmar con PlacetaID</button>
+  `);
+}
+
+function firmarActa() {
+  mostrarToast('✅ Acta firmada digitalmente con PlacetaID', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+</script>

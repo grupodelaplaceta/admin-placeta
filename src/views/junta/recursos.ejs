@@ -1,1 +1,72 @@
-<%- include('stubs', { seccion: 'recursos' }) %>
+<div class="info-card mb-16">
+  <h4>📦 Recursos Digitales</h4>
+  <p>Gestión de correos electrónicos, licencias de software y recursos digitales de la Junta.</p>
+</div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevoRecurso()">📦 Nuevo Recurso</button>
+</div>
+
+<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card"><span class="stat-value">12</span><span class="stat-label">Correos</span></div>
+  <div class="stat-card"><span class="stat-value">8</span><span class="stat-label">Licencias</span></div>
+  <div class="stat-card"><span class="stat-value">5</span><span class="stat-label">Dominios</span></div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>Recurso</th><th>Tipo</th><th>Asignado a</th><th>Vencimiento</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const recursosMock = [
+        { nombre: 'correo@laplaceta.org', tipo: 'Correo', asignado: 'Presidencia', vencimiento: '2026-12-31', activo: true },
+        { nombre: 'admin@laplaceta.org', tipo: 'Correo', asignado: 'Administración', vencimiento: '2026-12-31', activo: true },
+        { nombre: 'Office 365 (x5)', tipo: 'Licencia', asignado: 'Junta', vencimiento: '2025-06-30', activo: true },
+        { nombre: 'laplaceta.org', tipo: 'Dominio', asignado: 'General', vencimiento: '2026-03-15', activo: true },
+        { nombre: 'Antivirus (x10)', tipo: 'Licencia', asignado: 'Todos', vencimiento: '2025-05-01', activo: false },
+      ];
+      %>
+      <% recursosMock.forEach(r => { %>
+      <tr>
+        <td><strong><%= r.nombre %></strong></td>
+        <td><%= r.tipo %></td>
+        <td><%= r.asignado %></td>
+        <td><%= r.vencimiento %></td>
+        <td><span class="badge <%= r.activo ? 'badge-success' : 'badge-danger' %>"><%= r.activo ? 'Activo' : 'Expirado' %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='editarRecurso("<%= r.nombre %>")'>✏️ Editar</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevoRecurso() {
+  mostrarModal('📦 Nuevo Recurso', `
+    <p style="margin-bottom:12px">Registra un nuevo recurso digital:</p>
+    <input type="text" id="recNombre" class="form-input" placeholder="Nombre del recurso" style="width:100%;margin-bottom:8px">
+    <select id="recTipo" class="form-input" style="width:100%;margin-bottom:8px">
+      <option value="Correo">Correo Electrónico</option>
+      <option value="Licencia">Licencia de Software</option>
+      <option value="Dominio">Dominio Web</option>
+      <option value="Servidor">Servidor</option>
+    </select>
+    <input type="text" id="recAsignado" class="form-input" placeholder="Asignado a" style="width:100%;margin-bottom:8px">
+    <input type="date" id="recVenc" class="form-input" style="width:100%;margin-bottom:8px">
+    <button class="btn-primary mt-16" onclick='guardarRecurso()'>💾 Registrar</button>
+  `);
+}
+
+function guardarRecurso() {
+  const n = document.getElementById('recNombre')?.value;
+  if (!n) return mostrarToast('Introduce un nombre', 'error');
+  mostrarToast('✅ Recurso registrado: ' + n, 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function editarRecurso(nombre) {
+  mostrarModal('✏️ Editar: ' + nombre, `<p>Modifica los datos del recurso.</p><button class="btn-primary mt-16" onclick='mostrarToast("✅ Recurso actualizado","success");setTimeout(()=>document.querySelector(".modal-close")?.click(),800)'>💾 Guardar</button>`);
+}
+</script>

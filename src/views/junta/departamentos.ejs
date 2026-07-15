@@ -1,1 +1,71 @@
-<%- include('stubs', { seccion: 'departamentos' }) %>
+<div class="info-card mb-16">
+  <h4>🏢 Estructura Departamental</h4>
+  <p>Gestión de los departamentos que componen la Junta de La Placeta.</p>
+</div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevoDepartamento()">🏢 Nuevo Departamento</button>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>Nombre</th><th>Responsable</th><th>Miembros</th><th>Presupuesto</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const deptosMock = [
+        { nombre: 'Presidencia', responsable: 'Mikel Ibáñez', miembros: 3, presupuesto: 50000, activo: true },
+        { nombre: 'Tesorería', responsable: 'Alba García', miembros: 5, presupuesto: 75000, activo: true },
+        { nombre: 'Tributos', responsable: 'Ana Martínez', miembros: 8, presupuesto: 45000, activo: true },
+        { nombre: 'Banco', responsable: 'Carlos López', miembros: 6, presupuesto: 60000, activo: true },
+        { nombre: 'Administración', responsable: '—', miembros: 4, presupuesto: 30000, activo: true },
+        { nombre: 'Junta de Gobierno', responsable: '—', miembros: 0, presupuesto: 0, activo: false },
+      ];
+      %>
+      <% deptosMock.forEach(d => { %>
+      <tr>
+        <td><strong><%= d.nombre %></strong></td>
+        <td><%= d.responsable %></td>
+        <td><%= d.miembros %></td>
+        <td><%= d.presupuesto.toLocaleString() %> Pz</td>
+        <td><span class="badge <%= d.activo ? 'badge-success' : 'badge-danger' %>"><%= d.activo ? 'Activo' : 'Inactivo' %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='editarDepto("<%= d.nombre %>")'>✏️ Editar</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevoDepartamento() {
+  mostrarModal('🏢 Nuevo Departamento', `
+    <p style="margin-bottom:12px">Crea un nuevo departamento:</p>
+    <input type="text" id="deptNombre" class="form-input" placeholder="Nombre del departamento" style="width:100%;margin-bottom:8px">
+    <input type="text" id="deptResponsable" class="form-input" placeholder="Responsable" style="width:100%;margin-bottom:8px">
+    <input type="number" id="deptPresupuesto" class="form-input" placeholder="Presupuesto (Pz)" style="width:100%;margin-bottom:8px">
+    <button class="btn-primary mt-16" onclick='guardarDepto()'>💾 Crear Departamento</button>
+  `);
+}
+
+function guardarDepto() {
+  const n = document.getElementById('deptNombre')?.value;
+  if (!n) return mostrarToast('Introduce un nombre', 'error');
+  mostrarToast('✅ Departamento "' + n + '" creado', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function editarDepto(nombre) {
+  mostrarModal('✏️ Editar: ' + nombre, `
+    <p style="margin-bottom:12px">Modifica los datos del departamento:</p>
+    <input type="text" id="editDeptNombre" class="form-input" value="${nombre}" style="width:100%;margin-bottom:8px">
+    <input type="number" id="editDeptPresup" class="form-input" value="50000" style="width:100%;margin-bottom:8px">
+    <button class="btn-primary mt-16" onclick='guardarEditDepto()'>💾 Guardar</button>
+  `);
+}
+
+function guardarEditDepto() {
+  mostrarToast('✅ Departamento actualizado', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+</script>

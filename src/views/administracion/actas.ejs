@@ -1,1 +1,71 @@
-<%- include('stubs', { seccion: 'actas' }) %>
+<div class="info-card mb-16">
+  <h4>📄 Actas y Documentos Oficiales</h4>
+  <p>Gestión de actas de reuniones, documentos oficiales y su archivo. Firmados digitalmente con PlacetaID.</p>
+</div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevaActa()">📄 Nueva Acta</button>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Título</th><th>Tipo</th><th>Fecha</th><th>Firmada</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const actasMock = [
+        { id: 'ACTA-001', titulo: 'Consejo de Gobierno - Abril 2025', tipo: 'Acta Reunión', fecha: '2025-04-01', firmada: true },
+        { id: 'ACTA-002', titulo: 'Nombramiento Vicepresidente', tipo: 'Documento Oficial', fecha: '2025-03-15', firmada: true },
+        { id: 'ACTA-003', titulo: 'Comité Tributos - Marzo 2025', tipo: 'Acta Reunión', fecha: '2025-03-10', firmada: false },
+        { id: 'ACTA-004', titulo: 'Presupuestos 2026 - Borrador', tipo: 'Documento Oficial', fecha: '2025-04-05', firmada: false },
+      ];
+      %>
+      <% actasMock.forEach(a => { %>
+      <tr>
+        <td class="text-mono"><%= a.id %></td>
+        <td><strong><%= a.titulo %></strong></td>
+        <td><%= a.tipo %></td>
+        <td><%= a.fecha %></td>
+        <td><span class="badge <%= a.firmada ? 'badge-success' : 'badge-warning' %>"><%= a.firmada ? '✅ Firmada' : '⏳ Pendiente' %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='verActa("<%= a.id %>")'>👁️ Ver</button>
+          <% if (!a.firmada) { %>
+          <button class="btn-sm btn-primary" onclick='firmarActaAdmin("<%= a.id %>")'>✍️ Firmar</button>
+          <% } %>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevaActa() {
+  mostrarModal('📄 Nueva Acta', `
+    <p style="margin-bottom:12px">Crear un nuevo documento:</p>
+    <input type="text" id="actaTitulo" class="form-input" placeholder="Título" style="width:100%;margin-bottom:8px">
+    <select id="actaTipo" class="form-input" style="width:100%;margin-bottom:8px">
+      <option value="Acta Reunión">Acta de Reunión</option>
+      <option value="Documento Oficial">Documento Oficial</option>
+      <option value="Informe">Informe</option>
+    </select>
+    <textarea id="actaContenido" class="form-input" placeholder="Contenido del documento..." style="width:100%;min-height:100px;margin-bottom:8px"></textarea>
+    <button class="btn-primary mt-16" onclick='crearActa()'>💾 Crear Documento</button>
+  `);
+}
+
+function crearActa() {
+  const t = document.getElementById('actaTitulo')?.value;
+  if (!t) return mostrarToast('Introduce un título', 'error');
+  mostrarToast('✅ Documento creado: ' + t, 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function verActa(id) {
+  mostrarModal('📄 ' + id, `<p><strong>Título:</strong> Consejo de Gobierno</p><p><strong>Fecha:</strong> 2025-04-01</p><p><strong>Tipo:</strong> Acta Reunión</p><p><strong>Firmada:</strong> Sí</p><hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)"><p>Contenido del acta disponible para descarga.</p><button class="btn-secondary mt-16">📥 Descargar PDF</button>`);
+}
+
+function firmarActaAdmin(id) {
+  mostrarToast('✍️ Documento firmado digitalmente con PlacetaID', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+</script>

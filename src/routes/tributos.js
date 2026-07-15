@@ -44,11 +44,14 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
 });
 
 // ── Declaraciones ──────────────────────────────────────────────────────────
-router.get('/declaraciones', verificarPermiso('tributos', 'crear_declaraciones'), (req, res) => {
+router.get('/declaraciones', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
+  const state = await apiBancoGetState();
+  const contribuyentes = state?.accounts?.filter(a => a.tributosCensusDate) || [];
   res.render('tributos/declaraciones', {
     titulo: 'Declaraciones',
     entidad_actual: 'tributos',
-    esAdmin: req.session.roles?.includes('tributos_admin')
+    esAdmin: req.session.roles?.includes('tributos_admin'),
+    totalContribuyentes: contribuyentes.length
   });
 });
 

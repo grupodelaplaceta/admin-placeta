@@ -1,24 +1,41 @@
 <div class="stats-grid">
   <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Tarjetas</span></div>
+  <div class="stat-card"><span class="stat-value"><%= tarjetas.filter(t=>!t.blocked).length %></span><span class="stat-label">Activas</span></div>
+  <div class="stat-card"><span class="stat-value"><%= tarjetas.filter(t=>t.blocked).length %></span><span class="stat-label">Bloqueadas</span></div>
+</div>
+
+<div class="info-card mb-16">
+  <h4>💳 Gestión de Tarjetas</h4>
+  <p>Administra las tarjetas digitales del banco. Puedes bloquear, desbloquear y ver el detalle de cada tarjeta.</p>
 </div>
 
 <% if (tarjetas.length === 0) { %>
-<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
+<div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
   <div style="font-size:64px;margin-bottom:16px">💳</div>
   <p>No hay tarjetas registradas en el sistema.</p>
 </div>
 <% } else { %>
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Titular</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <thead><tr><th>ID</th><th>Titular</th><th>Cuenta</th><th>Estado</th><th>Acciones</th></tr></thead>
     <tbody>
       <% tarjetas.forEach(t => { %>
       <tr>
         <td class="text-mono"><%= t.id %></td>
         <td><%= t.displayName || '—' %></td>
-        <td><span class="badge <%= t.blocked ? 'badge-danger' : 'badge-success' %>"><%= t.blocked ? 'Bloqueada' : 'Activa' %></span></td>
+        <td class="text-mono"><%= t.accountId || '—' %></td>
+        <td><span class="badge <%= t.blocked ? 'badge-danger' : 'badge-success' %>"><%= t.blocked ? '🔴 Bloqueada' : '🟢 Activa' %></span></td>
         <td>
-          <button class="btn-sm" onclick="mostrarToast('🔧 En desarrollo','info')">Gestionar</button>
+          <button class="btn-sm <%= t.blocked ? 'btn-primary' : 'btn-secondary' %>" onclick="toggleTarjeta('<%= t.id %>', <%= !t.blocked %>)">
+            <%= t.blocked ? '✅ Desbloquear' : '🔒 Bloquear' %>
+          </button>
+          <button class="btn-sm btn-secondary" onclick="mostrarModal('💳 Detalle Tarjeta', `
+            <p><strong>ID:</strong> <%= t.id %></p>
+            <p><strong>Titular:</strong> <%= t.displayName || '—' %></p>
+            <p><strong>Cuenta:</strong> <%= t.accountId || '—' %></p>
+            <p><strong>Estado:</strong> <%= t.blocked ? '🔴 Bloqueada' : '🟢 Activa' %></p>
+            <p><strong>PlacetaID:</strong> <%= t.placetaId || '—' %></p>
+          `)">👁️ Ver</button>
         </td>
       </tr>
       <% }) %>
@@ -26,3 +43,16 @@
   </table>
 </div>
 <% } %>
+
+<script>
+async function toggleTarjeta(id, bloquear) {
+  try {
+    const result = await apiFetch('/api/banco/action', {
+      method: 'POST',
+      body: JSON.stringify({ action: bloquear ? 'bloquear-tarjeta' : 'desbloquear-tarjeta', cardId: id })
+    });
+    mostrarToast(bloquear ? '🔒 Tarjeta bloqueada' : '✅ Tarjeta desbloqueada', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch { mostrarToast('⚠️ No disponible offline', 'warning'); }
+}
+</script>

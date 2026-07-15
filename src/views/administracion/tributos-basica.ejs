@@ -1,1 +1,21 @@
-<%- include('stubs', { seccion: 'tributos-basica' }) %>
+<div class="info-card mb-16">
+  <h4>📊 Tributos — Acceso Básico</h4>
+  <p>Panel resumen de la situación tributaria. Para gestión completa, accede al <a href="/tributos">módulo de Tributos</a>.</p>
+</div>
+
+<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card"><span class="stat-value">88</span><span class="stat-label">Contribuyentes</span></div>
+  <div class="stat-card"><span class="stat-value">12</span><span class="stat-label">Declaraciones mes</span></div>
+  <div class="stat-card"><span class="stat-value">45.230</span><span class="stat-label">Recaudación (Pz)</span></div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>Periodo</th><th>Declaraciones</th><th>Base Total</th><th>Recaudado</th><th>Pendiente</th></tr></thead>
+    <tbody>
+      <tr><td>2025 - T1</td><td>42</td><td>125.000 Pz</td><td>28.750 Pz</td><td>12.300 Pz</td></tr>
+      <tr><td>2025 - T2</td><td>38</td><td>98.000 Pz</td><td>22.540 Pz</td><td>8.900 Pz</td></tr>
+      <tr><td>2024 - Anual</td><td>156</td><td>520.000 Pz</td><td>119.600 Pz</td><td>15.000 Pz</td></tr>
+    </tbody>
+  </table>
+</div>

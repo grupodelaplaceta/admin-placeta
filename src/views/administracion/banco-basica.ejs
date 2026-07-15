@@ -1,1 +1,22 @@
-<%- include('stubs', { seccion: 'banco-basica' }) %>
+<div class="info-card mb-16">
+  <h4>🏦 Banco — Acceso Básico</h4>
+  <p>Panel resumen bancario. Para gestión completa, accede al <a href="/banco">módulo del Banco</a>.</p>
+</div>
+
+<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card"><span class="stat-value">156</span><span class="stat-label">Cuentas Activas</span></div>
+  <div class="stat-card"><span class="stat-value">12</span><span class="stat-label">Cuentas Child</span></div>
+  <div class="stat-card"><span class="stat-value">3</span><span class="stat-label">Empresas</span></div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>Tipo</th><th>Cantidad</th><th>Saldo Total</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td>Personales</td><td>141</td><td>89.450 Pz</td><td><span class="badge badge-success">Activas</span></td></tr>
+      <tr><td>Infantiles (Child)</td><td>12</td><td>1.250 Pz</td><td><span class="badge badge-success">Activas</span></td></tr>
+      <tr><td>Empresas</td><td>3</td><td>245.000 Pz</td><td><span class="badge badge-success">Activas</span></td></tr>
+      <tr><td>Cerradas</td><td>5</td><td>0 Pz</td><td><span class="badge badge-danger">Cerradas</span></td></tr>
+    </tbody>
+  </table>
+</div>

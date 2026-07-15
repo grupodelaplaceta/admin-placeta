@@ -1,1 +1,35 @@
-<%- include('stubs', { seccion: 'junior' }) %>
+<div class="info-card mb-16">
+  <h4>🧒 Usuarios Placeta Junior — Admin</h4>
+  <p>Panel de administración de usuarios junior. Gestiona menores, control parental y cuentas infantiles.</p>
+</div>
+
+<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="stat-card"><span class="stat-value">3</span><span class="stat-label">Menores Registrados</span></div>
+  <div class="stat-card"><span class="stat-value">2</span><span class="stat-label">Con Cuenta Child</span></div>
+  <div class="stat-card"><span class="stat-value">3</span><span class="stat-label">Tutores Activos</span></div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Tutor</th><th>Cuenta Bancaria</th><th>IBAN</th><th>Control Parental</th></tr></thead>
+    <tbody>
+      <% 
+      const juniorAdminMock = [
+        { dip: 'J-00001', nombre: 'Lucas García', tutor: 'Alba García', cuenta: 'a-lucas', iban: 'GDLP-AP-42-017', cp: true },
+        { dip: 'J-00002', nombre: 'Sofía López', tutor: 'Carlos López', cuenta: 'a-sofia', iban: 'GDLP-AP-58-243', cp: true },
+        { dip: 'J-00003', nombre: 'Martín Ruiz', tutor: 'Ana Martínez', cuenta: '—', iban: '—', cp: false },
+      ];
+      %>
+      <% juniorAdminMock.forEach(j => { %>
+      <tr>
+        <td class="text-mono"><%= j.dip %></td>
+        <td><%= j.nombre %></td>
+        <td><%= j.tutor %></td>
+        <td class="text-mono"><%= j.cuenta %></td>
+        <td class="text-mono"><%= j.iban %></td>
+        <td><span class="badge <%= j.cp ? 'badge-success' : 'badge-danger' %>"><%= j.cp ? 'Activo' : 'Inactivo' %></span></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>

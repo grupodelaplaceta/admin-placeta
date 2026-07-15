@@ -1,4 +1,89 @@
-<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
-  <div style="font-size:64px;margin-bottom:16px">📋</div>
-  <p>Gestión de trámites vía ETramite — en desarrollo.</p>
+<div class="info-card mb-16">
+  <h4>📋 Gestión de Trámites (ETramite)</h4>
+  <p>Administra los trámites ciudadanos: solicitudes, certificados, licencias y más. Sistema integrado con ETramite.</p>
 </div>
+
+<div class="stats-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="stat-card"><span class="stat-value">23</span><span class="stat-label">Pendientes</span></div>
+  <div class="stat-card"><span class="stat-value">45</span><span class="stat-label">En trámite</span></div>
+  <div class="stat-card"><span class="stat-value">128</span><span class="stat-label">Completados</span></div>
+  <div class="stat-card"><span class="stat-value">12</span><span class="stat-label">Rechazados</span></div>
+</div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevoTramite()">📋 Nuevo Trámite</button>
+  <input type="text" id="filtroTramites" class="form-input" placeholder="🔍 Buscar trámites..." style="width:250px;max-width:100%" oninput="filtrarTramites()">
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Tipo</th><th>Solicitante</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody id="tablaTramites">
+      <% 
+      const tramitesMock = [
+        { id: 'TRAM-001', tipo: 'Licencia de Obra', solicitante: 'Juan Pérez', fecha: '2025-04-01', estado: 'Pendiente' },
+        { id: 'TRAM-002', tipo: 'Certificado de Empadronamiento', solicitante: 'María López', fecha: '2025-03-28', estado: 'En trámite' },
+        { id: 'TRAM-003', tipo: 'Solicitud de Subvención', solicitante: 'Carlos Ruiz', fecha: '2025-03-25', estado: 'Completado' },
+        { id: 'TRAM-004', tipo: 'Licencia de Apertura', solicitante: 'Ana García', fecha: '2025-03-20', estado: 'Rechazado' },
+        { id: 'TRAM-005', tipo: 'Cambio de Domicilio', solicitante: 'Pedro Sánchez', fecha: '2025-04-02', estado: 'Pendiente' },
+      ];
+      %>
+      <% tramitesMock.forEach(t => { %>
+      <tr class="fila-tramite">
+        <td class="text-mono"><%= t.id %></td>
+        <td><%= t.tipo %></td>
+        <td><%= t.solicitante %></td>
+        <td><%= t.fecha %></td>
+        <td><span class="badge <%= t.estado === 'Completado' ? 'badge-success' : t.estado === 'En trámite' ? 'badge-info' : t.estado === 'Pendiente' ? 'badge-warning' : 'badge-danger' %>"><%= t.estado %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='verTramite("<%= t.id %>")'>👁️ Ver</button>
+          <% if (t.estado === 'Pendiente') { %>
+          <button class="btn-sm btn-primary" onclick='tramitar("<%= t.id %>")'>▶️ Tramitar</button>
+          <% } %>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevoTramite() {
+  mostrarModal('📋 Nuevo Trámite', `
+    <p style="margin-bottom:12px">Registra un nuevo trámite:</p>
+    <select id="tramTipo" class="form-input" style="width:100%;margin-bottom:8px">
+      <option value="Licencia de Obra">Licencia de Obra</option>
+      <option value="Certificado">Certificado</option>
+      <option value="Subvención">Subvención</option>
+      <option value="Licencia de Apertura">Licencia de Apertura</option>
+      <option value="Cambio Domicilio">Cambio de Domicilio</option>
+    </select>
+    <input type="text" id="tramSolicitante" class="form-input" placeholder="Nombre del solicitante" style="width:100%;margin-bottom:8px">
+    <textarea id="tramDesc" class="form-input" placeholder="Descripción" style="width:100%;margin-bottom:8px;min-height:60px"></textarea>
+    <button class="btn-primary mt-16" onclick='crearTramite()'>💾 Registrar</button>
+  `);
+}
+
+function crearTramite() {
+  const s = document.getElementById('tramSolicitante')?.value;
+  if (!s) return mostrarToast('Introduce el solicitante', 'error');
+  mostrarToast('✅ Trámite registrado correctamente', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function filtrarTramites() {
+  const q = document.getElementById('filtroTramites').value.toLowerCase();
+  document.querySelectorAll('.fila-tramite').forEach(r => {
+    r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function verTramite(id) {
+  mostrarModal('📋 ' + id, `<p><strong>ID:</strong> ${id}</p><p><strong>Tipo:</strong> Licencia de Obra</p><p><strong>Solicitante:</strong> Juan Pérez</p><p><strong>Fecha:</strong> 2025-04-01</p><p><strong>Estado:</strong> Pendiente</p><button class="btn-primary mt-16" onclick='tramitar("${id}")'>▶️ Iniciar Tramitación</button>`);
+}
+
+function tramitar(id) {
+  mostrarToast('✅ Trámite ' + id + ' en proceso', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+</script>

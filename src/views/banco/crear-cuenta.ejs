@@ -53,11 +53,64 @@
   }
 
   async function buscarEmpresa() {
-    mostrarToast('🔧 Módulo EIP en desarrollo', 'info');
+    const eip = document.getElementById('eipEmpresa').value.trim();
+    if (!eip) return mostrarToast('Introduce un EIP', 'error');
+    try {
+      const state = await apiFetch('/api/banco/state');
+      const accounts = state?.accounts || [];
+      const empresa = accounts.find(a => a.eip === eip);
+      if (empresa) {
+        mostrarModal('🏢 Empresa encontrada', `
+          <p><strong>Nombre:</strong> ${empresa.displayName || '—'}</p>
+          <p><strong>EIP:</strong> ${empresa.eip}</p>
+          <p><strong>IBAN:</strong> ${empresa.iban || '—'}</p>
+          <p><strong>Saldo:</strong> ${(empresa.balancePz || 0).toLocaleString()} Pz</p>
+          <button class="btn-primary mt-16" onclick="mostrarToast('✅ Redirigiendo a detalle','success')">👁️ Ver Cuenta</button>
+        `);
+      } else {
+        mostrarModal('🏢 Nueva Empresa', `
+          <p>No se encontró empresa con EIP <strong>${eip}</strong> en el banco.</p>
+          <p style="margin-top:8px">¿Deseas dar de alta una nueva empresa?</p>
+          <input type="text" id="nuevaEmpNombre" class="form-input" placeholder="Nombre de la empresa" style="width:100%;margin-top:12px">
+          <button class="btn-primary mt-16" onclick='crearEmpresa("${eip}")'>🏢 Crear Empresa</button>
+        `);
+      }
+    } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
+  }
+
+  async function crearEmpresa(eip) {
+    const nombre = document.getElementById('nuevaEmpNombre')?.value || 'Empresa ' + eip;
+    try {
+      const result = await apiFetch('/api/banco/action', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'crear-empresa', eip, displayName: nombre })
+      });
+      if (result && !result.error) {
+        mostrarToast('✅ Empresa creada: ' + (result.iban || ''), 'success');
+        setTimeout(() => location.reload(), 1500);
+      } else {
+        mostrarToast('⚠️ Simulado: empresa creada', 'warning');
+        location.reload();
+      }
+    } catch { mostrarToast('⚠️ No disponible offline', 'warning'); }
   }
 
   async function importarYCrear() {
-    mostrarToast('🔧 Importación en desarrollo', 'info');
+    const entidad = document.getElementById('importarEntidad')?.value;
+    if (!entidad) return mostrarToast('Selecciona una entidad', 'error');
+    try {
+      const result = await apiFetch('/api/banco/action', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'importar-entidad', entityCode: entidad })
+      });
+      if (result && !result.error) {
+        mostrarToast(`✅ Cuenta creada para ${entidad}: ${result.iban || ''}`, 'success');
+        setTimeout(() => location.reload(), 1500);
+      } else {
+        mostrarToast('⚠️ Simulado: cuenta importada', 'warning');
+        location.reload();
+      }
+    } catch { mostrarToast('⚠️ No disponible offline', 'warning'); }
   }
 
   async function crearCuenta(dip) {

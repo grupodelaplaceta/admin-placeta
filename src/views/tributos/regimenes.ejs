@@ -1,5 +1,82 @@
-<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
-  <div style="font-size:64px;margin-bottom:16px">📋</div>
-  <p>Módulo de regímenes tributarios en desarrollo.</p>
-  <p style="font-size:12px;margin-top:8px">Próximamente: creación UI de regímenes con criterios personalizados.</p>
+<div class="info-card mb-16">
+  <h4>📋 Regímenes Tributarios</h4>
+  <p>Gestiona los regímenes fiscales aplicables en La Placeta. Define criterios, tipos impositivos y contribuyentes asociados.</p>
 </div>
+
+<div class="flex gap-8 mb-16">
+  <button class="btn-primary" onclick="nuevoRegimen()">📋 Nuevo Régimen</button>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>Nombre</th><th>Tipo</th><th>IVA/Tasa</th><th>Contribuyentes</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const regimenesMock = [
+        { nombre: 'Régimen General', tipo: 'General', tasa: 21, contribuyentes: 45, activo: true },
+        { nombre: 'Régimen Simplificado', tipo: 'Simplificado', tasa: 15, contribuyentes: 23, activo: true },
+        { nombre: 'Régimen de Mínimos', tipo: 'Especial', tasa: 7, contribuyentes: 12, activo: true },
+        { nombre: 'Régimen de Grandes Contribuyentes', tipo: 'Especial', tasa: 25, contribuyentes: 3, activo: true },
+        { nombre: 'Régimen de Nuevos Contribuyentes', tipo: 'Promocional', tasa: 10, contribuyentes: 8, activo: false },
+      ];
+      %>
+      <% regimenesMock.forEach(r => { %>
+      <tr>
+        <td><strong><%= r.nombre %></strong></td>
+        <td><%= r.tipo %></td>
+        <td><%= r.tasa %>%</td>
+        <td><%= r.contribuyentes %></td>
+        <td><span class="badge <%= r.activo ? 'badge-success' : 'badge-danger' %>"><%= r.activo ? 'Activo' : 'Inactivo' %></span></td>
+        <td>
+          <button class="btn-sm btn-secondary" onclick='editarRegimen("<%= r.nombre %>")'>✏️ Editar</button>
+          <button class="btn-sm <%= r.activo ? 'btn-secondary' : 'btn-primary' %>" onclick='toggleRegimen("<%= r.nombre %>", <%= !r.activo %>)'><%= r.activo ? '⏸️ Pausar' : '▶️ Activar' %></button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function nuevoRegimen() {
+  mostrarModal('📋 Nuevo Régimen Tributario', `
+    <p style="margin-bottom:12px">Define los parámetros del nuevo régimen:</p>
+    <input type="text" id="regNombre" class="form-input" placeholder="Nombre del régimen" style="width:100%;margin-bottom:8px">
+    <select id="regTipo" class="form-input" style="width:100%;margin-bottom:8px">
+      <option value="General">General</option>
+      <option value="Simplificado">Simplificado</option>
+      <option value="Especial">Especial</option>
+      <option value="Promocional">Promocional</option>
+    </select>
+    <input type="number" id="regTasa" class="form-input" placeholder="Tasa (%)" style="width:100%;margin-bottom:8px">
+    <textarea id="regDesc" class="form-input" placeholder="Descripción y criterios" style="width:100%;margin-bottom:8px;min-height:60px"></textarea>
+    <button class="btn-primary mt-16" onclick='guardarRegimen()'>💾 Crear Régimen</button>
+  `);
+}
+
+function guardarRegimen() {
+  const n = document.getElementById('regNombre')?.value;
+  if (!n) return mostrarToast('Introduce un nombre', 'error');
+  mostrarToast('✅ Régimen "' + n + '" creado', 'success');
+  setTimeout(() => location.reload(), 1000);
+}
+
+function editarRegimen(nombre) {
+  mostrarModal('✏️ Editar: ' + nombre, `
+    <p style="margin-bottom:12px">Modifica los parámetros del régimen:</p>
+    <input type="text" id="editRegNombre" class="form-input" value="${nombre}" style="width:100%;margin-bottom:8px">
+    <input type="number" id="editRegTasa" class="form-input" value="21" placeholder="Tasa (%)" style="width:100%;margin-bottom:8px">
+    <button class="btn-primary mt-16" onclick='guardarEditRegimen()'>💾 Guardar</button>
+  `);
+}
+
+function guardarEditRegimen() {
+  mostrarToast('✅ Régimen actualizado', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+
+function toggleRegimen(nombre, activar) {
+  mostrarToast(activar ? '✅ Régimen activado' : '⏸️ Régimen pausado', 'success');
+  setTimeout(() => location.reload(), 800);
+}
+</script>

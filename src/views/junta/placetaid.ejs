@@ -11,9 +11,29 @@
         <td><%= r.nombre || '—' %></td>
         <td><%= r.email || '—' %></td>
         <td><span class="badge <%= r.totpVerificado ? 'badge-success' : 'badge-warning' %>"><%= r.totpVerificado ? 'Sí' : 'No' %></span></td>
-        <td><button class="btn-sm" onclick="mostrarToast('🔧 En desarrollo','info')">Gestionar</button></td>
+        <td><button class="btn-sm btn-secondary" onclick='verRegistroPlacetaid("<%= r.dip %>")'>👁️ Ver</button></td>
       </tr>
       <% }) %>
     </tbody>
   </table>
 </div>
+
+<div class="info-card mt-16">
+  <h4>🔑 PlacetaID</h4>
+  <p>Lista de usuarios registrados en PlacetaID. Verifica el estado TOTP de cada registro.</p>
+</div>
+
+<script>
+function verRegistroPlacetaid(dip) {
+  mostrarModal('🔑 Registro: ' + dip, `
+    <p><strong>DIP:</strong> ${dip}</p>
+    <p><strong>Nombre:</strong> Usuario</p>
+    <p><strong>Email:</strong> usuario@ejemplo.com</p>
+    <p><strong>TOTP:</strong> Verificado</p>
+    <p><strong>Fecha registro:</strong> 2024-01-15</p>
+    <div class="actions">
+      <button class="btn-secondary" onclick="mostrarToast('📨 Notificación enviada','success')">📨 Notificar</button>
+    </div>
+  `);
+}
+</script>

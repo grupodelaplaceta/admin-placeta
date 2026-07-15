@@ -1,1 +1,47 @@
-<%- include('stubs', { seccion: 'votaciones' }) %>
+<div class="info-card mb-16">
+  <h4>🗳️ Inspección de Votaciones</h4>
+  <p>Consulta y verifica las votaciones realizadas en las diferentes entidades. Acceso de sólo lectura para auditoría.</p>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Título</th><th>Entidad</th><th>Participación</th><th>Resultado</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% 
+      const votosAdminMock = [
+        { id: 'VOT-001', titulo: 'Aprobación Presupuestos 2026', entidad: 'Junta', participacion: '78%', resultado: 'Aprobada', estado: 'Cerrada' },
+        { id: 'VOT-002', titulo: 'Reforma Tributaria', entidad: 'Tributos', participacion: '65%', resultado: 'Aprobada', estado: 'Cerrada' },
+        { id: 'VOT-003', titulo: 'Nuevo Cargo Directivo', entidad: 'Junta', participacion: '0%', resultado: '—', estado: 'Programada' },
+      ];
+      %>
+      <% votosAdminMock.forEach(v => { %>
+      <tr>
+        <td class="text-mono"><%= v.id %></td>
+        <td><strong><%= v.titulo %></strong></td>
+        <td><%= v.entidad %></td>
+        <td><%= v.participacion %></td>
+        <td><span class="badge <%= v.resultado === 'Aprobada' ? 'badge-success' : 'badge-info' %>"><%= v.resultado %></span></td>
+        <td><span class="badge <%= v.estado === 'Cerrada' ? 'badge-info' : 'badge-warning' %>"><%= v.estado %></span></td>
+        <td><button class="btn-sm btn-secondary" onclick='inspeccionarVoto("<%= v.id %>")'>🔍 Auditar</button></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function inspeccionarVoto(id) {
+  mostrarModal('🔍 Auditoría: ' + id, `
+    <p><strong>Votación:</strong> Aprobación Presupuestos 2026</p>
+    <p><strong>Entidad:</strong> Junta de La Placeta</p>
+    <p><strong>Participación:</strong> 78% (45 votos)</p>
+    <p><strong>Resultado:</strong> Aprobada</p>
+    <p><strong>Integridad:</strong> ✅ Verificada con PlacetaID</p>
+    <hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)">
+    <p><strong>Desglose:</strong></p>
+    <p>✅ A favor: 28 votos</p>
+    <p>❌ En contra: 12 votos</p>
+    <p>⬜ Abstenciones: 5 votos</p>
+  `);
+}
+</script>

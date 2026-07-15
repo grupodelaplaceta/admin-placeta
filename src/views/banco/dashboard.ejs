@@ -1,3 +1,5 @@
+<%- include('../parciales/guia-rol', { entidad_actual: 'banco', roles }) %>
+
 <div class="stats-grid">
   <div class="stat-card"><span class="stat-value"><%= totalCuentas %></span><span class="stat-label">Total Cuentas</span></div>
   <div class="stat-card"><span class="stat-value"><%= cuentasActivas %></span><span class="stat-label">Cuentas Activas</span></div>
@@ -19,7 +21,7 @@
       <tr onclick="window.location='/banco/cuentas/<%= c.id %>'" style="cursor:pointer">
         <td class="text-mono"><%= c.id %></td>
         <td><strong><%= c.displayName || '—' %></strong></td>
-        <td><span class="badge badge-info"><%= c.type || '—' %></span></td>
+        <td><span class="badge badge-purple"><%= c.type || '—' %></span></td>
         <td class="text-mono"><%= c.iban || '—' %></td>
         <td><strong><%= (c.balancePz || 0).toLocaleString() %></strong> Pz</td>
         <td><span class="badge <%= c.closedAt ? 'badge-danger' : 'badge-success' %>"><%= c.closedAt ? 'Cerrada' : 'Activa' %></span></td>
@@ -33,4 +35,6 @@
   <a href="/banco/cuentas/nueva/gestor" class="btn-primary">➕ Nueva Cuenta</a>
   <a href="/banco/operaciones" class="btn-secondary">🔄 Ver Operaciones</a>
   <a href="/banco/control-cumplimiento" class="btn-secondary">🛡️ Control Cumplimiento</a>
+  <a href="/banco/tarjetas" class="btn-secondary">💳 Tarjetas</a>
+  <a href="/banco/nominas" class="btn-secondary">📄 Nóminas</a>
 </div>
