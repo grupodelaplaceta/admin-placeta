@@ -139,6 +139,14 @@ router.get('/nominas', verificarPermiso('banco', 'ver_nominas'), async (req, res
   });
 });
 
+// ── Documentación ─────────────────────────────────────────────────────────
+router.get('/documentos', verificarPermiso('banco', 'ver_cuentas'), (req, res) => {
+  res.render('documentos', {
+    titulo: 'Documentación - Banco de La Placeta',
+    entidad_actual: 'banco'
+  });
+});
+
 // ── API: Acciones sobre cuentas ────────────────────────────────────────────
 router.post('/api/cuentas/:action', verificarPermiso('banco', 'modificar_cuentas'), async (req, res) => {
   const { action } = req.params;

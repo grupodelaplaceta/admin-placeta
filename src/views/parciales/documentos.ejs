@@ -1,0 +1,310 @@
+<% const DOCS_ENTIDAD = entidad || entidad_actual || 'banco'; const DOCS_TITULOS = { banco: 'Banco', tributos: 'Tributos', junta: 'Junta', administracion: 'Admin' }; 
+// Sistema de Documentación Global
+%>
+<%
+const entidadDoc = entidad || entidad_actual || 'banco';
+const tituloEntidad = { banco: 'Banco de La Placeta', tributos: 'Tributos de La Placeta', junta: 'Junta de La Placeta', administracion: 'Administración de La Placeta' };
+%>
+
+<div class="docs-section">
+  <div class="section-header">
+    <h3>📄 Documentos y Certificados</h3>
+    <div class="flex gap-8">
+      <button class="btn btn-primary btn-sm" onclick="mostrarPanelDocs()">📄 Nuevo Documento</button>
+    </div>
+  </div>
+
+  <div class="info-card mb-16" style="border-left:3px solid var(--p)">
+    <p style="font-size:12px;color:#888">Genera documentos oficiales, certificados, informes y más. Los datos se guardan como JSON y los PDFs se generan bajo demanda. <a href="#" onclick="mostrarPanelDocs();return false">Crear documento →</a></p>
+  </div>
+
+  <!-- Filtros -->
+  <div class="flex gap-8 mb-16 flex-wrap">
+    <input type="text" id="docsBusqueda" class="form-input" placeholder="🔍 Buscar documentos..." style="width:240px;max-width:100%" oninput="filtrarDocs()">
+    <select id="docsFiltroTipo" class="form-input" style="width:auto;min-width:160px" onchange="filtrarDocs()">
+      <option value="">Todos los tipos</option>
+    </select>
+    <select id="docsFiltroEstado" class="form-input" style="width:auto;min-width:140px" onchange="filtrarDocs()">
+      <option value="">Todos los estados</option>
+      <option value="borrador">Borrador</option>
+      <option value="final">Final</option>
+      <option value="firmado">Firmado</option>
+    </select>
+  </div>
+
+  <!-- Tabla de documentos -->
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Título</th>
+          <th>Tipo</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="docsTablaBody">
+        <tr id="docsLoadingRow">
+          <td colspan="5" style="text-align:center;padding:40px;color:#999">Cargando documentos...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// Estado
+let docsData = [];
+let docsTipos = [];
+
+// Inicializar
+document.addEventListener('DOMContentLoaded', cargarDocs);
+
+async function cargarDocs() {
+  try {
+    const data = await apiFetch('/api/<%= entidadDoc %>/documentos');
+    docsData = data.documentos || [];
+    
+    // Cargar tipos disponibles
+    const tiposRes = await apiFetch('/api/<%= entidadDoc %>/tipos-documento');
+    docsTipos = tiposRes.categorias || [];
+    
+    renderDocs();
+    renderFiltroTipos();
+  } catch (e) {
+    document.getElementById('docsTablaBody').innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#999">Error al cargar: ${e.message}</td></tr>`;
+  }
+}
+
+function renderFiltroTipos() {
+  const sel = document.getElementById('docsFiltroTipo');
+  docsTipos.forEach(cat => {
+    cat.documentos.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.tipo;
+      opt.textContent = d.etiqueta;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function renderDocs() {
+  const tbody = document.getElementById('docsTablaBody');
+  if (docsData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#999">
+      <div style="font-size:40px;margin-bottom:8px;opacity:0.4">📄</div>
+      No hay documentos. Crea el primero.
+    </td></tr>`;
+    return;
+  }
+  tbody.innerHTML = docsData.map(d => {
+    const estadoClass = d.estado === 'firmado' ? 'badge-success' : d.estado === 'final' ? 'badge-info' : 'badge-warning';
+    const estadoLabel = d.estado === 'firmado' ? '✅ Firmado' : d.estado === 'final' ? 'Final' : 'Borrador';
+    const fecha = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—';
+    const esAuto = d.id?.startsWith('auto-');
+    return `<tr>
+      <td><strong>${d.titulo || '—'}</strong>${esAuto ? ' <span class="badge badge-purple">Auto</span>' : ''}</td>
+      <td><span class="badge badge-purple">${d.tipo || '—'}</span></td>
+      <td style="color:#888;font-size:12px">${fecha}</td>
+      <td><span class="badge ${estadoClass}">${estadoLabel}</span></td>
+      <td>
+        <button class="btn-sm btn-secondary" onclick="verDoc('${d.id}')">👁️ Ver</button>
+        <button class="btn-sm btn-primary" onclick="descargarPDF('${d.id}')">📥 PDF</button>
+        ${!esAuto ? `<button class="btn-sm btn-secondary" onclick="firmarDoc('${d.id}')">✍️ Firmar</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarDocs() {
+  const q = document.getElementById('docsBusqueda').value.toLowerCase();
+  const tipo = document.getElementById('docsFiltroTipo').value;
+  const estado = document.getElementById('docsFiltroEstado').value;
+  
+  const filtradas = docsData.filter(d => {
+    if (q && !d.titulo?.toLowerCase().includes(q) && !d.tipo?.toLowerCase().includes(q)) return false;
+    if (tipo && d.tipo !== tipo) return false;
+    if (estado && d.estado !== estado) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('docsTablaBody');
+  if (filtradas.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#999">Sin resultados</td></tr>`;
+    return;
+  }
+  
+  const estadoClassMap = { firmado: 'badge-success', final: 'badge-info', borrador: 'badge-warning' };
+  const estadoLabelMap = { firmado: '✅ Firmado', final: 'Final', borrador: 'Borrador' };
+  
+  tbody.innerHTML = filtradas.map(d => {
+    const esAuto = d.id?.startsWith('auto-');
+    const fecha = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—';
+    return `<tr>
+      <td><strong>${d.titulo || '—'}</strong>${esAuto ? ' <span class="badge badge-purple">Auto</span>' : ''}</td>
+      <td><span class="badge badge-purple">${d.tipo || '—'}</span></td>
+      <td style="color:#888;font-size:12px">${fecha}</td>
+      <td><span class="badge ${estadoClassMap[d.estado] || 'badge-warning'}">${estadoLabelMap[d.estado] || d.estado}</span></td>
+      <td>
+        <button class="btn-sm btn-secondary" onclick="verDoc('${d.id}')">👁️ Ver</button>
+        <button class="btn-sm btn-primary" onclick="descargarPDF('${d.id}')">📥 PDF</button>
+        ${!esAuto && d.estado !== 'firmado' ? `<button class="btn-sm btn-secondary" onclick="firmarDoc('${d.id}')">✍️ Firmar</button>` : ''}
+        ${!esAuto ? `<button class="btn-sm btn-danger" onclick="eliminarDoc('${d.id}')">🗑️</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function verDoc(id) {
+  try {
+    const doc = await apiFetch('/api/<%= entidadDoc %>/documentos/' + id);
+    const datos = doc.datos || {};
+    let html = `<div style="margin-bottom:12px">`;
+    html += `<p><strong>ID:</strong> ${doc.id}</p>`;
+    html += `<p><strong>Tipo:</strong> ${doc.tipo}</p>`;
+    html += `<p><strong>Estado:</strong> ${doc.estado}</p>`;
+    html += `<p><strong>Creado:</strong> ${doc.createdAt ? new Date(doc.createdAt).toLocaleString() : '—'}</p>`;
+    if (doc.firmado) html += `<p class="badge badge-success" style="margin-top:8px">✅ Firmado digitalmente</p>`;
+    html += `</div><hr style="margin:12px 0;border:none;border-top:1px solid #f0ecf8">`;
+    html += `<div style="font-size:13px">`;
+    for (const [key, value] of Object.entries(datos)) {
+      if (typeof value === 'object' && value !== null) {
+        html += `<p style="margin-top:8px"><strong>${key}:</strong></p>`;
+        for (const [sk, sv] of Object.entries(value)) {
+          html += `<p style="padding-left:12px;font-size:12px;color:#666">${sk}: ${sv ?? '—'}</p>`;
+        }
+      } else {
+        html += `<p><strong>${key}:</strong> ${value ?? '—'}</p>`;
+      }
+    }
+    html += `</div>`;
+    html += `<div class="actions"><button class="btn-primary" onclick="descargarPDF('${doc.id}')">📥 Descargar PDF</button></div>`;
+    mostrarModal('📄 ' + (doc.titulo || 'Documento'), html);
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
+async function descargarPDF(id) {
+  mostrarToast('📄 Generando PDF...', 'info');
+  // Abrir en nueva pestaña
+  window.open('/api/<%= entidadDoc %>/documentos/' + id + '/pdf', '_blank');
+  setTimeout(() => mostrarToast('✅ PDF generado', 'success'), 1000);
+}
+
+async function firmarDoc(id) {
+  if (!confirm('¿Firmar digitalmente este documento?')) return;
+  try {
+    await apiFetch('/api/<%= entidadDoc %>/documentos/' + id + '/firmar', { method: 'POST' });
+    mostrarToast('✍️ Documento firmado digitalmente', 'success');
+    cargarDocs();
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
+async function eliminarDoc(id) {
+  if (!confirm('¿Eliminar este documento definitivamente?')) return;
+  try {
+    await apiFetch('/api/<%= entidadDoc %>/documentos/' + id, { method: 'DELETE' });
+    mostrarToast('🗑️ Documento eliminado', 'success');
+    cargarDocs();
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
+// ── Panel de Nuevo Documento ──────────────────────────────────────────────
+function mostrarPanelDocs() {
+  let html = `<p style="margin-bottom:16px;color:#666">Selecciona el tipo de documento y rellena los datos. El PDF se genera al descargar.</p>`;
+  
+  html += `<div style="margin-bottom:16px">`;
+  // Categorías y tipos
+  docsTipos.forEach(cat => {
+    html += `<div style="margin-bottom:12px">
+      <h4 style="font-size:13px;font-weight:700;color:var(--p);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:6px">${cat.categoria}</h4>
+      <div class="flex gap-8 flex-wrap">`;
+    cat.documentos.forEach(d => {
+      html += `<button class="btn-sm btn-secondary" onclick="seleccionarTipo('${d.tipo}')" style="font-size:10px">${d.etiqueta}</button>`;
+    });
+    html += `</div></div>`;
+  });
+  html += `</div>`;
+
+  // Formulario
+  html += `<div id="docFormContainer" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid #f0ecf8"></div>`;
+
+  mostrarModal('📄 Nuevo Documento', html);
+}
+
+async function seleccionarTipo(tipo) {
+  try {
+    const plantilla = await apiFetch('/api/<%= entidadDoc %>/plantilla/' + tipo);
+    const container = document.getElementById('docFormContainer');
+    if (!container) return;
+    
+    container.style.display = 'block';
+    let html = `<h4 style="font-size:14px;font-weight:700;margin-bottom:12px">${plantilla.titulo || tipo}</h4>`;
+    html += `<p style="font-size:12px;color:#888;margin-bottom:12px">${plantilla.descripcion || ''}</p>`;
+    html += `<input type="hidden" id="docTipoSeleccionado" value="${tipo}">`;
+
+    // Campos del formulario
+    const datos = plantilla.datos || {};
+    for (const [key, value] of Object.entries(datos)) {
+      const label = key.split(/(?=[A-Z])/).join(' ').replace(/_/g, ' ');
+      const labelCap = label.charAt(0).toUpperCase() + label.slice(1);
+      
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        html += `<div style="margin-bottom:12px">
+          <label style="font-size:12px;font-weight:600;color:#666;margin-bottom:4px;display:block">${labelCap}</label>`;
+        for (const [sk, sv] of Object.entries(value)) {
+          const sl = sk.split(/(?=[A-Z])/).join(' ').replace(/_/g, ' ');
+          html += `<input type="text" id="docField_${key}_${sk}" class="form-input" placeholder="${sl}" value="${sv ?? ''}" style="margin-bottom:6px">`;
+        }
+        html += `</div>`;
+      } else if (Array.isArray(value)) {
+        html += `<div style="margin-bottom:12px">
+          <label style="font-size:12px;font-weight:600;color:#666;margin-bottom:4px;display:block">${labelCap}</label>
+          <textarea id="docField_${key}" class="form-input" placeholder="Uno por línea" style="min-height:60px">${value.join('\n')}</textarea>
+        </div>`;
+      } else {
+        const inputType = typeof value === 'number' ? 'number' : 'text';
+        html += `<div style="margin-bottom:10px">
+          <label style="font-size:12px;font-weight:600;color:#666;margin-bottom:4px;display:block">${labelCap}</label>
+          <input type="${inputType}" id="docField_${key}" class="form-input" placeholder="${labelCap}" value="${value ?? ''}">
+        </div>`;
+      }
+    }
+
+    html += `<button class="btn-primary mt-16" onclick="crearDocumento()">💾 Guardar Documento</button>`;
+    container.innerHTML = html;
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
+async function crearDocumento() {
+  const tipo = document.getElementById('docTipoSeleccionado')?.value;
+  if (!tipo) return mostrarToast('Selecciona un tipo', 'error');
+
+  // Recoger campos del formulario
+  const inputs = document.querySelectorAll('#docFormContainer [id^="docField_"]');
+  const datos = {};
+  inputs.forEach(input => {
+    const idParts = input.id.replace('docField_', '').split('_');
+    if (idParts.length === 1) {
+      datos[idParts[0]] = input.value;
+    } else if (idParts.length === 2) {
+      if (!datos[idParts[0]]) datos[idParts[0]] = {};
+      datos[idParts[0]][idParts[1]] = input.value;
+    } else if (idParts.length >= 2) {
+      // Arrays (textarea)
+      datos[idParts[0]] = input.value.split('\n').filter(l => l.trim());
+    }
+  });
+
+  try {
+    const result = await apiFetch('/api/<%= entidadDoc %>/documentos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo, datos })
+    });
+    mostrarToast('✅ Documento creado: ' + (result.titulo || tipo), 'success');
+    // Cerrar modal y recargar
+    document.querySelector('.modal-overlay')?.remove();
+    cargarDocs();
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+</script>

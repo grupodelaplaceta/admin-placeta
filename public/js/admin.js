@@ -20,27 +20,32 @@ async function apiFetch(url, opts = {}) {
 // ── Toast ──────────────────────────────────────────────────────────────────
 function mostrarToast(mensaje, tipo = 'info') {
   const colors = { success: '#22a06b', error: '#d03131', info: '#3f00d8', warning: '#d7a02d' };
+  const icons = { success: '✅', error: '❌', info: 'ℹ️', warning: '⚠️' };
   const existing = document.querySelector('.admin-toast');
   if (existing) existing.remove();
 
   const toast = document.createElement('div');
   toast.className = 'admin-toast';
   toast.style.cssText = `
-    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
-    background: ${colors[tipo] || colors.info}; color: #fff;
-    padding: 14px 24px; border-radius: 10px; font-weight: 600;
-    font-size: 14px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
-    animation: slideIn 0.3s ease-out;
-    font-family: 'Outfit', sans-serif; max-width: 400px; border: 1px solid rgba(255,255,255,0.15);
+    position: fixed; bottom: 28px; right: 28px; z-index: 99999;
+    background: #fff; color: #111;
+    padding: 16px 24px; border-radius: 16px; font-weight: 500;
+    font-size: 14px; box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+    animation: toastIn 0.35s ease-out;
+    font-family: 'Outfit', sans-serif; max-width: 420px;
+    border: 1px solid #e8e4f0;
+    display: flex; align-items: center; gap: 10px;
+    border-left: 4px solid ${colors[tipo] || colors.info};
   `;
-  toast.textContent = mensaje;
+  toast.innerHTML = `<span style="font-size:18px">${icons[tipo] || 'ℹ️'}</span><span>${mensaje}</span>`;
   document.body.appendChild(toast);
 
   setTimeout(() => {
     toast.style.opacity = '0';
-    toast.style.transition = 'opacity 0.3s';
+    toast.style.transform = 'translateX(40px)';
+    toast.style.transition = 'all 0.3s ease';
     setTimeout(() => toast.remove(), 300);
-  }, 4000);
+  }, 4500);
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────────
@@ -50,17 +55,41 @@ function mostrarModal(titulo, html) {
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
+  overlay.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4); z-index: 10000;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(6px);
+    animation: overlayIn 0.2s ease;
+    padding: 20px;
+  `;
   overlay.innerHTML = `
-    <div class="modal-window">
-      <div class="modal-header">
-        <h3>${titulo}</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    <div class="modal-window" style="
+      background: #fff; border: 1px solid #e8e4f0;
+      border-radius: 20px; padding: 32px;
+      max-width: 540px; width: 100%;
+      max-height: 90vh; overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+      animation: modalIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    ">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #f0ecf8">
+        <h3 style="font-weight:700;font-size:18px;color:#111;margin:0">${titulo}</h3>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="
+          background: #f0ecf8; border: none;
+          width: 32px; height: 32px; border-radius: 50%;
+          font-size: 16px; cursor: pointer; color: #666;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.2s;
+        " onmouseover="this.style.background='#e0daf0'" onmouseout="this.style.background='#f0ecf8'">✕</button>
       </div>
-      <div class="modal-body">${html}</div>
+      <div style="font-size:14px;color:#444;line-height:1.6">${html}</div>
     </div>
   `;
   document.body.appendChild(overlay);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  // Close on Escape
+  const escHandler = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); } };
+  document.addEventListener('keydown', escHandler);
 }
 
 // ── Búsqueda en tabla ─────────────────────────────────────────────────────
@@ -92,30 +121,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// ── Animación slideIn ─────────────────────────────────────────────────────
+// ── Animaciones ───────────────────────────────────────────────────────────
 const style = document.createElement('style');
 style.textContent = `
-  @keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  .modal-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.5); z-index: 1000;
-    display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px);
-  }
-  .modal-window {
-    background: #fff; border: 1px solid #e5e7eb;
-    border-radius: 16px; padding: 32px;
-    max-width: 500px; width: 90%; max-height: 85vh; overflow: auto;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
-    animation: modalIn 0.25s ease-out;
-  }
-  @keyframes modalIn {
-    from { transform: scale(0.9) translateY(20px); opacity: 0; }
-    to { transform: scale(1) translateY(0); opacity: 1; }
-  }
-  .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-  .modal-header h3 { font-weight: 700; font-size: 18px; color: #111; }
-  .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #999; }
-  .modal-body { font-size: 14px; color: #444; }
+  @keyframes toastIn { from { transform: translateX(60px) translateY(10px); opacity: 0; } to { transform: translateX(0) translateY(0); opacity: 1; } }
+  @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modalIn { from { transform: scale(0.92) translateY(30px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
+  /* Table search highlight */
+  .table-search-highlight { background: #fff8d6 !important; }
+  /* Scrollbar for tables */
+  .table-container::-webkit-scrollbar { height: 6px; }
+  .table-container::-webkit-scrollbar-track { background: transparent; }
+  .table-container::-webkit-scrollbar-thumb { background: #d0c8e0; border-radius: 3px; }
+  .table-container::-webkit-scrollbar-thumb:hover { background: #b8aed0; }
 `;
 document.head.appendChild(style);

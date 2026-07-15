@@ -21,6 +21,7 @@ import tributosRoutes from './src/routes/tributos.js';
 import juntaRoutes from './src/routes/junta.js';
 import administracionRoutes from './src/routes/administracion.js';
 import apiRoutes from './src/routes/api.js';
+import documentosRoutes from './src/routes/documentos.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -118,6 +119,7 @@ app.use('/administracion', verificarSesion, verificarAccesoEntidad('administraci
 
 // API REST
 app.use('/api', apiRoutes);
+app.use(documentosRoutes); // /api/:entidad/documentos...
 
 // ── Landing / Login ────────────────────────────────────────────────────────
 app.get('/', (req, res) => {

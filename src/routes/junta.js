@@ -89,6 +89,14 @@ router.get('/recursos', verificarPermiso('junta', 'gestion_recursos'), (req, res
   });
 });
 
+// ── Documentación ─────────────────────────────────────────────────────────
+router.get('/documentos', verificarPermiso('junta', 'gestion_ciudadanos'), (req, res) => {
+  res.render('documentos', {
+    titulo: 'Documentación - Junta de La Placeta',
+    entidad_actual: 'junta'
+  });
+});
+
 // ── Gestión de Usuarios Junior ─────────────────────────────────────────────
 router.get('/junior', verificarPermiso('junta', 'gestion_junior'), (req, res) => {
   res.render('junta/junior', {

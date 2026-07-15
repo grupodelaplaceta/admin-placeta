@@ -75,6 +75,14 @@ router.get('/placetaid', verificarPermiso('administracion', 'gestion_placetid_co
   });
 });
 
+// ── Documentación ─────────────────────────────────────────────────────────
+router.get('/documentos', verificarPermiso('administracion', 'gestion_tramites'), (req, res) => {
+  res.render('documentos', {
+    titulo: 'Documentación - Administración de La Placeta',
+    entidad_actual: 'administracion'
+  });
+});
+
 // ── Gestión de Usuarios Junior ─────────────────────────────────────────────
 router.get('/junior', verificarPermiso('administracion', 'gestion_junior'), (req, res) => {
   res.render('administracion/junior', {

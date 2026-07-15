@@ -90,6 +90,14 @@ router.get('/incidencias', verificarPermiso('tributos', 'gestionar_incidencias')
   });
 });
 
+// ── Documentación ─────────────────────────────────────────────────────────
+router.get('/documentos', verificarPermiso('tributos', 'ver_contribuyentes'), (req, res) => {
+  res.render('documentos', {
+    titulo: 'Documentación - Tributos de La Placeta',
+    entidad_actual: 'tributos'
+  });
+});
+
 // ── Trabajadores de Tributos ───────────────────────────────────────────────
 router.get('/trabajadores', verificarPermiso('tributos', 'ver_trabajadores_tributos'), (req, res) => {
   res.render('tributos/trabajadores', {
