@@ -366,6 +366,8 @@ code, .code { font-family: 'Courier New', monospace; font-size: 12px; background
 .btn-sm.btn-secondary:hover { background: #ede8ff; border-color: #c8bde8; }
 /* Table action buttons */
 td .btn-sm { margin: 1px 2px; }
+/* Compact cell for IDs */
+td.id-cell { font-family: 'Courier New', monospace; font-size: 11px; color: #5a4a7a; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Badges ───────────────────────────────────────────────────────────────── */
 .badge {
@@ -422,7 +424,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
 .mb-8 { margin-bottom: 8px; }
 .mb-16 { margin-bottom: 16px; }
 .text-center { text-align: center; }
-.text-mono { font-family: 'Courier New', monospace; font-size: 12px; letter-spacing: 0.3px; color: #5a4a7a; background: #f6f3ff; padding: 2px 6px; border-radius: 4px; display: inline-block; }
+.text-mono { font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.2px; color: #5a4a7a; background: transparent; padding: 0; border-radius: 0; display: inline; }
 .text-sm { font-size: 12px; color: var(--tm); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
 

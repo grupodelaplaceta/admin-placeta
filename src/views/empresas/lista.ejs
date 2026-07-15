@@ -21,7 +21,7 @@
       <tr>
         <th>Empresa</th>
         <th>EIP</th>
-        <th>IBAN</th>
+        <th>Cuenta Bancaria</th>
         <th>Saldo</th>
         <th>Socios</th>
         <th>Cuentas Vinculadas</th>
@@ -33,13 +33,16 @@
       <% empresas.forEach(e => { %>
       <tr class="fila-empresa">
         <td><strong><%= e.nombre %></strong></td>
-        <td><span class="badge badge-purple"><%= e.eip %></span></td>
-        <td class="text-mono"><%= e.iban %></td>
+        <td><span class="badge badge-purple" style="font-size:11px;letter-spacing:0.3px"><%= e.eip %></span></td>
+        <td><span class="text-mono" style="font-size:11px"><%= e.iban || '—' %></span><br><span style="font-size:10px;color:#999">Cuenta: <%= e.id?.slice(0,12) %>…</span></td>
         <td><strong><%= e.saldo.toLocaleString() %></strong> Pz</td>
         <td>
           <% if (e.socios.length === 0) { %><span style="color:#999;font-size:12px">—</span><% } %>
           <% e.socios.forEach(s => { %>
-            <div style="font-size:12px;margin-bottom:2px"><%= s.nombre %> <span class="badge badge-info" style="font-size:9px">Socio</span></div>
+            <div style="font-size:12px;margin-bottom:2px;display:flex;align-items:center;gap:4px">
+              <span><%= s.nombre %></span>
+              <span class="badge badge-info" style="font-size:9px">Socio</span>
+            </div>
           <% }) %>
         </td>
         <td>
@@ -51,7 +54,7 @@
         <td><span class="badge <%= e.compliance === 'Clear' ? 'badge-success' : 'badge-warning' %>"><%= e.compliance || 'Pending' %></span></td>
         <td>
           <button class="btn-sm btn-secondary" onclick="verEmpresa('<%= e.eip %>','<%= e.nombre.replace(/'/g,"\\'") %>','<%= e.id %>')">👁️</button>
-          <button class="btn-sm btn-secondary" onclick="anadirSocio('<%= e.eip %>','<%= e.nombre.replace(/'/g,"\\'") %>')">👥 Socio</button>
+          <button class="btn-sm btn-secondary" onclick="anadirSocio('<%= e.eip %>','<%= e.nombre.replace(/'/g,"\\'") %>')">👥</button>
           <button class="btn-sm btn-primary" onclick="verDocsDe('empresa','<%= e.id %>','<%= entidad_actual %>','<%= e.nombre.replace(/'/g,"\\'").slice(0,20) %>')">📄</button>
           <button class="btn-sm btn-secondary" onclick="bajaEmpresa('<%= e.id %>','<%= e.nombre.replace(/'/g,"\\'") %>')">❌</button>
         </td>

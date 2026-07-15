@@ -37,13 +37,14 @@
 
 <% if (esAdmin) { %>
 <div class="flex gap-8 flex-wrap">
-  <button class="btn-secondary" onclick="mostrarModificarCuenta('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>',<%= cuenta.sendLimitPz || 0 %>)">✏️ Modificar</button>
-  <button class="btn-secondary" onclick="mostrarVincularEIP('<%= cuenta.id %>')">🔗 Vincular EIP</button>
-  <button class="btn-secondary" onclick="mostrarAnadirCotitular('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>')">👥 Añadir Cotitular</button>
+  <button class="btn btn-secondary btn-sm" onclick="mostrarModificarCuenta('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>',<%= cuenta.sendLimitPz || 0 %>)" title="Modificar cuenta">✏️</button>
+  <button class="btn btn-secondary btn-sm" onclick="mostrarVincularEIP('<%= cuenta.id %>')" title="Vincular EIP">🔗</button>
+  <button class="btn btn-secondary btn-sm" onclick="mostrarAnadirCotitular('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>')" title="Añadir cotitular">👥</button>
+  <button class="btn btn-secondary btn-sm" onclick="mostrarQuitarCotitular('<%= cuenta.id %>')" title="Quitar cotitular">🚫</button>
   <% if (!cuenta.closedAt) { %>
-  <button class="btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')" style="color:var(--r);border-color:rgba(208,49,49,0.2)">🔒 Bloquear</button>
+  <button class="btn btn-secondary btn-sm" onclick="bloquearCuenta('<%= cuenta.id %>')" title="Bloquear cuenta" style="color:var(--r)">🔒</button>
   <% } else { %>
-  <button class="btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')">✅ Desbloquear</button>
+  <button class="btn btn-secondary btn-sm" onclick="bloquearCuenta('<%= cuenta.id %>')" title="Desbloquear cuenta">✅</button>
   <% } %>
 </div>
 <% } %>
@@ -76,9 +77,18 @@ function mostrarAnadirCotitular(id, nombre) {
   const h = '<div style="margin-bottom:12px">' +
     '<p style="margin-bottom:12px;color:#666">Añade un cotitular a la cuenta <strong>' + nombre + '</strong></p>' +
     '<input type="text" id="cotitularDip" class="form-input" placeholder="DIP del cotitular" style="width:100%;margin-bottom:12px">' +
-    '<button class="btn-primary" onclick="anadirCotitular(\'' + id + '\')">👥 Añadir</button>' +
+    '<button class="btn-primary" onclick="anadirCotitular(\'' + id + '\')">➕ Añadir</button>' +
     '</div>';
   mostrarModal('👥 Añadir Cotitular', h);
+}
+
+function mostrarQuitarCotitular(id) {
+  const h = '<div style="margin-bottom:12px">' +
+    '<p style="margin-bottom:12px;color:#666">Introduce el DIP del cotitular a eliminar:</p>' +
+    '<input type="text" id="quitarCotitularDip" class="form-input" placeholder="DIP del cotitular" style="width:100%;margin-bottom:12px">' +
+    '<button class="btn-danger" onclick="quitarCotitular(\'' + id + '\')">🚫 Quitar</button>' +
+    '</div>';
+  mostrarModal('🚫 Quitar Cotitular', h);
 }
 
 async function guardarCambiosCuenta(id) {
@@ -112,6 +122,17 @@ async function anadirCotitular(id) {
     mostrarToast('👥 Cotitular añadido', 'success');
     setTimeout(() => location.reload(), 1000);
   } catch { mostrarToast('⚠️ Simulado: cotitular añadido', 'warning'); location.reload(); }
+}
+
+async function quitarCotitular(id) {
+  const dip = document.getElementById('quitarCotitularDip')?.value;
+  if (!dip) return mostrarToast('Introduce un DIP', 'error');
+  if (!confirm('¿Quitar a ' + dip + ' como cotitular de esta cuenta?')) return;
+  try {
+    await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'quitar-cotitular', accountId: id, dip }) });
+    mostrarToast('🚫 Cotitular eliminado', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } catch { mostrarToast('⚠️ Simulado: cotitular eliminado', 'warning'); location.reload(); }
 }
 
 async function bloquearCuenta(id) {
