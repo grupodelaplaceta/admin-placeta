@@ -67,11 +67,12 @@ export async function cargarPermisosUsuario(req, res, next) {
   try {
     const dip = req.session.usuario.dip;
 
-    // Cargar cargos de la junta
-    const cargos = await sbFindCargosByDip(dip);
-
-    // Cargar permisos de administración
-    const permisosAlmacenados = await sbFindPermisosByDip(dip);
+    // Cargar cargos y permisos (con timeout 3s para evitar cuelgues en Vercel)
+    const timeout = (ms) => new Promise(r => setTimeout(() => r([]), ms));
+    const [cargos, permisosAlmacenados] = await Promise.all([
+      Promise.race([sbFindCargosByDip(dip), timeout(3000)]),
+      Promise.race([sbFindPermisosByDip(dip), timeout(3000)])
+    ]);
 
     // Determinar roles (incluyendo DIP para hardcodeados)
     const roles = determinarRoles(cargos, permisosAlmacenados, dip);
