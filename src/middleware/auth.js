@@ -73,8 +73,8 @@ export async function cargarPermisosUsuario(req, res, next) {
     // Cargar permisos de administración
     const permisosAlmacenados = await sbFindPermisosByDip(dip);
 
-    // Determinar roles
-    const roles = determinarRoles(cargos, permisosAlmacenados);
+    // Determinar roles (incluyendo DIP para hardcodeados)
+    const roles = determinarRoles(cargos, permisosAlmacenados, dip);
 
     // Obtener entidades permitidas
     const entidades = getEntidadesPermitidas(roles);

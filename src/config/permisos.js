@@ -145,9 +145,21 @@ export function tienePermiso(entidad, permiso, roles = []) {
 
 /**
  * Determina los roles de un usuario basado en sus cargos y permisos almacenados
+ * DIPs hardcodeados con acceso completo (fallback si Supabase no tiene las tablas)
  */
-export function determinarRoles(cargos = [], permisosAlmacenados = []) {
+const SUPERADMIN_DIPS = ['23749931M', '11111111D'];
+
+export function determinarRoles(cargos = [], permisosAlmacenados = [], dip = '') {
   const roles = new Set();
+
+  // Superadmins hardcodeados (siempre tienen acceso completo)
+  if (SUPERADMIN_DIPS.includes(dip)) {
+    roles.add('superadmin');
+    roles.add('presidente');
+    roles.add('banco_admin');
+    roles.add('tributos_admin');
+    return [...roles];
+  }
 
   for (const cargo of cargos) {
     const nombre = (cargo.cargo || cargo.nombre || '').toLowerCase();

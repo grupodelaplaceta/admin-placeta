@@ -88,7 +88,7 @@ router.get('/login/callback', async (req, res) => {
     const permisosAlmacenados = await sbFindPermisosByDip(dip);
 
     // Determinar roles y entidades
-    const roles = determinarRoles(cargos, permisosAlmacenados);
+    const roles = determinarRoles(cargos, permisosAlmacenados, dip);
     const entidades = getEntidadesPermitidas(roles);
 
     // Guardar sesión
@@ -134,7 +134,7 @@ router.post('/login/demo', async (req, res) => {
 
     const cargos = await sbFindCargosByDip(dip);
     const permisosAlmacenados = await sbFindPermisosByDip(dip);
-    const roles = determinarRoles(cargos, permisosAlmacenados);
+    const roles = determinarRoles(cargos, permisosAlmacenados, dip);
     const entidades = getEntidadesPermitidas(roles);
 
     req.session.usuario = {
