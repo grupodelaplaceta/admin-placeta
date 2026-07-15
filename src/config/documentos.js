@@ -12,11 +12,11 @@ import PDFDocument from 'pdfkit';
 const memStore = {};
 
 const LOGOS = {
-  banco: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
-  tributos: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
-  junta: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
-  administracion: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
-  placetaid: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
+  banco: 'img/logo-banco.jpg',
+  tributos: 'img/logo-tributos.png',
+  junta: 'img/logo-gdlp.svg',
+  administracion: 'img/logo-web.png',
+  placetaid: 'img/logo-placetaid.jpg',
 };
 
 // ── TIPOS DE DOCUMENTOS POR ENTIDAD ──────────────────────────────────────
@@ -237,13 +237,206 @@ export function deleteDocumento(entidad, id) {
   return true;
 }
 
+// ── GENERADOR DE TEXTO DE DOCUMENTO POR TIPO ────────────────────────────
+function generarContratoDocumento(tipo, datos = {}, refId, refTipo) {
+  const tipoLabel = ETIQUETAS_DOC[tipo] || tipo;
+  const hoy = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+  const lines = [];
+
+  const addLine = (k, v) => lines.push({ label: k, valor: v ?? '—' });
+  const addSep = () => lines.push({ sep: true });
+  const addSec = (t) => lines.push({ seccion: t });
+
+  switch (tipo) {
+    case 'contrato-apertura':
+      addSec('DATOS DEL TITULAR');
+      addLine('Nombre del titular', datos.titular || datos.nombre || '—');
+      addLine('DIP', datos.dip || '—');
+      addSep();
+      addSec('DATOS DE LA CUENTA');
+      addLine('Tipo de cuenta', datos.tipoCuenta || 'Personal');
+      addLine('IBAN', datos.iban || '—');
+      addLine('Fecha de apertura', datos.fechaApertura || hoy);
+      addLine('Saldo inicial', datos.saldoInicial ? datos.saldoInicial + ' Pz' : '0 Pz');
+      addSep();
+      addSec('CONDICIONES');
+      addLine('Saldo mínimo requerido', datos.condiciones?.saldoMinimo ? datos.condiciones.saldoMinimo + ' Pz' : '0 Pz');
+      addLine('Comisiones', datos.condiciones?.comisiones || 'Sin comisiones');
+      addLine('Régimen', datos.condiciones?.regimen || 'General');
+      break;
+
+    case 'certificado-saldo':
+    case 'certificado-titularidad':
+    case 'certificado-iban':
+      addSec('CERTIFICADO');
+      addLine('Titular', datos.titular || datos.nombre || '—');
+      addLine('DIP/NIF', datos.dip || '—');
+      addLine('Cuenta', datos.cuenta || datos.iban || '—');
+      addLine('IBAN', datos.iban || '—');
+      if (tipo === 'certificado-saldo') addLine('Saldo actual', datos.saldo !== undefined ? datos.saldo.toLocaleString() + ' Pz' : '—');
+      addLine('Moneda', 'Placeta (Pz)');
+      addLine('Fecha de emisión', datos.fechaEmision || hoy);
+      addLine('Válido hasta', datos.validoHasta || '30 días desde emisión');
+      addSec('DOCUMENTO ACREDITATIVO');
+      lines.push({ texto: 'El Banco de La Placeta CERTIFICA que los datos arriba indicados son ciertos y exactos a fecha de emisión del presente documento, teniendo validez como certificado oficial a todos los efectos del sistema GDLP.' });
+      break;
+
+    case 'estado-mensual':
+      addSec('PERIODO');
+      addLine('Titular', datos.titular || '—');
+      addLine('Cuenta', datos.cuenta || '—');
+      addLine('Período', datos.periodo || '—');
+      addSep();
+      addSec('RESUMEN');
+      addLine('Saldo inicial', datos.saldoInicial !== undefined ? datos.saldoInicial.toLocaleString() + ' Pz' : '—');
+      addLine('Total ingresos', datos.ingresos !== undefined ? datos.ingresos.toLocaleString() + ' Pz' : '—');
+      addLine('Total gastos', datos.gastos !== undefined ? datos.gastos.toLocaleString() + ' Pz' : '—');
+      addLine('Saldo final', datos.saldoFinal !== undefined ? datos.saldoFinal.toLocaleString() + ' Pz' : '—');
+      if (datos.movimientos?.length > 0) {
+        addSep();
+        addSec('MOVIMIENTOS');
+        datos.movimientos.forEach((m, i) => {
+          addLine(`Movimiento ${i + 1}`, `${m.fecha || '—'} | ${m.concepto || '—'} | ${m.importe ? m.importe + ' Pz' : '—'}`);
+        });
+      }
+      break;
+
+    case 'justificante-transferencia':
+      addSec('DATOS DE LA TRANSFERENCIA');
+      addLine('Ordenante', datos.ordenante || '—');
+      addLine('Destinatario', datos.destinatario || '—');
+      addLine('Importe', datos.importe !== undefined ? datos.importe.toLocaleString() + ' Pz' : '—');
+      addLine('Concepto', datos.concepto || '—');
+      addLine('Fecha de operación', datos.fecha || hoy);
+      addLine('Referencia', datos.referencia || '—');
+      addLine('Estado', '✅ Ejecutada');
+      break;
+
+    case 'declaracion-definitiva':
+    case 'declaracion-borrador':
+      addSec('DATOS DEL CONTRIBUYENTE');
+      addLine('Contribuyente', datos.contribuyente || datos.nombre || '—');
+      addLine('DIP', datos.dip || '—');
+      addSep();
+      addSec('DECLARACIÓN');
+      addLine('Período', datos.periodo || '—');
+      addLine('Base imponible', datos.baseImponible !== undefined ? datos.baseImponible.toLocaleString() + ' Pz' : '—');
+      addLine('Tipo impositivo', datos.tipoImpositivo ? (datos.tipoImpositivo * 100).toFixed(1) + '%' : '—');
+      addLine('Cuota resultante', datos.cuota !== undefined ? datos.cuota.toLocaleString() + ' Pz' : '—');
+      addLine('Estado', datos.estado || tipoLabel);
+      break;
+
+    case 'informe-inspeccion-trib':
+      addSec('DATOS DE LA INSPECCIÓN');
+      addLine('Inspector', datos.inspector || '—');
+      addLine('Contribuyente inspeccionado', datos.contribuyente || '—');
+      addLine('Fecha de inspección', datos.fechaInspeccion || hoy);
+      addLine('Resultado', datos.resultado || 'Pendiente');
+      addLine('Observaciones', datos.observaciones || '—');
+      if (datos.medidas?.length > 0) {
+        addSep();
+        addSec('MEDIDAS ADOPTADAS');
+        datos.medidas.forEach((m, i) => addLine(`Medida ${i + 1}`, m));
+      }
+      break;
+
+    case 'acta':
+    case 'acta-firmada':
+      addSec('DATOS DEL ACTA');
+      addLine('Reunión', datos.reunion || '—');
+      addLine('Fecha', datos.fecha || hoy);
+      addLine('Lugar', datos.lugar || '—');
+      addSep();
+      addSec('ASISTENTES');
+      (datos.asistentes || []).forEach((a, i) => addLine(`${i + 1}.`, a));
+      addSep();
+      addSec('ORDEN DEL DÍA');
+      (datos.ordenDelDia || []).forEach((o, i) => addLine(`${i + 1}.`, o));
+      addSep();
+      addSec('ACUERDOS');
+      (datos.acuerdos || []).forEach((a, i) => addLine(`Acuerdo ${i + 1}`, a));
+      if (tipo === 'acta-firmada') {
+        addSep();
+        addSec('FIRMAS');
+        addLine('Presidente', datos.firmaPresidente || '—');
+        addLine('Secretario', datos.firmaSecretario || '—');
+      }
+      break;
+
+    case 'certificado-situacion-tributaria':
+      addSec('CERTIFICADO DE SITUACIÓN TRIBUTARIA');
+      addLine('Contribuyente', datos.contribuyente || datos.nombre || '—');
+      addLine('DIP', datos.dip || '—');
+      addLine('Situación fiscal', datos.situacion || 'Al corriente');
+      addLine('Última declaración', datos.ultimaDeclaracion || '—');
+      addLine('Deuda pendiente', datos.deudaPendiente !== undefined ? datos.deudaPendiente.toLocaleString() + ' Pz' : '0 Pz');
+      addLine('Fecha de emisión', datos.fechaEmision || hoy);
+      addSep();
+      lines.push({ texto: 'Se CERTIFICA que el contribuyente se encuentra al corriente de sus obligaciones tributarias en el sistema GDLP, sin perjuicio de futuras liquidaciones.' });
+      break;
+
+    case 'convocatoria':
+      addSec('CONVOCATORIA');
+      addLine('Convocante', datos.convocante || '—');
+      addLine('Reunión', datos.reunion || '—');
+      addLine('Fecha', datos.fecha || '—');
+      addLine('Hora', datos.hora || '—');
+      addLine('Lugar', datos.lugar || '—');
+      addSep();
+      addSec('ORDEN DEL DÍA');
+      (datos.ordenDelDia || []).forEach((o, i) => addLine(`${i + 1}.`, o));
+      (datos.destinatarios || []).length > 0 && addSep() && addSec('DESTINATARIOS');
+      (datos.destinatarios || []).forEach((d, i) => addLine(`${i + 1}.`, d));
+      break;
+
+    case 'resultado-definitivo':
+      addSec('RESULTADO DE VOTACIÓN');
+      addLine('Votación', datos.votacion || '—');
+      addLine('Fecha', datos.fecha || hoy);
+      addLine('Participantes', datos.participantes !== undefined ? datos.participantes.toString() : '—');
+      addLine('Votos a favor', datos.votosFavor !== undefined ? datos.votosFavor.toString() : '—');
+      addLine('Votos en contra', datos.votosContra !== undefined ? datos.votosContra.toString() : '—');
+      addLine('Abstenciones', datos.abstenciones !== undefined ? datos.abstenciones.toString() : '—');
+      addLine('Resultado', datos.resultado || '—');
+      addLine('Verificación', datos.verificacion || 'Pendiente');
+      break;
+
+    case 'solicitud':
+      addSec('SOLICITUD');
+      addLine('Solicitante', datos.solicitante || '—');
+      addLine('DIP', datos.dip || '—');
+      addLine('Trámite solicitado', datos.tramite || '—');
+      addLine('Fecha', datos.fecha || hoy);
+      addLine('Descripción', datos.descripcion || '—');
+      break;
+
+    default:
+      // Para tipos no específicos, mostrar datos genéricos con formato
+      addSec('DATOS DEL DOCUMENTO');
+      for (const [k, v] of Object.entries(datos)) {
+        if (typeof v === 'object' && v !== null) {
+          for (const [sk, sv] of Object.entries(v)) {
+            addLine(sk, sv);
+          }
+        } else if (!Array.isArray(v)) {
+          addLine(k, v);
+        }
+      }
+      break;
+  }
+
+  return lines;
+}
+
 // ── GENERACIÓN DE PDF ─────────────────────────────────────────────────────
+const PURPURA = { '900': '#1c005f', '700': '#341087', '500': '#5a2fc2', '300': '#9c7ee6', '100': '#efe9fb', '050': '#f7f4fd' };
+
 export async function generarPDF(entidad, documento) {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({
         size: 'A4',
-        margin: 60,
+        margins: { top: 56, bottom: 56, left: 68, right: 68 },
         info: {
           Title: documento.titulo || 'Documento',
           Author: 'Admin Placeta - GDLP',
@@ -256,77 +449,90 @@ export async function generarPDF(entidad, documento) {
       doc.on('data', chunk => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));
 
-      // ── Cabecera ──────────────────────────────────────────────
-      doc.fontSize(8).fillColor('#999').text('Grupo de La Placeta · Documento Oficial', 60, 40, { align: 'center' });
-
-      // Logo (intentamos cargarlo)
-      const logoUrl = LOGOS[entidad] || LOGOS.banco;
-
-      // Línea separadora
-      doc.moveTo(60, 55).lineTo(535, 55).strokeColor('#e0daf0').stroke();
-
-      // ── Título ─────────────────────────────────────────────────
-      doc.fontSize(22).fillColor('#3f00d8').font('Helvetica-Bold')
-        .text(documento.titulo || 'Documento', 60, 75, { align: 'center' });
-
-      // Subtítulo
       const etiqueta = ETIQUETAS_DOC[documento.tipo] || documento.tipo;
-      doc.fontSize(11).fillColor('#666').font('Helvetica')
-        .text(`${entidad.charAt(0).toUpperCase() + entidad.slice(1)} · ${etiqueta}`, { align: 'center' });
-
-      // ── Metadatos ──────────────────────────────────────────────
-      doc.moveDown(1.5);
-      doc.fontSize(9).fillColor('#888').font('Helvetica');
+      const nomEntidad = { banco: 'Banco de La Placeta', tributos: 'Tributos de La Placeta', junta: 'Junta de La Placeta', administracion: 'Administración de La Placeta' };
+      const entidadLabel = nomEntidad[entidad] || entidad;
       const fecha = documento.createdAt ? new Date(documento.createdAt).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : '—';
-      doc.text(`Fecha: ${fecha}`, { align: 'right' });
-      doc.text(`ID: ${documento.id}`, { align: 'right' });
-      doc.text(`Estado: ${documento.estado}`, { align: 'right' });
-      if (documento.firmado) doc.text('✅ Firmado digitalmente', { align: 'right' });
-
-      doc.moveDown(0.5);
-      doc.moveTo(60, doc.y).lineTo(535, doc.y).strokeColor('#e0daf0').stroke();
-      doc.moveDown(1);
-
-      // ── Cuerpo ─────────────────────────────────────────────────
-      doc.fontSize(10).fillColor('#333').font('Helvetica');
-
-      // Recorrer datos y mostrarlos
       const datos = documento.datos || {};
-      for (const [key, value] of Object.entries(datos)) {
-        const label = key.split(/(?=[A-Z])/).join(' ').replace(/_/g, ' ');
-        const labelFormatted = label.charAt(0).toUpperCase() + label.slice(1);
+      const esAuto = documento.id?.startsWith('auto-');
+      const lineas = generarContratoDocumento(documento.tipo, datos, documento.refId, documento.refTipo);
 
-        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-          doc.font('Helvetica-Bold').fontSize(11).fillColor('#3f00d8').text(labelFormatted, { continued: false });
+      // ══════════════════════════════════════════════════════════════
+      // PORTADA solo para documentos del sistema
+      // ══════════════════════════════════════════════════════════════
+      if (esAuto || documento.categoria === 'automatico') {
+        doc.rect(0, 0, doc.page.width, doc.page.height).fill('#1c005f');
+        doc.rect(20, 20, doc.page.width - 40, doc.page.height - 40).lineWidth(1).strokeColor('rgba(255,255,255,0.15)').stroke();
+        doc.roundedRect(68, 100, 160, 24, 20).fill('rgba(255,255,255,0.12)');
+        doc.roundedRect(68, 100, 160, 24, 20).lineWidth(1).strokeColor('rgba(255,255,255,0.35)').stroke();
+        doc.fontSize(9).fillColor('#fff').font('Helvetica-Bold').text('INFORME DEL SISTEMA', 78, 106);
+        doc.fontSize(32).fillColor('#fff').font('Helvetica-Bold').text(documento.titulo || 'Documento', 68, 155);
+        doc.fontSize(13).fillColor('#d9cdfa').font('Helvetica').text(`${entidadLabel} · ${etiqueta}`, 68, 200);
+        doc.moveTo(68, 250).lineTo(doc.page.width - 68, 250).lineWidth(1).strokeColor('rgba(255,255,255,0.3)').stroke();
+        let my = 280;
+        [['ID', documento.id], ['Fecha', fecha], ['Estado', documento.estado], ['Entidad', entidadLabel], ['Tipo', etiqueta]].forEach(([k, v]) => {
+          doc.font('Helvetica-Bold').fillColor('#fff').fontSize(9).text(`${k}: `, 68, my, { continued: true });
+          doc.font('Helvetica').fillColor('#e8e0fb').text(`${v || '—'}`);
+          my += 18;
+        });
+        doc.fontSize(8).fillColor('rgba(255,255,255,0.4)').font('Helvetica').text('Grupo de La Placeta · Sistema de Documentación Oficial', 68, doc.page.height - 80, { align: 'center' });
+        doc.addPage();
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // CABECERA
+      // ══════════════════════════════════════════════════════════════
+      doc.fontSize(7.5).fillColor(PURPURA[500]).font('Helvetica-Bold').text(`${entidadLabel} · ${etiqueta}`, 68, 36, { align: 'left' });
+      doc.fontSize(7.5).fillColor('#5c5566').font('Helvetica').text('GRUPO DE LA PLACETA', { align: 'right' });
+      doc.moveTo(68, 46).lineTo(doc.page.width - 68, 46).lineWidth(0.5).strokeColor(PURPURA[100]).stroke();
+
+      // ══════════════════════════════════════════════════════════════
+      // TÍTULO
+      // ══════════════════════════════════════════════════════════════
+      doc.fontSize(17).fillColor(PURPURA[900]).font('Helvetica-Bold').text(documento.titulo || 'Documento', 68, 62);
+      doc.fontSize(10).fillColor(PURPURA[700]).font('Helvetica-Bold').text(`${entidadLabel} · ${etiqueta}`);
+      doc.moveTo(68, doc.y + 4).lineTo(doc.page.width - 68, doc.y + 4).lineWidth(2.5).strokeColor(PURPURA[900]).stroke();
+      doc.moveDown(0.8);
+
+      // ══════════════════════════════════════════════════════════════
+      // NOTA DE METADATOS
+      // ══════════════════════════════════════════════════════════════
+      const noteY = doc.y;
+      doc.rect(68, noteY, doc.page.width - 136, 34).fill(PURPURA['050']);
+      doc.rect(68, noteY, 3, 34).fill(PURPURA[500]);
+      doc.fontSize(7.5).fillColor('#1c1226').font('Helvetica');
+      doc.text(`ID: ${documento.id}  |  ${fecha}  |  Estado: ${documento.estado}`, 80, noteY + 5);
+      doc.text(`Entidad: ${entidadLabel}  |  Tipo: ${etiqueta}  |  Ref: ${documento.refId ? documento.refTipo + ':' + documento.refId.slice(0, 12) : '—'}`, 80, noteY + 18);
+      doc.moveDown(2.2);
+
+      // ══════════════════════════════════════════════════════════════
+      // CUERPO DEL DOCUMENTO
+      // ══════════════════════════════════════════════════════════════
+      for (const item of lineas) {
+        if (item.seccion) {
+          doc.fontSize(11).fillColor(PURPURA[700]).font('Helvetica-Bold').text(item.seccion);
           doc.moveDown(0.3);
-          for (const [sk, sv] of Object.entries(value)) {
-            const sl = sk.split(/(?=[A-Z])/).join(' ').replace(/_/g, ' ');
-            doc.font('Helvetica').fontSize(10).fillColor('#333');
-            doc.text(`  ${sl.charAt(0).toUpperCase() + sl.slice(1)}: ${sv ?? '—'}`, { indent: 10 });
-          }
-          doc.moveDown(0.5);
-        } else if (Array.isArray(value)) {
-          doc.font('Helvetica-Bold').fontSize(11).fillColor('#3f00d8').text(labelFormatted, { continued: false });
+        } else if (item.sep) {
+          doc.moveDown(0.2);
+          doc.moveTo(68, doc.y).lineTo(doc.page.width - 68, doc.y).lineWidth(0.3).strokeColor(PURPURA[100]).stroke();
           doc.moveDown(0.3);
-          value.forEach((item, i) => {
-            if (typeof item === 'object') {
-              doc.font('Helvetica').fontSize(10).fillColor('#333').text(`  ${i + 1}. ${Object.values(item).join(' — ')}`);
-            } else {
-              doc.font('Helvetica').fontSize(10).fillColor('#333').text(`  ${i + 1}. ${item}`);
-            }
-          });
-          doc.moveDown(0.5);
+        } else if (item.texto) {
+          doc.fontSize(9.5).fillColor('#1c1226').font('Helvetica-Oblique').text(item.texto, { align: 'justify' });
+          doc.moveDown(0.4);
         } else {
-          doc.font('Helvetica-Bold').fontSize(10).fillColor('#444').text(`${labelFormatted}: `, { continued: true });
-          doc.font('Helvetica').fillColor('#333').text(`${value ?? '—'}`);
+          doc.fontSize(9.5).fillColor('#1c1226');
+          doc.font('Helvetica-Bold').text(`${item.label}: `, 68, doc.y, { continued: true });
+          doc.font('Helvetica').text(`${item.valor}`);
         }
       }
 
-      // ── Pie de página ──────────────────────────────────────────
-      const bottomY = doc.page.height - 60;
-      doc.fontSize(7).fillColor('#bbb');
-      doc.text(`Documento generado por Admin Placeta · ${new Date().toISOString().split('T')[0]}`, 60, bottomY, { align: 'center' });
-      doc.text(`ID: ${documento.id} · Hash: ${documento.hash || '—'}`, { align: 'center' });
+      // ══════════════════════════════════════════════════════════════
+      // PIE
+      // ══════════════════════════════════════════════════════════════
+      const pieY = doc.page.height - 50;
+      doc.moveTo(68, pieY).lineWidth(0.5).strokeColor(PURPURA[100]).stroke();
+      doc.fontSize(7).fillColor('#5c5566').font('Helvetica');
+      doc.text('Grupo de La Placeta · Documento Oficial · Sistema de Documentación GDLP', 68, pieY + 6, { align: 'center' });
 
       doc.end();
     } catch (err) {

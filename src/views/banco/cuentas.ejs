@@ -8,18 +8,18 @@
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>Saldo</th><th>EIP</th><th>Estado</th></tr></thead>
+    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>Saldo</th><th>EIP</th><th>Estado</th><th style="width:50px">Docs</th></tr></thead>
     <tbody>
       <% (cuentas || []).forEach(c => { %>
       <tr onclick="window.location='/banco/cuentas/<%= c.id %>'" style="cursor:pointer">
         <td class="text-mono"><%= c.id %></td>
         <td><strong><%= c.displayName || '—' %></strong></td>
-        <td><span class="badge badge-info"><%= c.type || '—' %></span></td>
+        <td><span class="badge badge-purple"><%= c.type || '—' %></span></td>
         <td class="text-mono"><%= c.iban || '—' %></td>
-        <td><%= (c.balancePz || 0).toLocaleString() %> Pz</td>
+        <td><strong><%= (c.balancePz || 0).toLocaleString() %></strong> Pz</td>
         <td class="text-mono"><%= c.eip || '—' %></td>
         <td><span class="badge <%= c.closedAt ? 'badge-danger' : 'badge-success' %>"><%= c.closedAt ? 'Cerrada' : 'Activa' %></span></td>
-        <td><button class="btn-sm btn-secondary" onclick="verDocsDe('cuenta','<%= c.id %>','banco','<%= (c.displayName || c.id).slice(0,20) %>')">📄</button></td>
+        <td style="width:50px"><button class="btn-sm btn-secondary" onclick="event.stopPropagation();verDocsDe('cuenta','<%= c.id %>','banco','<%= (c.displayName || c.id).slice(0,20) %>')" style="padding:4px 10px;font-size:13px">📄</button></td>
       </tr>
       <% }) %>
     </tbody>
