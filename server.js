@@ -63,7 +63,6 @@ app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieSession(sessionConfig));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Favicon inline (evita 404 del browser)
@@ -84,7 +83,7 @@ app.use('/api/', limiter);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'src/views'));
 app.use(ejsLayouts);
-app.set('layout', 'layouts/admin');
+// No establecer layout global - cada ruta especifica su layout
 
 // Variables globales
 app.use((req, res, next) => {
