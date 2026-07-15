@@ -1,17 +1,16 @@
 /**
  * SISTEMA DE DOCUMENTACIÓN GLOBAL
  * 
- * Almacena datos como JSON, genera PDFs bajo demanda.
+ * Almacena datos como JSON en memoria (compatible con serverless Vercel).
+ * Genera PDFs bajo demanda con pdfkit.
  * Accesible por entidad con permisos. Exportable vía API pública.
  */
-import fs from 'fs';
-import path from 'path';
 import { createHash, randomUUID } from 'crypto';
-import { fileURLToPath } from 'url';
 import PDFDocument from 'pdfkit';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, '../../data/documentos');
+// Almacenamiento en memoria (fallback cuando fs no está disponible en serverless)
+const memStore = {};
+
 const LOGOS = {
   banco: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
   tributos: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
@@ -19,9 +18,6 @@ const LOGOS = {
   administracion: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
   placetaid: 'https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png',
 };
-
-// Asegurar directorio de datos
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 // ── TIPOS DE DOCUMENTOS POR ENTIDAD ──────────────────────────────────────
 export const TIPOS_DOCUMENTO = {
@@ -195,17 +191,10 @@ DOCUMENTOS_AUTOMATICOS.forEach(d => {
   ETIQUETAS_DOC[d] = d.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 });
 
-// ── ALMACENAMIENTO (JSON) ─────────────────────────────────────────────────
-function getFilePath(entidad) {
-  return path.join(DATA_DIR, `${entidad}.json`);
-}
-
+// ── ALMACENAMIENTO (Memoria + fs opcional) ────────────────────────────────
 export function getDocumentos(entidad) {
-  const fp = getFilePath(entidad);
-  if (!fs.existsSync(fp)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(fp, 'utf-8'));
-  } catch { return []; }
+  if (!memStore[entidad]) memStore[entidad] = [];
+  return memStore[entidad];
 }
 
 export function getDocumentoById(entidad, id) {
@@ -221,7 +210,7 @@ export function saveDocumento(entidad, data) {
     categoria: data.categoria || 'general',
     titulo: data.titulo,
     descripcion: data.descripcion || '',
-    datos: data.datos || {}, // JSON con los valores del documento
+    datos: data.datos || {},
     createdBy: data.createdBy || 'sistema',
     createdAt: data.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -232,13 +221,12 @@ export function saveDocumento(entidad, data) {
   const idx = docs.findIndex(d => d.id === doc.id);
   if (idx >= 0) docs[idx] = doc;
   else docs.push(doc);
-  fs.writeFileSync(getFilePath(entidad), JSON.stringify(docs, null, 2));
   return doc;
 }
 
 export function deleteDocumento(entidad, id) {
   const docs = getDocumentos(entidad).filter(d => d.id !== id);
-  fs.writeFileSync(getFilePath(entidad), JSON.stringify(docs, null, 2));
+  memStore[entidad] = docs;
   return true;
 }
 

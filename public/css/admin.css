@@ -254,6 +254,9 @@ tr:hover td { background: #faf8ff; }
 /* Table row clickable */
 tr[onclick] { cursor: pointer; }
 tr[onclick]:hover td { background: #f4f0ff; }
+/* Table action buttons cell */
+td:last-child { white-space: nowrap; }
+td .btn-sm + .btn-sm { margin-left: 4px; }
 
 /* ── Stats ────────────────────────────────────────────────────────────────── */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
@@ -293,11 +296,11 @@ tr[onclick]:hover td { background: #f4f0ff; }
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 11px 22px;
+  padding: 12px 24px;
   border-radius: 12px;
   font-family: var(--font);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.2;
   border: none;
   cursor: pointer;
@@ -307,6 +310,7 @@ tr[onclick]:hover td { background: #f4f0ff; }
   outline: none;
 }
 .btn:active { transform: scale(0.97); }
+.btn > span, .btn > svg { vertical-align: middle; }
 .btn-primary {
   background: linear-gradient(135deg, var(--p), #5a1cf0);
   color: #fff;
@@ -368,13 +372,15 @@ tr[onclick]:hover td { background: #f4f0ff; }
 }
 /* Small button for tables */
 .btn-sm {
-  padding: 6px 14px;
-  font-size: 11px;
-  border-radius: 8px;
+  padding: 7px 16px;
+  font-size: 12px;
+  border-radius: 10px;
   font-weight: 600;
-  gap: 5px;
-  letter-spacing: 0.2px;
+  gap: 6px;
+  letter-spacing: 0;
+  line-height: 1;
 }
+.btn-sm .badge { font-size: 9px; padding: 1px 8px; }
 .btn-sm.btn-primary { box-shadow: 0 1px 4px rgba(63,0,216,0.2); }
 .btn-sm.btn-secondary { background: #f6f3ff; border-color: #e0daf0; }
 .btn-sm.btn-secondary:hover { background: #ede8ff; }
