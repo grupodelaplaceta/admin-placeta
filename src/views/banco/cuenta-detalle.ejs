@@ -63,6 +63,8 @@
 </div>
 <% } %>
 
+<%- include('../parciales/documentos-ctx', { entidad: 'banco', refTipo: 'cuenta', refId: cuenta.id, refNombre: cuenta.displayName || cuenta.id }) %>
+
 <script>
 async function guardarCambiosCuenta(id) {
   const nombre = document.getElementById('editNombre')?.value;

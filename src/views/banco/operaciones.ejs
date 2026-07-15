@@ -1,6 +1,6 @@
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Desde</th><th>Hacia</th><th>Cantidad</th><th>Tipo</th><th>Nota</th><th>Estado</th><th>Fecha</th></tr></thead>
+    <thead><tr><th>ID</th><th>Desde</th><th>Hacia</th><th>Cantidad</th><th>Tipo</th><th>Nota</th><th>Estado</th><th>Fecha</th><th>Docs</th></tr></thead>
     <tbody>
       <% (operaciones || []).slice(0, 50).forEach(tx => { %>
       <tr>
@@ -12,6 +12,7 @@
         <td style="font-size:12px"><%= (tx.note || '').slice(0, 40) %></td>
         <td><span class="badge <%= tx.status === 'Settled' ? 'badge-success' : 'badge-warning' %>"><%= tx.status || '—' %></span></td>
         <td style="font-size:12px"><%= tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : '—' %></td>
+        <td><button class="btn-sm btn-secondary" onclick="verDocsDe('operacion','<%= tx.id %>','banco','<%= (tx.id || '').slice(0,12) %>')" title="Documentos">📄</button></td>
       </tr>
       <% }) %>
     </tbody>

@@ -5,7 +5,7 @@
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>EIP</th><th>Estado Fiscal</th></tr></thead>
+    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>EIP</th><th>Estado Fiscal</th><th>Docs</th></tr></thead>
     <tbody>
       <% (contribuyentes || []).forEach(c => { %>
       <tr>
@@ -15,6 +15,7 @@
         <td class="text-mono"><%= c.iban || '—' %></td>
         <td class="text-mono"><%= c.eip || '—' %></td>
         <td><span class="badge <%= c.tributosCensusDate ? 'badge-success' : 'badge-warning' %>"><%= c.tributosCensusDate ? 'Al Dia' : 'Pendiente' %></span></td>
+        <td><button class="btn-sm btn-secondary" onclick="verDocsDe('contribuyente','<%= c.id %>','tributos','<%= (c.displayName || c.id).slice(0,20) %>')">📄</button></td>
       </tr>
       <% }) %>
     </tbody>

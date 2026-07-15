@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { createHash, randomUUID } from 'crypto';
 import { verificarSesion, verificarPermiso } from '../middleware/auth.js';
 import {
-  getDocumentos, getDocumentoById, saveDocumento, deleteDocumento,
+  getDocumentos, getDocumentoById, getDocumentosPorRef, saveDocumento, deleteDocumento,
   generarPDF, getPlantilla, TIPOS_DOCUMENTO, DOCUMENTOS_COMUNES,
   ETIQUETAS_DOC, getDocumentosByEntidad
 } from '../config/documentos.js';
@@ -33,6 +33,13 @@ router.get('/api/:entidad/documentos', verificarSesion, async (req, res) => {
   res.json({ documentos: filtrados, total: filtrados.length });
 });
 
+// ── API: Documentos por referencia (cuenta, tarjeta, etc.) ────────────────
+router.get('/api/:entidad/documentos/por-ref/:refTipo/:refId', verificarSesion, async (req, res) => {
+  const { entidad, refTipo, refId } = req.params;
+  const docs = getDocumentosPorRef(entidad, refTipo, refId);
+  res.json({ documentos: docs, total: docs.length });
+});
+
 // ── API: Obtener un documento ─────────────────────────────────────────────
 router.get('/api/:entidad/documentos/:id', verificarSesion, async (req, res) => {
   const { entidad, id } = req.params;
@@ -47,7 +54,7 @@ router.get('/api/:entidad/documentos/:id', verificarSesion, async (req, res) => 
 // ── API: Crear documento ──────────────────────────────────────────────────
 router.post('/api/:entidad/documentos', verificarSesion, async (req, res) => {
   const { entidad } = req.params;
-  const { tipo, titulo, descripcion, datos } = req.body;
+  const { tipo, titulo, descripcion, datos, refId, refTipo } = req.body;
   if (!tipo) return res.status(400).json({ error: 'Tipo de documento requerido' });
 
   const doc = saveDocumento(entidad, {
@@ -55,6 +62,8 @@ router.post('/api/:entidad/documentos', verificarSesion, async (req, res) => {
     titulo: titulo || ETIQUETAS_DOC[tipo] || tipo,
     descripcion: descripcion || '',
     datos: datos || {},
+    refId: refId || null,
+    refTipo: refTipo || null,
     createdBy: req.session.usuario?.dip || 'sistema',
     estado: 'borrador',
     hash: createHash('sha256').update(tipo + Date.now()).digest('hex').slice(0, 16)

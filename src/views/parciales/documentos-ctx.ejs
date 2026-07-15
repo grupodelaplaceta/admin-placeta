@@ -1,0 +1,135 @@
+<% // Panel de documentos contextual - para incrustar en detalle de cuenta, tarjeta, etc.
+// Uso: include('parciales/documentos-ctx', { entidad: 'banco', refTipo: 'cuenta', refId, refNombre })
+%>
+<div class="docs-ctx" style="margin-top:24px">
+  <div class="section-header" style="margin-bottom:12px;padding-bottom:8px">
+    <h3 style="font-size:16px;font-weight:700;color:var(--t);display:flex;align-items:center;gap:8px">
+      📄 Documentos <% if (refNombre) { %>de <em style="font-weight:400;color:#888;font-style:normal">«<%= refNombre %>»</em><% } %>
+    </h3>
+    <button class="btn btn-sm btn-primary" onclick="mostrarCtxDocs('<%= refTipo %>','<%= refId %>','<%= entidad %>')">📄 Nuevo</button>
+  </div>
+
+  <div id="ctxDocsTable-<%= refTipo %>-<%= refId %>" style="min-height:60px">
+    <p style="font-size:13px;color:#999;text-align:center;padding:20px">Cargando documentos...</p>
+  </div>
+</div>
+
+<script>
+(function() {
+  const container = document.getElementById('ctxDocsTable-<%= refTipo %>-<%= refId %>');
+  if (!container) return;
+  
+  fetch('/api/<%= entidad %>/documentos/por-ref/<%= refTipo %>/<%= refId %>')
+    .then(r => r.json())
+    .then(data => {
+      const docs = data.documentos || [];
+      if (docs.length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:20px;color:#999;font-size:13px">
+          <span style="font-size:32px;display:block;margin-bottom:8px;opacity:0.4">📄</span>
+          Sin documentos asociados. 
+          <a href="#" onclick="mostrarCtxDocs('<%= refTipo %>','<%= refId %>','<%= entidad %>');return false" style="color:var(--p)">Crear primero →</a>
+        </div>`;
+        return;
+      }
+      container.innerHTML = `<div class="table-container" style="border-radius:12px">
+        <table>
+          <thead><tr><th>Documento</th><th>Tipo</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>${docs.map(d => {
+            const estCls = d.estado === 'firmado' ? 'badge-success' : d.estado === 'final' ? 'badge-info' : 'badge-warning';
+            const estLbl = d.estado === 'firmado' ? '✅ Firmado' : d.estado === 'final' ? 'Final' : 'Borrador';
+            const fecha = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—';
+            return `<tr>
+              <td><strong style="font-size:13px">${d.titulo || '—'}</strong><br><span style="font-size:11px;color:#999">${fecha}</span></td>
+              <td><span class="badge badge-purple" style="font-size:9px">${d.tipo}</span></td>
+              <td><span class="badge ${estCls}">${estLbl}</span></td>
+              <td>
+                <button class="btn-sm btn-secondary" onclick="verDocCtx('${d.id}','<%= entidad %>')">👁️</button>
+                <button class="btn-sm btn-primary" onclick="descargarPDFCtx('${d.id}','<%= entidad %>')">📥</button>
+                ${d.estado !== 'firmado' ? `<button class="btn-sm btn-secondary" onclick="firmarDocCtx('${d.id}','<%= entidad %>')">✍️</button>` : ''}
+              </td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+    })
+    .catch(() => {
+      container.innerHTML = `<p style="font-size:13px;color:#999;text-align:center;padding:20px">Error al cargar documentos</p>`;
+    });
+})();
+
+function mostrarCtxDocs(refTipo, refId, entidad) {
+  mostrarModal('📄 Nuevo Documento', `
+    <p style="color:#666;margin-bottom:16px">Crear documento vinculado a este elemento.</p>
+    <div style="margin-bottom:16px">
+      <select id="ctxDocTipo" class="form-input" style="margin-bottom:8px">
+        ${TIPOS_CTX_OPTIONS[refTipo] ? TIPOS_CTX_OPTIONS[refTipo].map(t => `<option value="${t.tipo}">${t.etiqueta}</option>`).join('') : '<option value="informe-pdf">Informe PDF</option>'}
+      </select>
+      <input type="text" id="ctxDocTitulo" class="form-input" placeholder="Título del documento" style="margin-bottom:8px">
+      <textarea id="ctxDocContenido" class="form-input" placeholder="Contenido / observaciones..." style="min-height:80px;margin-bottom:8px"></textarea>
+      <input type="hidden" id="ctxRefTipo" value="${refTipo}">
+      <input type="hidden" id="ctxRefId" value="${refId}">
+    </div>
+    <button class="btn-primary" onclick="crearDocCtx('${entidad}')">💾 Guardar</button>
+  `);
+  // Cargar tipos disponibles
+  if (!window.TIPOS_CTX_OPTIONS) {
+    fetch('/api/' + entidad + '/tipos-documento').then(r => r.json()).then(data => {
+      window.TIPOS_CTX_OPTIONS = window.TIPOS_CTX_OPTIONS || {};
+      const all = [];
+      (data.categorias || []).forEach(c => c.documentos.forEach(d => all.push(d)));
+      // Guardar por refTipo
+      const tiposPorRef = { cuenta: all, tarjeta: all.filter(d => d.tipo.includes('tarjeta')), operacion: all.filter(d => ['informe-operacion','comprobante','justificante-transferencia','justificante-iva','informe-impuestos','reversion'].includes(d.tipo)), contribuyente: all.filter(d => d.tipo.includes('contribuyente') || d.tipo.includes('declaracion') || d.tipo.includes('situacion')), declaracion: all.filter(d => d.tipo.includes('declaracion') || d.tipo.includes('liquidacion')) };
+      Object.assign(window.TIPOS_CTX_OPTIONS, tiposPorRef);
+      window.TIPOS_CTX_OPTIONS.default = all;
+      // Actualizar select si está abierto
+      const sel = document.getElementById('ctxDocTipo');
+      if (sel) {
+        const opts = window.TIPOS_CTX_OPTIONS[refTipo] || window.TIPOS_CTX_OPTIONS.default || [];
+        sel.innerHTML = opts.map(t => `<option value="${t.tipo}">${t.etiqueta}</option>`).join('');
+      }
+    });
+  }
+}
+
+async function crearDocCtx(entidad) {
+  const tipo = document.getElementById('ctxDocTipo')?.value;
+  const titulo = document.getElementById('ctxDocTitulo')?.value;
+  const contenido = document.getElementById('ctxDocContenido')?.value;
+  const refTipo = document.getElementById('ctxRefTipo')?.value;
+  const refId = document.getElementById('ctxRefId')?.value;
+  if (!tipo) return mostrarToast('Selecciona un tipo', 'error');
+  try {
+    await apiFetch('/api/' + entidad + '/documentos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo, titulo: titulo || '', datos: { contenido, refTipo, refId }, refId, refTipo })
+    });
+    mostrarToast('✅ Documento creado', 'success');
+    document.querySelector('.modal-overlay')?.remove();
+    // Recargar la tabla
+    const container = document.getElementById('ctxDocsTable-' + refTipo + '-' + refId);
+    if (container) container.innerHTML = '<p style="font-size:13px;color:#999;text-align:center;padding:20px">Cargando documentos...</p>';
+    location.reload();
+  } catch(e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
+function verDocCtx(id, entidad) {
+  fetch('/api/' + entidad + '/documentos/' + id).then(r => r.json()).then(doc => {
+    const datos = doc.datos || {};
+    let html = Object.entries(datos).map(([k,v]) => `<p><strong>${k}:</strong> ${typeof v === 'object' ? JSON.stringify(v) : v}</p>`).join('');
+    html += `<div class="actions"><button class="btn-primary" onclick="descargarPDFCtx('${id}','${entidad}')">📥 Descargar PDF</button></div>`;
+    mostrarModal('📄 ' + (doc.titulo || 'Documento'), html);
+  });
+}
+
+function descargarPDFCtx(id, entidad) {
+  window.open('/api/' + entidad + '/documentos/' + id + '/pdf', '_blank');
+  mostrarToast('📄 Generando PDF...', 'info');
+}
+
+function firmarDocCtx(id, entidad) {
+  if (!confirm('¿Firmar digitalmente?')) return;
+  fetch('/api/' + entidad + '/documentos/' + id + '/firmar', { method: 'POST' })
+    .then(() => { mostrarToast('✍️ Firmado', 'success'); location.reload(); })
+    .catch(e => mostrarToast('Error: ' + e.message, 'error'));
+}
+</script>

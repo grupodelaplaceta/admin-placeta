@@ -121,6 +121,55 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// ── Documentos contextuales (usado desde cualquier vista) ─────────────────
+function verDocsDe(refTipo, refId, entidad, refNombre) {
+  fetch('/api/' + entidad + '/documentos/por-ref/' + refTipo + '/' + refId)
+    .then(r => r.json())
+    .then(data => {
+      const docs = data.documentos || [];
+      let html = '<div style="margin-bottom:12px">';
+      if (docs.length === 0) {
+        html += '<p style="color:#888;text-align:center;padding:20px">Sin documentos asociados.</p>';
+      } else {
+        html += '<table style="width:100%;border-collapse:collapse">';
+        html += '<tr style="border-bottom:1px solid #f0ecf8"><th style="text-align:left;padding:8px;font-size:12px;font-weight:600;color:#666">Documento</th><th style="text-align:left;padding:8px;font-size:12px;font-weight:600;color:#666">Estado</th><th style="text-align:left;padding:8px;font-size:12px;font-weight:600;color:#666">Acción</th></tr>';
+        docs.forEach(d => {
+          const estLbl = d.estado === 'firmado' ? '✅ Firmado' : d.estado === 'final' ? 'Final' : 'Borrador';
+          html += `<tr style="border-bottom:1px solid #f0ecf8">
+            <td style="padding:8px;font-size:13px"><strong>${d.titulo || d.tipo}</strong></td>
+            <td style="padding:8px"><span class="badge ${d.estado === 'firmado' ? 'badge-success' : d.estado === 'final' ? 'badge-info' : 'badge-warning'}">${estLbl}</span></td>
+            <td style="padding:8px">
+              <button class="btn-sm btn-secondary" onclick="window.open('/api/${entidad}/documentos/'+'${d.id}'+'/pdf','_blank')">📥 PDF</button>
+            </td>
+          </tr>`;
+        });
+        html += '</table>';
+      }
+      html += '</div>';
+      html += `<div class="actions"><button class="btn-primary btn-sm" onclick="mostrarModal('📄 Nuevo Documento',\`
+        <input type="text" id="docTituloModal" class="form-input" placeholder="Título" style="margin-bottom:8px">
+        <select id="docTipoModal" class="form-input" style="margin-bottom:8px"><option value="informe-pdf">Informe PDF</option><option value="certificado">Certificado</option><option value="notificacion">Notificación</option></select>
+        <textarea id="docContModal" class="form-input" placeholder="Contenido..." style="min-height:80px;margin-bottom:8px"></textarea>
+        <button class="btn-primary" onclick="crearDocRef('${refTipo}','${refId}','${entidad}')">💾 Guardar</button>
+      \`)">📄 Nuevo</button></div>`;
+      mostrarModal('📄 Documentos' + (refNombre ? ' de ' + refNombre : ''), html);
+    });
+}
+
+async function crearDocRef(refTipo, refId, entidad) {
+  const titulo = document.getElementById('docTituloModal')?.value || '';
+  const tipo = document.getElementById('docTipoModal')?.value || 'informe-pdf';
+  const contenido = document.getElementById('docContModal')?.value || '';
+  try {
+    await apiFetch('/api/' + entidad + '/documentos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo, titulo, datos: { contenido }, refId, refTipo })
+    });
+    mostrarToast('✅ Documento creado', 'success');
+    document.querySelector('.modal-overlay')?.remove();
+  } catch(e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
 // ── Animaciones ───────────────────────────────────────────────────────────
 const style = document.createElement('style');
 style.textContent = `

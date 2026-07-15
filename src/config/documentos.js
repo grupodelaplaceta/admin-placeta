@@ -211,6 +211,8 @@ export function saveDocumento(entidad, data) {
     titulo: data.titulo,
     descripcion: data.descripcion || '',
     datos: data.datos || {},
+    refId: data.refId || null,       // ID del objeto al que pertenece (cuenta, tarjeta, etc.)
+    refTipo: data.refTipo || null,   // tipo de referencia: 'cuenta', 'tarjeta', 'operacion', 'contribuyente', etc.
     createdBy: data.createdBy || 'sistema',
     createdAt: data.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -222,6 +224,11 @@ export function saveDocumento(entidad, data) {
   if (idx >= 0) docs[idx] = doc;
   else docs.push(doc);
   return doc;
+}
+
+// Obtener documentos por referencia (ej: todos los docs de una cuenta)
+export function getDocumentosPorRef(entidad, refTipo, refId) {
+  return getDocumentos(entidad).filter(d => d.refTipo === refTipo && d.refId === refId);
 }
 
 export function deleteDocumento(entidad, id) {
