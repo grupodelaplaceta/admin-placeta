@@ -89,18 +89,46 @@ export function calcularCotizaciones(sueldoBruto) {
   };
 }
 
-// ── Art. 4.7 — SMI (150 Pz) y Salario Máximo (1.750 Pz) ─────────────────
+// ── Art. 4.7 — SMI (150 Pz/mes) y Salario Máximo (1.750 Pz/mes) ──────────
 export const SMI = 150;
 export const SALARIO_MAXIMO = 1750;
 
 export function validarSalario(sueldo) {
   const issues = [];
-  if (sueldo < SMI) issues.push({ tipo: 'BAJO_SMI', mensaje: `Salario ${sueldo} Pz inferior al SMI (${SMI} Pz)` });
-  if (sueldo > SALARIO_MAXIMO) issues.push({ tipo: 'EXCESO_SALARIO', mensaje: `Salario ${sueldo} Pz superior al máximo (${SALARIO_MAXIMO} Pz)` });
+  if (sueldo < SMI) issues.push({ tipo: 'BAJO_SMI', mensaje: `Salario ${sueldo} Pz/mes inferior al SMI (${SMI} Pz/mes)` });
+  if (sueldo > SALARIO_MAXIMO) issues.push({ tipo: 'EXCESO_SALARIO', mensaje: `Salario ${sueldo} Pz/mes superior al máximo (${SALARIO_MAXIMO} Pz/mes)` });
   return issues;
 }
 
-// ── Art. 4.8 a 4.11 — IRM (Impuesto de Regulación Monetaria) ────────────
+// ── Art. 7 — Tipos de cuenta y límites por franja de edad ────────────────
+export const CUENTAS_POR_EDAD = {
+  junior_basica: { max: 500, diaria: 50, bono: 750, label: 'Junior básica (< 16 años)' },
+  junior_senior: { max: 1000, diaria: 100, bono: 500, label: 'Junior senior (16-17 años)' },
+  ciudadana: { max: 500000, diaria: Infinity, bono: 500, label: 'Ciudadana plena (18+ años)' },
+  empresarial: { max: 10000000, diaria: Infinity, bono: 0, label: 'Institucional (empresa/estatal)' },
+};
+
+export function getTipoCuentaPorEdad(edad, tipoActual) {
+  if (tipoActual === 'Business') return 'empresarial';
+  if (edad < 16) return 'junior_basica';
+  if (edad < 18) return 'junior_senior';
+  return 'ciudadana';
+}
+
+// ── Art. 15 — Sueldos Públicos (mensuales) ────────────────────────────────
+export const SUELDOS_PUBLICOS = [
+  { cargo: 'Presidencia', base: 267, complemento: 67, total: 334, tipo: 'Fijo' },
+  { cargo: 'Vicepresidencia', base: 217, complemento: 50, total: 267, tipo: 'Fijo' },
+  { cargo: 'Director/a de Departamento', base: 167, complemento: 33, total: 200, tipo: 'Fijo' },
+  { cargo: 'Técnico/a de Departamento', base: 100, complemento: 25, total: 125, tipo: 'Variable' },
+  { cargo: 'Colaborador/a o Asesor/a', base: 50, complemento: 17, total: 67, tipo: 'Variable' },
+  { cargo: 'Estudiante en programa especial', base: 17, complemento: 8, total: 25, tipo: 'Variable' },
+];
+
+// ── Art. 4.8 a 4.11 bis — IRM (Impuesto de Regulación Monetaria) ────────
+// Periodicidad: MENSUAL. Cargo automático el día 5 del mes siguiente.
+// Base: Patrimonio medio del mes vencido (Art. 4.8)
+// IA = (Media ingresos - Media pagos) / Patrimonio medio (Art. 4.9)
 export function calcularPatrimonioMedio(saldosDiarios) {
   if (!saldosDiarios || saldosDiarios.length === 0) return 0;
   return saldosDiarios.reduce((s, v) => s + v, 0) / saldosDiarios.length;
