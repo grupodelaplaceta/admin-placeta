@@ -83,7 +83,7 @@ app.use('/api/', limiter);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'src/views'));
 app.use(ejsLayouts);
-// No establecer layout global - cada ruta especifica su layout
+app.set('layout', 'layouts/admin');
 
 // Variables globales
 app.use((req, res, next) => {
