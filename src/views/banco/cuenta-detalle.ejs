@@ -36,29 +36,14 @@
 </div>
 
 <% if (esAdmin) { %>
-<div class="flex gap-8">
-  <button class="btn-secondary" onclick="mostrarModal('✏️ Modificar Cuenta', `
-    <p style="margin-bottom:12px">Modificar datos de <strong><%= cuenta.displayName || cuenta.id %></strong></p>
-    <label style="display:block;margin-bottom:8px">Nombre:</label>
-    <input type="text" id="editNombre" class="form-input" value="<%= cuenta.displayName || '' %>" style="width:100%;margin-bottom:12px">
-    <label style="display:block;margin-bottom:8px">Límite de envío (Pz):</label>
-    <input type="number" id="editLimite" class="form-input" value="<%= cuenta.sendLimitPz || 0 %>" style="width:100%;margin-bottom:12px">
-    <button class="btn-primary" onclick="guardarCambiosCuenta('<%= cuenta.id %>')">💾 Guardar Cambios</button>
-  `)">✏️ Modificar</button>
-  <button class="btn-secondary" onclick="mostrarModal('🔗 Vincular EIP', `
-    <p style="margin-bottom:12px">Vincula una empresa (EIP) como cotitular de la cuenta.</p>
-    <input type="text" id="eipInput" class="form-input" placeholder="EIP de la empresa" style="width:100%;margin-bottom:12px">
-    <button class="btn-primary" onclick="vincularEIP('<%= cuenta.id %>')">🔗 Vincular</button>
-  `)">🔗 Vincular EIP</button>
-  <button class="btn-secondary" onclick="mostrarModal('👥 Añadir Cotitular', `
-    <p style="margin-bottom:12px">Añade un cotitular a la cuenta <strong><%= cuenta.displayName || cuenta.id %></strong></p>
-    <input type="text" id="cotitularDip" class="form-input" placeholder="DIP del cotitular" style="width:100%;margin-bottom:12px">
-    <button class="btn-primary" onclick="anadirCotitular('<%= cuenta.id %>')">👥 Añadir</button>
-  `)">👥 Añadir Cotitular</button>
+<div class="flex gap-8 flex-wrap">
+  <button class="btn-secondary" onclick="mostrarModificarCuenta('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>',<%= cuenta.sendLimitPz || 0 %>)">✏️ Modificar</button>
+  <button class="btn-secondary" onclick="mostrarVincularEIP('<%= cuenta.id %>')">🔗 Vincular EIP</button>
+  <button class="btn-secondary" onclick="mostrarAnadirCotitular('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>')">👥 Añadir Cotitular</button>
   <% if (!cuenta.closedAt) { %>
-  <button class="btn-secondary" style="background:rgba(239,68,68,0.12);color:var(--danger);border-color:rgba(239,68,68,0.2)" onclick="bloquearCuenta('<%= cuenta.id %>')">🔒 Bloquear Cuenta</button>
+  <button class="btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')" style="color:var(--r);border-color:rgba(208,49,49,0.2)">🔒 Bloquear</button>
   <% } else { %>
-  <button class="btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')">✅ Desbloquear Cuenta</button>
+  <button class="btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')">✅ Desbloquear</button>
   <% } %>
 </div>
 <% } %>
@@ -66,6 +51,36 @@
 <%- include('../parciales/documentos-ctx', { entidad: 'banco', refTipo: 'cuenta', refId: cuenta.id, refNombre: cuenta.displayName || cuenta.id }) %>
 
 <script>
+function mostrarModificarCuenta(id, nombre, limite) {
+  const h = '<div style="margin-bottom:12px">' +
+    '<p style="margin-bottom:12px;color:#666">Modificar datos de <strong>' + nombre + '</strong></p>' +
+    '<label style="display:block;font-size:12px;font-weight:600;color:#666;margin-bottom:4px">Nombre:</label>' +
+    '<input type="text" id="editNombre" class="form-input" value="' + (nombre || '') + '" style="width:100%;margin-bottom:12px">' +
+    '<label style="display:block;font-size:12px;font-weight:600;color:#666;margin-bottom:4px">Límite de envío (Pz):</label>' +
+    '<input type="number" id="editLimite" class="form-input" value="' + (limite || 0) + '" style="width:100%;margin-bottom:12px">' +
+    '<button class="btn-primary" onclick="guardarCambiosCuenta(\'' + id + '\')">💾 Guardar Cambios</button>' +
+    '</div>';
+  mostrarModal('✏️ Modificar Cuenta', h);
+}
+
+function mostrarVincularEIP(id) {
+  const h = '<div style="margin-bottom:12px">' +
+    '<p style="margin-bottom:12px;color:#666">Vincula una empresa (EIP) como cotitular de la cuenta.</p>' +
+    '<input type="text" id="eipInput" class="form-input" placeholder="EIP de la empresa (ej: EIP-A3F7C2)" style="width:100%;margin-bottom:12px">' +
+    '<button class="btn-primary" onclick="vincularEIP(\'' + id + '\')">🔗 Vincular</button>' +
+    '</div>';
+  mostrarModal('🔗 Vincular EIP', h);
+}
+
+function mostrarAnadirCotitular(id, nombre) {
+  const h = '<div style="margin-bottom:12px">' +
+    '<p style="margin-bottom:12px;color:#666">Añade un cotitular a la cuenta <strong>' + nombre + '</strong></p>' +
+    '<input type="text" id="cotitularDip" class="form-input" placeholder="DIP del cotitular" style="width:100%;margin-bottom:12px">' +
+    '<button class="btn-primary" onclick="anadirCotitular(\'' + id + '\')">👥 Añadir</button>' +
+    '</div>';
+  mostrarModal('👥 Añadir Cotitular', h);
+}
+
 async function guardarCambiosCuenta(id) {
   const nombre = document.getElementById('editNombre')?.value;
   const limite = document.getElementById('editLimite')?.value;
@@ -100,10 +115,11 @@ async function anadirCotitular(id) {
 }
 
 async function bloquearCuenta(id) {
+  if (!confirm('¿Bloquear/desbloquear esta cuenta?')) return;
   try {
     await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'toggle-bloqueo', accountId: id }) });
-    mostrarToast('✅ Estado de bloqueo cambiado', 'success');
+    mostrarToast('✅ Estado cambiado', 'success');
     setTimeout(() => location.reload(), 1000);
-  } catch { mostrarToast('⚠️ Simulado: estado cambiado', 'warning'); location.reload(); }
+  } catch { mostrarToast('⚠️ Simulado', 'warning'); location.reload(); }
 }
 </script>
