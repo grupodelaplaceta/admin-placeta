@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= titulo %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="login-page">
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-icon">🏛️</div>
+        <h1>Admin Placeta</h1>
+        <p>Plataforma de Administración Unificada</p>
+      </div>
+
+      <% if (locals.error) { %>
+      <div class="alert alert-error"><%= error %></div>
+      <% } %>
+
+      <div id="errorContainer" class="alert alert-error" style="display:none"></div>
+
+      <div class="login-body">
+        <button class="btn-placetid" onclick="loginPlacetaID()">
+          <span class="btn-icon">🔑</span>
+          <span>Iniciar sesión con PlacetaID</span>
+        </button>
+
+        <div class="divider"><span>o</span></div>
+
+        <details class="demo-login">
+          <summary>Acceso directo (desarrollo)</summary>
+          <div class="demo-form">
+            <input type="text" id="dipInput" placeholder="DIP (ej: 11111111D)" class="form-input">
+            <button class="btn-demo" onclick="loginDemo()">Entrar como demo</button>
+          </div>
+        </details>
+      </div>
+
+      <div class="login-footer">
+        <p>© 2026 Grupo de La Placeta</p>
+        <p><a href="https://id.laplaceta.org">¿No tienes PlacetaID? Regístrate</a></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loginPlacetaID() {
+      try {
+        const r = await fetch('/login/placetaid', { method: 'POST' });
+        const data = await r.json();
+        if (data.redirect) window.location.href = data.redirect;
+      } catch (err) {
+        document.getElementById('errorContainer').textContent = 'Error al conectar con PlacetaID';
+        document.getElementById('errorContainer').style.display = 'block';
+      }
+    }
+
+    async function loginDemo() {
+      const dip = document.getElementById('dipInput').value.trim();
+      if (!dip) { alert('Introduce un DIP'); return; }
+
+      try {
+        const r = await fetch('/login/demo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dip })
+        });
+        const data = await r.json();
+        if (data.redirect) window.location.href = data.redirect;
+        else document.getElementById('errorContainer').textContent = data.error || 'Error de autenticación';
+        document.getElementById('errorContainer').style.display = 'block';
+      } catch (err) {
+        document.getElementById('errorContainer').textContent = 'Error de conexión';
+        document.getElementById('errorContainer').style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>

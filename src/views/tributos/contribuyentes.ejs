@@ -1,0 +1,23 @@
+<div class="flex gap-8 mb-16">
+  <input type="text" id="searchInput" placeholder="Buscar contribuyente..." class="form-input" style="width:300px">
+  <button class="btn-secondary" data-search-btn>🔍</button>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>EIP</th><th>Estado Fiscal</th></tr></thead>
+    <tbody>
+      <% (contribuyentes || []).forEach(c => { %>
+      <tr>
+        <td class="text-mono"><%= c.id %></td>
+        <td><strong><%= c.displayName || '—' %></strong></td>
+        <td><span class="badge badge-info"><%= c.type || '—' %></span></td>
+        <td class="text-mono"><%= c.iban || '—' %></td>
+        <td class="text-mono"><%= c.eip || '—' %></td>
+        <td><span class="badge <%= c.tributosCensusDate ? 'badge-success' : 'badge-warning' %>"><%= c.tributosCensusDate ? 'Al Dia' : 'Pendiente' %></span></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<p style="font-size:12px;color:var(--text-light);margin-top:8px">Total: <strong><%= total %></strong> contribuyentes</p>

@@ -1,0 +1,84 @@
+<div style="max-width:600px">
+  <div class="alert alert-info">
+    <strong>🔍 Modo Gestor</strong> — Introduce un DIP o EIP para buscar o dar de alta a un cliente.
+  </div>
+
+  <div style="background:var(--surface);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow)">
+    <div class="form-group">
+      <label>DIP del cliente</label>
+      <input type="text" id="dipCliente" class="form-input" placeholder="Ej: 11111111D">
+      <button class="btn-secondary mt-16" onclick="buscarCliente()">🔍 Buscar en PlacetaID</button>
+    </div>
+
+    <div class="divider" style="margin:24px 0">o</div>
+
+    <div class="form-group">
+      <label>EIP de empresa</label>
+      <input type="text" id="eipEmpresa" class="form-input" placeholder="Ej: EIP-A3F7C2">
+      <button class="btn-secondary mt-16" onclick="buscarEmpresa()">🔍 Buscar por EIP</button>
+    </div>
+
+    <div class="divider" style="margin:24px 0">o</div>
+
+    <div class="form-group">
+      <label>Importar desde Administración EIP</label>
+      <p style="font-size:12px;color:var(--text-light);margin-bottom:8px">Selecciona una entidad registrada en Administración para crear su cuenta bancaria.</p>
+      <select class="form-input" id="importarEntidad">
+        <option value="">— Seleccionar —</option>
+        <option value="AGLDP">AGLDP - Administración GDLP</option>
+        <option value="TGLP">TGLP - Tesorería GDLP</option>
+      </select>
+      <button class="btn-primary mt-16" onclick="importarYCrear()">📥 Importar y crear cuenta</button>
+    </div>
+  </div>
+
+  <div id="resultadoCliente" style="display:none;margin-top:16px"></div>
+</div>
+
+<script>
+  async function buscarCliente() {
+    const dip = document.getElementById('dipCliente').value.trim();
+    if (!dip) return mostrarToast('Introduce un DIP', 'error');
+    try {
+      const data = await apiFetch(`/api/crm/solicitante/${dip}`);
+      if (data.error) return mostrarToast('Cliente no encontrado', 'error');
+      mostrarModal('👤 Cliente encontrado', `
+        <p><strong>Nombre:</strong> ${data.nombre_real || data.alias || '—'}</p>
+        <p><strong>DIP:</strong> ${data.dip}</p>
+        <p><strong>Email:</strong> ${data.email || '—'}</p>
+        <p><strong>Estado:</strong> ${data.estado}</p>
+        <button class="btn-primary mt-16" onclick="crearCuenta('${data.dip}')">🏦 Crear cuenta bancaria</button>
+      `);
+    } catch (e) { mostrarToast(e.message, 'error'); }
+  }
+
+  async function buscarEmpresa() {
+    mostrarToast('🔧 Módulo EIP en desarrollo', 'info');
+  }
+
+  async function importarYCrear() {
+    mostrarToast('🔧 Importación en desarrollo', 'info');
+  }
+
+  async function crearCuenta(dip) {
+    try {
+      const result = await apiFetch('/api/banco/action', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'crear-cuenta-infantil',
+          juniorDip: dip,
+          juniorNombre: dip,
+          tutorAccountId: 'u-alba',
+          sendLimitPz: 50,
+          tutorDip: '11111111D'
+        })
+      });
+      if (result.accountId) {
+        mostrarToast(`✅ Cuenta creada: ${result.iban}`, 'success');
+        setTimeout(() => location.reload(), 1500);
+      } else {
+        mostrarToast('Error al crear cuenta', 'error');
+      }
+    } catch (e) { mostrarToast(e.message, 'error'); }
+  }
+</script>

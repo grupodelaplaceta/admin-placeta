@@ -1,0 +1,33 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= cuenta.displayName || cuenta.id %></span><span class="stat-label">Nombre</span></div>
+  <div class="stat-card"><span class="stat-value"><%= cuenta.iban || '—' %></span><span class="stat-label">IBAN</span></div>
+  <div class="stat-card"><span class="stat-value"><%= (cuenta.balancePz || 0).toLocaleString() %></span><span class="stat-label">Saldo (Pz)</span></div>
+  <div class="stat-card"><span class="stat-value"><span class="badge badge-info"><%= cuenta.type %></span></span><span class="stat-label">Tipo</span></div>
+</div>
+
+<div style="background:var(--surface);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:24px">
+  <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">📋 Datos de la Cuenta</h3>
+  <table style="width:100%">
+    <tr><td style="padding:8px 0;font-weight:600">ID</td><td class="text-mono"><%= cuenta.id %></td></tr>
+    <tr><td style="padding:8px 0;font-weight:600">PlacetaID</td><td class="text-mono"><%= cuenta.placetaId || '—' %></td></tr>
+    <tr><td style="padding:8px 0;font-weight:600">EIP</td><td class="text-mono"><%= cuenta.eip || '—' %></td></tr>
+    <tr><td style="padding:8px 0;font-weight:600">Tipo</td><td><%= cuenta.type %></td></tr>
+    <tr><td style="padding:8px 0;font-weight:600">Cuenta Padre</td><td class="text-mono"><%= cuenta.parentAccountId || '—' %></td></tr>
+    <tr><td style="padding:8px 0;font-weight:600">Límite envío</td><td><%= cuenta.sendLimitPz || 'Sin límite' %> Pz</td></tr>
+    <tr><td style="padding:8px 0;font-weight:600">Citizenship</td><td><%= cuenta.citizenshipTier || '—' %></td></tr>
+    <tr><td style="padding:8px 0;font-weight:600">Compliance</td><td><span class="badge <%= cuenta.complianceStatus === 'Clear' ? 'badge-success' : 'badge-warning' %>"><%= cuenta.complianceStatus || 'Pending' %></span></td></tr>
+    <tr><td style="padding:8px 0;font-weight:600">Creada</td><td><%= cuenta.createdAt ? new Date(cuenta.createdAt).toLocaleDateString() : '—' %></td></tr>
+    <% if (cuenta.closedAt) { %><tr><td style="padding:8px 0;font-weight:600;color:var(--danger)">Cerrada</td><td><%= new Date(cuenta.closedAt).toLocaleDateString() %></td></tr><% } %>
+  </table>
+</div>
+
+<% if (esAdmin) { %>
+<div class="flex gap-8">
+  <button class="btn-secondary" onclick="mostrarToast('🔧 Función en desarrollo','info')">✏️ Modificar</button>
+  <button class="btn-secondary" onclick="mostrarToast('🔧 Función en desarrollo','info')">🔗 Vincular EIP</button>
+  <button class="btn-secondary" onclick="mostrarToast('🔧 Función en desarrollo','info')">👥 Añadir Cotitular</button>
+  <% if (!cuenta.closedAt) { %>
+  <button class="btn-danger" onclick="mostrarToast('🔧 Función en desarrollo','info')">🔒 Bloquear Cuenta</button>
+  <% } %>
+</div>
+<% } %>

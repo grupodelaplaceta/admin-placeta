@@ -1,0 +1,13 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= trabajadores.length %></span><span class="stat-label">Trabajadores</span></div>
+</div>
+<div class="table-container">
+  <table>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Rol</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% (trabajadores || []).forEach(u => { %>
+      <tr><td class="text-mono"><%= u.dip || '—' %></td><td><%= u.displayName || '—' %></td><td><span class="badge badge-info"><%= u.role || '—' %></span></td><td><button class="btn-sm" onclick="mostrarToast('🔧 En desarrollo','info')">Gestionar</button></td></tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,19 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Ciudadanos</span></div>
+</div>
+<div class="table-container">
+  <table>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Email</th><th>Estado</th><th>Rol</th></tr></thead>
+    <tbody>
+      <% (ciudadanos || []).forEach(c => { %>
+      <tr>
+        <td class="text-mono"><%= c.dip %></td>
+        <td><strong><%= c.nombre_real || c.alias || '—' %></strong></td>
+        <td><%= c.email || '—' %></td>
+        <td><span class="badge <%= c.estado === 'activo' ? 'badge-success' : 'badge-warning' %>"><%= c.estado || '—' %></span></td>
+        <td><%= c.rol || '—' %></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,16 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Registros PlacetaID</span></div>
+</div>
+<div class="table-container">
+  <table>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Email</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% (registros || []).slice(0, 50).forEach(r => { %>
+      <tr><td class="text-mono"><%= r.dip %></td><td><%= r.nombre || '—' %></td><td><%= r.email || '—' %></td><td><span class="badge <%= r.bloqueado ? 'badge-danger' : 'badge-success' %>"><%= r.bloqueado ? 'Bloqueado' : 'Activo' %></span></td>
+      <td>
+        <button class="btn-sm" onclick="mostrarToast('🔧 En desarrollo','info')">Desbloquear</button>
+      </td></tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>

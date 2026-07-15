@@ -1,0 +1,36 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= totalCuentas %></span><span class="stat-label">Total Cuentas</span></div>
+  <div class="stat-card"><span class="stat-value"><%= cuentasActivas %></span><span class="stat-label">Cuentas Activas</span></div>
+  <div class="stat-card"><span class="stat-value"><%= saldoTotal.toLocaleString() %></span><span class="stat-label">Masa Monetaria (Pz)</span></div>
+</div>
+
+<div class="flex-between mb-16">
+  <h3 style="font-size:16px;font-weight:700">Últimas cuentas</h3>
+  <div class="flex gap-8">
+    <a href="/banco/cuentas" class="btn-link">Ver todas →</a>
+  </div>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>Saldo</th><th>Estado</th></tr></thead>
+    <tbody>
+      <% (cuentas || []).slice(0, 10).forEach(c => { %>
+      <tr onclick="window.location='/banco/cuentas/<%= c.id %>'" style="cursor:pointer">
+        <td class="text-mono"><%= c.id %></td>
+        <td><strong><%= c.displayName || '—' %></strong></td>
+        <td><span class="badge badge-info"><%= c.type || '—' %></span></td>
+        <td class="text-mono"><%= c.iban || '—' %></td>
+        <td><strong><%= (c.balancePz || 0).toLocaleString() %></strong> Pz</td>
+        <td><span class="badge <%= c.closedAt ? 'badge-danger' : 'badge-success' %>"><%= c.closedAt ? 'Cerrada' : 'Activa' %></span></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<div class="flex gap-8 mt-16">
+  <a href="/banco/cuentas/nueva/gestor" class="btn-primary">➕ Nueva Cuenta</a>
+  <a href="/banco/operaciones" class="btn-secondary">🔄 Ver Operaciones</a>
+  <a href="/banco/control-cumplimiento" class="btn-secondary">🛡️ Control Cumplimiento</a>
+</div>

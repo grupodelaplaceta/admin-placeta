@@ -1,0 +1,20 @@
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Desde</th><th>Hacia</th><th>Cantidad</th><th>Tipo</th><th>Nota</th><th>Estado</th><th>Fecha</th></tr></thead>
+    <tbody>
+      <% (operaciones || []).slice(0, 50).forEach(tx => { %>
+      <tr>
+        <td class="text-mono" style="font-size:11px"><%= (tx.id || '').slice(0, 16) %>…</td>
+        <td class="text-mono"><%= tx.fromAccountId || '—' %></td>
+        <td class="text-mono"><%= tx.toAccountId || '—' %></td>
+        <td><strong><%= (tx.amountPz || 0).toLocaleString() %></strong> Pz</td>
+        <td><span class="badge badge-info"><%= tx.kind || '—' %></span></td>
+        <td style="font-size:12px"><%= (tx.note || '').slice(0, 40) %></td>
+        <td><span class="badge <%= tx.status === 'Settled' ? 'badge-success' : 'badge-warning' %>"><%= tx.status || '—' %></span></td>
+        <td style="font-size:12px"><%= tx.createdAt ? new Date(tx.createdAt).toLocaleDateString() : '—' %></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<p style="font-size:12px;color:var(--text-light);margin-top:8px">Total: <strong><%= total %></strong> operaciones (mostrando últimas 50)</p>

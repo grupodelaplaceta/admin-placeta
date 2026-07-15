@@ -1,0 +1,20 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Contratos Nómina</span></div>
+</div>
+
+<% if (nominas.length === 0) { %>
+<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
+  <p>No hay contratos de nómina registrados.</p>
+</div>
+<% } else { %>
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Empleado</th><th>Entidad</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% nominas.forEach(n => { %>
+      <tr><td class="text-mono"><%= n.id %></td><td><%= n.displayName || '—' %></td><td><%= n.entityId || '—' %></td><td><span class="badge <%= n.active ? 'badge-success' : 'badge-danger' %>"><%= n.active ? 'Activo' : 'Inactivo' %></span></td><td><button class="btn-sm" onclick="mostrarToast('🔧 En desarrollo','info')">Gestionar</button></td></tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<% } %>

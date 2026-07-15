@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= titulo || 'Admin Placeta' %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/admin.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏛️</text></svg>">
+</head>
+<body>
+  <% if (usuario) { %>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">🏛️</div>
+      <div class="sidebar-brand">
+        <span class="brand-title">Admin Placeta</span>
+        <span class="brand-sub"><%= usuario.nombre %></span>
+      </div>
+      <button class="sidebar-toggle" onclick="toggleSidebar()">✕</button>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/dashboard" class="nav-item <%= pathActual === '/dashboard' ? 'active' : '' %>">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Panel Principal</span>
+      </a>
+
+      <% if (entidades_permitidas && entidades_permitidas.includes('banco')) { %>
+      <div class="nav-section">
+        <span class="nav-section-title">💰 Banco</span>
+        <a href="/banco" class="nav-item <%= pathActual.startsWith('/banco') ? 'active' : '' %>">
+          <span class="nav-icon">🏦</span>
+          <span class="nav-label">Dashboard Banco</span>
+        </a>
+        <a href="/banco/cuentas" class="nav-item">📋 Cuentas</a>
+        <a href="/banco/operaciones" class="nav-item">🔄 Operaciones</a>
+        <a href="/banco/tarjetas" class="nav-item">💳 Tarjetas</a>
+        <a href="/banco/control-cumplimiento" class="nav-item">🛡️ Cumplimiento</a>
+        <a href="/banco/trabajadores" class="nav-item">👥 Trabajadores</a>
+        <a href="/banco/nominas" class="nav-item">📄 Nóminas</a>
+      </div>
+      <% } %>
+
+      <% if (entidades_permitidas && entidades_permitidas.includes('tributos')) { %>
+      <div class="nav-section">
+        <span class="nav-section-title">📊 Tributos</span>
+        <a href="/tributos" class="nav-item <%= pathActual.startsWith('/tributos') ? 'active' : '' %>">
+          <span class="nav-icon">🏛️</span>
+          <span class="nav-label">Dashboard Tributos</span>
+        </a>
+        <a href="/tributos/contribuyentes" class="nav-item">👤 Contribuyentes</a>
+        <a href="/tributos/declaraciones" class="nav-item">📝 Declaraciones</a>
+        <a href="/tributos/inspeccion" class="nav-item">🔍 Inspección</a>
+        <a href="/tributos/incidencias" class="nav-item">⚠️ Incidencias</a>
+        <a href="/tributos/regimenes" class="nav-item">📋 Regímenes</a>
+        <a href="/tributos/trabajadores" class="nav-item">👥 Trabajadores</a>
+      </div>
+      <% } %>
+
+      <% if (entidades_permitidas && entidades_permitidas.includes('junta')) { %>
+      <div class="nav-section">
+        <span class="nav-section-title">⚖️ Junta</span>
+        <a href="/junta" class="nav-item <%= pathActual.startsWith('/junta') ? 'active' : '' %>">
+          <span class="nav-icon">🏛️</span>
+          <span class="nav-label">Dashboard Junta</span>
+        </a>
+        <a href="/junta/ciudadanos" class="nav-item">👥 Ciudadanos</a>
+        <a href="/junta/placetaid" class="nav-item">🔑 PlacetaID</a>
+        <a href="/junta/reclamaciones" class="nav-item">📨 Reclamaciones</a>
+        <a href="/junta/reuniones" class="nav-item">🤝 Reuniones</a>
+        <a href="/junta/votaciones" class="nav-item">🗳️ Votaciones</a>
+        <a href="/junta/cargos" class="nav-item">👤 Cargos</a>
+        <a href="/junta/departamentos" class="nav-item">🏢 Departamentos</a>
+        <a href="/junta/recursos" class="nav-item">📦 Recursos</a>
+        <a href="/junta/junior" class="nav-item">🧒 Junior</a>
+      </div>
+      <% } %>
+
+      <% if (entidades_permitidas && entidades_permitidas.includes('administracion')) { %>
+      <div class="nav-section">
+        <span class="nav-section-title">📋 Administración</span>
+        <a href="/administracion" class="nav-item <%= pathActual.startsWith('/administracion') ? 'active' : '' %>">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">Dashboard Admin</span>
+        </a>
+        <a href="/administracion/tramites" class="nav-item">📋 Trámites</a>
+        <a href="/administracion/ciudadanos" class="nav-item">👥 Ciudadanos</a>
+        <a href="/administracion/tributos" class="nav-item">📊 Tributos</a>
+        <a href="/administracion/banco" class="nav-item">🏦 Banco</a>
+        <a href="/administracion/actas" class="nav-item">📄 Actas</a>
+        <a href="/administracion/votaciones" class="nav-item">🗳️ Votaciones</a>
+        <a href="/administracion/placetaid" class="nav-item">🔑 PlacetaID</a>
+        <a href="/administracion/junior" class="nav-item">🧒 Junior</a>
+      </div>
+      <% } %>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar"><%= (usuario.nombre || 'U').charAt(0).toUpperCase() %></div>
+        <div class="user-data">
+          <div class="user-name"><%= usuario.nombre %></div>
+          <div class="user-roles"><%= (roles || []).join(', ') %></div>
+        </div>
+      </div>
+      <a href="/logout" class="logout-btn" title="Cerrar sesión">🚪</a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content" id="mainContent">
+    <div class="content-header">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <h1><%= titulo %></h1>
+      <div class="header-actions">
+        <span class="badge-entidad"><%= entidad_actual || 'general' %></span>
+      </div>
+    </div>
+    <div class="content-body">
+      <%- body %>
+    </div>
+  </main>
+
+  <script src="/js/admin.js"></script>
+  <% } else { %>
+  <%- body %>
+  <% } %>
+</body>
+</html>

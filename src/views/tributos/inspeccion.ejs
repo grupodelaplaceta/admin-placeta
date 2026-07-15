@@ -1,0 +1,23 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Incidencias Detectadas</span></div>
+</div>
+
+<% if (incidencias.length === 0) { %>
+<div class="alert alert-success">✅ No se detectaron incidencias. Todos los contribuyentes están al día.</div>
+<% } else { %>
+<div class="table-container">
+  <table>
+    <thead><tr><th>Tipo</th><th>Cuenta</th><th>Descripción</th><th>Acción</th></tr></thead>
+    <tbody>
+      <% incidencias.forEach(inc => { %>
+      <tr>
+        <td><span class="badge badge-danger"><%= inc.tipo %></span></td>
+        <td class="text-mono"><%= inc.cuenta?.id || '—' %></td>
+        <td><%= inc.mensaje %></td>
+        <td><a href="/banco/cuentas/<%= inc.cuenta?.id %>" class="btn-link">Ver cuenta</a></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<% } %>

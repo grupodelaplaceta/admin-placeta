@@ -1,0 +1,28 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Tarjetas</span></div>
+</div>
+
+<% if (tarjetas.length === 0) { %>
+<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
+  <div style="font-size:64px;margin-bottom:16px">💳</div>
+  <p>No hay tarjetas registradas en el sistema.</p>
+</div>
+<% } else { %>
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Titular</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+      <% tarjetas.forEach(t => { %>
+      <tr>
+        <td class="text-mono"><%= t.id %></td>
+        <td><%= t.displayName || '—' %></td>
+        <td><span class="badge <%= t.blocked ? 'badge-danger' : 'badge-success' %>"><%= t.blocked ? 'Bloqueada' : 'Activa' %></span></td>
+        <td>
+          <button class="btn-sm" onclick="mostrarToast('🔧 En desarrollo','info')">Gestionar</button>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<% } %>

@@ -1,0 +1,24 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= totalAlertas %></span><span class="stat-label">Alertas</span></div>
+  <div class="stat-card"><span class="stat-value"><%= totalCuentas %></span><span class="stat-label">Cuentas Auditadas</span></div>
+</div>
+
+<% if (alertas.length === 0) { %>
+<div class="alert alert-success" style="margin-top:16px">✅ No se encontraron incidencias. Todo en orden.</div>
+<% } else { %>
+<div class="table-container">
+  <table>
+    <thead><tr><th>Tipo</th><th>Cuenta</th><th>Mensaje</th><th>Acción</th></tr></thead>
+    <tbody>
+      <% alertas.forEach(a => { %>
+      <tr>
+        <td><span class="badge badge-danger"><%= a.tipo %></span></td>
+        <td class="text-mono"><%= a.cuenta?.id || '—' %></td>
+        <td><%= a.mensaje %></td>
+        <td><a href="/banco/cuentas/<%= a.cuenta?.id %>" class="btn-link">Inspeccionar</a></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<% } %>

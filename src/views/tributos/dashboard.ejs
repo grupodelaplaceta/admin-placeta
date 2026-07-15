@@ -1,0 +1,19 @@
+<div class="stats-grid">
+  <div class="stat-card"><span class="stat-value"><%= totalContribuyentes %></span><span class="stat-label">Contribuyentes</span></div>
+  <div class="stat-card"><span class="stat-value"><%= ingresos.toLocaleString() %></span><span class="stat-label">Base Imponible (Pz)</span></div>
+</div>
+
+<div class="flex gap-8" style="flex-wrap:wrap">
+  <a href="/tributos/contribuyentes" class="btn-primary">👤 Ver Contribuyentes</a>
+  <a href="/tributos/declaraciones" class="btn-secondary">📝 Declaraciones</a>
+  <a href="/tributos/inspeccion" class="btn-secondary">🔍 Inspección Automática</a>
+  <a href="/tributos/incidencias" class="btn-secondary">⚠️ Incidencias</a>
+  <a href="/tributos/regimenes" class="btn-secondary">📋 Regímenes</a>
+</div>
+
+<div style="background:var(--surface);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);margin-top:24px">
+  <p style="font-size:13px;color:var(--text-light)">
+    <% if (esAdmin) { %><span class="badge badge-success">✅ Admin</span> Acceso completo a tributos.<% } %>
+    <% if (esInspector) { %><span class="badge badge-info">🔍 Inspector</span> Acceso limitado a inspección y contribuyentes.<% } %>
+  </p>
+</div>

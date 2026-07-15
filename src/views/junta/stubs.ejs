@@ -1,0 +1,19 @@
+<%# Stub views for junta modules %>
+<%% 
+const secciones = {
+  reclamaciones: { icono: '📨', titulo: 'Gestión de Reclamaciones', desc: 'Buzón de quejas, sugerencias y reclamaciones ciudadanas.' },
+  reuniones: { icono: '🤝', titulo: 'Gestión de Reuniones', desc: 'Convocatorias, actas con firma PlacetaID y votaciones.' },
+  votaciones: { icono: '🗳️', titulo: 'Gestión de Votaciones', desc: 'Creación de votaciones con editor visual, grupos de usuarios, anonimización.' },
+  cargos: { icono: '👤', titulo: 'Gestión de Cargos', desc: 'Asignación de cargos, departamentos y permisos.' },
+  departamentos: { icono: '🏢', titulo: 'Gestión de Departamentos', desc: 'Estructura departamental de la Junta.' },
+  recursos: { icono: '📦', titulo: 'Recursos Digitales', desc: 'Correos, licencias y recursos digitales.' },
+  junior: { icono: '🧒', titulo: 'Usuarios Placeta Junior', desc: 'Gestión de menores, control parental y autorizaciones.' }
+};
+const sec = secciones[seccion] || { icono: '📋', titulo: 'Sección', desc: '' };
+%>
+<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
+  <div style="font-size:64px;margin-bottom:16px"><%= sec.icono %></div>
+  <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:8px"><%= sec.titulo %></h2>
+  <p style="max-width:400px;margin:0 auto"><%= sec.desc %></p>
+  <p style="font-size:12px;margin-top:16px;font-style:italic">Módulo en desarrollo — próximamente disponible.</p>
+</div>

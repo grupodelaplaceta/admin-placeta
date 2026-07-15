@@ -1,0 +1,57 @@
+<div class="dashboard-grid">
+  <!-- Entidades -->
+  <% if (entidades_permitidas && entidades_permitidas.includes('banco')) { %>
+  <a href="/banco" class="entidad-card banco">
+    <div class="entidad-icon">🏦</div>
+    <div class="entidad-info">
+      <h3>Banco de La Placeta</h3>
+      <p>Gestión bancaria, cuentas, operaciones y cumplimiento normativo</p>
+    </div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <% } %>
+
+  <% if (entidades_permitidas && entidades_permitidas.includes('tributos')) { %>
+  <a href="/tributos" class="entidad-card tributos">
+    <div class="entidad-icon">📊</div>
+    <div class="entidad-info">
+      <h3>Tributos de La Placeta</h3>
+      <p>Declaraciones, inspección, regímenes y gestión de contribuyentes</p>
+    </div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <% } %>
+
+  <% if (entidades_permitidas && entidades_permitidas.includes('junta')) { %>
+  <a href="/junta" class="entidad-card junta">
+    <div class="entidad-icon">⚖️</div>
+    <div class="entidad-info">
+      <h3>Junta de La Placeta</h3>
+      <p>Gobierno, votaciones, cargos, reclamaciones y recursos</p>
+    </div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <% } %>
+
+  <% if (entidades_permitidas && entidades_permitidas.includes('administracion')) { %>
+  <a href="/administracion" class="entidad-card administracion">
+    <div class="entidad-icon">📋</div>
+    <div class="entidad-info">
+      <h3>Administración de La Placeta</h3>
+      <p>Trámites, actas, PlacetaID y gestión ciudadana</p>
+    </div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <% } %>
+</div>
+
+<!-- Info de sesión -->
+<div class="session-info">
+  <div class="info-card">
+    <h4>👤 Sesión actual</h4>
+    <p><strong><%= usuario.nombre %></strong> · DIP: <code><%= usuario.dip %></code></p>
+    <p>Roles: <strong><%= (roles || []).join(', ') || 'Sin roles asignados' %></strong></p>
+    <p>Entidades: <strong><%= (entidades_permitidas || []).join(', ') || 'Ninguna' %></strong></p>
+    <p class="info-footer">Contacta con la Junta Directiva si necesitas acceso a más entidades.</p>
+  </div>
+</div>

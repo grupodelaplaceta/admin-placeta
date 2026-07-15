@@ -1,0 +1,17 @@
+<%# Stub views for administracion modules %>
+<%% const secs = {
+  'tributos-basica': { icono: '📊', tit: 'Tributos (Básico)', desc: 'Gestión básica de tributos.' },
+  'banco-basica': { icono: '🏦', tit: 'Banco (Básico)', desc: 'Gestión básica bancaria.' },
+  'actas': { icono: '📄', tit: 'Actas y Documentos', desc: 'Gestión de actas y documentos oficiales.' },
+  'votaciones': { icono: '🗳️', tit: 'Inspección de Votaciones', desc: 'Consulta de votaciones realizadas.' },
+  'placetaid': { icono: '🔑', tit: 'PlacetaID - Gestión Completa', desc: 'Gestión completa de identidades PlacetaID.' },
+  'junior': { icono: '🧒', tit: 'Usuarios Placeta Junior', desc: 'Gestión de menores y autorizaciones.' }
+};
+const s = secs[seccion] || { icono: '📋', tit: 'Sección', desc: '' };
+%>
+<div style="text-align:center;padding:60px 20px;color:var(--text-light)">
+  <div style="font-size:64px;margin-bottom:16px"><%= s.icono %></div>
+  <h2 style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:8px"><%= s.tit %></h2>
+  <p><%= s.desc %></p>
+  <p style="font-size:12px;margin-top:16px;font-style:italic">Módulo en desarrollo.</p>
+</div>
