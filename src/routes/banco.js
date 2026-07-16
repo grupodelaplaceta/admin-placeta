@@ -13,8 +13,6 @@ async function bancoAction(action, data = {}) {
     return { success: false, error: 'Error de conexión con el banco' };
   }
 }
-  });
-}
 
 // ── Dashboard Banco ────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
@@ -66,11 +64,14 @@ router.get('/cuentas/:id', verificarPermiso('banco', 'ver_cuentas'), async (req,
     const cuenta = state?.accounts?.find(a => a.id === req.params.id);
     if (!cuenta) return res.status(404).render('parciales/error', { titulo: 'Error', error: 'Cuenta no encontrada' });
 
-  res.render('banco/cuenta-detalle', {
-    titulo: `Cuenta: ${cuenta.displayName || cuenta.id}`,
-    entidad_actual: 'banco',
-    cuenta, esAdmin: req.session.roles?.includes('banco_admin')
-  });
+    res.render('banco/cuenta-detalle', {
+      titulo: `Cuenta: ${cuenta.displayName || cuenta.id}`,
+      entidad_actual: 'banco',
+      cuenta, esAdmin: req.session.roles?.includes('banco_admin')
+    });
+  } catch (e) {
+    res.status(500).render('parciales/error', { titulo: 'Error', error: 'Error al cargar la cuenta: ' + e.message });
+  }
 });
 
 // ── Crear Cuenta ───────────────────────────────────────────────────────────
