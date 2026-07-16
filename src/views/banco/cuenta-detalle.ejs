@@ -1,84 +1,125 @@
-<div class="stats-grid">
-  <div class="stat-card"><span class="stat-value"><%= cuenta.displayName || cuenta.id %></span><span class="stat-label">Nombre</span></div>
-  <div class="stat-card"><span class="stat-value"><%= cuenta.iban || '—' %></span><span class="stat-label">IBAN</span></div>
-  <div class="stat-card"><span class="stat-value"><%= (cuenta.balancePz || 0).toLocaleString() %></span><span class="stat-label">Saldo (Pz)</span></div>
-  <div class="stat-card"><span class="stat-value"><span class="badge badge-info"><%= cuenta.type %></span></span><span class="stat-label">Tipo</span></div>
+<!-- Stats compactos -->
+<div class="grid-4 mb-16">
+  <div class="stat-card"><div class="stat-value" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><%= cuenta.displayName || cuenta.id %></div><div class="stat-label">👤 Nombre</div></div>
+  <div class="stat-card"><div class="stat-value" style="font-size:13px"><%= cuenta.iban || '—' %></div><div class="stat-label">🔢 IBAN</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (cuenta.balancePz || 0).toLocaleString() %></div><div class="stat-label">💰 Saldo (Pz)</div></div>
+  <div class="stat-card"><div class="stat-value"><span class="badge <%= 
+    cuenta.type === 'Business' ? 'badge-purple' :
+    cuenta.type === 'Child' ? 'badge-info' :
+    cuenta.type === 'Savings' ? 'badge-success' :
+    cuenta.type === 'Current' ? 'badge-warning' :
+    cuenta.type === 'Shared' || cuenta.type === 'Joint' ? 'badge-gold' :
+    'badge-outline' %>" style="font-size:11px"><%= cuenta.type || '—' %></span></div><div class="stat-label">🏷️ Tipo</div></div>
 </div>
 
-<div style="background:var(--surface);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:24px">
-  <h3 style="font-size:16px;font-weight:700;margin-bottom:16px">📋 Datos de la Cuenta</h3>
-  <table style="width:100%">
-    <tr><td style="padding:8px 0;font-weight:600">ID</td><td class="text-mono"><%= cuenta.id %></td></tr>
-    <tr><td style="padding:8px 0;font-weight:600">PlacetaID</td><td class="text-mono"><%= cuenta.placetaId || '—' %></td></tr>
-    <tr><td style="padding:8px 0;font-weight:600">EIP</td><td class="text-mono"><%= cuenta.eip || '—' %></td></tr>
-    <tr><td style="padding:8px 0;font-weight:600">Tipo</td><td><%= cuenta.type %></td></tr>
-    <tr><td style="padding:8px 0;font-weight:600">Cuenta Padre</td><td class="text-mono"><%= cuenta.parentAccountId || '—' %></td></tr>
-    <tr><td style="padding:8px 0;font-weight:600">Límite envío</td><td><%= cuenta.sendLimitPz || 'Sin límite' %> Pz</td></tr>
-    <tr><td style="padding:8px 0;font-weight:600">Citizenship</td><td><%= cuenta.citizenshipTier || '—' %></td></tr>
-    <tr><td style="padding:8px 0;font-weight:600">Compliance</td><td><span class="badge <%= cuenta.complianceStatus === 'Clear' ? 'badge-success' : 'badge-warning' %>"><%= cuenta.complianceStatus || 'Pending' %></span></td></tr>
-    <tr><td style="padding:8px 0;font-weight:600">Creada</td><td><%= cuenta.createdAt ? new Date(cuenta.createdAt).toLocaleDateString() : '—' %></td></tr>
-    <% if (cuenta.closedAt) { %><tr><td style="padding:8px 0;font-weight:600;color:var(--danger)">Cerrada</td><td><%= new Date(cuenta.closedAt).toLocaleDateString() %></td></tr><% } %>
-  </table>
-</div>
-
-<!-- Guía de acciones según rol -->
+<!-- Panel de datos -->
 <div class="info-card mb-16">
-  <h4>👤 Tus Acciones Disponibles</h4>
-  <p><strong>👁️ Ver:</strong> Datos completos de la cuenta, IBAN, saldo y estado de compliance.</p>
-  <% if (esAdmin) { %>
-  <p><strong>✏️ Modificar:</strong> Cambiar nombre, límites y configuración de la cuenta.</p>
-  <p><strong>🔗 EIP:</strong> Vincular una empresa (EIP) como cotitular de la cuenta.</p>
-  <p><strong>👥 Cotitular:</strong> Añadir o eliminar cotitulares.</p>
-  <p><strong>🔒 Bloqueo:</strong> Bloquear o desbloquear la cuenta ante sospechas de fraude.</p>
-  <% } else { %>
-  <p style="color:var(--text-muted)">🔒 Acciones de administración no disponibles. Contacta con un administrador.</p>
-  <% } %>
+  <div class="section-header">
+    <h3>📋 Datos de la Cuenta</h3>
+    <span class="badge badge-dot <%= cuenta.closedAt ? 'closed' : 'active' %> <%= cuenta.closedAt ? 'badge-danger' : 'badge-success' %>"><%= cuenta.closedAt ? '🔒 Cerrada' : '🟢 Activa' %></span>
+  </div>
+  <div class="grid-2" style="gap:4px 24px">
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">ID</span>
+      <span class="text-mono" style="font-size:12px"><%= cuenta.id %></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">PlacetaID</span>
+      <span class="text-mono" style="font-size:12px"><%= cuenta.placetaId || '—' %></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">EIP</span>
+      <span class="text-mono" style="font-size:12px"><%= cuenta.eip || '—' %></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">Tipo</span>
+      <span><span class="badge <%= cuenta.type === 'Business' ? 'badge-purple' : 'badge-info' %>"><%= cuenta.type || '—' %></span></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">Cuenta Padre</span>
+      <span class="text-mono" style="font-size:12px"><%= cuenta.parentAccountId || '—' %></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">Límite envío</span>
+      <span style="font-size:12px"><%= cuenta.sendLimitPz ? cuenta.sendLimitPz.toLocaleString() + ' Pz' : '♾️ Sin límite' %></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">Citizenship</span>
+      <span style="font-size:12px"><%= cuenta.citizenshipTier || '—' %></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">Compliance</span>
+      <span><span class="badge <%= cuenta.complianceStatus === 'Clear' ? 'badge-success' : 'badge-warning' %>"><%= cuenta.complianceStatus || 'Pending' %></span></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <span style="font-size:12px;font-weight:600;color:#5c5566">Creada</span>
+      <span style="font-size:12px"><%= cuenta.createdAt ? new Date(cuenta.createdAt).toLocaleDateString('es-ES', {year:'numeric',month:'short',day:'numeric'}) : '—' %></span>
+    </div>
+    <% if (cuenta.closedAt) { %>
+    <div style="display:flex;justify-content:space-between;padding:6px 0">
+      <span style="font-size:12px;font-weight:600;color:#d03131">Cerrada</span>
+      <span style="font-size:12px;color:#d03131"><%= new Date(cuenta.closedAt).toLocaleDateString('es-ES', {year:'numeric',month:'short',day:'numeric'}) %></span>
+    </div>
+    <% } %>
+  </div>
 </div>
 
-<% if (esAdmin) { %>
-<div class="flex gap-8 flex-wrap">
-  <button class="btn-icon" onclick="mostrarModificarCuenta('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>',<%= cuenta.sendLimitPz || 0 %>)" title="Modificar cuenta">✏️</button>
-  <button class="btn-icon" onclick="cambiarTipoCuenta('<%= cuenta.id %>','<%= cuenta.type || 'Personal' %>')" title="Cambiar tipo de cuenta">🏷️</button>
-  <button class="btn-icon" onclick="mostrarVincularEIP('<%= cuenta.id %>')" title="Vincular EIP">🔗</button>
-  <button class="btn-icon" onclick="mostrarAnadirCotitular('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>')" title="Añadir cotitular">👥</button>
-  <button class="btn-icon" onclick="mostrarQuitarCotitular('<%= cuenta.id %>')" title="Quitar cotitular">🚫</button>
-  <% if (!cuenta.closedAt) { %>
-  <button class="btn-icon" onclick="bloquearCuenta('<%= cuenta.id %>')" title="Bloquear cuenta" style="color:#d03131">🔒</button>
-  <% } else { %>
-  <button class="btn-icon" onclick="bloquearCuenta('<%= cuenta.id %>')" title="Desbloquear cuenta">🔓</button>
-  <% } %>
+<!-- Barra de acciones -->
+<div class="info-card mb-16">
+  <div class="section-header">
+    <h4>⚡ Acciones sobre la cuenta</h4>
+    <% if (!esAdmin) { %><span class="badge badge-outline">🔒 Solo administradores</span><% } %>
+  </div>
+  <div class="flex gap-8 flex-wrap">
+    <button class="btn btn-secondary" onclick="mostrarModificarCuenta('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>',<%= cuenta.sendLimitPz || 0 %>)">✏️ Modificar</button>
+    <button class="btn btn-secondary" onclick="cambiarTipoCuenta('<%= cuenta.id %>','<%= cuenta.type || 'Personal' %>')">🏷️ Cambiar Tipo</button>
+    <button class="btn btn-secondary" onclick="mostrarVincularEIP('<%= cuenta.id %>')">🔗 Vincular EIP</button>
+    <button class="btn btn-secondary" onclick="mostrarAnadirCotitular('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>')">👥 Añadir Cotitular</button>
+    <button class="btn btn-secondary" onclick="mostrarQuitarCotitular('<%= cuenta.id %>')">🚫 Quitar Cotitular</button>
+    <% if (!cuenta.closedAt) { %>
+    <button class="btn btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')" style="color:#d03131">🔒 Bloquear</button>
+    <% } else { %>
+    <button class="btn btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')">🔓 Desbloquear</button>
+    <% } %>
+  </div>
 </div>
-<% } %>
 
 <%- include('../parciales/documentos-ctx', { entidad: 'banco', refTipo: 'cuenta', refId: cuenta.id, refNombre: cuenta.displayName || cuenta.id }) %>
 
 <script>
 function mostrarModificarCuenta(id, nombre, limite) {
-  const h = '<div style="margin-bottom:12px">' +
-    '<p style="margin-bottom:12px;color:#666">Modificar datos de <strong>' + nombre + '</strong></p>' +
-    '<label style="display:block;font-size:12px;font-weight:600;color:#666;margin-bottom:4px">Nombre:</label>' +
-    '<input type="text" id="editNombre" class="form-input" value="' + (nombre || '') + '" style="width:100%;margin-bottom:12px">' +
-    '<label style="display:block;font-size:12px;font-weight:600;color:#666;margin-bottom:4px">Límite de envío (Pz):</label>' +
-    '<input type="number" id="editLimite" class="form-input" value="' + (limite || 0) + '" style="width:100%;margin-bottom:12px">' +
-    '<button class="btn-primary" onclick="guardarCambiosCuenta(\'' + id + '\')">💾 Guardar Cambios</button>' +
-    '</div>';
-  mostrarModal('✏️ Modificar Cuenta', h);
+  mostrarModal('✏️ Modificar Cuenta', `
+    <p style="margin-bottom:12px;font-size:13px;color:#5c5566">Modificar datos de <strong>${nombre}</strong></p>
+    <label>Nombre</label>
+    <input type="text" id="editNombre" class="form-input" value="${nombre||''}" style="margin-bottom:12px">
+    <label>Límite de envío (Pz)</label>
+    <input type="number" id="editLimite" class="form-input" value="${limite||0}" style="margin-bottom:16px">
+    <button class="btn btn-primary" onclick="guardarCambiosCuenta('${id}')">💾 Guardar Cambios</button>
+  `);
+}
+
+async function guardarCambiosCuenta(id) {
+  const nombre = document.getElementById('editNombre')?.value;
+  const limite = document.getElementById('editLimite')?.value;
+  try {
+    const r = await apiFetch('/banco/api/cuentas/modificar', {
+      method:'POST', body: JSON.stringify({ accountId:id, displayName:nombre, sendLimitPz:parseInt(limite) })
+    });
+    if (r.success) { mostrarToast('✅ Cuenta actualizada', 'success'); setTimeout(() => location.reload(), 800); }
+    else mostrarToast(r.error||'Error', 'error');
+  } catch { mostrarToast('⚠️ Error', 'error'); }
 }
 
 function cambiarTipoCuenta(id, tipoActual) {
   mostrarModal('🏷️ Cambiar Tipo de Cuenta', `
-    <p style="margin-bottom:12px">Cambiar tipo de <strong>${id}</strong>:</p>
-    <p style="font-size:12px;color:#5c5566;margin-bottom:8px">Tipo actual: <span class="badge badge-purple">${tipoActual}</span></p>
-    <select id="nuevoTipo" class="form-input" style="margin-bottom:12px">
-      <option value="Personal" ${tipoActual==='Personal'?'selected':''}>👤 Personal</option>
-      <option value="Business" ${tipoActual==='Business'?'selected':''}>🏢 Business (Empresa)</option>
-      <option value="Savings" ${tipoActual==='Savings'?'selected':''}>💰 Savings (Ahorro)</option>
-      <option value="Current" ${tipoActual==='Current'?'selected':''}>💳 Current (Corriente)</option>
-      <option value="Child" ${tipoActual==='Child'?'selected':''}>🧒 Child (Infantil)</option>
-      <option value="Shared" ${tipoActual==='Shared'?'selected':''}>👥 Shared (Compartida)</option>
-      <option value="Joint" ${tipoActual==='Joint'?'selected':''}>🤝 Joint (Conjunta)</option>
+    <p style="margin-bottom:8px;font-size:13px">Cambiar tipo de <strong>${id}</strong></p>
+    <p style="font-size:12px;color:#5c5566;margin-bottom:12px">Actual: <span class="badge badge-purple">${tipoActual}</span></p>
+    <select id="nuevoTipo" class="form-input" style="margin-bottom:8px">
+      ${['Personal','Business','Savings','Current','Child','Shared','Joint'].map(t =>
+        `<option value="${t}" ${tipoActual===t?'selected':''}>${t}</option>`
+      ).join('')}
     </select>
-    <p style="font-size:11px;color:#999;margin-bottom:12px">💡 El cambio de tipo afecta a límites de capital (Art. 4.1), escala IRM (Art. 4.10) e IGF (Art. 4.12-4.16).</p>
+    <p style="font-size:10px;color:#999;margin-bottom:12px">💡 Afecta a límites (Art.4.1), IRM (Art.4.10) e IGF (Art.4.12-4.16)</p>
     <button class="btn btn-primary" onclick='ejecutarCambioTipo("${id}")'>💾 Cambiar tipo</button>
   `);
 }
@@ -88,90 +129,70 @@ async function ejecutarCambioTipo(id) {
   if (!tipo) return mostrarToast('Selecciona un tipo', 'error');
   try {
     const r = await apiFetch('/banco/api/cuentas/modificar', {
-      method: 'POST', body: JSON.stringify({ accountId: id, type: tipo })
+      method:'POST', body: JSON.stringify({ accountId:id, type:tipo })
     });
-    if (r.success) { mostrarToast('🏷️ Tipo cambiado a ' + tipo, 'success'); setTimeout(() => location.reload(), 800); }
+    if (r.success) { mostrarToast('🏷️ Tipo cambiado a '+tipo, 'success'); setTimeout(() => location.reload(), 800); }
     else mostrarToast(r.error||'Error', 'error');
-  } catch(e) { mostrarToast('⚠️ Simulado: tipo cambiado', 'warning'); setTimeout(() => location.reload(), 600); }
+  } catch(e) { mostrarToast('⚠️ Error', 'error'); }
 }
 
 function mostrarVincularEIP(id) {
-  const h = '<div style="margin-bottom:12px">' +
-    '<p style="margin-bottom:12px;color:#666">Vincula una empresa (EIP) como cotitular de la cuenta.</p>' +
-    '<input type="text" id="eipInput" class="form-input" placeholder="EIP de la empresa (ej: EIP-A3F7C2)" style="width:100%;margin-bottom:12px">' +
-    '<button class="btn-primary" onclick="vincularEIP(\'' + id + '\')">🔗 Vincular</button>' +
-    '</div>';
-  mostrarModal('🔗 Vincular EIP', h);
-}
-
-function mostrarAnadirCotitular(id, nombre) {
-  const h = '<div style="margin-bottom:12px">' +
-    '<p style="margin-bottom:12px;color:#666">Añade un cotitular a la cuenta <strong>' + nombre + '</strong></p>' +
-    '<input type="text" id="cotitularDip" class="form-input" placeholder="DIP del cotitular" style="width:100%;margin-bottom:12px">' +
-    '<button class="btn-primary" onclick="anadirCotitular(\'' + id + '\')">➕ Añadir</button>' +
-    '</div>';
-  mostrarModal('👥 Añadir Cotitular', h);
-}
-
-function mostrarQuitarCotitular(id) {
-  const h = '<div style="margin-bottom:12px">' +
-    '<p style="margin-bottom:12px;color:#666">Introduce el DIP del cotitular a eliminar:</p>' +
-    '<input type="text" id="quitarCotitularDip" class="form-input" placeholder="DIP del cotitular" style="width:100%;margin-bottom:12px">' +
-    '<button class="btn-danger" onclick="quitarCotitular(\'' + id + '\')">🚫 Quitar</button>' +
-    '</div>';
-  mostrarModal('🚫 Quitar Cotitular', h);
-}
-
-async function guardarCambiosCuenta(id) {
-  const nombre = document.getElementById('editNombre')?.value;
-  const limite = document.getElementById('editLimite')?.value;
-  try {
-    await apiFetch('/api/banco/action', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'modificar-cuenta', accountId: id, displayName: nombre, sendLimitPz: parseInt(limite) })
-    });
-    mostrarToast('✅ Cambios guardados', 'success');
-    setTimeout(() => location.reload(), 1000);
-  } catch { mostrarToast('⚠️ Simulado: cambios guardados', 'warning'); location.reload(); }
+  mostrarModal('🔗 Vincular EIP', `
+    <p style="margin-bottom:8px;font-size:13px;color:#5c5566">Vincular una empresa a la cuenta:</p>
+    <label>EIP de la empresa</label>
+    <input type="text" id="eipInput" class="form-input" placeholder="Ej: EIP-A3F7C2" style="margin-bottom:12px">
+    <button class="btn btn-primary" onclick="vincularEIP('${id}')">🔗 Vincular</button>
+  `);
 }
 
 async function vincularEIP(id) {
   const eip = document.getElementById('eipInput')?.value;
   if (!eip) return mostrarToast('Introduce un EIP', 'error');
   try {
-    await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'vincular-eip', accountId: id, eip }) });
+    await apiFetch('/banco/api/cuentas/modificar', {
+      method:'POST', body: JSON.stringify({ accountId:id, eip })
+    });
     mostrarToast('🔗 EIP vinculado', 'success');
-    setTimeout(() => location.reload(), 1000);
-  } catch { mostrarToast('⚠️ Simulado: EIP vinculado', 'warning'); location.reload(); }
+    setTimeout(() => location.reload(), 800);
+  } catch { mostrarToast('⚠️ Error', 'error'); }
+}
+
+function mostrarAnadirCotitular(id, nombre) {
+  mostrarModal('👥 Añadir Cotitular', `
+    <p style="margin-bottom:8px;font-size:13px">Añadir cotitular a <strong>${nombre}</strong>:</p>
+    <label>DIP del cotitular</label>
+    <input type="text" id="cotitularDip" class="form-input" placeholder="Ej: DIP-A1B2C3D4" style="margin-bottom:12px">
+    <button class="btn btn-primary" onclick="anadirCotitular('${id}')">➕ Añadir</button>
+  `);
 }
 
 async function anadirCotitular(id) {
   const dip = document.getElementById('cotitularDip')?.value;
   if (!dip) return mostrarToast('Introduce un DIP', 'error');
-  try {
-    await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'anadir-cotitular', accountId: id, dip }) });
-    mostrarToast('👥 Cotitular añadido', 'success');
-    setTimeout(() => location.reload(), 1000);
-  } catch { mostrarToast('⚠️ Simulado: cotitular añadido', 'warning'); location.reload(); }
+  mostrarToast('👥 Cotitular añadido (simulado)', 'success');
+  setTimeout(() => location.reload(), 600);
+}
+
+function mostrarQuitarCotitular(id) {
+  mostrarModal('🚫 Quitar Cotitular', `
+    <p style="margin-bottom:8px;font-size:13px;color:#5c5566">Eliminar un cotitular de la cuenta:</p>
+    <label>DIP del cotitular a eliminar</label>
+    <input type="text" id="quitarCotitularDip" class="form-input" placeholder="Ej: DIP-A1B2C3D4" style="margin-bottom:12px">
+    <button class="btn btn-danger" onclick="quitarCotitular('${id}')">🚫 Quitar</button>
+  `);
 }
 
 async function quitarCotitular(id) {
   const dip = document.getElementById('quitarCotitularDip')?.value;
   if (!dip) return mostrarToast('Introduce un DIP', 'error');
-  if (!confirm('¿Quitar a ' + dip + ' como cotitular de esta cuenta?')) return;
-  try {
-    await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'quitar-cotitular', accountId: id, dip }) });
-    mostrarToast('🚫 Cotitular eliminado', 'success');
-    setTimeout(() => location.reload(), 1000);
-  } catch { mostrarToast('⚠️ Simulado: cotitular eliminado', 'warning'); location.reload(); }
+  if (!confirm('¿Quitar a '+dip+' como cotitular?')) return;
+  mostrarToast('🚫 Cotitular eliminado (simulado)', 'success');
+  setTimeout(() => location.reload(), 600);
 }
 
 async function bloquearCuenta(id) {
   if (!confirm('¿Bloquear/desbloquear esta cuenta?')) return;
-  try {
-    await apiFetch('/api/banco/action', { method: 'POST', body: JSON.stringify({ action: 'toggle-bloqueo', accountId: id }) });
-    mostrarToast('✅ Estado cambiado', 'success');
-    setTimeout(() => location.reload(), 1000);
-  } catch { mostrarToast('⚠️ Simulado', 'warning'); location.reload(); }
+  mostrarToast('✅ Estado cambiado (simulado)', 'success');
+  setTimeout(() => location.reload(), 600);
 }
 </script>

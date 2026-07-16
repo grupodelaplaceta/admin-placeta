@@ -1,11 +1,12 @@
 <!-- Filtros y acciones -->
 <div class="flex gap-8 mb-16 flex-wrap items-center">
   <div class="flex gap-8" style="flex:1">
-    <input type="text" id="searchInput" placeholder="🔍 Buscar cuenta..." class="form-input" style="width:220px" value="<%= query.busqueda || '' %>">
-    <button class="btn btn-secondary" data-search-btn>🔍</button>
+    <input type="text" id="searchInput" placeholder="🔍 Buscar por ID, nombre, IBAN o EIP..." class="form-input" style="flex:1;min-width:180px" value="<%= query.busqueda || '' %>">
+    <button class="btn btn-primary" data-search-btn>🔍 Buscar</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('searchInput').value='';filtrarCuentas()">✕ Limpiar</button>
   </div>
-  <select id="filtroTipo" class="form-input" style="width:140px" onchange="filtrarCuentas()">
-    <option value="">📋 Todos los tipos</option>
+  <select id="filtroTipo" class="form-input" style="width:130px" onchange="filtrarCuentas()">
+    <option value=""><span>🏷️</span> Todos los tipos</option>
     <option value="Personal" <%= query.tipo === 'Personal' ? 'selected' : '' %>>👤 Personal</option>
     <option value="Business" <%= query.tipo === 'Business' ? 'selected' : '' %>>🏢 Business</option>
     <option value="Savings" <%= query.tipo === 'Savings' ? 'selected' : '' %>>💰 Savings</option>
@@ -14,53 +15,52 @@
     <option value="Shared" <%= query.tipo === 'Shared' ? 'selected' : '' %>>👥 Shared</option>
     <option value="Joint" <%= query.tipo === 'Joint' ? 'selected' : '' %>>🤝 Joint</option>
   </select>
-  <select id="filtroEstado" class="form-input" style="width:130px" onchange="filtrarCuentas()">
+  <select id="filtroEstado" class="form-input" style="width:120px" onchange="filtrarCuentas()">
     <option value="">📊 Todos</option>
     <option value="activas" <%= query.estado === 'activas' ? 'selected' : '' %>>🟢 Activas</option>
     <option value="cerradas" <%= query.estado === 'cerradas' ? 'selected' : '' %>>🔴 Cerradas</option>
   </select>
-  <a href="/banco/cuentas/nueva/gestor" class="btn btn-primary">➕ Nueva Cuenta</a>
+  <a href="/banco/cuentas/nueva/gestor" class="btn btn-primary">➕ Nueva</a>
 </div>
 
 <div class="table-container">
   <table>
     <thead>
       <tr>
-        <th style="width:50px">ID</th>
-        <th>👤 Nombre</th>
-        <th style="width:90px">🏷️ Tipo</th>
-        <th style="width:130px">🔢 IBAN</th>
-        <th style="width:90px">💰 Saldo</th>
-        <th style="width:80px">🔗 EIP</th>
-        <th style="width:80px">📊 Estado</th>
-        <th style="width:140px">⚡ Acciones</th>
+        <th style="width:40px">ID</th>
+        <th>Nombre</th>
+        <th style="width:80px">Tipo</th>
+        <th style="width:120px">IBAN</th>
+        <th style="width:80px">Saldo</th>
+        <th style="width:70px">EIP</th>
+        <th style="width:70px">Estado</th>
+        <th style="width:110px">Acciones</th>
       </tr>
     </thead>
     <tbody>
+      <% if (!cuentas || cuentas.length === 0) { %>
+      <tr><td colspan="8" class="text-center text-muted" style="padding:32px">No hay cuentas que coincidan con los filtros</td></tr>
+      <% } %>
       <% (cuentas || []).forEach(c => { %>
       <tr>
-        <td class="text-mono" style="font-size:10px"><%= c.id?.slice(0,8) %></td>
-        <td><a href="/banco/cuentas/<%= c.id %>" style="font-weight:600;font-size:13px"><%= c.displayName || '—' %></a></td>
+        <td class="text-mono" style="font-size:9px"><%= c.id?.slice(0,8) %></td>
+        <td><a href="/banco/cuentas/<%= c.id %>" style="font-weight:600;font-size:13px;display:block"><%= c.displayName || '—' %></a><span class="text-sm" style="font-size:10px"><%= c.placetaId || '' %></span></td>
         <td><span class="badge <%= 
           c.type === 'Business' ? 'badge-purple' :
           c.type === 'Child' ? 'badge-info' :
           c.type === 'Savings' ? 'badge-success' :
           c.type === 'Current' ? 'badge-warning' :
           c.type === 'Shared' || c.type === 'Joint' ? 'badge-gold' :
-          'badge-outline' %>"><%= c.type || '—' %></span></td>
-        <td class="text-mono" style="font-size:10px"><%= c.iban || '—' %></td>
-        <td><strong style="color:var(--p)"><%= (c.balancePz || 0).toLocaleString() %></strong> <span style="font-size:10px;color:#888">Pz</span></td>
-        <td class="text-mono" style="font-size:10px"><%= c.eip || '—' %></td>
-        <td>
-          <span class="badge badge-dot <%= c.closedAt ? 'closed' : 'active' %> <%= c.closedAt ? 'badge-danger' : 'badge-success' %>">
-            <%= c.closedAt ? '🔒 Cerrada' : '🟢 Activa' %>
-          </span>
-        </td>
+          'badge-outline' %>" style="font-size:8px"><%= c.type || '—' %></span></td>
+        <td class="text-mono" style="font-size:9px"><%= c.iban || '—' %></td>
+        <td style="font-weight:700;color:#3f00d8;font-size:14px"><%= (c.balancePz || 0).toLocaleString() %> <span style="font-weight:400;color:#888;font-size:9px">Pz</span></td>
+        <td class="text-mono" style="font-size:9px"><%= c.eip || '—' %></td>
+        <td><span class="badge <%= c.closedAt ? 'badge-danger' : 'badge-success' %>" style="font-size:8px"><%= c.closedAt ? 'Cerrada' : 'Activa' %></span></td>
         <td>
           <div class="flex gap-4" style="flex-wrap:nowrap">
             <a href="/banco/cuentas/<%= c.id %>" class="btn-icon" title="Ver detalle">👁️</a>
-            <button class="btn-icon" onclick="event.stopPropagation();cambiarTipoCuenta('<%= c.id %>','<%= c.type || 'Personal' %>')" title="Cambiar tipo">🏷️</button>
-            <button class="btn-icon" onclick="event.stopPropagation();verDocsDe('cuenta','<%= c.id %>','banco','<%= (c.displayName || c.id).slice(0,20).replace(/'/g,"\\'") %>')" title="Documentos">📎</button>
+            <button class="btn-icon" onclick="cambiarTipoCuenta('<%= c.id %>','<%= c.type || 'Personal' %>')" title="Cambiar tipo">🏷️</button>
+            <button class="btn-icon" onclick="verDocsDe('cuenta','<%= c.id %>','banco','<%= (c.displayName || c.id).slice(0,20).replace(/'/g,"\\'") %>')" title="Documentos">📎</button>
           </div>
         </td>
       </tr>
@@ -68,7 +68,10 @@
     </tbody>
   </table>
 </div>
-<p style="font-size:12px;color:#999;margin-top:8px">Total: <strong><%= total %></strong> cuentas bancarias</p>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+  <span style="font-size:12px;color:#999">Total: <strong><%= total %></strong> cuentas</span>
+  <% if (total > 0) { %><span style="font-size:11px;color:#999"><%= cuentas.filter(c => !c.closedAt).length %> activas · <%= cuentas.filter(c => c.closedAt).length %> cerradas</span><% } %>
+</div>
 
 <script>
 function filtrarCuentas() {
