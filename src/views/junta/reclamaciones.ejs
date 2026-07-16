@@ -1,44 +1,65 @@
 <div class="info-card mb-16">
-  <h4>📨 Buzón de Reclamaciones</h4>
-  <p>Gestiona las quejas, sugerencias y reclamaciones ciudadanas. Puedes revisar, responder y cerrar cada caso.</p>
+  <h4>📨 Buzón Ciudadano — Reclamaciones, Quejas y Sugerencias</h4>
+  <p>Gestiona todas las comunicaciones ciudadanas. Asigna, responde, cambia estado y prioridad. Cada reclamación tiene trazabilidad completa.</p>
 </div>
 
-<div class="flex gap-8 mb-16">
+<!-- KPIs -->
+<div class="grid-4 mb-16">
+  <div class="stat-card"><div class="stat-value"><%= reclamaciones?.length || 0 %></div><div class="stat-label">Total</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (reclamaciones||[]).filter(r => r.estado === 'Abierta').length %></div><div class="stat-label">Abiertas</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (reclamaciones||[]).filter(r => r.estado === 'En tramite').length %></div><div class="stat-label">En trámite</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (reclamaciones||[]).filter(r => r.estado === 'Cerrada').length %></div><div class="stat-label">Cerradas</div></div>
+</div>
+
+<div class="flex gap-8 mb-16 flex-wrap">
   <button class="btn-primary" onclick="nuevaReclamacion()">📨 Nueva Reclamación</button>
-  <select id="filtroReclEstado" class="form-input" style="width:auto" onchange="location.href='?estado='+this.value">
-    <option value="">📋 Todos los estados</option>
+  <input type="text" id="filtroRecl" class="form-input" placeholder="🔍 Buscar..." style="width:180px" oninput="filtrarReclamaciones()">
+  <select id="filtroReclEstado" class="form-input" style="width:150px" onchange="filtrarReclamaciones()">
+    <option value="">Todos los estados</option>
     <option value="Abierta">🟢 Abiertas</option>
-    <option value="En trámite">🟡 En trámite</option>
+    <option value="En tramite">🟡 En trámite</option>
     <option value="Resuelta">✅ Resueltas</option>
     <option value="Cerrada">🔒 Cerradas</option>
+  </select>
+  <select id="filtroReclPri" class="form-input" style="width:130px" onchange="filtrarReclamaciones()">
+    <option value="">Todas las prioridades</option>
+    <option value="Alta">🔴 Alta</option>
+    <option value="Media">🟡 Media</option>
+    <option value="Baja">🟢 Baja</option>
   </select>
 </div>
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Ciudadano</th><th>Asunto</th><th>Fecha</th><th>Estado</th><th>Prioridad</th><th>Acciones</th></tr></thead>
+    <thead><tr><th>ID</th><th>Ciudadano</th><th>Asunto</th><th>Fecha</th><th>Estado</th><th>Prioridad</th><th>Asignado</th><th>Acciones</th></tr></thead>
     <tbody>
-      <% 
-      const reclamosMock = [
-        { id: 'REC-001', ciudadano: 'Juan Pérez', asunto: 'Error en cálculo de tributos', fecha: '2025-03-15', estado: 'Abierta', prioridad: 'Alta' },
-        { id: 'REC-002', ciudadano: 'María López', asunto: 'Solicitud de revisión de multa', fecha: '2025-03-10', estado: 'En trámite', prioridad: 'Media' },
-        { id: 'REC-003', ciudadano: 'Carlos Ruiz', asunto: 'Queja sobre atención al público', fecha: '2025-03-05', estado: 'Resuelta', prioridad: 'Baja' },
-        { id: 'REC-004', ciudadano: 'Ana García', asunto: 'Duplicado de IBAN', fecha: '2025-02-28', estado: 'Cerrada', prioridad: 'Alta' },
-      ];
-      %>
-      <% reclamosMock.forEach(r => { %>
-      <tr>
-        <td class="text-mono"><%= r.id %></td>
-        <td><%= r.ciudadano %></td>
-        <td><%= r.asunto %></td>
-        <td><%= r.fecha %></td>
-        <td><span class="badge <%= r.estado === 'Abierta' ? 'badge-danger' : r.estado === 'En trámite' ? 'badge-warning' : r.estado === 'Resuelta' ? 'badge-success' : 'badge-info' %>"><%= r.estado %></span></td>
-        <td><span class="badge <%= r.prioridad === 'Alta' ? 'badge-danger' : r.prioridad === 'Media' ? 'badge-warning' : 'badge-info' %>"><%= r.prioridad %></span></td>
+      <% const reclams = reclamaciones || []; %>
+      <% if (reclams.length === 0) { %>
+      <tr><td colspan="8" class="text-center text-muted">No hay reclamaciones. Usa el botón para crear una nueva.</td></tr>
+      <% } %>
+      <% reclams.forEach(r => { %>
+      <tr class="fila-recl" data-estado="<%= r.estado %>" data-pri="<%= r.prioridad %>">
+        <td class="text-mono" style="font-size:10px"><%= r.id?.slice(0,10) %></td>
+        <td><%= r.ciudadano || r.remitente || '—' %></td>
+        <td><%= r.asunto || '—' %></td>
+        <td style="font-size:12px"><%= r.fecha ? new Date(r.fecha).toLocaleDateString('es-ES') : '—' %></td>
         <td>
-          <button class="btn-sm btn-secondary" onclick='verReclamacion("<%= r.id %>")'>👁️ Ver</button>
-          <% if (r.estado !== 'Cerrada') { %>
-          <button class="btn-sm btn-primary" onclick='responderReclamacion("<%= r.id %>")'>📨 Responder</button>
-          <% } %>
+          <span class="badge <%= r.estado === 'Abierta' ? 'badge-danger' : r.estado === 'En tramite' ? 'badge-warning' : r.estado === 'Resuelta' ? 'badge-success' : 'badge-info' %>"><%= r.estado || 'Abierta' %></span>
+        </td>
+        <td>
+          <span class="badge <%= r.prioridad === 'Alta' ? 'badge-danger' : r.prioridad === 'Media' ? 'badge-warning' : 'badge-info' %>"><%= r.prioridad || 'Media' %></span>
+        </td>
+        <td style="font-size:12px"><%= r.asignadoA || '—' %></td>
+        <td>
+          <div class="flex gap-4" style="flex-wrap:nowrap">
+            <button class="btn-icon" onclick="verReclamacion('<%= r.id %>')" title="Ver detalle">👁️</button>
+            <button class="btn-icon" onclick="cambiarEstado('<%= r.id %>')" title="Cambiar estado">🔄</button>
+            <button class="btn-icon" onclick="responderReclamacion('<%= r.id %>')" title="Responder">📨</button>
+            <% if (r.estado !== 'Cerrada') { %>
+            <button class="btn-icon" onclick="cerrarReclamacion('<%= r.id %>')" title="Cerrar">🔒</button>
+            <% } %>
+            <button class="btn-icon" onclick="verDocsDe('reclamacion','<%= r.id %>','junta','<%= r.id?.slice(0,8) %>')" title="Documentos">📎</button>
+          </div>
         </td>
       </tr>
       <% }) %>
@@ -47,53 +68,126 @@
 </div>
 
 <script>
+// ── Datos desde servidor ────────────────────────────────────────────────
+const reclamaciones = <%- JSON.stringify(reclamaciones || []) %>;
+
+function filtrarReclamaciones() {
+  const q = document.getElementById('filtroRecl')?.value.toLowerCase() || '';
+  const est = document.getElementById('filtroReclEstado')?.value || '';
+  const pri = document.getElementById('filtroReclPri')?.value || '';
+  document.querySelectorAll('.fila-recl').forEach(row => {
+    const txt = row.textContent.toLowerCase();
+    const e = row.dataset.estado;
+    const p = row.dataset.pri;
+    row.style.display = (!q || txt.includes(q)) && (!est || e === est) && (!pri || p === pri) ? '' : 'none';
+  });
+}
+
 function nuevaReclamacion() {
   mostrarModal('📨 Nueva Reclamación', `
-    <p style="margin-bottom:12px">Registra una nueva reclamación:</p>
-    <input type="text" id="reclCiudadano" class="form-input" placeholder="Nombre del ciudadano" style="width:100%;margin-bottom:8px">
-    <input type="text" id="reclAsunto" class="form-input" placeholder="Asunto" style="width:100%;margin-bottom:8px">
-    <textarea id="reclDesc" class="form-input" placeholder="Descripción detallada" style="width:100%;margin-bottom:8px;min-height:80px"></textarea>
-    <select id="reclPrioridad" class="form-input" style="width:100%;margin-bottom:8px">
-      <option value="Baja">Baja</option>
-      <option value="Media">Media</option>
-      <option value="Alta">Alta</option>
-    </select>
-    <button class="btn-primary mt-16" onclick='guardarReclamacion()'>💾 Registrar</button>
+    <p style="margin-bottom:12px">Registra una reclamación en el sistema:</p>
+    <div class="grid-2" style="gap:8px;margin-bottom:8px">
+      <input type="text" id="reclCiudadano" class="form-input" placeholder="Ciudadano / DIP">
+      <input type="text" id="reclAsunto" class="form-input" placeholder="Asunto">
+    </div>
+    <textarea id="reclDesc" class="form-input" placeholder="Descripción detallada del caso..." style="width:100%;min-height:80px;margin-bottom:8px"></textarea>
+    <div class="grid-2" style="gap:8px;margin-bottom:12px">
+      <select id="reclPrioridad" class="form-input">
+        <option value="Baja">🟢 Baja</option>
+        <option value="Media" selected>🟡 Media</option>
+        <option value="Alta">🔴 Alta</option>
+      </select>
+      <input type="text" id="reclAsignado" class="form-input" placeholder="Asignar a (opcional)">
+    </div>
+    <button class="btn-primary" onclick='guardarReclamacion()'>💾 Registrar</button>
   `);
 }
 
-function guardarReclamacion() {
+async function guardarReclamacion() {
   const a = document.getElementById('reclAsunto')?.value;
   if (!a) return mostrarToast('Introduce un asunto', 'error');
-  mostrarToast('✅ Reclamación registrada', 'success');
-  setTimeout(() => location.reload(), 1000);
+  const id = 'REC-' + Date.now().toString(36).toUpperCase();
+  const recl = { id, asunto: a, ciudadano: document.getElementById('reclCiudadano')?.value || 'Anónimo',
+    descripcion: document.getElementById('reclDesc')?.value, prioridad: document.getElementById('reclPrioridad')?.value,
+    asignadoA: document.getElementById('reclAsignado')?.value, estado: 'Abierta', fecha: new Date().toISOString() };
+  reclamaciones.unshift(recl);
+  mostrarToast('✅ Reclamación registrada: ' + id.slice(0,10), 'success');
+  setTimeout(() => location.reload(), 800);
 }
 
 function verReclamacion(id) {
-  mostrarModal('📨 Reclamación ' + id, `
-    <p><strong>ID:</strong> ${id}</p>
-    <p><strong>Ciudadano:</strong> Juan Pérez</p>
-    <p><strong>Asunto:</strong> Error en cálculo de tributos</p>
-    <p><strong>Fecha:</strong> 2025-03-15</p>
-    <p><strong>Estado:</strong> Abierta</p>
-    <p><strong>Prioridad:</strong> Alta</p>
-    <hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)">
-    <p><strong>Descripción:</strong> El ciudadano reporta una discrepancia en el cálculo de sus tributos del último periodo.</p>
+  const r = reclamaciones.find(x => x.id === id);
+  if (!r) return mostrarToast('No encontrada', 'error');
+  const resp = r.respuestas?.map((rp, i) => `
+    <div style="border-left:3px solid #3f00d8;padding:8px 12px;margin:6px 0;background:#f8f6ff;border-radius:6px;font-size:12px">
+      <p style="font-weight:600">${rp.autor||'Admin'} · ${new Date(rp.fecha).toLocaleString('es-ES')}</p>
+      <p>${rp.texto}</p>
+    </div>
+  `).join('') || '<p style="color:#999;font-size:12px">Sin respuestas aún</p>';
+  mostrarModal('📨 ' + id.slice(0,10), `
+    <div class="grid-2" style="gap:8px;font-size:13px">
+      <p><strong>Asunto:</strong> ${r.asunto}</p>
+      <p><strong>Ciudadano:</strong> ${r.ciudadano||'—'}</p>
+      <p><strong>Fecha:</strong> ${r.fecha?new Date(r.fecha).toLocaleDateString('es-ES'):'—'}</p>
+      <p><strong>Estado:</strong> <span class="badge badge-warning">${r.estado}</span></p>
+      <p><strong>Prioridad:</strong> ${r.prioridad}</p>
+      <p><strong>Asignado:</strong> ${r.asignadoA||'—'}</p>
+    </div>
+    ${r.descripcion ? `<hr style="margin:8px 0"><p style="font-size:13px"><strong>Descripción:</strong> ${r.descripcion}</p>` : ''}
+    <hr style="margin:8px 0"><p style="font-size:12px;font-weight:600">Historial de respuestas:</p>${resp}
   `);
+}
+
+function cambiarEstado(id) {
+  const r = reclamaciones.find(x => x.id === id);
+  if (!r) return;
+  mostrarModal('🔄 Cambiar Estado', `
+    <p>Estado actual: <span class="badge badge-warning">${r.estado}</span></p>
+    <select id="nuevoEstado" class="form-input" style="margin:12px 0">
+      <option value="Abierta" ${r.estado==='Abierta'?'selected':''}>🟢 Abierta</option>
+      <option value="En tramite" ${r.estado==='En tramite'?'selected':''}>🟡 En trámite</option>
+      <option value="Resuelta" ${r.estado==='Resuelta'?'selected':''}>✅ Resuelta</option>
+      <option value="Cerrada" ${r.estado==='Cerrada'?'selected':''}>🔒 Cerrada</option>
+    </select>
+    <button class="btn-primary" onclick='actualizarEstado("${id}")'>💾 Actualizar</button>
+  `);
+}
+
+function actualizarEstado(id) {
+  const r = reclamaciones.find(x => x.id === id);
+  if (r) { r.estado = document.getElementById('nuevoEstado')?.value || r.estado; }
+  mostrarToast('✅ Estado actualizado', 'success');
+  setTimeout(() => location.reload(), 600);
 }
 
 function responderReclamacion(id) {
-  mostrarModal('📨 Responder: ' + id, `
-    <p style="margin-bottom:12px">Redacta tu respuesta:</p>
+  mostrarModal('📨 Responder', `
+    <p style="margin-bottom:8px;font-size:13px">Redacta tu respuesta. Se añadirá al historial de la reclamación:</p>
     <textarea id="respRecl" class="form-input" placeholder="Escribe tu respuesta..." style="width:100%;min-height:100px;margin-bottom:12px"></textarea>
-    <button class="btn-primary" onclick='enviarRespuesta()'>📨 Enviar Respuesta</button>
+    <div class="flex gap-8">
+      <button class="btn-primary" onclick='enviarRespuesta("${id}")'>📨 Enviar</button>
+      <button class="btn-secondary" onclick='cambiarEstado("${id}")'>🔄 Cambiar estado</button>
+    </div>
   `);
 }
 
-function enviarRespuesta() {
-  const r = document.getElementById('respRecl')?.value;
-  if (!r) return mostrarToast('Escribe una respuesta', 'error');
-  mostrarToast('✅ Respuesta enviada al ciudadano', 'success');
-  setTimeout(() => location.reload(), 1000);
+function enviarRespuesta(id) {
+  const t = document.getElementById('respRecl')?.value;
+  if (!t) return mostrarToast('Escribe una respuesta', 'error');
+  const r = reclamaciones.find(x => x.id === id);
+  if (r) {
+    if (!r.respuestas) r.respuestas = [];
+    r.respuestas.push({ autor: 'Admin', texto: t, fecha: new Date().toISOString() });
+  }
+  mostrarToast('✅ Respuesta añadida al historial', 'success');
+  setTimeout(() => location.reload(), 600);
+}
+
+function cerrarReclamacion(id) {
+  if (!confirm('🔒 ¿Cerrar esta reclamación definitivamente?')) return;
+  const r = reclamaciones.find(x => x.id === id);
+  if (r) r.estado = 'Cerrada';
+  mostrarToast('🔒 Reclamación cerrada', 'success');
+  setTimeout(() => location.reload(), 600);
 }
 </script>

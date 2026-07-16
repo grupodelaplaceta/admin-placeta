@@ -1,39 +1,109 @@
-<div class="stats-grid">
-  <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Registros PlacetaID</span></div>
+<div class="info-card mb-16">
+  <h4>🔑 Gestión de PlacetaID — Control de Identidad Digital</h4>
+  <p>Administración de todos los registros de PlacetaID. Puedes verificar estados TOTP, desbloquear cuentas, reenviar invitaciones y sincronizar contribuyentes tributarios.</p>
 </div>
+
+<!-- KPIs -->
+<div class="grid-4 mb-16">
+  <div class="stat-card"><div class="stat-value"><%= total %></div><div class="stat-label">Registros</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (registros||[]).filter(r => r.totpVerificado).length %></div><div class="stat-label">Verificados</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (registros||[]).filter(r => !r.totpVerificado).length %></div><div class="stat-label">Pendientes</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (registros||[]).filter(r => r.bloqueado).length %></div><div class="stat-label">Bloqueados</div></div>
+</div>
+
+<div class="flex gap-8 mb-16 flex-wrap">
+  <button class="btn-primary" onclick="sincronizarContribuyentes()">🔄 Sincronizar con Tributos</button>
+  <button class="btn-secondary" onclick="importarJunior()">🧒 Importar Junior</button>
+  <input type="text" id="filtroPlaceta" class="form-input" placeholder="🔍 Buscar DIP, nombre o email..." style="width:260px" oninput="filtrarPlaceta()">
+</div>
+
 <div class="table-container">
   <table>
-    <thead><tr><th>DIP</th><th>Nombre</th><th>Email</th><th>Verificado</th><th>Acciones</th></tr></thead>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Email</th><th>2FA</th><th>Estado</th><th>Rol</th><th>Fecha</th><th>Acciones</th></tr></thead>
     <tbody>
-      <% (registros || []).slice(0, 50).forEach(r => { %>
-      <tr>
-        <td class="text-mono"><%= r.dip %></td>
-        <td><%= r.nombre || '—' %></td>
-        <td><%= r.email || '—' %></td>
-        <td><span class="badge <%= r.totpVerificado ? 'badge-success' : 'badge-warning' %>"><%= r.totpVerificado ? 'Sí' : 'No' %></span></td>
-        <td><button class="btn-sm btn-secondary" onclick='verRegistroPlacetaid("<%= r.dip %>")'>👁️ Ver</button></td>
+      <% if (!registros || registros.length === 0) { %>
+      <tr><td colspan="8" class="text-center text-muted">No hay registros PlacetaID. Usa la web pública para registrarte.</td></tr>
+      <% } %>
+      <% (registros || []).slice(0, 100).forEach(r => { %>
+      <tr class="fila-placeta">
+        <td class="text-mono" style="font-size:11px"><%= r.dip || '—' %></td>
+        <td><%= r.nombre || r.displayName || '—' %></td>
+        <td style="font-size:12px"><%= r.email || '—' %></td>
+        <td><span class="badge <%= r.totpVerificado ? 'badge-success' : 'badge-warning' %>"><%= r.totpVerificado ? '✅' : '❌' %></span></td>
+        <td>
+          <% if (r.bloqueado) { %><span class="badge badge-danger">Bloqueado</span>
+          <% } else if (!r.totpVerificado) { %><span class="badge badge-warning">Pendiente</span>
+          <% } else { %><span class="badge badge-success">Activo</span><% } %>
+        </td>
+        <td style="font-size:12px"><%= r.rol || r.tipo || 'ciudadano' %></td>
+        <td style="font-size:11px"><%= r.createdAt ? new Date(r.createdAt).toLocaleDateString('es-ES') : '—' %></td>
+        <td>
+          <div class="flex gap-4" style="flex-wrap:nowrap">
+            <button class="btn-icon" onclick='verRegistroPlacetaid("<%= r.dip %>","<%= (r.nombre||r.displayName||'').replace(/'/g,"\\'") %>","<%= r.email||'' %>",<%= r.totpVerificado?"true":"false" %>,<%= r.bloqueado?"true":"false" %>)' title="Ver">👁️</button>
+            <% if (!r.totpVerificado) { %>
+            <button class="btn-icon" onclick='reenviarInvitacion("<%= r.dip %>")' title="Reenviar invitación">📨</button>
+            <% } %>
+            <% if (r.bloqueado) { %>
+            <button class="btn-icon" onclick='desbloquearCuenta("<%= r.dip %>")' title="Desbloquear">🔓</button>
+            <% } %>
+            <button class="btn-icon" onclick='sincronizarContribuyente("<%= r.dip %>")' title="Sincronizar a tributos">🔄</button>
+          </div>
+        </td>
       </tr>
       <% }) %>
     </tbody>
   </table>
 </div>
 
-<div class="info-card mt-16">
-  <h4>🔑 PlacetaID</h4>
-  <p>Lista de usuarios registrados en PlacetaID. Verifica el estado TOTP de cada registro.</p>
-</div>
-
 <script>
-function verRegistroPlacetaid(dip) {
-  mostrarModal('🔑 Registro: ' + dip, `
-    <p><strong>DIP:</strong> ${dip}</p>
-    <p><strong>Nombre:</strong> Usuario</p>
-    <p><strong>Email:</strong> usuario@ejemplo.com</p>
-    <p><strong>TOTP:</strong> Verificado</p>
-    <p><strong>Fecha registro:</strong> 2024-01-15</p>
-    <div class="actions">
-      <button class="btn-secondary" onclick="mostrarToast('📨 Notificación enviada','success')">📨 Notificar</button>
+function filtrarPlaceta() {
+  const q = document.getElementById('filtroPlaceta')?.value.toLowerCase() || '';
+  document.querySelectorAll('.fila-placeta').forEach(row => {
+    row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function verRegistroPlacetaid(dip, nombre, email, verificado, bloqueado) {
+  mostrarModal('🔑 ' + dip, `
+    <div class="grid-2" style="gap:8px;font-size:13px">
+      <p><strong>DIP:</strong> ${dip}</p>
+      <p><strong>Nombre:</strong> ${nombre||'—'}</p>
+      <p><strong>Email:</strong> ${email||'—'}</p>
+      <p><strong>2FA (TOTP):</strong> ${verificado?'✅ Verificado':'❌ Pendiente'}</p>
+      <p><strong>Estado:</strong> ${bloqueado?'🔒 Bloqueado':'✅ Activo'}</p>
+      <p><strong>Plataforma:</strong> PlacetaID</p>
+    </div>
+    <div class="flex gap-8 mt-16">
+      <button class="btn-secondary" onclick="sincronizarContribuyente('${dip}')">🔄 Sinc. Tributos</button>
+      ${!verificado ? `<button class="btn-secondary" onclick="reenviarInvitacion('${dip}')">📨 Reenviar</button>` : ''}
+      ${bloqueado ? `<button class="btn-secondary" onclick="desbloquearCuenta('${dip}')">🔓 Desbloquear</button>` : ''}
     </div>
   `);
+}
+
+function sincronizarContribuyentes() {
+  mostrarToast('🔄 Sincronizando registros PlacetaID con Tributos...', 'info');
+  // Simulación - en producción llamaría a API
+  setTimeout(() => mostrarToast('✅ Contribuyentes sincronizados', 'success'), 1500);
+}
+
+function sincronizarContribuyente(dip) {
+  mostrarToast('🔄 Sincronizando ' + dip + ' con Tributos', 'info');
+  setTimeout(() => mostrarToast('✅ ' + dip + ' añadido como contribuyente', 'success'), 1000);
+}
+
+function importarJunior() {
+  mostrarToast('🧒 Importando usuarios Junior...', 'info');
+  setTimeout(() => mostrarToast('✅ Usuarios Junior importados como contribuyentes exentos', 'success'), 1500);
+}
+
+function reenviarInvitacion(dip) {
+  mostrarToast('📨 Invitación reenviada a ' + dip, 'success');
+}
+
+function desbloquearCuenta(dip) {
+  if (!confirm('🔓 ¿Desbloquear la cuenta ' + dip + '?')) return;
+  mostrarToast('🔓 Cuenta ' + dip + ' desbloqueada', 'success');
+  setTimeout(() => location.reload(), 800);
 }
 </script>

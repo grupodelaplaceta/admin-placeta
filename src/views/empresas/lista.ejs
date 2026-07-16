@@ -1,62 +1,54 @@
 <div class="info-card mb-16">
-  <h4>🏢 Gestión de Empresas y EIP</h4>
-  <p>Registro mercantil del ecosistema GDLP. Gestiona altas, bajas, socios y porcentajes de participación. Las cuentas bancarias se detectan automáticamente al vincularse por EIP.</p>
+  <h4>🏢 Registro Mercantil — Empresas y EIP</h4>
+  <p>Tabla independiente de empresas. Cada empresa tiene: nombre, DIP, EIP y representantes. <strong>No usa IBAN ni cuentas bancarias</strong>. Las empresas se identifican por EIP.</p>
+</div>
+
+<!-- KPIs -->
+<div class="grid-3 mb-16">
+  <div class="stat-card"><div class="stat-value"><%= empresas.length %></div><div class="stat-label">Empresas</div></div>
+  <div class="stat-card"><div class="stat-value"><%= empresas.reduce((s,e) => s + (e.representantes?.length || 0), 0) %></div><div class="stat-label">Representantes</div></div>
+  <div class="stat-card"><div class="stat-value"><%= empresas.filter(e => e.activa !== false).length %></div><div class="stat-label">Activas</div></div>
 </div>
 
 <div class="flex gap-8 mb-16 flex-wrap">
   <button class="btn-primary" onclick="nuevaEmpresa()">🏢 Nueva Empresa</button>
-  <input type="text" id="filtroEmpresas" class="form-input" placeholder="🔍 Buscar por nombre o EIP..." style="width:260px;max-width:100%" oninput="filtrarEmpresas()">
+  <button class="btn-secondary" onclick="altaRapidaDip()">⚡ Alta rápida por DIP</button>
+  <input type="text" id="filtroEmpresas" class="form-input" placeholder="🔍 Buscar por nombre, EIP o DIP..." style="width:260px" oninput="filtrarEmpresas()">
 </div>
 
 <% if (empresas.length === 0) { %>
 <div class="empty-state">
   <div class="empty-icon">🏢</div>
   <h3>Sin empresas registradas</h3>
-  <p>Usa el botón "Nueva Empresa" para dar de alta la primera.</p>
+  <p>Usa "Nueva Empresa" para dar de alta la primera.</p>
 </div>
 <% } else { %>
 <div class="table-container">
   <table>
-    <thead>
-      <tr>
-        <th>Empresa</th>
-        <th>EIP</th>
-        <th>Cuenta Bancaria</th>
-        <th>Saldo</th>
-        <th>Socios</th>
-        <th>Cuentas Vinculadas</th>
-        <th>Compliance</th>
-        <th>Acciones</th>
-      </tr>
-    </thead>
+    <thead><tr><th>Empresa</th><th>EIP</th><th>DIP</th><th>Representantes</th><th>Acciones</th></tr></thead>
     <tbody id="tablaEmpresas">
       <% empresas.forEach(e => { %>
       <tr class="fila-empresa">
         <td><strong><%= e.nombre %></strong></td>
-        <td><span class="badge badge-purple" style="font-size:11px;letter-spacing:0.3px"><%= e.eip %></span></td>
-        <td><span class="text-mono" style="font-size:11px"><%= e.iban || '—' %></span><br><span style="font-size:10px;color:#999">Cuenta: <%= e.id?.slice(0,12) %>…</span></td>
-        <td><strong><%= e.saldo.toLocaleString() %></strong> Pz</td>
+        <td><span class="badge badge-purple" style="font-size:10px;letter-spacing:0.3px"><%= e.eip %></span></td>
+        <td class="text-mono" style="font-size:11px"><%= e.dip || '—' %></td>
         <td>
-          <% if (e.socios.length === 0) { %><span style="color:#999;font-size:12px">—</span><% } %>
-          <% e.socios.forEach(s => { %>
-            <div style="font-size:12px;margin-bottom:2px;display:flex;align-items:center;gap:4px">
-              <span><%= s.nombre %></span>
-              <span class="badge badge-info" style="font-size:9px">Socio</span>
+          <% if (!e.representantes || e.representantes.length === 0) { %><span style="color:#999;font-size:12px">—</span><% } %>
+          <% (e.representantes||[]).forEach(s => { %>
+            <div style="font-size:11px;margin-bottom:2px;display:flex;align-items:center;gap:4px">
+              <span><%= s.nombre||s.dip %></span>
+              <span class="badge badge-info" style="font-size:8px"><%= s.cargo||'Representante' %></span>
             </div>
           <% }) %>
         </td>
         <td>
-          <% if (e.cuentasVinculadas.length === 0) { %><span style="color:#999;font-size:12px">—</span><% } %>
-          <% e.cuentasVinculadas.forEach(cv => { %>
-            <div style="font-size:11px;margin-bottom:2px"><%= cv.nombre %> <span class="text-mono" style="font-size:10px"><%= cv.iban %></span></div>
-          <% }) %>
-        </td>
-        <td><span class="badge <%= e.compliance === 'Clear' ? 'badge-success' : 'badge-warning' %>"><%= e.compliance || 'Pending' %></span></td>
-        <td>
-          <button class="btn-sm btn-secondary" onclick="verEmpresa('<%= e.eip %>','<%= e.nombre.replace(/'/g,"\\'") %>','<%= e.id %>')">👁️</button>
-          <button class="btn-sm btn-secondary" onclick="anadirSocio('<%= e.eip %>','<%= e.nombre.replace(/'/g,"\\'") %>')">👥</button>
-          <button class="btn-sm btn-primary" onclick="verDocsDe('empresa','<%= e.id %>','<%= entidad_actual %>','<%= e.nombre.replace(/'/g,"\\'").slice(0,20) %>')">📄</button>
-          <button class="btn-sm btn-secondary" onclick="bajaEmpresa('<%= e.id %>','<%= e.nombre.replace(/'/g,"\\'") %>')">❌</button>
+          <div class="flex gap-4" style="flex-wrap:nowrap">
+            <button class="btn-icon" onclick="verEmpresa('<%= e.id %>')" title="Ver">👁️</button>
+            <button class="btn-icon" onclick="editarEmpresa('<%= e.id %>')" title="Editar">✏️</button>
+            <button class="btn-icon" onclick="anadirRepresentante('<%= e.id %>')" title="Añadir representante">👥</button>
+            <button class="btn-icon" onclick="verDocsDe('empresa','<%= e.id %>','<%= entidad_actual %>','<%= e.nombre.slice(0,20).replace(/'/g,"\\'") %>')" title="Documentos">📎</button>
+            <button class="btn-icon" onclick="bajaEmpresa('<%= e.id %>')" title="Dar de baja">❌</button>
+          </div>
         </td>
       </tr>
       <% }) %>
@@ -67,28 +59,159 @@
 <% } %>
 
 <script>
+// ── Datos desde servidor ────────────────────────────────────────────────
+const empresas = <%- JSON.stringify(empresas) %>;
+
+function filtrarEmpresas() {
+  const q = document.getElementById('filtroEmpresas').value.toLowerCase();
+  document.querySelectorAll('.fila-empresa').forEach(row => {
+    row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+// ── Nueva empresa (completa) ────────────────────────────────────────────
 function nuevaEmpresa() {
   mostrarModal('🏢 Nueva Empresa', `
-    <p style="margin-bottom:12px;color:#666">Registra una nueva empresa en el sistema:</p>
-    <input type="text" id="empNombre" class="form-input" placeholder="Nombre de la empresa" style="margin-bottom:8px">
-    <input type="text" id="empEip" class="form-input" placeholder="EIP (ej: EIP-A3F7C2)" style="margin-bottom:8px">
-    <input type="text" id="empDip" class="form-input" placeholder="DIP del representante" style="margin-bottom:12px">
+    <p style="margin-bottom:12px">Registra una nueva empresa en el sistema:</p>
+    <input type="text" id="empNombre" class="form-input" placeholder="Nombre de la empresa *" style="width:100%;margin-bottom:8px">
+    <div class="grid-2" style="gap:8px;margin-bottom:8px">
+      <input type="text" id="empEip" class="form-input" placeholder="EIP (auto si vacío)">
+      <input type="text" id="empDip" class="form-input" placeholder="DIP empresa (auto si vacío)">
+    </div>
+    <p style="font-size:11px;color:#999;margin-bottom:8px">Representante inicial (opcional):</p>
+    <div class="grid-2" style="gap:8px;margin-bottom:12px">
+      <input type="text" id="empRepDip" class="form-input" placeholder="DIP del representante">
+      <input type="text" id="empRepNombre" class="form-input" placeholder="Nombre del representante">
+    </div>
     <button class="btn-primary" onclick="crearEmpresa()">💾 Crear Empresa</button>
   `);
 }
 
 async function crearEmpresa() {
   const nombre = document.getElementById('empNombre')?.value;
-  const eip = document.getElementById('empEip')?.value;
-  const dip = document.getElementById('empDip')?.value;
-  if (!nombre || !eip) return mostrarToast('Nombre y EIP requeridos', 'error');
+  if (!nombre) return mostrarToast('El nombre es obligatorio', 'error');
   try {
-    const r = await apiFetch('/api/empresas/crear', {
+    const r = await apiFetch('/<%= entidad_actual %>/api/empresas/crear', {
       method: 'POST',
-      body: JSON.stringify({ nombre, eip, dipRepresentante: dip })
+      body: JSON.stringify({
+        nombre, eip: document.getElementById('empEip')?.value,
+        dipEmpresa: document.getElementById('empDip')?.value,
+        representanteDip: document.getElementById('empRepDip')?.value,
+        representanteNombre: document.getElementById('empRepNombre')?.value
+      })
     });
-    mostrarToast('✅ Empresa ' + nombre + ' creada', 'success');
-    setTimeout(() => location.reload(), 1000);
+    if (r.success) { mostrarToast('✅ Empresa creada', 'success'); setTimeout(() => location.reload(), 800); }
+    else mostrarToast(r.error||'Error', 'error');
+  } catch(e) { mostrarToast('Error de red', 'error'); }
+}
+
+// ── Alta rápida por DIP ────────────────────────────────────────────────
+function altaRapidaDip() {
+  mostrarModal('⚡ Alta Rápida por DIP', `
+    <p style="margin-bottom:12px">Introduce el DIP y se creará una empresa automáticamente:</p>
+    <input type="text" id="rapDip" class="form-input" placeholder="DIP del ciudadano" style="width:100%;margin-bottom:8px">
+    <input type="text" id="rapNombre" class="form-input" placeholder="Nombre de la empresa (auto si vacío)" style="width:100%;margin-bottom:12px">
+    <button class="btn-primary" onclick='crearEmpresaRapida()'>⚡ Crear</button>
+  `);
+}
+
+async function crearEmpresaRapida() {
+  const dip = document.getElementById('rapDip')?.value;
+  if (!dip) return mostrarToast('DIP requerido', 'error');
+  const nombre = document.getElementById('rapNombre')?.value || ('Empresa de ' + dip);
+  try {
+    const r = await apiFetch('/<%= entidad_actual %>/api/empresas/crear', {
+      method: 'POST', body: JSON.stringify({ nombre, dipEmpresa: dip, representanteDip: dip, representanteNombre: dip })
+    });
+    if (r.success) { mostrarToast('✅ Empresa creada desde DIP ' + dip, 'success'); setTimeout(() => location.reload(), 800); }
+    else mostrarToast(r.error||'Error', 'error');
+  } catch(e) { mostrarToast('Error de red', 'error'); }
+}
+
+// ── Ver empresa ─────────────────────────────────────────────────────────
+function verEmpresa(id) {
+  const e = empresas.find(x => x.id === id);
+  if (!e) return mostrarToast('No encontrada', 'error');
+  const reps = (e.representantes||[]).map(r => `<p style="font-size:12px">• ${r.nombre||r.dip} <span class="badge badge-info" style="font-size:8px">${r.cargo||'Representante'}</span></p>`).join('') || '<p style="color:#999;font-size:12px">Sin representantes</p>';
+  mostrarModal('🏢 ' + e.nombre, `
+    <div class="grid-2" style="gap:8px;font-size:13px">
+      <p><strong>Nombre:</strong> ${e.nombre}</p>
+      <p><strong>EIP:</strong> <span class="badge badge-purple">${e.eip}</span></p>
+      <p><strong>DIP:</strong> <span class="text-mono">${e.dip||'—'}</span></p>
+      <p><strong>Estado:</strong> ${e.activa !== false ? '<span class="badge badge-success">Activa</span>' : '<span class="badge badge-danger">Inactiva</span>'}</p>
+    </div>
+    <hr style="margin:8px 0"><p style="font-weight:600;font-size:12px">Representantes:</p>${reps}
+    <div class="flex gap-8 mt-16">
+      <button class="btn-secondary" onclick="editarEmpresa('${id}')">✏️ Editar</button>
+      <button class="btn-secondary" onclick="anadirRepresentante('${id}')">👥 Añadir representante</button>
+      <button class="btn-secondary" onclick="bajaEmpresa('${id}')">❌ Baja</button>
+    </div>
+  `);
+}
+
+// ── Editar empresa ──────────────────────────────────────────────────────
+function editarEmpresa(id) {
+  const e = empresas.find(x => x.id === id);
+  if (!e) return;
+  mostrarModal('✏️ Editar: ' + e.nombre, `
+    <input type="text" id="editNombre" class="form-input" value="${e.nombre}" style="width:100%;margin-bottom:8px">
+    <div class="grid-2" style="gap:8px;margin-bottom:12px">
+      <input type="text" id="editEip" class="form-input" value="${e.eip}">
+      <input type="text" id="editDip" class="form-input" value="${e.dip||''}">
+    </div>
+    <button class="btn-primary" onclick='guardarEditEmpresa("${id}")'>💾 Guardar</button>
+  `);
+}
+
+async function guardarEditEmpresa(id) {
+  try {
+    const r = await apiFetch('/<%= entidad_actual %>/api/empresas/'+id, {
+      method:'PUT', body: JSON.stringify({
+        nombre: document.getElementById('editNombre')?.value,
+        eip: document.getElementById('editEip')?.value,
+        dipEmpresa: document.getElementById('editDip')?.value
+      })
+    });
+    if (r.success) { mostrarToast('✅ Empresa actualizada', 'success'); setTimeout(() => location.reload(), 800); }
+  } catch(e) { mostrarToast('Error', 'error'); }
+}
+
+// ── Añadir/quitar representante ─────────────────────────────────────────
+function anadirRepresentante(id) {
+  mostrarModal('👥 Añadir Representante', `
+    <p style="margin-bottom:12px">Vincula un ciudadano como representante:</p>
+    <input type="text" id="repDip" class="form-input" placeholder="DIP del ciudadano" style="width:100%;margin-bottom:8px">
+    <input type="text" id="repNombre" class="form-input" placeholder="Nombre (opcional)" style="width:100%;margin-bottom:8px">
+    <input type="text" id="repCargo" class="form-input" placeholder="Cargo (ej: CEO, Apoderado)" style="width:100%;margin-bottom:12px">
+    <button class="btn-primary" onclick='guardarRepresentante("${id}")'>👥 Vincular</button>
+  `);
+}
+
+async function guardarRepresentante(id) {
+  const dip = document.getElementById('repDip')?.value;
+  if (!dip) return mostrarToast('DIP requerido', 'error');
+  try {
+    const r = await apiFetch('/<%= entidad_actual %>/api/empresas/'+id+'/representante', {
+      method:'POST', body: JSON.stringify({
+        dip, nombre: document.getElementById('repNombre')?.value,
+        cargo: document.getElementById('repCargo')?.value
+      })
+    });
+    if (r.success) { mostrarToast('✅ Representante vinculado', 'success'); setTimeout(() => location.reload(), 800); }
+  } catch(e) { mostrarToast('Error', 'error'); }
+}
+
+// ── Baja de empresa ─────────────────────────────────────────────────────
+async function bajaEmpresa(id) {
+  const e = empresas.find(x => x.id === id);
+  if (!e) return;
+  if (!confirm('❌ ¿Dar de baja a ' + e.nombre + '? Los representantes quedarán desvinculados.')) return;
+  try {
+    const r = await apiFetch('/<%= entidad_actual %>/api/empresas/'+id, { method:'DELETE' });
+    if (r.success) { mostrarToast('❌ Empresa dada de baja', 'info'); setTimeout(() => location.reload(), 800); }
+  } catch(e) { mostrarToast('Error', 'error'); }
+}
+</script>
   } catch(e) { mostrarToast('Error: ' + e.message, 'error'); }
 }
 

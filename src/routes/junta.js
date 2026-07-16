@@ -40,12 +40,39 @@ router.get('/placetaid', verificarPermiso('junta', 'gestion_placetaid'), async (
   });
 });
 
-// ── Gestión de Reclamaciones ───────────────────────────────────────────────
+// ── Gestión de Reclamaciones (con datos en memoria) ────────────────────────
+const memReclamaciones = new Map();
+let reclIdCounter = 0;
+
+// Inicializar con ejemplos
+(function initRecl() {
+  if (memReclamaciones.size > 0) return;
+  const ej = [
+    { id: 'REC-001', ciudadano: 'Juan Pérez', asunto: 'Error en cálculo de tributos', descripcion: 'Discrepancia en el IRM del último periodo. El IA aplicado no corresponde con mis movimientos.', prioridad: 'Alta', estado: 'Abierta', fecha: '2026-07-10', asignadoA: '—', respuestas: [] },
+    { id: 'REC-002', ciudadano: 'María López', asunto: 'Solicitud de revisión de multa', descripcion: 'Multa por exceso de capital aplicada incorrectamente. Mi saldo nunca superó el límite.', prioridad: 'Media', estado: 'En tramite', fecha: '2026-07-08', asignadoA: 'Admin Tributos', respuestas: [{ autor: 'Admin', texto: 'Caso en revisión por el departamento de cumplimiento.', fecha: '2026-07-09' }] },
+  ];
+  ej.forEach(e => { memReclamaciones.set(e.id, e); reclIdCounter = Math.max(reclIdCounter, parseInt(e.id.slice(-3))); });
+})();
+
 router.get('/reclamaciones', verificarPermiso('junta', 'gestion_reclamaciones'), (req, res) => {
   res.render('junta/reclamaciones', {
     titulo: 'Gestión de Reclamaciones',
-    entidad_actual: 'junta'
+    entidad_actual: 'junta',
+    reclamaciones: [...memReclamaciones.values()].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''))
   });
+});
+
+// API endpoints for reclamaciones
+router.get('/api/reclamaciones', verificarPermiso('junta', 'gestion_reclamaciones'), (req, res) => {
+  res.json([...memReclamaciones.values()]);
+});
+
+router.post('/api/reclamaciones', verificarPermiso('junta', 'gestion_reclamaciones'), (req, res) => {
+  const { ciudadano, asunto, descripcion, prioridad, asignadoA } = req.body;
+  const id = 'REC-' + String(++reclIdCounter).padStart(3, '0');
+  const recl = { id, ciudadano: ciudadano || 'Anónimo', asunto, descripcion, prioridad: prioridad || 'Media', estado: 'Abierta', fecha: new Date().toISOString().slice(0,10), asignadoA: asignadoA || '—', respuestas: [] };
+  memReclamaciones.set(id, recl);
+  res.json({ success: true, reclamacion: recl });
 });
 
 // ── Gestión de Reuniones ───────────────────────────────────────────────────

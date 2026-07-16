@@ -1,102 +1,130 @@
 /**
- * Gestión de Empresas y EIP — Multientidad (Admin, Junta, Banco)
+ * Gestión de Empresas y EIP — Tabla independiente (no bancaria)
+ * Almacena solo: nombre, DIP de empresa, EIP, representantes.
+ * Las empresas van por EIP, no por IBAN.
  */
 import { Router } from 'express';
-import { apiBancoGetState, apiBancoPost } from '../config/db.js';
 import { verificarPermiso } from '../middleware/auth.js';
 
 const router = Router();
 
-// ── Listado de Empresas ───────────────────────────────────────────────────
+// ── Almacenamiento en memoria ─────────────────────────────────────────────
+const memEmpresas = new Map();
+let idCounter = 0;
+
+function nextId() { return 'EMP-' + String(++idCounter).padStart(4, '0'); }
+
+// Inicializar con datos de ejemplo
+function initEjemplos() {
+  if (memEmpresas.size > 0) return;
+  const ejemplos = [
+    { nombre: 'Capitalia Bank', eip: 'EIP-CAP001', dip: 'CAPITALIA_BANK', representantes: [{ dip: 'ADMIN-GDLP', nombre: 'Admin GDLP', cargo: 'CEO' }] },
+    { nombre: 'Tributos GDLP', eip: 'EIP-TRIB01', dip: 'TGLP', representantes: [] },
+  ];
+  ejemplos.forEach(e => { const id = nextId(); memEmpresas.set(id, { id, ...e, creada: new Date().toISOString(), activa: true }); });
+}
+initEjemplos();
+
+// ── Listado de Empresas (solo datos propios, sin IBAN/saldos) ──────────────
 router.get('/empresas', async (req, res) => {
-  const state = await apiBancoGetState();
-  const cuentas = state?.accounts || [];
-  const empresas = cuentas.filter(c => c.type === 'Business' || c.eip);
-
-  // Socio vinculado: si una cuenta personal tiene eip, vinculamos
-  const socios = cuentas.filter(c => c.eip && c.type !== 'Business').map(c => ({
-    dip: c.placetaId || c.id,
-    nombre: c.displayName || c.id,
-    cuentaId: c.id,
-    eip: c.eip,
-    esTitular: false
-  }));
-
-  // Construir estructura empresas
-  const empresasConSocios = empresas.map(emp => ({
-    id: emp.id,
-    nombre: emp.displayName || emp.id,
-    eip: emp.eip || '—',
-    iban: emp.iban || '—',
-    saldo: emp.balancePz || 0,
-    tipo: emp.type,
-    creada: emp.createdAt,
-    compliance: emp.complianceStatus || 'Pending',
-    socios: socios.filter(s => s.eip === emp.eip),
-    // Detectar cuentas vinculadas por EIP
-    cuentasVinculadas: cuentas
-      .filter(c => c.eip === emp.eip && c.id !== emp.id)
-      .map(c => ({ id: c.id, nombre: c.displayName, iban: c.iban, saldo: c.balancePz }))
-  }));
-
+  const empresas = [...memEmpresas.values()].filter(e => e.activa !== false);
   res.render('empresas/lista', {
     titulo: 'Gestión de Empresas y EIP',
     entidad_actual: req.baseUrl.replace('/', ''),
-    empresas: empresasConSocios,
-    total: empresasConSocios.length
+    empresas, total: empresas.length
   });
 });
 
-// ── API: Crear empresa ────────────────────────────────────────────────────
+// ── API: Listar empresas ──────────────────────────────────────────────────
+router.get('/api/empresas', async (req, res) => {
+  res.json([...memEmpresas.values()].filter(e => e.activa !== false));
+});
+
+// ── API: Crear empresa (alta manual por DIP o EIP, o auto-alta con EIP) ──
 router.post('/api/empresas/crear', async (req, res) => {
-  const { nombre, eip, dipRepresentante } = req.body;
+  const { nombre, eip, dipEmpresa, representanteDip, representanteNombre } = req.body;
   if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
-  if (!eip) return res.status(400).json({ error: 'EIP requerido' });
 
-  const result = await apiBancoPost('crear-empresa', {
-    eip, displayName: nombre, placetaId: dipRepresentante
-  });
-  res.json(result || { error: 'Error al crear empresa' });
+  // Si no se proporciona EIP, generarlo automáticamente
+  const eipFinal = eip || 'EIP-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+  // Si no se proporciona DIP, usar el nombre normalizado
+  const dipFinal = dipEmpresa || nombre.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+
+  const representantes = [];
+  if (representanteDip) {
+    representantes.push({ dip: representanteDip, nombre: representanteNombre || representanteDip, cargo: 'Representante' });
+  }
+
+  const id = nextId();
+  const empresa = { id, nombre, eip: eipFinal, dip: dipFinal, representantes, activa: true, creada: new Date().toISOString() };
+  memEmpresas.set(id, empresa);
+  res.json({ success: true, empresa });
 });
 
-// ── API: Añadir socio ─────────────────────────────────────────────────────
-router.post('/api/empresas/:eip/socio', async (req, res) => {
-  const { eip } = req.params;
-  const { dip, porcentaje } = req.body;
+// ── API: Obtener empresa ──────────────────────────────────────────────────
+router.get('/api/empresas/:id', async (req, res) => {
+  const emp = memEmpresas.get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'No encontrada' });
+  res.json(emp);
+});
+
+// ── API: Modificar empresa ────────────────────────────────────────────────
+router.put('/api/empresas/:id', async (req, res) => {
+  const emp = memEmpresas.get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'No encontrada' });
+  const { nombre, eip, dipEmpresa } = req.body;
+  Object.assign(emp, { ...(nombre && { nombre }), ...(eip && { eip }), ...(dipEmpresa && { dip: dipEmpresa }) });
+  memEmpresas.set(req.params.id, emp);
+  res.json({ success: true, empresa: emp });
+});
+
+// ── API: Vincular ciudadano como representante ───────────────────────────
+router.post('/api/empresas/:id/representante', async (req, res) => {
+  const emp = memEmpresas.get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'No encontrada' });
+  const { dip, nombre, cargo } = req.body;
   if (!dip) return res.status(400).json({ error: 'DIP requerido' });
-
-  // Vincular cuenta del socio a la empresa
-  const result = await apiBancoPost('vincular-eip', { eip, placetaId: dip, porcentaje: porcentaje || 0 });
-  res.json(result || { success: true });
+  // Evitar duplicados
+  if (!emp.representantes.find(r => r.dip === dip)) {
+    emp.representantes.push({ dip, nombre: nombre || dip, cargo: cargo || 'Representante' });
+  }
+  res.json({ success: true, representantes: emp.representantes });
 });
 
-// ── API: Eliminar socio ───────────────────────────────────────────────────
-router.post('/api/empresas/:eip/quitar-socio', async (req, res) => {
-  const { eip } = req.params;
-  const { dip } = req.body;
-  // Desvincular EIP
-  const result = await apiBancoPost('desvincular-eip', { eip, placetaId: dip });
-  res.json(result || { success: true });
+// ── API: Quitar representante ─────────────────────────────────────────────
+router.delete('/api/empresas/:id/representante/:dip', async (req, res) => {
+  const emp = memEmpresas.get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'No encontrada' });
+  emp.representantes = emp.representantes.filter(r => r.dip !== req.params.dip);
+  res.json({ success: true, representantes: emp.representantes });
 });
 
-// ── API: Baja de empresa ──────────────────────────────────────────────────
-router.post('/api/empresas/:id/baja', async (req, res) => {
-  const result = await apiBancoPost('cerrar-empresa', { accountId: req.params.id });
-  res.json(result || { success: true });
+// ── API: Dar de baja (borrado lógico) ─────────────────────────────────────
+router.delete('/api/empresas/:id', async (req, res) => {
+  const emp = memEmpresas.get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'No encontrada' });
+  emp.activa = false;
+  res.json({ success: true, message: 'Empresa dada de baja' });
+});
+
+// ── API: Reactivar empresa ────────────────────────────────────────────────
+router.post('/api/empresas/:id/reactivar', async (req, res) => {
+  const emp = memEmpresas.get(req.params.id);
+  if (!emp) return res.status(404).json({ error: 'No encontrada' });
+  emp.activa = true;
+  res.json({ success: true });
 });
 
 // ── Vista de Cumplimiento Fiscal ──────────────────────────────────────────
 router.get('/empresas/cumplimiento', async (req, res) => {
-  const state = await apiBancoGetState();
-  const cuentas = state?.accounts || [];
-  const empresas = cuentas.filter(c => c.type === 'Business' || c.eip);
-
+  const empresas = [...memEmpresas.values()].filter(e => e.activa !== false);
   res.render('empresas/cumplimiento', {
     titulo: 'Cumplimiento Fiscal — Empresas',
     entidad_actual: req.baseUrl.replace('/', ''),
-    empresas: empresas.map(c => ({
-      id: c.id, nombre: c.displayName, eip: c.eip, saldo: c.balancePz,
-      tipo: c.type, compliance: c.complianceStatus
+    empresas: empresas.map(e => ({
+      id: e.id, nombre: e.nombre, eip: e.eip, dip: e.dip,
+      numRepresentantes: e.representantes?.length || 0,
+      compliance: 'Clear'
     }))
   });
 });
