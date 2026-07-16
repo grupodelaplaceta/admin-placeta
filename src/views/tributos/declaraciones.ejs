@@ -1,64 +1,116 @@
 <!-- Guía de rol -->
 <div class="info-card mb-16">
-  <h4>📝 Gestión de Declaraciones</h4>
-  <p>Como <strong>administrador de tributos</strong> puedes generar declaraciones globales e individuales, revisar borradores y aprobar. Los <strong>inspectores</strong> pueden crear y revisar.</p>
+  <h4>📝 Sistema de Declaraciones Tributarias</h4>
+  <p>Gestión completa del ciclo de vida: <strong>Borrador → Pendiente → Aprobada → Emitida/Cobrada</strong>.
+  Los impuestos se calculan automáticamente según <strong>Art. 4.8-4.16</strong> (IRM mensual + IGF progresivo).</p>
+  <% if (esAdmin) { %><span class="badge badge-purple">Admin</span> Puedes aprobar con bypass y emitir cobros.<% } %>
 </div>
 
-<div class="flex gap-8 mb-16">
+<!-- KPIs -->
+<div class="grid-4 mb-16">
+  <div class="stat-card"><div class="stat-value"><%= declaraciones.length %></div><div class="stat-label">Total Declaraciones</div></div>
+  <div class="stat-card"><div class="stat-value"><%= declaraciones.filter(d => d._estado_semantico === 'Borrador').length %></div><div class="stat-label">Borradores</div></div>
+  <div class="stat-card"><div class="stat-value"><%= declaraciones.filter(d => d._estado_semantico === 'Pendiente_Aprobacion').length %></div><div class="stat-label">Pendientes</div></div>
+  <div class="stat-card"><div class="stat-value"><%= declaraciones.reduce((s,d) => s + (d.cuota_irm||0) + (d.cuota_igf||0), 0).toLocaleString() %></div><div class="stat-label">Pz en Declaraciones</div></div>
+</div>
+
+<!-- Acciones rápidas -->
+<div class="flex gap-8 mb-16 flex-wrap">
   <button class="btn-primary" onclick="nuevaDeclaracion()">📝 Nueva Declaración</button>
-  <button class="btn-secondary" onclick="mostrarModal('📊 Generar Declaración Global', `
-    <p style="margin-bottom:12px">Genera una declaración global para todos los contribuyentes.</p>
-    <label style="display:block;margin-bottom:8px">Periodo:</label>
-    <select id="periodoGlobal" class="form-input" style="width:100%;margin-bottom:12px">
-      <option value="2025-ANUAL">2025 - Anual</option>
-      <option value="2025-T1">2025 - T1 (Ene-Mar)</option>
-      <option value="2025-T2">2025 - T2 (Abr-Jun)</option>
-      <option value="2025-T3">2025 - T3 (Jul-Sep)</option>
-      <option value="2025-T4">2025 - T4 (Oct-Dic)</option>
-    </select>
-    <button class="btn-primary" onclick='generarGlobal()'>📊 Generar</button>
-  `)">📊 Global</button>
+  <button class="btn-secondary" onclick="mostrarReconciliacion()">🔄 Reconciliar</button>
+  <button class="btn-secondary" onclick="mostrarModalBulk('publish')">📤 Publicar Seleccionadas</button>
+  <button class="btn-secondary" onclick="mostrarModalBulk('approve')">✅ Aprobar Seleccionadas</button>
+  <button class="btn-secondary" onclick="mostrarModalBulk('emit')">💰 Emitir Seleccionadas</button>
+  <% if (esAdmin) { %>
+  <button class="btn-secondary" onclick="toggleInhibicion()">🚫 Control Recaudación</button>
+  <% } %>
 </div>
 
-<div style="margin-bottom:16px">
-  <input type="text" id="filtroDeclaraciones" class="form-input" placeholder="🔍 Buscar declaraciones..." style="width:300px;max-width:100%" oninput="filtrarDeclaraciones()">
+<!-- Filtros -->
+<div class="flex gap-8 mb-16 flex-wrap">
+  <input type="text" id="filtroDeclaraciones" class="form-input" placeholder="🔍 Buscar..." style="width:200px" oninput="filtrarDeclaraciones()">
+  <select id="filtroEstado" class="form-input" style="width:160px" onchange="filtrarDeclaraciones()">
+    <option value="">Todos los estados</option>
+    <option value="Borrador">Borrador</option>
+    <option value="Pendiente_Aprobacion">Pendiente Aprobación</option>
+    <option value="Aprobada">Aprobada</option>
+    <option value="Emitido">Emitida</option>
+    <option value="Cobrado_Exito">Cobrada</option>
+  </select>
+  <select id="filtroMes" class="form-input" style="width:140px" onchange="filtrarDeclaraciones()">
+    <option value="">Todos los meses</option>
+    <% const meses = [...new Set(declaraciones.map(d => d.mes_periodo))].sort().reverse(); %>
+    <% meses.forEach(m => { %><option value="<%= m %>"><%= m %></option><% }) %>
+  </select>
+  <label class="checkbox-label" style="display:inline-flex;align-items:center;gap:4px">
+    <input type="checkbox" id="chkSeleccionarTodo" onchange="toggleSeleccionarTodo()"> Seleccionar todo
+  </label>
 </div>
 
+<!-- Tabla de Declaraciones -->
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Contribuyente</th><th>Periodo</th><th>Tipo</th><th>Base</th><th>Cuota</th><th>Estado</th><th>Acciones</th><th>Docs</th></tr></thead>
+    <thead>
+      <tr>
+        <th style="width:32px"><input type="checkbox" id="chkHeader" onchange="toggleSeleccionarTodo()"></th>
+        <th>ID</th>
+        <th>Contribuyente</th>
+        <th>Periodo</th>
+        <th>Patrim. Medio</th>
+        <th>IRM</th>
+        <th>IGF</th>
+        <th>Total</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+        <th style="width:40px">Docs</th>
+      </tr>
+    </thead>
     <tbody id="tablaDeclaraciones">
-      <% 
-      // Declaraciones simuladas basadas en contribuyentes reales
-      const declaracionesMock = [
-        ...Array.from({length: Math.min(5, totalContribuyentes || 0)}, (_, i) => ({
-          id: 'DEC-' + String(i+1).padStart(4,'0'),
-          contribuyente: 'Contribuyente ' + (i+1),
-          periodo: '2025-ANUAL',
-          tipo: 'Individual',
-          base: Math.round(Math.random() * 50000),
-          cuota: Math.round(Math.random() * 15000),
-          estado: ['Borrador','Presentada','Aprobada','Pagada'][Math.floor(Math.random()*4)]
-        }))
-      ];
-      declaracionesMock.length === 0 && console.log('sin datos');
-      %>
-      <% declaracionesMock.forEach(d => { %>
-      <tr class="fila-declaracion">
-        <td class="text-mono"><%= d.id %></td>
-        <td><%= d.contribuyente %></td>
-        <td><%= d.periodo %></td>
-        <td><%= d.tipo %></td>
-        <td><%= d.base.toLocaleString() %> Pz</td>
-        <td><%= d.cuota.toLocaleString() %> Pz</td>
-        <td><span class="badge <%= d.estado === 'Pagada' ? 'badge-success' : d.estado === 'Aprobada' ? 'badge-info' : d.estado === 'Presentada' ? 'badge-warning' : 'badge-purple' %>"><%= d.estado %></span></td>
+      <% if (declaraciones.length === 0) { %>
+      <tr><td colspan="11" class="text-center text-muted">No hay declaraciones. Crea una nueva o reconcilia cuentas.</td></tr>
+      <% } %>
+      <% declaraciones.forEach(d => { %>
+      <tr class="fila-declaracion" data-estado="<%= d._estado_semantico || d.estado_pago %>" data-mes="<%= d.mes_periodo %>">
+        <td><input type="checkbox" class="chk-declaracion" value="<%= d.id %>"></td>
+        <td class="text-mono" style="font-size:10px"><%= d.id?.slice(0,12) %></td>
+        <td><%= d.placeta_id || '—' %></td>
+        <td><%= d.mes_periodo || '—' %></td>
+        <td><%= d.patrimonio_medio ? d.patrimonio_medio.toLocaleString() + ' Pz' : '—' %></td>
+        <td><%= d.cuota_irm ? d.cuota_irm.toLocaleString() + ' Pz' : '—' %></td>
+        <td><%= d.cuota_igf ? d.cuota_igf.toLocaleString() + ' Pz' : '—' %></td>
+        <td><strong><%= ((d.cuota_irm||0) + (d.cuota_igf||0)).toLocaleString() %> Pz</strong></td>
         <td>
-          <button class="btn-sm btn-secondary" onclick='verDeclaracion("<%= d.id %>")'>👁️ Ver</button>
-          <% if (d.estado === 'Borrador') { %>
-          <button class="btn-sm btn-primary" onclick='aprobarDeclaracion("<%= d.id %>")'>✅ Aprobar</button>
-          <% } %>
+          <% const sem = d._estado_semantico || d.estado_pago; %>
+          <span class="badge <%= 
+            sem === 'Cobrado_Exito' ? 'badge-success' : 
+            sem === 'Emitido' ? 'badge-info' :
+            sem === 'Aprobada' ? 'badge-purple' : 
+            sem === 'Pendiente_Aprobacion' ? 'badge-warning' : 
+            'badge-secondary' %>"><%= sem %></span>
+          <% if (d.exencion_aplicada) { %><span class="badge badge-info" style="font-size:9px">Exenta</span><% } %>
         </td>
-        <td><button class="btn-sm btn-secondary" onclick="verDocsDe('declaracion','<%= d.id %>','tributos','<%= d.id %>')">📄</button></td>
+        <td>
+          <div class="flex gap-4" style="flex-wrap:nowrap">
+            <button class="btn-icon" onclick="verDeclaracion('<%= d.id %>')" title="Ver detalle">👁️</button>
+            <% if (d._puede_publicar) { %>
+            <button class="btn-icon" onclick="accionDeclaracion('<%= d.id %>','publish')" title="Publicar">📤</button>
+            <% } %>
+            <% if (d._puede_aprobar) { %>
+            <button class="btn-icon" onclick="accionDeclaracion('<%= d.id %>','approve')" title="Aprobar">✅</button>
+            <button class="btn-icon" onclick="accionDeclaracion('<%= d.id %>','reject')" title="Rechazar">❌</button>
+            <% } %>
+            <% if (d._puede_emitir) { %>
+            <button class="btn-icon" onclick="accionDeclaracion('<%= d.id %>','emit')" title="Emitir y cobrar">💰</button>
+            <% } %>
+            <% if (d._puede_eliminar) { %>
+            <button class="btn-icon" onclick="accionDeclaracion('<%= d.id %>','delete')" title="Eliminar">🗑️</button>
+            <% } %>
+            <% if (d.estado_pago !== 'Borrador') { %>
+            <button class="btn-icon" onclick="verPDF('<%= d.id %>')" title="PDF">📄</button>
+            <% } %>
+          </div>
+        </td>
+        <td><button class="btn-icon" onclick="verDocsDe('declaracion','<%= d.id %>','tributos','<%= d.id %>')" title="Documentos">📎</button></td>
       </tr>
       <% }) %>
     </tbody>
@@ -66,75 +118,191 @@
 </div>
 
 <script>
-const declaraciones = [
-  <% 
-  const dec = Array.from({length: Math.min(8, 8)}, (_, i) => ({
-    id: 'DEC-' + String(i+1).padStart(4,'0'),
-    contribuyente: 'Contribuyente ' + (i+1),
-    periodo: '2025-ANUAL',
-    tipo: 'Individual',
-    base: Math.round(Math.random() * 50000),
-    cuota: Math.round(Math.random() * 15000),
-    estado: ['Borrador','Presentada','Aprobada','Pagada'][Math.floor(Math.random()*4)]
-  }));
-  dec.forEach((d, i) => { %>
-  { id: '<%= d.id %>', contribuyente: '<%= d.contribuyente %>', periodo: '<%= d.periodo %>', tipo: '<%= d.tipo %>', base: <%= d.base %>, cuota: <%= d.cuota %>, estado: '<%= d.estado %>' }<%= i < dec.length-1 ? ',' : '' %>
-  <% }) %>
-];
+// ── Declaraciones desde servidor ─────────────────────────────────────────
+const declaraciones = <%- JSON.stringify(declaraciones) %>;
 
 function filtrarDeclaraciones() {
   const q = document.getElementById('filtroDeclaraciones').value.toLowerCase();
+  const estado = document.getElementById('filtroEstado').value;
+  const mes = document.getElementById('filtroMes').value;
   document.querySelectorAll('.fila-declaracion').forEach(row => {
-    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    const e = row.dataset.estado;
+    const m = row.dataset.mes;
+    const match = (!q || row.textContent.toLowerCase().includes(q)) &&
+      (!estado || e === estado) &&
+      (!mes || m === mes);
+    row.style.display = match ? '' : 'none';
   });
 }
 
+function toggleSeleccionarTodo() {
+  const checked = document.getElementById('chkHeader').checked || document.getElementById('chkSeleccionarTodo').checked;
+  document.querySelectorAll('.chk-declaracion').forEach(cb => cb.checked = checked);
+}
+
+function getSelectedIds() {
+  return [...document.querySelectorAll('.chk-declaracion:checked')].map(cb => cb.value);
+}
+
+// ── Nueva declaración ─────────────────────────────────────────────────────
 function nuevaDeclaracion() {
+  const contribuyentes = <%- JSON.stringify(contribuyentes || []) %>;
+  const opts = contribuyentes.map(c => `<option value="${c.placetaId || c.id}">${c.displayName || c.id} (${c.dip || 'sin DIP'})</option>`).join('');
+  const mesActual = '<%= mesActual %>';
   mostrarModal('📝 Nueva Declaración', `
-    <p style="margin-bottom:12px">Introduce los datos de la declaración:</p>
-    <input type="text" id="decContribuyente" class="form-input" placeholder="DIP o nombre del contribuyente" style="width:100%;margin-bottom:8px">
-    <select id="decPeriodo" class="form-input" style="width:100%;margin-bottom:8px">
-      <option value="2025-ANUAL">2025 - Anual</option>
-      <option value="2025-T1">2025 - T1</option>
-      <option value="2025-T2">2025 - T2</option>
-      <option value="2025-T3">2025 - T3</option>
-      <option value="2025-T4">2025 - T4</option>
+    <p style="margin-bottom:12px">Datos de la declaración mensual:</p>
+    <label style="display:block;margin-bottom:4px;font-size:12px">Contribuyente:</label>
+    <select id="decContribuyente" class="form-input" style="width:100%;margin-bottom:8px">${opts}</select>
+    <label style="display:block;margin-bottom:4px;font-size:12px">Periodo (mes):</label>
+    <input type="month" id="decPeriodo" class="form-input" value="${mesActual}" style="width:100%;margin-bottom:8px">
+    <label style="display:block;margin-bottom:4px;font-size:12px">Patrimonio medio estimado (Pz):</label>
+    <input type="number" id="decPatrimonio" class="form-input" placeholder="0" style="width:100%;margin-bottom:8px">
+    <label style="display:block;margin-bottom:4px;font-size:12px">Tipo:</label>
+    <select id="decTipo" class="form-input" style="width:100%;margin-bottom:12px">
+      <option value="Fisico">Persona Física</option>
+      <option value="Empresa">Empresa</option>
     </select>
-    <input type="number" id="decBase" class="form-input" placeholder="Base imponible (Pz)" style="width:100%;margin-bottom:8px">
-    <button class="btn-primary mt-16" onclick='crearDeclaracion()'>💾 Crear Declaración</button>
+    <button class="btn-primary" onclick='crearDeclaracion()'>💾 Crear Borrador</button>
   `);
 }
 
 async function crearDeclaracion() {
   const c = document.getElementById('decContribuyente')?.value;
   const p = document.getElementById('decPeriodo')?.value;
-  const b = document.getElementById('decBase')?.value;
-  if (!c || !b) return mostrarToast('Completa todos los campos', 'error');
-  mostrarToast('✅ Declaración creada como borrador', 'success');
-  setTimeout(() => location.reload(), 1000);
+  const pm = parseFloat(document.getElementById('decPatrimonio')?.value) || 0;
+  const t = document.getElementById('decTipo')?.value;
+  if (!c || !p) return mostrarToast('Completa los campos obligatorios', 'error');
+  try {
+    const r = await fetch('/tributos/api/declaraciones', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ placetaId: c, mesPeriodo: p, patrimonioMedio: pm, tipoSujeto: t })
+    });
+    const data = await r.json();
+    if (data.success) { mostrarToast('✅ Declaración creada como borrador', 'success'); setTimeout(() => location.reload(), 800); }
+    else mostrarToast('Error: ' + (data.error || 'desconocido'), 'error');
+  } catch(e) { mostrarToast('Error de red', 'error'); }
 }
 
+// ── Ver detalle ───────────────────────────────────────────────────────────
 function verDeclaracion(id) {
   const d = declaraciones.find(x => x.id === id);
   if (!d) return mostrarToast('No encontrada', 'error');
-  mostrarModal('📝 Declaración ' + id, `
-    <p><strong>Contribuyente:</strong> ${d.contribuyente}</p>
-    <p><strong>Periodo:</strong> ${d.periodo}</p>
-    <p><strong>Tipo:</strong> ${d.tipo}</p>
-    <p><strong>Base:</strong> ${d.base.toLocaleString()} Pz</p>
-    <p><strong>Cuota:</strong> ${d.cuota.toLocaleString()} Pz</p>
-    <p><strong>Estado:</strong> ${d.estado}</p>
+  const total = (d.cuota_irm||0) + (d.cuota_igf||0);
+  mostrarModal('📝 Declaración ' + id.slice(0,12), `
+    <div class="grid-2" style="gap:8px;font-size:13px">
+      <p><strong>Contribuyente:</strong> ${d.placeta_id||'—'}</p>
+      <p><strong>Periodo:</strong> ${d.mes_periodo||'—'}</p>
+      <p><strong>Patrimonio medio:</strong> ${d.patrimonio_medio?.toLocaleString()||'0'} Pz</p>
+      <p><strong>IA:</strong> ${d.indice_acumulacion||'0.0000'}</p>
+      <p><strong>Cuota IRM:</strong> ${(d.cuota_irm||0).toLocaleString()} Pz</p>
+      <p><strong>Cuota IGF:</strong> ${(d.cuota_igf||0).toLocaleString()} Pz</p>
+      <p><strong>Total:</strong> <strong>${total.toLocaleString()} Pz</strong></p>
+      <p><strong>Estado:</strong> <span class="badge badge-purple">${d._estado_semantico||d.estado_pago}</span></p>
+      <p><strong>ID Permiso:</strong> ${d.id_permiso_junta||'—'}</p>
+      <p><strong>Transacción:</strong> ${d.transaction_id_blp||'—'}</p>
+      ${d.exencion_aplicada ? '<p><span class="badge badge-info">Exención IGF aplicada</span></p>' : ''}
+    </div>
+    ${d.estado_pago !== 'Borrador' ? `<button class="btn-secondary mt-16" onclick="window.open('/tributos/api/declaraciones/${id}/pdf','_blank')">📄 Ver PDF</button>` : ''}
   `);
 }
 
-function aprobarDeclaracion(id) {
-  mostrarToast('✅ Declaración ' + id + ' aprobada', 'success');
-  setTimeout(() => location.reload(), 800);
+// ── Acciones sobre declaración ────────────────────────────────────────────
+async function accionDeclaracion(id, accion) {
+  const labels = { publish:'publicar', approve:'aprobar', reject:'rechazar', emit:'emitir y cobrar', delete:'eliminar' };
+  if (accion === 'emit' && !confirm('💰 ¿Emitir y proceder al cobro bancario de esta declaración?')) return;
+  if (accion === 'delete' && !confirm('🗑️ ¿Eliminar este borrador definitivamente?')) return;
+
+  try {
+    let r;
+    if (accion === 'delete') r = await fetch('/tributos/api/declaraciones/' + id, { method:'DELETE' });
+    else r = await fetch('/tributos/api/declaraciones/' + id + '/' + accion, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+    const data = await r.json();
+    if (data.success) { mostrarToast('✅ ' + labels[accion] + ' correcta', 'success'); setTimeout(() => location.reload(), 800); }
+    else mostrarToast('Error: ' + (data.error || 'desconocido'), 'error');
+  } catch(e) { mostrarToast('Error de red', 'error'); }
 }
 
-async function generarGlobal() {
-  const periodo = document.getElementById('periodoGlobal')?.value || '2025-ANUAL';
-  mostrarToast('📊 Declaración global generada para ' + periodo, 'success');
-  setTimeout(() => location.reload(), 1000);
+// ── Acciones en lote ─────────────────────────────────────────────────────
+function mostrarModalBulk(accion) {
+  const labels = { publish:'📤 Publicar', approve:'✅ Aprobar', emit:'💰 Emitir', delete:'🗑️ Eliminar' };
+  const advertencias = { emit:'Los cobros se marcarán como emitidos sin verificar saldo bancario.', delete:'Solo se eliminarán borradores sin procesar.' };
+  mostrarModal(labels[accion], `
+    <p>¿Ejecutar <strong>${labels[accion]}</strong> en las declaraciones seleccionadas?</p>
+    <p style="font-size:12px;color:#5c5566">${advertencias[accion]||''}</p>
+    <button class="btn-primary mt-16" onclick='ejecutarBulk("${accion}")'>Confirmar</button>
+  `);
+}
+
+async function ejecutarBulk(accion) {
+  const ids = getSelectedIds();
+  if (!ids.length) return mostrarToast('Selecciona al menos una declaración', 'error');
+  try {
+    const r = await fetch('/tributos/api/declaraciones/bulk/' + accion, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ ids })
+    });
+    const data = await r.json();
+    if (data.success) { mostrarToast('✅ Operación completada en ' + (data.results?.filter(r=>r.success).length||0) + ' declaraciones', 'success'); setTimeout(() => location.reload(), 1200); }
+    else mostrarToast('Error en operación', 'error');
+  } catch(e) { mostrarToast('Error de red', 'error'); }
+}
+
+// ── Reconciliación ───────────────────────────────────────────────────────
+function mostrarReconciliacion() {
+  const contribuyentes = <%- JSON.stringify(contribuyentes || []) %>;
+  const opts = contribuyentes.map(c => `<option value="${c.placetaId || c.id}">${c.displayName || c.id}</option>`).join('');
+  const mesActual = '<%= mesActual %>';
+  mostrarModal('🔄 Reconciliación de Saldos Diarios', `
+    <p style="margin-bottom:12px">Reconstruye saldos diarios desde el banco y genera declaración automática.</p>
+    <label style="display:block;margin-bottom:4px;font-size:12px">Contribuyente:</label>
+    <select id="recContribuyente" class="form-input" style="width:100%;margin-bottom:8px">${opts}</select>
+    <label style="display:block;margin-bottom:4px;font-size:12px">Periodo (mes):</label>
+    <input type="month" id="recPeriodo" class="form-input" value="${mesActual}" style="width:100%;margin-bottom:12px">
+    <button class="btn-primary" onclick='ejecutarReconciliacion()'>🔄 Reconciliar y Generar</button>
+    <div id="recResultados" style="margin-top:12px"></div>
+  `);
+}
+
+async function ejecutarReconciliacion() {
+  const c = document.getElementById('recContribuyente')?.value;
+  const p = document.getElementById('recPeriodo')?.value;
+  if (!c || !p) return mostrarToast('Selecciona contribuyente y periodo', 'error');
+  const div = document.getElementById('recResultados');
+  div.innerHTML = '<p style="color:#5c5566">⏳ Reconciliando...</p>';
+  try {
+    const r = await fetch('/tributos/api/reconcile/' + c, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mesPeriodo: p })
+    });
+    const data = await r.json();
+    if (data.success) {
+      div.innerHTML = `<div class="info-card" style="font-size:13px">
+        <p>✅ <strong>Patrimonio medio:</strong> ${data.patrimonioMedio?.toLocaleString()} Pz</p>
+        <p>📊 <strong>${data.balances?.length||0}</strong> saldos diarios reconstruidos</p>
+        <p>📝 <strong>Declaración:</strong> ${data.declaracion?.id?.slice(0,12)}</p>
+        <p>💰 <strong>IRM:</strong> ${(data.declaracion?.cuota_irm||0).toLocaleString()} Pz | <strong>IGF:</strong> ${(data.declaracion?.cuota_igf||0).toLocaleString()} Pz</p>
+        <button class="btn-primary mt-8" onclick="location.reload()">🔄 Recargar</button>
+      </div>`;
+    } else div.innerHTML = '<p style="color:#d32f2f">Error: ' + (data.error||'desconocido') + '</p>';
+  } catch(e) { div.innerHTML = '<p style="color:#d32f2f">Error de red</p>'; }
+}
+
+// ── PDF ───────────────────────────────────────────────────────────────────
+function verPDF(id) {
+  window.open('/tributos/api/declaraciones/' + id + '/pdf', '_blank');
+}
+
+// ── Control de recaudación ────────────────────────────────────────────────
+async function toggleInhibicion() {
+  try {
+    const r = await fetch('/tributos/api/control-recaudacion/<%= mesActual %>');
+    const ctrl = await r.json();
+    const inhibido = !ctrl?.inhibido;
+    await fetch('/tributos/api/control-recaudacion', {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ mesPeriodo: '<%= mesActual %>', inhibido })
+    });
+    mostrarToast(inhibido ? '🚫 Recaudación inhibida para este mes' : '✅ Recaudación activa', 'success');
+  } catch(e) { mostrarToast('Error', 'error'); }
 }
 </script>

@@ -50,10 +50,13 @@ const entidad = guiaEntidad[entidad_actual];
     </div>
   </div>
   <% 
-  // Encontrar qué roles del usuario aplican a esta entidad
+  // Encontrar qué roles del usuario aplican a esta entidad (SIN DUPLICADOS)
+  const rolesVistos = {};
   const rolesAplicables = roles.filter(r => {
     const entRoles = Object.keys(guiaEntidad[entidad_actual]?.roles?.reduce((acc, r2) => { acc[r2.rol] = true; return acc; }, {}) || {});
-    return entRoles.some(er => r.includes(er) || r.includes(entidad_actual + '_' + er));
+    const match = entRoles.find(er => r.includes(er) || r.includes(entidad_actual + '_' + er));
+    if (match && !rolesVistos[match]) { rolesVistos[match] = true; return true; }
+    return false;
   });
   %>
   <% if (rolesAplicables.length > 0) { %>
