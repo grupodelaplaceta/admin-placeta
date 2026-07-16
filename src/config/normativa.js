@@ -225,6 +225,37 @@ export function calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña = fal
   return { total: Math.round(total * 100) / 100, tramos, exento: false };
 }
 
+// ── Art. 4.17 — IVA y Facturación ─────────────────────────────────────────
+export function calcularFactura(lineas) {
+  let baseImponible = 0;
+  const lineasCalc = lineas.map(l => {
+    const neto = l.cantidad * l.precioUnitario;
+    const iva = neto * (l.ivaPorcentaje || 12) / 100;
+    baseImponible += neto;
+    return { ...l, subtotalNeto: neto, subtotalIva: iva };
+  });
+  const totalIVA = lineasCalc.reduce((s, l) => s + l.subtotalIva, 0);
+  return {
+    lineas: lineasCalc,
+    baseImponible: Math.round(baseImponible * 100) / 100,
+    totalIVA: Math.round(totalIVA * 100) / 100,
+    totalFactura: Math.round((baseImponible + totalIVA) * 100) / 100
+  };
+}
+
+export function generarCSV() {
+  return `CSV-${Math.random().toString(36).slice(2,10).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`;
+}
+
+// ── Tipos de Contribución (Régimen Tributario TLP) ───────────────────────
+export const TIPOS_CONTRIBUCION = [
+  { id: 'estandar', label: 'Estándar', desc: 'Persona física. Paga IRM + IGF completos.', incluyeIRM: true, incluyeIGF: true, pagaCapitalia: false, exentaIGF: false, icono: '👤' },
+  { id: 'compartida', label: 'Compartida', desc: 'Cuenta compartida/joint. Tipos IRM reducidos (0.75%-6%).', incluyeIRM: true, incluyeIGF: true, pagaCapitalia: false, exentaIGF: false, icono: '👥' },
+  { id: 'empresa', label: 'Empresa', desc: 'Persona jurídica. IRM empresa (1%-9%) + IGF empresa (5%-85%).', incluyeIRM: true, incluyeIGF: true, pagaCapitalia: false, exentaIGF: false, icono: '🏢' },
+  { id: 'exenta_junior', label: 'Exenta Junior', desc: 'Menores 16 años. Capitalia paga los impuestos. El menor NO tributa.', incluyeIRM: true, incluyeIGF: true, pagaCapitalia: true, exentaIGF: false, icono: '🧒' },
+  { id: 'empresa_exenta_igf', label: 'Empresa Exenta IGF', desc: 'Empresa < 20.000 Pz. Solo paga IRM. IGF exento (Art. 4.15).', incluyeIRM: true, incluyeIGF: false, pagaCapitalia: false, exentaIGF: true, icono: '🏪' },
+];
+
 // ── Calcular todos los impuestos de una cuenta ───────────────────────────
 export async function calcularImpuestosCuenta(cuenta, historialSaldos) {
   const saldo = cuenta.balancePz || 0;
@@ -266,6 +297,17 @@ export async function calcularImpuestosCuenta(cuenta, historialSaldos) {
   return resultados;
 }
 
+// ── Junior Tax Rules - Art. 5 (Normativa Placeta Junior) ────────────────
+// Los menores NO pagan impuestos. Capitalia asume IRM/IGF/IVA.
+export function getTipoContribucionParaJunior(edad, tipoCuenta, patrimonio) {
+  if (edad < 16 || tipoCuenta === 'Child') return 'exenta_junior';
+  if (edad < 18) return 'estandar'; // 16-17 pagan normalmente
+  if (tipoCuenta === 'Business' && patrimonio < 20000) return 'empresa_exenta_igf';
+  if (tipoCuenta === 'Business') return 'empresa';
+  if (tipoCuenta === 'Shared' || tipoCuenta === 'Joint') return 'compartida';
+  return 'estandar';
+}
+
 export default {
   LIMITES_CAPITAL,
   verificarLimiteCapital,
@@ -279,6 +321,9 @@ export default {
   calcularIRM,
   calcularIGF,
   calcularImpuestosCuenta,
-  SMI,
-  SALARIO_MAXIMO,
+  calcularFactura,
+  generarCSV,
+  TIPOS_CONTRIBUCION,
+  getTipoContribucionParaJunior,
+  SMI, SALARIO_MAXIMO, IVA,
 };

@@ -335,6 +335,63 @@ router.get('/api/saldos/:placetaId/:mesPeriodo', verificarPermiso('tributos', 'v
   res.json(saldos);
 });
 
+// ═════════════════════════════════════════════════════════════════════════
+// FACTURAS (Art. 4.17 - IVA 12%)
+// ═════════════════════════════════════════════════════════════════════════
+
+const memFacturas = new Map();
+
+router.get('/api/facturas', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
+  const facturas = [...memFacturas.values()].sort((a,b) => (b.fecha_emision||'').localeCompare(a.fecha_emision||''));
+  res.json(facturas);
+});
+
+router.post('/api/facturas', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
+  try {
+    const { emisorId, receptorId, lineas } = req.body;
+    if (!emisorId || !receptorId || !lineas?.length) {
+      return res.status(400).json({ error: 'emisorId, receptorId y lineas requeridos' });
+    }
+    const { calcularFactura, generarCSV } = await import('../config/normativa.js');
+    const calc = calcularFactura(lineas);
+    const id = 'FAC-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+    const factura = {
+      id, numero_factura: req.body.numeroFactura || id,
+      emisor_placeta_id: emisorId, receptor_placeta_id: receptorId,
+      fecha_emision: new Date().toISOString(),
+      base_imponible: calc.baseImponible,
+      total_iva: calc.totalIVA,
+      total_factura: calc.totalFactura,
+      lineas: calc.lineas,
+      csv_verificacion: generarCSV(),
+      estado: req.body.estado || 'Emitida',
+      created_at: new Date().toISOString()
+    };
+    memFacturas.set(id, factura);
+    res.json({ success: true, factura });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/api/facturas/:id/pdf', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
+  const factura = memFacturas.get(req.params.id);
+  if (!factura) return res.status(404).json({ error: 'No encontrada' });
+  const buffer = await generarPDF('tributos', {
+    id: factura.id, titulo: `Factura ${factura.numero_factura}`,
+    tipo: 'factura',
+    datos: {
+      emisor: factura.emisor_placeta_id, receptor: factura.receptor_placeta_id,
+      baseImponible: factura.base_imponible, totalIVA: factura.total_iva,
+      totalFactura: factura.total_factura, lineas: factura.lineas,
+      numeroFactura: factura.numero_factura, csv: factura.csv_verificacion,
+      fechaEmision: factura.fecha_emision
+    },
+    estado: factura.estado, createdAt: factura.created_at,
+    refId: factura.id, refTipo: 'factura'
+  });
+  res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename=${factura.id}.pdf` });
+  res.send(buffer);
+});
+
 // ── Control de recaudación ────────────────────────────────────────────────
 router.put('/api/control-recaudacion', verificarPermiso('tributos', 'gestionar_regimenes'), async (req, res) => {
   const { mesPeriodo, inhibido } = req.body;

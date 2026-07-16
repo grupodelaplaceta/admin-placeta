@@ -1,82 +1,205 @@
 <div class="info-card mb-16">
-  <h4>📋 Regímenes Tributarios</h4>
-  <p>Gestiona los regímenes fiscales aplicables en La Placeta. Define criterios, tipos impositivos y contribuyentes asociados.</p>
+  <h4>📋 Regímenes Tributarios del Sistema GDLP</h4>
+  <p>El sistema tributario se basa en el <strong>Capítulo IV del Código Normativo Interno</strong>. Cada contribuyente tiene un tipo de contribución que determina qué impuestos paga y a qué escalas está sujeto. <strong>Periodicidad: MENSUAL</strong> (Art. 4.8).</p>
 </div>
 
-<div class="flex gap-8 mb-16">
-  <button class="btn-primary" onclick="nuevoRegimen()">📋 Nuevo Régimen</button>
+<!-- KPIs -->
+<div class="grid-4 mb-16">
+  <div class="stat-card"><div class="stat-value">5</div><div class="stat-label">Regímenes</div></div>
+  <div class="stat-card"><div class="stat-value">12%</div><div class="stat-label">IVA (Art. 4.4/4.17)</div></div>
+  <div class="stat-card"><div class="stat-value">150 Pz</div><div class="stat-label">SMI mensual (Art. 4.7)</div></div>
+  <div class="stat-card"><div class="stat-value">1.750 Pz</div><div class="stat-label">Salario Máximo (Art. 4.7)</div></div>
 </div>
 
-<div class="table-container">
-  <table>
-    <thead><tr><th>Nombre</th><th>Tipo</th><th>IVA/Tasa</th><th>Contribuyentes</th><th>Estado</th><th>Acciones</th></tr></thead>
-    <tbody>
-      <% 
-      const regimenesMock = [
-        { nombre: 'Régimen General', tipo: 'General', tasa: 21, contribuyentes: 45, activo: true },
-        { nombre: 'Régimen Simplificado', tipo: 'Simplificado', tasa: 15, contribuyentes: 23, activo: true },
-        { nombre: 'Régimen de Mínimos', tipo: 'Especial', tasa: 7, contribuyentes: 12, activo: true },
-        { nombre: 'Régimen de Grandes Contribuyentes', tipo: 'Especial', tasa: 25, contribuyentes: 3, activo: true },
-        { nombre: 'Régimen de Nuevos Contribuyentes', tipo: 'Promocional', tasa: 10, contribuyentes: 8, activo: false },
-      ];
-      %>
-      <% regimenesMock.forEach(r => { %>
-      <tr>
-        <td><strong><%= r.nombre %></strong></td>
-        <td><%= r.tipo %></td>
-        <td><%= r.tasa %>%</td>
-        <td><%= r.contribuyentes %></td>
-        <td><span class="badge <%= r.activo ? 'badge-success' : 'badge-danger' %>"><%= r.activo ? 'Activo' : 'Inactivo' %></span></td>
-        <td>
-          <button class="btn-sm btn-secondary" onclick='editarRegimen("<%= r.nombre %>")'>✏️ Editar</button>
-          <button class="btn-sm <%= r.activo ? 'btn-secondary' : 'btn-primary' %>" onclick='toggleRegimen("<%= r.nombre %>", <%= !r.activo %>)'><%= r.activo ? '⏸️ Pausar' : '▶️ Activar' %></button>
-        </td>
-      </tr>
-      <% }) %>
-    </tbody>
-  </table>
+<!-- Cards de regímenes -->
+<div class="grid-2 mb-16">
+  <div class="info-card" style="border-left:4px solid #3f00d8">
+    <h4>👤 Estándar</h4>
+    <p style="font-size:13px;color:#5c5566;margin-bottom:8px">Personas físicas +18 años. Pagan IRM mensual sobre patrimonio medio + IGF progresivo.</p>
+    <table style="width:100%;font-size:12px">
+      <tr><td style="width:80px;color:#5c5566"><strong>IRM:</strong></td><td>0%–5% según IA (Art. 4.10)</td></tr>
+      <tr><td style="color:#5c5566"><strong>IGF:</strong></td><td>10%–30% (Art. 4.13)</td></tr>
+      <tr><td style="color:#5c5566"><strong>Aplica:</strong></td><td>Ciudadanos plenos, cuentas personales y de ahorro</td></tr>
+    </table>
+  </div>
+  <div class="info-card" style="border-left:4px solid #5a2fc2">
+    <h4>👥 Compartida</h4>
+    <p style="font-size:13px;color:#5c5566;margin-bottom:8px">Cuentas compartidas o joint. Tipos IRM reducidos (0.75%–6%).</p>
+    <table style="width:100%;font-size:12px">
+      <tr><td style="width:80px;color:#5c5566"><strong>IRM:</strong></td><td>0%–6% (escala compartida)</td></tr>
+      <tr><td style="color:#5c5566"><strong>IGF:</strong></td><td>10%–30% (Art. 4.13)</td></tr>
+      <tr><td style="color:#5c5566"><strong>Aplica:</strong></td><td>Cuentas con varios titulares, familiares</td></tr>
+    </table>
+  </div>
+  <div class="info-card" style="border-left:4px solid #1c005f">
+    <h4>🏢 Empresarial</h4>
+    <p style="font-size:13px;color:#5c5566;margin-bottom:8px">Personas jurídicas con EIP. IRM tipos empresa + IGF progresivo empresa.</p>
+    <table style="width:100%;font-size:12px">
+      <tr><td style="width:80px;color:#5c5566"><strong>IRM:</strong></td><td>0%–9% (escala empresa Art. 4.10)</td></tr>
+      <tr><td style="color:#5c5566"><strong>IGF:</strong></td><td>5%–85% (Art. 4.14)</td></tr>
+      <tr><td style="color:#5c5566"><strong>Aplica:</strong></td><td>Empresas, entidades, organizaciones con EIP</td></tr>
+    </table>
+  </div>
+  <div class="info-card" style="border-left:4px solid #9c7ee6">
+    <h4>🧒 Exenta Junior</h4>
+    <p style="font-size:13px;color:#5c5566;margin-bottom:8px">Menores de 16 años. Los impuestos los asume <strong>Capitalia</strong>. El menor NO tributa (Art. 5 Normativa Junior).</p>
+    <table style="width:100%;font-size:12px">
+      <tr><td style="width:80px;color:#5c5566"><strong>IRM:</strong></td><td>Pagado por Capitalia</td></tr>
+      <tr><td style="color:#5c5566"><strong>IGF:</strong></td><td>Pagado por Capitalia</td></tr>
+      <tr><td style="color:#5c5566"><strong>Aplica:</strong></td><td>Menores 0-15 años, cuentas Child/CAPI-, bono 750 Pz</td></tr>
+    </table>
+  </div>
+  <div class="info-card" style="border-left:4px solid #341087">
+    <h4>🏪 Empresa Reducida</h4>
+    <p style="font-size:13px;color:#5c5566;margin-bottom:8px">Empresas con patrimonio &lt; 20.000 Pz. Solo pagan IRM. IGF exento (Art. 4.15).</p>
+    <table style="width:100%;font-size:12px">
+      <tr><td style="width:80px;color:#5c5566"><strong>IRM:</strong></td><td>0%–9% (escala empresa)</td></tr>
+      <tr><td style="color:#5c5566"><strong>IGF:</strong></td><td>EXENTO (Art. 4.15)</td></tr>
+      <tr><td style="color:#5c5566"><strong>Aplica:</strong></td><td>Pequeñas empresas, autónomos, startups &lt; 20.000 Pz</td></tr>
+    </table>
+  </div>
+</div>
+
+<hr style="margin:24px 0;border-color:rgba(139,92,246,0.15)">
+
+<h4 class="mb-16">📊 Escalas y Tablas</h4>
+
+<div class="grid-2">
+  <div class="info-card">
+    <h5>📈 IRM — Escala Personal (Art. 4.10)</h5>
+    <table style="width:100%;font-size:12px">
+      <tr><th>Índice de Acumulación (IA)</th><th>Tipo</th></tr>
+      <tr><td>≤ 0 (Consumo/Equilibrio)</td><td><strong>0%</strong></td></tr>
+      <tr><td>≤ 0,05 (Acumulación baja)</td><td><strong>0,5%</strong></td></tr>
+      <tr><td>≤ 0,15 (Acumulación media)</td><td><strong>1,5%</strong></td></tr>
+      <tr><td>≤ 0,30 (Acumulación alta)</td><td><strong>3%</strong></td></tr>
+      <tr><td>&gt; 0,30 (Máxima acumulación)</td><td><strong>5%</strong></td></tr>
+    </table>
+  </div>
+  <div class="info-card">
+    <h5>📈 IRM — Escala Empresa (Art. 4.10)</h5>
+    <table style="width:100%;font-size:12px">
+      <tr><th>IA</th><th>Tipo</th></tr>
+      <tr><td>≤ 0</td><td><strong>0%</strong></td></tr>
+      <tr><td>≤ 0,05</td><td><strong>1%</strong></td></tr>
+      <tr><td>≤ 0,15</td><td><strong>3%</strong></td></tr>
+      <tr><td>≤ 0,30</td><td><strong>6%</strong></td></tr>
+      <tr><td>&gt; 0,30</td><td><strong>9%</strong></td></tr>
+    </table>
+  </div>
+  <div class="info-card">
+    <h5>💰 IGF — Escala Personal (Art. 4.13)</h5>
+    <table style="width:100%;font-size:12px">
+      <tr><th>Base imponible</th><th>Tipo</th></tr>
+      <tr><td>Hasta 5.000 Pz</td><td><strong>Exento</strong> (Art. 4.16)</td></tr>
+      <tr><td>5.001 - 20.000 Pz</td><td><strong>10%</strong></td></tr>
+      <tr><td>20.001 - 500.000 Pz</td><td><strong>30%</strong></td></tr>
+    </table>
+  </div>
+  <div class="info-card">
+    <h5>💰 IGF — Escala Empresa (Art. 4.14)</h5>
+    <table style="width:100%;font-size:12px">
+      <tr><th>Base imponible</th><th>Tipo</th></tr>
+      <tr><td>Hasta 5.000 Pz</td><td><strong>Exento</strong> (Art. 4.16)</td></tr>
+      <tr><td>5.001 - 20.000 Pz</td><td><strong>5%</strong></td></tr>
+      <tr><td>20.001 - 500.000 Pz</td><td><strong>35%</strong></td></tr>
+      <tr><td>&gt; 500.000 Pz</td><td><strong>85%</strong></td></tr>
+    </table>
+  </div>
+</div>
+
+<hr style="margin:24px 0;border-color:rgba(139,92,246,0.15)">
+
+<!-- Calculadora rápida -->
+<h4 class="mb-16">🧮 Calculadora Rápida de Impuestos</h4>
+<div class="info-card">
+  <div class="grid-3" style="gap:8px">
+    <div><label style="font-size:12px;display:block;margin-bottom:4px">Patrimonio medio (Pz):</label><input type="number" id="calcPatrimonio" class="form-input" value="10000" style="width:100%"></div>
+    <div><label style="font-size:12px;display:block;margin-bottom:4px">Tipo:</label>
+      <select id="calcTipo" class="form-input" style="width:100%">
+        <option value="personal">Personal</option>
+        <option value="empresa">Empresa</option>
+      </select>
+    </div>
+    <div><label style="font-size:12px;display:block;margin-bottom:4px">IA (índice acumulación):</label>
+      <input type="number" id="calcIA" class="form-input" value="0.05" step="0.01" style="width:100%">
+    </div>
+  </div>
+  <button class="btn-primary mt-16" onclick="calcularImpuestos()">🧮 Calcular</button>
+  <div id="calcResultados" class="mt-16" style="font-size:13px"></div>
+</div>
+
+<hr style="margin:24px 0;border-color:rgba(139,92,246,0.15)">
+
+<h4 class="mb-16">⚖️ Base Legal Completa</h4>
+<div class="info-card" style="font-size:13px;line-height:1.8">
+  <ul>
+    <li><strong>Art. 4.1</strong> — Límites de capital. Personal/Savings/Current: 500.000 Pz. Business: 10.000.000 Pz. Child: 5.000 Pz.</li>
+    <li><strong>Art. 4.2</strong> — Sanciones por descubierto. Día 6+: 25.000 Pz. Día 30+: 125.000 Pz.</li>
+    <li><strong>Art. 4.3</strong> — Tasa de transferencia. Máximo 12%.</li>
+    <li><strong>Art. 4.4</strong> — IVA general del 12% sobre base imponible.</li>
+    <li><strong>Art. 4.5</strong> — Cotizaciones laborales progresivas (7,5%–17,5%).</li>
+    <li><strong>Art. 4.7</strong> — SMI: 150 Pz/mes. Salario Máximo: 1.750 Pz/mes.</li>
+    <li><strong>Art. 4.8</strong> — IRM mensual sobre patrimonio medio del periodo vencido.</li>
+    <li><strong>Art. 4.9</strong> — IA = (Ingresos medios - Pagos medios) / Patrimonio medio.</li>
+    <li><strong>Art. 4.10</strong> — Escala IRM progresiva por tipo de cuenta.</li>
+    <li><strong>Art. 4.11</strong> — Liquidación mensual. Cargo día 5 del mes siguiente (Art. 4.11 bis).</li>
+    <li><strong>Art. 4.12</strong> — IGF grava patrimonio > 5.000 Pz.</li>
+    <li><strong>Art. 4.13</strong> — IGF personal: 10% y 30%.</li>
+    <li><strong>Art. 4.14</strong> — IGF empresa: 5%, 35% y 85%.</li>
+    <li><strong>Art. 4.15</strong> — Empresas &lt; 20.000 Pz: IGF exento.</li>
+    <li><strong>Art. 4.16</strong> — Exención primeros 5.000 Pz para todos.</li>
+    <li><strong>Art. 4.17</strong> — IVA 12% en facturas.</li>
+    <li><strong>Art. 5 (Junior)</strong> — Capitalia paga impuestos. Bono 750 Pz.</li>
+    <li><strong>Art. 7</strong> — Tipos de cuenta por edad.</li>
+    <li><strong>Art. 15</strong> — Sueldos públicos.</li>
+  </ul>
 </div>
 
 <script>
-function nuevoRegimen() {
-  mostrarModal('📋 Nuevo Régimen Tributario', `
-    <p style="margin-bottom:12px">Define los parámetros del nuevo régimen:</p>
-    <input type="text" id="regNombre" class="form-input" placeholder="Nombre del régimen" style="width:100%;margin-bottom:8px">
-    <select id="regTipo" class="form-input" style="width:100%;margin-bottom:8px">
-      <option value="General">General</option>
-      <option value="Simplificado">Simplificado</option>
-      <option value="Especial">Especial</option>
-      <option value="Promocional">Promocional</option>
-    </select>
-    <input type="number" id="regTasa" class="form-input" placeholder="Tasa (%)" style="width:100%;margin-bottom:8px">
-    <textarea id="regDesc" class="form-input" placeholder="Descripción y criterios" style="width:100%;margin-bottom:8px;min-height:60px"></textarea>
-    <button class="btn-primary mt-16" onclick='guardarRegimen()'>💾 Crear Régimen</button>
-  `);
-}
-
-function guardarRegimen() {
-  const n = document.getElementById('regNombre')?.value;
-  if (!n) return mostrarToast('Introduce un nombre', 'error');
-  mostrarToast('✅ Régimen "' + n + '" creado', 'success');
-  setTimeout(() => location.reload(), 1000);
-}
-
-function editarRegimen(nombre) {
-  mostrarModal('✏️ Editar: ' + nombre, `
-    <p style="margin-bottom:12px">Modifica los parámetros del régimen:</p>
-    <input type="text" id="editRegNombre" class="form-input" value="${nombre}" style="width:100%;margin-bottom:8px">
-    <input type="number" id="editRegTasa" class="form-input" value="21" placeholder="Tasa (%)" style="width:100%;margin-bottom:8px">
-    <button class="btn-primary mt-16" onclick='guardarEditRegimen()'>💾 Guardar</button>
-  `);
-}
-
-function guardarEditRegimen() {
-  mostrarToast('✅ Régimen actualizado', 'success');
-  setTimeout(() => location.reload(), 800);
-}
-
-function toggleRegimen(nombre, activar) {
-  mostrarToast(activar ? '✅ Régimen activado' : '⏸️ Régimen pausado', 'success');
-  setTimeout(() => location.reload(), 800);
+async function calcularImpuestos() {
+  const p = parseFloat(document.getElementById('calcPatrimonio')?.value) || 0;
+  const t = document.getElementById('calcTipo')?.value;
+  const ia = parseFloat(document.getElementById('calcIA')?.value) || 0;
+  let irmTipo = 0;
+  if (t === 'empresa') {
+    if (ia <= 0) irmTipo = 0; else if (ia <= 0.05) irmTipo = 0.01; else if (ia <= 0.15) irmTipo = 0.03; else if (ia <= 0.30) irmTipo = 0.06; else irmTipo = 0.09;
+  } else {
+    if (ia <= 0) irmTipo = 0; else if (ia <= 0.05) irmTipo = 0.005; else if (ia <= 0.15) irmTipo = 0.015; else if (ia <= 0.30) irmTipo = 0.03; else irmTipo = 0.05;
+  }
+  const cuotaIRM = p * irmTipo;
+  let igfTotal = 0, igfTramos = [];
+  if (p > 5000) {
+    const b1 = Math.min(p - 5000, 15000);
+    const c1 = b1 * (t === 'empresa' ? 0.05 : 0.10);
+    igfTramos.push({ label: '5.001-20.000', base: b1, cuota: c1 }); igfTotal += c1;
+    if (p > 20000) {
+      const b2 = Math.min(p - 20000, 480000);
+      const c2 = b2 * (t === 'empresa' ? 0.35 : 0.30);
+      igfTramos.push({ label: '20.001-500.000', base: b2, cuota: c2 }); igfTotal += c2;
+      if (t === 'empresa' && p > 500000) {
+        const b3 = p - 500000; const c3 = b3 * 0.85;
+        igfTramos.push({ label: '>500.000', base: b3, cuota: c3 }); igfTotal += c3;
+      }
+    }
+  }
+  document.getElementById('calcResultados').innerHTML = `
+    <div class="grid-3" style="gap:8px">
+      <div style="background:#f5f3f7;padding:12px;border-radius:8px;text-align:center">
+        <p style="font-size:11px;color:#5c5566">IRM (${(irmTipo*100).toFixed(2)}%)</p>
+        <p style="font-size:20px;font-weight:700;color:#3f00d8">${cuotaIRM.toFixed(2)} Pz</p>
+      </div>
+      <div style="background:#f5f3f7;padding:12px;border-radius:8px;text-align:center">
+        <p style="font-size:11px;color:#5c5566">IGF</p>
+        <p style="font-size:20px;font-weight:700;color:#3f00d8">${igfTotal.toFixed(2)} Pz</p>
+        <p style="font-size:10px;color:#5c5566">${igfTramos.length} tramos</p>
+      </div>
+      <div style="background:#efe9fb;padding:12px;border-radius:8px;text-align:center">
+        <p style="font-size:11px;color:#5c5566">TOTAL</p>
+        <p style="font-size:24px;font-weight:700;color:#1c005f">${(cuotaIRM+igfTotal).toFixed(2)} Pz</p>
+      </div>
+    </div>
+    <p style="font-size:10px;color:#9a8aaa;margin-top:8px">Basado en Arts. 4.8-4.16 del Código Normativo Interno GDLP</p>
+  `;
 }
 </script>

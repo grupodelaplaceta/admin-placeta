@@ -338,11 +338,80 @@ function generarContenidoDocumento(tipo, datos = {}) {
 
     case 'acta':
     case 'acta-firmada':
-      sf('DATOS DEL ACTA'); cf('Reunión', datos.reunion); cf('Fecha', datos.fecha||hoy); cf('Lugar', datos.lugar);
-      ln(); sf('ASISTENTES'); (datos.asistentes||[]).forEach((a,i) => cf(`${i+1}`, a));
-      ln(); sf('ORDEN DEL DÍA'); (datos.ordenDelDia||[]).forEach((o,i) => cf(`${i+1}`, o));
-      ln(); sf('ACUERDOS'); (datos.acuerdos||[]).forEach((a,i) => cf(`Acuerdo ${i+1}`, a));
-      if (tipo==='acta-firmada') { ln(); sf('FIRMAS'); cf('Presidente', datos.firmaPresidente); cf('Secretario', datos.firmaSecretario); }
+      sf('DATOS GENERALES DEL ACTA');
+      cf('Reunión', datos.reunion||'—');
+      cf('Fecha de celebración', datos.fecha||hoy);
+      cf('Hora de inicio', datos.horaInicio||'—');
+      cf('Hora de finalización', datos.horaFin||'—');
+      cf('Lugar', datos.lugar||'—');
+      cf('Convocante', datos.convocante||'—');
+      cf('Tipo de reunión', datos.tipoReunion||'Ordinaria');
+      cf('Número de acta', datos.numActa||'—');
+      ln();
+      sf('ASISTENTES');
+      if (datos.asistentes?.length) {
+        const presentes = datos.asistentes.filter(a => a.presente !== false);
+        presentes.forEach((a,i) => cf(`${i+1}. ${a.nombre||a}`, a.cargo?`${a.cargo}${a.dip?' ('+a.dip+')':''}`:'Presente'));
+        cf('Total asistentes', String(presentes.length));
+        const ausentes = datos.asistentes.filter(a => a.presente === false);
+        if (ausentes.length) { ln(); sf('AUSENTES'); ausentes.forEach((a,i) => cf(`${i+1}`, a.nombre||a)); }
+      } else {
+        cf('No se registraron asistentes', '—');
+      }
+      ln();
+      sf('ORDEN DEL DÍA');
+      if (datos.ordenDelDia?.length) {
+        datos.ordenDelDia.forEach((o,i) => cf(`Punto ${i+1}`, typeof o === 'string' ? o : (o.titulo||o)));
+      } else cf('No se registró orden del día', '—');
+      ln();
+      sf('DESARROLLO DE LA SESIÓN');
+      if (datos.desarrollo) {
+        tx(datos.desarrollo);
+      }
+      datos.puntosTratados?.forEach((p,i) => {
+        ln();
+        sf(`PUNTO ${i+1}: ${p.titulo||''}`);
+        if (p.descripcion) tx(p.descripcion);
+        if (p.intervenciones?.length) {
+          p.intervenciones.forEach((iv, j) => cf(`Intervención ${j+1}`, `${iv.quien}: ${iv.texto}`));
+        }
+      });
+      ln();
+      sf('VOTACIONES');
+      if (datos.votaciones?.length) {
+        datos.votaciones.forEach((v, vi) => {
+          ln();
+          sf(`Votación ${vi+1}: ${v.titulo||'Sin título'}`);
+          cf('Tipo', v.tipo||'Ordinaria');
+          cf('Grupo convocado', v.grupo||'Todos');
+          cf('Quorum requerido', v.quorum?String(v.quorum)+'%':'—');
+          cf('Participantes', v.totalVotos!==undefined?String(v.totalVotos):'—');
+          cf('A favor', v.aFavor!==undefined?String(v.aFavor):'—');
+          cf('En contra', v.enContra!==undefined?String(v.enContra):'—');
+          cf('Abstenciones', v.abstenciones!==undefined?String(v.abstenciones):'—');
+          cf('Resultado', v.resultado||(v.aFavor > v.enContra?'APROBADA':'NO APROBADA'));
+          cf('Finalizada', v.cerrada?'Sí':'No');
+        });
+      } else {
+        cf('No se registraron votaciones', '—');
+      }
+      ln();
+      sf('ACUERDOS ADOPTADOS');
+      if (datos.acuerdos?.length) {
+        datos.acuerdos.forEach((a,i) => cf(`Acuerdo ${i+1}`, typeof a === 'string' ? a : (a.texto||a)));
+      } else cf('No se adoptaron acuerdos', '—');
+      if (datos.proximosPasos) { ln(); sf('PRÓXIMOS PASOS'); tx(datos.proximosPasos); }
+      if (tipo==='acta-firmada') {
+        ln();
+        sf('FIRMAS DIGITALES');
+        cf('Presidente', datos.firmaPresidente||'—');
+        cf('Secretario/a', datos.firmaSecretario||'—');
+        cf('Fecha de firma', datos.fechaFirma||hoy);
+        cf('Hash de integridad', datos.hashActa||'—');
+        L.push({nota:'El presente acta ha sido aprobada por los asistentes y firmada digitalmente mediante PlacetaID. El hash de integridad garantiza la inmutabilidad del documento.'});
+      } else {
+        L.push({nota:'ACTA PROVISIONAL — Pendiente de aprobación y firma digital. Este documento no tiene validez oficial hasta su firma mediante PlacetaID.'});
+      }
       break;
 
     case 'certificado-situacion-tributaria':
@@ -358,6 +427,36 @@ function generarContenidoDocumento(tipo, datos = {}) {
       cf('Fecha', datos.fecha); cf('Hora', datos.hora); cf('Lugar', datos.lugar);
       ln(); sf('ORDEN DEL DÍA'); (datos.ordenDelDia||[]).forEach((o,i) => cf(`${i+1}`, o));
       if (datos.destinatarios?.length) { sf('DESTINATARIOS'); datos.destinatarios.forEach((d,i) => cf(`${i+1}`, d)); }
+      break;
+
+    case 'factura':
+      sf('DATOS DE LA FACTURA');
+      cf('Número de factura', datos.numeroFactura||'—');
+      cf('Emisor', datos.emisor||'—');
+      cf('Receptor', datos.receptor||'—');
+      cf('Fecha de emisión', datos.fechaEmision?new Date(datos.fechaEmision).toLocaleDateString('es-ES'):hoy);
+      cf('CSV de verificación', datos.csv||'—');
+      ln();
+      sf('LÍNEAS DE FACTURACIÓN');
+      if (datos.lineas?.length) {
+        datos.lineas.forEach((l,i) => {
+          ln();
+          sf(`Línea ${i+1}: ${l.conceptoProducto||l.concepto||'—'}`);
+          cf('Cantidad', String(l.cantidad||1));
+          cf('Precio unitario', (l.precioUnitario||0).toLocaleString()+' Pz');
+          cf('IVA', (l.ivaPorcentaje||12)+'%');
+          cf('Subtotal neto', (l.subtotalNeto||0).toLocaleString()+' Pz');
+          cf('Subtotal IVA', (l.subtotalIva||0).toLocaleString()+' Pz');
+        });
+      } else cf('No hay líneas', '—');
+      ln();
+      sf('RESUMEN DE LA FACTURA');
+      cf('Base imponible', (datos.baseImponible||0).toLocaleString()+' Pz');
+      cf('IVA (12%)', (datos.totalIVA||0).toLocaleString()+' Pz');
+      cf('TOTAL FACTURA', (datos.totalFactura||0).toLocaleString()+' Pz');
+      cf('Moneda', 'Placeta (Pz)');
+      cf('Estado', datos.estado||'Emitida');
+      L.push({nota:`Factura emitida según Art. 4.17 del Código Normativo Interno GDLP. IVA 12% incluido. CSV de verificación: ${datos.csv||'—'}. Verificable en admin-placeta.vercel.app.`});
       break;
 
     case 'resultado-definitivo':
