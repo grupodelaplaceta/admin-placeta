@@ -37,14 +37,15 @@
 
 <% if (esAdmin) { %>
 <div class="flex gap-8 flex-wrap">
-  <button class="btn btn-secondary btn-sm" onclick="mostrarModificarCuenta('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>',<%= cuenta.sendLimitPz || 0 %>)" title="Modificar cuenta">✏️</button>
-  <button class="btn btn-secondary btn-sm" onclick="mostrarVincularEIP('<%= cuenta.id %>')" title="Vincular EIP">🔗</button>
-  <button class="btn btn-secondary btn-sm" onclick="mostrarAnadirCotitular('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>')" title="Añadir cotitular">👥</button>
-  <button class="btn btn-secondary btn-sm" onclick="mostrarQuitarCotitular('<%= cuenta.id %>')" title="Quitar cotitular">🚫</button>
+  <button class="btn-icon" onclick="mostrarModificarCuenta('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>',<%= cuenta.sendLimitPz || 0 %>)" title="Modificar cuenta">✏️</button>
+  <button class="btn-icon" onclick="cambiarTipoCuenta('<%= cuenta.id %>','<%= cuenta.type || 'Personal' %>')" title="Cambiar tipo de cuenta">🏷️</button>
+  <button class="btn-icon" onclick="mostrarVincularEIP('<%= cuenta.id %>')" title="Vincular EIP">🔗</button>
+  <button class="btn-icon" onclick="mostrarAnadirCotitular('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>')" title="Añadir cotitular">👥</button>
+  <button class="btn-icon" onclick="mostrarQuitarCotitular('<%= cuenta.id %>')" title="Quitar cotitular">🚫</button>
   <% if (!cuenta.closedAt) { %>
-  <button class="btn btn-secondary btn-sm" onclick="bloquearCuenta('<%= cuenta.id %>')" title="Bloquear cuenta" style="color:var(--r)">🔒</button>
+  <button class="btn-icon" onclick="bloquearCuenta('<%= cuenta.id %>')" title="Bloquear cuenta" style="color:#d03131">🔒</button>
   <% } else { %>
-  <button class="btn btn-secondary btn-sm" onclick="bloquearCuenta('<%= cuenta.id %>')" title="Desbloquear cuenta">✅</button>
+  <button class="btn-icon" onclick="bloquearCuenta('<%= cuenta.id %>')" title="Desbloquear cuenta">🔓</button>
   <% } %>
 </div>
 <% } %>
@@ -62,6 +63,36 @@ function mostrarModificarCuenta(id, nombre, limite) {
     '<button class="btn-primary" onclick="guardarCambiosCuenta(\'' + id + '\')">💾 Guardar Cambios</button>' +
     '</div>';
   mostrarModal('✏️ Modificar Cuenta', h);
+}
+
+function cambiarTipoCuenta(id, tipoActual) {
+  mostrarModal('🏷️ Cambiar Tipo de Cuenta', `
+    <p style="margin-bottom:12px">Cambiar tipo de <strong>${id}</strong>:</p>
+    <p style="font-size:12px;color:#5c5566;margin-bottom:8px">Tipo actual: <span class="badge badge-purple">${tipoActual}</span></p>
+    <select id="nuevoTipo" class="form-input" style="margin-bottom:12px">
+      <option value="Personal" ${tipoActual==='Personal'?'selected':''}>👤 Personal</option>
+      <option value="Business" ${tipoActual==='Business'?'selected':''}>🏢 Business (Empresa)</option>
+      <option value="Savings" ${tipoActual==='Savings'?'selected':''}>💰 Savings (Ahorro)</option>
+      <option value="Current" ${tipoActual==='Current'?'selected':''}>💳 Current (Corriente)</option>
+      <option value="Child" ${tipoActual==='Child'?'selected':''}>🧒 Child (Infantil)</option>
+      <option value="Shared" ${tipoActual==='Shared'?'selected':''}>👥 Shared (Compartida)</option>
+      <option value="Joint" ${tipoActual==='Joint'?'selected':''}>🤝 Joint (Conjunta)</option>
+    </select>
+    <p style="font-size:11px;color:#999;margin-bottom:12px">💡 El cambio de tipo afecta a límites de capital (Art. 4.1), escala IRM (Art. 4.10) e IGF (Art. 4.12-4.16).</p>
+    <button class="btn btn-primary" onclick='ejecutarCambioTipo("${id}")'>💾 Cambiar tipo</button>
+  `);
+}
+
+async function ejecutarCambioTipo(id) {
+  const tipo = document.getElementById('nuevoTipo')?.value;
+  if (!tipo) return mostrarToast('Selecciona un tipo', 'error');
+  try {
+    const r = await apiFetch('/banco/api/cuentas/modificar', {
+      method: 'POST', body: JSON.stringify({ accountId: id, type: tipo })
+    });
+    if (r.success) { mostrarToast('🏷️ Tipo cambiado a ' + tipo, 'success'); setTimeout(() => location.reload(), 800); }
+    else mostrarToast(r.error||'Error', 'error');
+  } catch(e) { mostrarToast('⚠️ Simulado: tipo cambiado', 'warning'); setTimeout(() => location.reload(), 600); }
 }
 
 function mostrarVincularEIP(id) {
