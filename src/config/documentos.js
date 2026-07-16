@@ -7,6 +7,7 @@
  */
 import { createHash, randomUUID } from 'crypto';
 import PDFDocument from 'pdfkit';
+import { PLANTILLAS_BANCO } from './plantillas-banco.js';
 
 // Almacenamiento en memoria (fallback cuando fs no está disponible en serverless)
 const memStore = {};
@@ -23,7 +24,11 @@ const LOGOS = {
 export const TIPOS_DOCUMENTO = {
   banco: {
     cliente: [
-      'contrato-apertura', 'contrato-modificacion', 'contrato-cierre',
+      'contrato-apertura', 'contrato-modificacion', 'cambio-titularidad',
+      'incorporacion-cotitular', 'desvinculacion-cotitular',
+      'vinculacion-eip', 'modificacion-eip',
+      'bloqueo-cuenta', 'desbloqueo-cuenta', 'baja-cuenta',
+      'contrato-cierre',
       'certificado-titularidad', 'certificado-saldo', 'certificado-movimientos',
       'certificado-iban', 'estado-mensual', 'estado-anual',
       'extracto-personalizado', 'justificante-transferencia',
@@ -171,12 +176,25 @@ export const DOCUMENTOS_AUTOMATICOS = [
 ];
 
 // Etiquetas descriptivas para cada tipo
-export const ETIQUETAS_DOC = {};
+export const ETIQUETAS_DOC = {
+  'contrato-apertura': 'Contrato de Apertura de Cuenta (BLP-B-001)',
+  'contrato-modificacion': 'Contrato de Modificación de Cuenta (BLP-B-002)',
+  'cambio-titularidad': 'Cambio de Titularidad (BLP-B-003)',
+  'incorporacion-cotitular': 'Incorporación de Cotitular (BLP-B-004)',
+  'desvinculacion-cotitular': 'Desvinculación de Cotitular (BLP-B-005)',
+  'vinculacion-eip': 'Vinculación de Empresa EIP (BLP-B-006)',
+  'modificacion-eip': 'Modificación Empresa Vinculada (BLP-B-007)',
+  'bloqueo-cuenta': 'Resolución de Bloqueo (BLP-B-008)',
+  'desbloqueo-cuenta': 'Resolución de Desbloqueo (BLP-B-009)',
+  'baja-cuenta': 'Resolución de Baja Definitiva (BLP-B-010)',
+};
 function addLabels(obj, prefix = '') {
   for (const [cat, docs] of Object.entries(obj)) {
     if (Array.isArray(docs)) {
       docs.forEach(d => {
-        ETIQUETAS_DOC[d] = d.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        if (!ETIQUETAS_DOC[d]) {
+          ETIQUETAS_DOC[d] = d.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
       });
     } else if (typeof docs === 'object') {
       addLabels(docs, prefix || cat);
@@ -244,13 +262,21 @@ function generarContenidoDocumento(tipo, datos = {}) {
   const tx = (t) => L.push({texto:t}); const ln = () => L.push({linea:true});
 
   switch (tipo) {
+    // ── Plantillas oficiales del Banco de La Placeta (BLP-B-001 a B-010) ──
     case 'contrato-apertura':
-      sf('DATOS DEL TITULAR'); cf('Nombre', datos.titular||datos.nombre); cf('DIP', datos.dip);
-      ln(); sf('DATOS DE LA CUENTA'); cf('Tipo', datos.tipoCuenta||'Personal'); cf('IBAN', datos.iban);
-      cf('Fecha apertura', datos.fechaApertura||hoy); cf('Saldo inicial', datos.saldoInicial?datos.saldoInicial+' Pz':'0 Pz');
-      ln(); sf('CONDICIONES'); cf('Saldo mínimo', datos.condiciones?.saldoMinimo?datos.condiciones.saldoMinimo+' Pz':'0 Pz');
-      cf('Comisiones', datos.condiciones?.comisiones||'Sin comisiones'); cf('Régimen', datos.condiciones?.regimen||'General');
+    case 'contrato-modificacion':
+    case 'cambio-titularidad':
+    case 'incorporacion-cotitular':
+    case 'desvinculacion-cotitular':
+    case 'vinculacion-eip':
+    case 'modificacion-eip':
+    case 'bloqueo-cuenta':
+    case 'desbloqueo-cuenta':
+    case 'baja-cuenta': {
+      const plantilla = PLANTILLAS_BANCO[tipo];
+      if (plantilla) return plantilla(datos, L, cf, sf, tx, ln, hoy);
       break;
+    }
 
     case 'certificado-saldo':
     case 'certificado-titularidad':
