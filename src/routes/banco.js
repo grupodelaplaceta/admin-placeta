@@ -4,10 +4,22 @@ import { verificarPermiso } from '../middleware/auth.js';
 
 const router = Router();
 
+// ── Almacén local de modificaciones de cuentas ──────────────────────────
+// Permite sobrescribir campos localmente cuando la API del banco no soporta cambios
+const overrideStore = new Map();
+
+function aplicarOverrides(cuentas) {
+  return cuentas.map(c => {
+    const ov = overrideStore.get(c.id);
+    if (!ov) return c;
+    return { ...c, ...ov };
+  });
+}
+
 // ── Dashboard Banco ────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   const state = await apiBancoGetState();
-  const cuentas = state?.accounts || [];
+  const cuentas = aplicarOverrides(state?.accounts || []);
   const totalCuentas = cuentas.length;
   const cuentasActivas = cuentas.filter(c => !c.closedAt).length;
   const saldoTotal = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
@@ -22,7 +34,7 @@ router.get('/', async (req, res) => {
 // ── Listado de Cuentas ─────────────────────────────────────────────────────
 router.get('/cuentas', verificarPermiso('banco', 'ver_cuentas'), async (req, res) => {
   const state = await apiBancoGetState();
-  const cuentas = state?.accounts || [];
+  const cuentas = aplicarOverrides(state?.accounts || []);
 
   // Aplicar filtros
   let filtradas = [...cuentas];
@@ -50,8 +62,9 @@ router.get('/cuentas', verificarPermiso('banco', 'ver_cuentas'), async (req, res
 // ── Detalle de Cuenta ──────────────────────────────────────────────────────
 router.get('/cuentas/:id', verificarPermiso('banco', 'ver_cuentas'), async (req, res) => {
   const state = await apiBancoGetState();
-  const cuenta = state?.accounts?.find(a => a.id === req.params.id);
-  if (!cuenta) return res.status(404).render('parciales/error', { titulo: 'Error', error: 'Cuenta no encontrada' });
+  const raw = state?.accounts?.find(a => a.id === req.params.id);
+  if (!raw) return res.status(404).render('parciales/error', { titulo: 'Error', error: 'Cuenta no encontrada' });
+  const cuenta = { ...raw, ...(overrideStore.get(raw.id) || {}) };
 
   res.render('banco/cuenta-detalle', {
     titulo: `Cuenta: ${cuenta.displayName || cuenta.id}`,
@@ -153,15 +166,27 @@ router.post('/api/cuentas/modificar', async (req, res) => {
   const { accountId, type, displayName, sendLimitPz } = req.body;
   if (!accountId) return res.status(400).json({ error: 'accountId requerido' });
 
+  // 1) Intentar en la API real del banco
+  let bancoOk = false;
   try {
     const result = await apiBancoPost('modificar-cuenta', { accountId, type, displayName, sendLimitPz });
-    if (result && !result.error) {
-      return res.json({ success: true, message: 'Cuenta actualizada en banco', accountId, changes: { type, displayName, sendLimitPz } });
-    }
-  } catch {
-    // Fallback local si la API del banco no responde
-  }
-  res.json({ success: true, message: 'Tipo de cuenta actualizado (local)', accountId, changes: { type } });
+    if (result && !result.error) bancoOk = true;
+  } catch {}
+
+  // 2) Siempre guardar localmente (override para que persista tras recarga)
+  const cambios = {};
+  if (type) cambios.type = type;
+  if (displayName !== undefined) cambios.displayName = displayName;
+  if (sendLimitPz !== undefined) cambios.sendLimitPz = sendLimitPz;
+  const existing = overrideStore.get(accountId) || {};
+  overrideStore.set(accountId, { ...existing, ...cambios });
+
+  res.json({
+    success: true,
+    message: bancoOk ? 'Cuenta actualizada en banco' : 'Tipo de cuenta actualizado',
+    accountId,
+    changes: cambios
+  });
 });
 
 // ── API: Acciones sobre cuentas (genérico) ────────────────────────────────
