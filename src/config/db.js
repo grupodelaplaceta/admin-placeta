@@ -260,3 +260,50 @@ export async function sbUpsertControlRecaudacion(mesPeriodo, inhibido) {
     await supabase.from('tributos_control_recaudacion').upsert({ mes_periodo: mesPeriodo, inhibido });
   } catch { memControlRecaudacion.set(mesPeriodo, { mes_periodo: mesPeriodo, inhibido }); }
 }
+
+// ── OVERRIDES DE CUENTAS BANCARIAS (persistente en Supabase, fallback en /tmp) ──
+const memOverrides = new Map();
+
+export async function sbGetOverrides() {
+  if (!supabase) return Object.fromEntries(memOverrides);
+  try {
+    const { data } = await supabase.from('banco_overrides').select('*').maybeSingle();
+    if (data?.overrides) {
+      // Recargar en memoria
+      const parsed = typeof data.overrides === 'string' ? JSON.parse(data.overrides) : data.overrides;
+      Object.entries(parsed).forEach(([k, v]) => memOverrides.set(k, v));
+      return parsed;
+    }
+    return {};
+  } catch { return Object.fromEntries(memOverrides); }
+}
+
+export async function sbSetOverride(accountId, cambios) {
+  if (!supabase) {
+    const existing = memOverrides.get(accountId) || {};
+    memOverrides.set(accountId, { ...existing, ...cambios });
+    return;
+  }
+  try {
+    // Obtener overrides actuales
+    const { data } = await supabase.from('banco_overrides').select('*').maybeSingle();
+    let current = {};
+    if (data?.overrides) {
+      current = typeof data.overrides === 'string' ? JSON.parse(data.overrides) : data.overrides;
+    }
+    // Actualizar
+    current[accountId] = { ...(current[accountId] || {}), ...cambios };
+    await supabase.from('banco_overrides').upsert({ id: 'default', overrides: JSON.stringify(current), updated_at: new Date().toISOString() });
+    // Actualizar memoria
+    memOverrides.set(accountId, current[accountId]);
+  } catch {
+    const existing = memOverrides.get(accountId) || {};
+    memOverrides.set(accountId, { ...existing, ...cambios });
+  }
+}
+
+export async function sbClearOverrides() {
+  memOverrides.clear();
+  if (!supabase) return;
+  try { await supabase.from('banco_overrides').delete().eq('id', 'default'); } catch {}
+}

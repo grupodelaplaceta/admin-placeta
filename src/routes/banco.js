@@ -1,41 +1,21 @@
 import { Router } from 'express';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { apiBancoGetState, apiBancoPost } from '../config/db.js';
+import { apiBancoGetState, apiBancoPost, sbGetOverrides, sbSetOverride } from '../config/db.js';
 import { verificarPermiso } from '../middleware/auth.js';
 
 const router = Router();
 
-// ── Almacén persistente de modificaciones de cuentas ────────────────────
-// Guarda en JSON para que los cambios sobrevivan reinicios del servidor
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const OVERRIDES_FILE = path.join(__dirname, '..', '..', 'data', 'cuentas-overrides.json');
+// ── Caché de overrides (se carga desde Supabase al arrancar) ────────────
+let overrideCache = {};
 
-let overrideStore = new Map();
-
-function cargarOverrides() {
-  try {
-    fs.mkdirSync(path.dirname(OVERRIDES_FILE), { recursive: true });
-    if (fs.existsSync(OVERRIDES_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf-8'));
-      overrideStore = new Map(Object.entries(raw));
-    }
-  } catch { overrideStore = new Map(); }
+async function asegurarCache() {
+  if (Object.keys(overrideCache).length === 0) {
+    overrideCache = await sbGetOverrides() || {};
+  }
 }
-
-function guardarOverrides() {
-  try {
-    fs.mkdirSync(path.dirname(OVERRIDES_FILE), { recursive: true });
-    fs.writeFileSync(OVERRIDES_FILE, JSON.stringify(Object.fromEntries(overrideStore), null, 2));
-  } catch { /* silent */ }
-}
-
-cargarOverrides();
 
 function aplicarOverrides(cuentas) {
   return cuentas.map(c => {
-    const ov = overrideStore.get(c.id);
+    const ov = overrideCache[c.id];
     if (!ov) return c;
     return { ...c, ...ov };
   });
@@ -43,6 +23,7 @@ function aplicarOverrides(cuentas) {
 
 // ── Dashboard Banco ────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
+  await asegurarCache();
   const state = await apiBancoGetState();
   const cuentas = aplicarOverrides(state?.accounts || []);
   const totalCuentas = cuentas.length;
@@ -58,6 +39,7 @@ router.get('/', async (req, res) => {
 
 // ── Listado de Cuentas ─────────────────────────────────────────────────────
 router.get('/cuentas', verificarPermiso('banco', 'ver_cuentas'), async (req, res) => {
+  await asegurarCache();
   const state = await apiBancoGetState();
   const cuentas = aplicarOverrides(state?.accounts || []);
 
@@ -86,6 +68,7 @@ router.get('/cuentas', verificarPermiso('banco', 'ver_cuentas'), async (req, res
 
 // ── Detalle de Cuenta ──────────────────────────────────────────────────────
 router.get('/cuentas/:id', verificarPermiso('banco', 'ver_cuentas'), async (req, res) => {
+  await asegurarCache();
   const state = await apiBancoGetState();
   const raw = state?.accounts?.find(a => a.id === req.params.id);
   if (!raw) return res.status(404).render('parciales/error', { titulo: 'Error', error: 'Cuenta no encontrada' });
@@ -198,14 +181,14 @@ router.post('/api/cuentas/modificar', async (req, res) => {
     if (result && !result.error) bancoOk = true;
   } catch {}
 
-  // 2) Guardar localmente con persistencia a JSON
+  // 2) Guardar en Supabase (persiste entre reinicios y en Vercel)
   const cambios = {};
   if (type) cambios.type = type;
   if (displayName !== undefined) cambios.displayName = displayName;
   if (sendLimitPz !== undefined) cambios.sendLimitPz = sendLimitPz;
-  const existing = overrideStore.get(accountId) || {};
-  overrideStore.set(accountId, { ...existing, ...cambios });
-  guardarOverrides(); // Persiste a disco
+  await sbSetOverride(accountId, cambios);
+  // Actualizar caché local
+  overrideCache[accountId] = { ...(overrideCache[accountId] || {}), ...cambios };
 
   res.json({
     success: true,
