@@ -77,9 +77,10 @@
     <button class="btn btn-secondary" onclick="mostrarAnadirCotitular('<%= cuenta.id %>','<%= (cuenta.displayName || cuenta.id).replace(/'/g,"\\'") %>')">👥 Añadir Cotitular</button>
     <button class="btn btn-secondary" onclick="mostrarQuitarCotitular('<%= cuenta.id %>')">🚫 Quitar Cotitular</button>
     <% if (!cuenta.closedAt) { %>
-    <button class="btn btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')" style="color:#d03131">🔒 Bloquear</button>
+    <button class="btn btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>',false)" style="color:#d03131">🔒 Bloquear</button>
+    <button class="btn btn-secondary" onclick="mostrarBajaCuenta('<%= cuenta.id %>')" style="color:#d03131">🗑️ Baja</button>
     <% } else { %>
-    <button class="btn btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>')">🔓 Desbloquear</button>
+    <button class="btn btn-secondary" onclick="bloquearCuenta('<%= cuenta.id %>',true)">🔓 Desbloquear</button>
     <% } %>
   </div>
 </div>
@@ -87,30 +88,84 @@
 <%- include('../parciales/documentos-ctx', { entidad: 'banco', refTipo: 'cuenta', refId: cuenta.id, refNombre: cuenta.displayName || cuenta.id }) %>
 
 <script>
+// ═════════════════════════════════════════════════════════════════════════
+// HELPERS: motivo selector + bypass
+// ═════════════════════════════════════════════════════════════════════════
+function motivoHTML(motivos, selected = []) {
+  return motivos.map(m => {
+    const checked = selected.includes(m) ? 'checked' : '';
+    return `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;cursor:pointer">
+      <input type="checkbox" class="chk-motivo" value="${m}" ${checked} style="width:14px;height:14px"> ${m}
+    </label>`;
+  }).join('');
+}
+
+function bypassHTML() {
+  return `
+    <hr style="margin:8px 0;border-color:#e0daf0">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:#92400e">
+      <input type="checkbox" id="chkBypass" style="width:14px;height:14px">
+      ⚡ Bypass — Firmar sin aprobación adicional (solo Administrador/Junta)
+    </label>
+    <p style="font-size:10px;color:#999;margin:4px 0 8px 20px">Quedará registrado en auditoría. Art. 4.11 bis — Urgencia declarada.</p>`;
+}
+
+function getMotivosSeleccionados() {
+  return [...document.querySelectorAll('.chk-motivo:checked')].map(cb => cb.value);
+}
+
+function generarDocumento(evento, docTipo, data) {
+  mostrarToast('📄 Generando documento ' + docTipo + '...', 'info');
+  // Aquí se llamaría a la API de documentos para generar el PDF
+  // Por ahora simulamos
+  setTimeout(() => {
+    window.open('/banco/documentos?tipo=' + docTipo + '&ref=' + data.accountId, '_blank');
+  }, 500);
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 1. MODIFICAR CUENTA (BLP-B-002)
+// ═════════════════════════════════════════════════════════════════════════
 function mostrarModificarCuenta(id, nombre, limite) {
-  mostrarModal('✏️ Modificar Cuenta', `
-    <p style="margin-bottom:12px;font-size:13px;color:#5c5566">Modificar datos de <strong>${nombre}</strong></p>
+  const mods = ['Cambio de titular', 'Cambio de cotitulares', 'Modificación EIP', 'Cambio de régimen',
+    'Conversión a ahorro', 'Cambio clasificación', 'Actualización datos personales',
+    'Actualización domicilio', 'Actualización email', 'Actualización teléfono',
+    'Modificación autorizados', 'Modificación límites'];
+  mostrarModal('✏️ Modificar Cuenta — BLP-B-002', `
+    <p style="margin-bottom:8px;font-size:13px;color:#5c5566">Modificar datos de <strong>${nombre}</strong></p>
     <label>Nombre</label>
-    <input type="text" id="editNombre" class="form-input" value="${nombre||''}" style="margin-bottom:12px">
+    <input type="text" id="editNombre" class="form-input" value="${nombre||''}" style="margin-bottom:8px">
     <label>Límite de envío (Pz)</label>
-    <input type="number" id="editLimite" class="form-input" value="${limite||0}" style="margin-bottom:16px">
-    <button class="btn btn-primary" onclick="guardarCambiosCuenta('${id}')">💾 Guardar Cambios</button>
+    <input type="number" id="editLimite" class="form-input" value="${limite||0}" style="margin-bottom:12px">
+    <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Motivos de la modificación:</p>
+    ${motivoHTML(mods)}
+    ${bypassHTML()}
+    <button class="btn btn-primary mt-8" onclick="guardarCambiosCuenta('${id}')">💾 Guardar y generar documento</button>
   `);
 }
 
 async function guardarCambiosCuenta(id) {
   const nombre = document.getElementById('editNombre')?.value;
   const limite = document.getElementById('editLimite')?.value;
+  const motivos = getMotivosSeleccionados();
+  const bypass = document.getElementById('chkBypass')?.checked || false;
+  if (motivos.length === 0) return mostrarToast('Selecciona al menos un motivo', 'error');
   try {
     const r = await apiFetch('/banco/api/cuentas/modificar', {
-      method:'POST', body: JSON.stringify({ accountId:id, displayName:nombre, sendLimitPz:parseInt(limite) })
+      method:'POST', body: JSON.stringify({ accountId:id, displayName:nombre, sendLimitPz:parseInt(limite), motivos, bypass })
     });
-    if (r.success) { mostrarToast('✅ Cuenta actualizada', 'success'); setTimeout(() => location.reload(), 800); }
-    else mostrarToast(r.error||'Error', 'error');
+    if (r.success) {
+      mostrarToast('✅ Cuenta actualizada — Documento BLP-B-002 generado', 'success');
+      setTimeout(() => location.reload(), 800);
+    }
   } catch { mostrarToast('⚠️ Error', 'error'); }
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// 2. CAMBIAR TIPO DE CUENTA (BLP-B-002 - Modificación)
+// ═════════════════════════════════════════════════════════════════════════
 function cambiarTipoCuenta(id, tipoActual) {
+  const motivos = ['Cambio de régimen de cuenta', 'Conversión a cuenta de ahorro', 'Reclasificación bancaria'];
   mostrarModal('🏷️ Cambiar Tipo de Cuenta', `
     <p style="margin-bottom:8px;font-size:13px">Cambiar tipo de <strong>${id}</strong></p>
     <p style="font-size:12px;color:#5c5566;margin-bottom:12px">Actual: <span class="badge badge-purple">${tipoActual}</span></p>
@@ -119,80 +174,302 @@ function cambiarTipoCuenta(id, tipoActual) {
         `<option value="${t}" ${tipoActual===t?'selected':''}>${t}</option>`
       ).join('')}
     </select>
-    <p style="font-size:10px;color:#999;margin-bottom:12px">💡 Afecta a límites (Art.4.1), IRM (Art.4.10) e IGF (Art.4.12-4.16)</p>
-    <button class="btn btn-primary" onclick='ejecutarCambioTipo("${id}")'>💾 Cambiar tipo</button>
+    <p style="font-size:10px;color:#999;margin-bottom:8px">💡 Afecta a límites (Art.4.1), IRM (Art.4.10) e IGF (Art.4.12-4.16)</p>
+    <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Motivo:</p>
+    ${motivoHTML(motivos, ['Cambio de régimen de cuenta'])}
+    ${bypassHTML()}
+    <button class="btn btn-primary mt-8" onclick='ejecutarCambioTipo("${id}")'>💾 Cambiar tipo</button>
   `);
 }
 
 async function ejecutarCambioTipo(id) {
   const tipo = document.getElementById('nuevoTipo')?.value;
+  const motivos = getMotivosSeleccionados();
+  const bypass = document.getElementById('chkBypass')?.checked || false;
   if (!tipo) return mostrarToast('Selecciona un tipo', 'error');
+  if (motivos.length === 0) return mostrarToast('Selecciona un motivo', 'error');
   try {
     const r = await apiFetch('/banco/api/cuentas/modificar', {
-      method:'POST', body: JSON.stringify({ accountId:id, type:tipo })
+      method:'POST', body: JSON.stringify({ accountId:id, type:tipo, motivos, bypass })
     });
-    if (r.success) { mostrarToast('🏷️ Tipo cambiado a '+tipo, 'success'); setTimeout(() => location.reload(), 800); }
-    else mostrarToast(r.error||'Error', 'error');
+    if (r.success) { mostrarToast('🏷️ Tipo cambiado a '+tipo+' — BLP-B-002 generado', 'success'); setTimeout(() => location.reload(), 800); }
   } catch(e) { mostrarToast('⚠️ Error', 'error'); }
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// 3. VINCULAR EIP (BLP-B-006)
+// ═════════════════════════════════════════════════════════════════════════
 function mostrarVincularEIP(id) {
-  mostrarModal('🔗 Vincular EIP', `
+  const tipos = ['Titular principal', 'Empresa cotitular', 'Empresa autorizada', 'Empresa administradora'];
+  mostrarModal('🔗 Vincular EIP — BLP-B-006', `
     <p style="margin-bottom:8px;font-size:13px;color:#5c5566">Vincular una empresa a la cuenta:</p>
     <label>EIP de la empresa</label>
-    <input type="text" id="eipInput" class="form-input" placeholder="Ej: EIP-A3F7C2" style="margin-bottom:12px">
-    <button class="btn btn-primary" onclick="vincularEIP('${id}')">🔗 Vincular</button>
+    <input type="text" id="eipInput" class="form-input" placeholder="Ej: EIP-A3F7C2" style="margin-bottom:8px">
+    <label>Razón social</label>
+    <input type="text" id="eipRazon" class="form-input" placeholder="Nombre de la empresa" style="margin-bottom:8px">
+    <label>Representante legal</label>
+    <input type="text" id="eipRep" class="form-input" placeholder="DIP del representante" style="margin-bottom:8px">
+    <label>Tipo de vinculación</label>
+    <select id="eipTipo" class="form-input" style="margin-bottom:8px">
+      ${tipos.map(t => `<option value="${t}">${t}</option>`).join('')}
+    </select>
+    <label>Régimen fiscal</label>
+    <select id="eipRegimen" class="form-input" style="margin-bottom:8px">
+      <option value="General">General</option>
+      <option value="Simplificado">Simplificado</option>
+      <option value="Autónomo">Autónomo</option>
+      <option value="Asociación">Asociación</option>
+    </select>
+    ${bypassHTML()}
+    <button class="btn btn-primary mt-8" onclick="vincularEIP('${id}')">🔗 Vincular y generar BLP-B-006</button>
   `);
 }
 
 async function vincularEIP(id) {
   const eip = document.getElementById('eipInput')?.value;
   if (!eip) return mostrarToast('Introduce un EIP', 'error');
+  const bypass = document.getElementById('chkBypass')?.checked || false;
   try {
     await apiFetch('/banco/api/cuentas/modificar', {
-      method:'POST', body: JSON.stringify({ accountId:id, eip })
+      method:'POST', body: JSON.stringify({
+        accountId:id, eip, razonSocial: document.getElementById('eipRazon')?.value,
+        representante: document.getElementById('eipRep')?.value,
+        tipoVinculacion: document.getElementById('eipTipo')?.value,
+        regimenFiscal: document.getElementById('eipRegimen')?.value,
+        bypass
+      })
     });
-    mostrarToast('🔗 EIP vinculado', 'success');
+    mostrarToast('🔗 EIP vinculado — BLP-B-006 generado', 'success');
     setTimeout(() => location.reload(), 800);
   } catch { mostrarToast('⚠️ Error', 'error'); }
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// 4. AÑADIR COTITULAR (BLP-B-004)
+// ═════════════════════════════════════════════════════════════════════════
 function mostrarAnadirCotitular(id, nombre) {
-  mostrarModal('👥 Añadir Cotitular', `
+  const facultades = ['Consultar saldo', 'Consultar movimientos', 'Realizar transferencias',
+    'Emitir pagos', 'Recibir ingresos', 'Solicitar certificados', 'Contratar productos',
+    'Solicitar tarjetas', 'Modificar límites', 'Solicitar bloqueo', 'Firmar operaciones'];
+  const tipos = ['Plenos derechos', 'Autorizado sin cierre', 'Autorización limitada', 'Temporal', 'Administrativo'];
+  mostrarModal('👥 Añadir Cotitular — BLP-B-004', `
     <p style="margin-bottom:8px;font-size:13px">Añadir cotitular a <strong>${nombre}</strong>:</p>
-    <label>DIP del cotitular</label>
-    <input type="text" id="cotitularDip" class="form-input" placeholder="Ej: DIP-A1B2C3D4" style="margin-bottom:12px">
-    <button class="btn btn-primary" onclick="anadirCotitular('${id}')">➕ Añadir</button>
+    <div class="grid-2" style="gap:8px">
+      <div><label>DIP del cotitular</label>
+      <input type="text" id="cotitularDip" class="form-input" placeholder="Ej: DIP-XXXX"></div>
+      <div><label>Nombre</label>
+      <input type="text" id="cotitularNombre" class="form-input" placeholder="Nombre completo"></div>
+    </div>
+    <p style="font-size:11px;font-weight:600;color:#5c5566;margin:8px 0 4px">📋 Tipo de cotitularidad:</p>
+    <select id="cotitularTipo" class="form-input" style="margin-bottom:8px">
+      ${tipos.map(t => `<option value="${t}">${t}</option>`).join('')}
+    </select>
+    <p style="font-size:11px;font-weight:600;color:#5c5566;margin:8px 0 4px">✅ Facultades del cotitular:</p>
+    ${motivoHTML(facultades, ['Consultar saldo', 'Consultar movimientos'])}
+    ${bypassHTML()}
+    <button class="btn btn-primary mt-8" onclick="anadirCotitular('${id}')">👥 Añadir y generar BLP-B-004</button>
   `);
 }
 
 async function anadirCotitular(id) {
   const dip = document.getElementById('cotitularDip')?.value;
   if (!dip) return mostrarToast('Introduce un DIP', 'error');
-  mostrarToast('👥 Cotitular añadido (simulado)', 'success');
-  setTimeout(() => location.reload(), 600);
+  const facultades = getMotivosSeleccionados();
+  const bypass = document.getElementById('chkBypass')?.checked || false;
+  try {
+    await apiFetch('/banco/api/cuentas/modificar', {
+      method:'POST', body: JSON.stringify({
+        accountId:id, cotitularDip: dip, cotitularNombre: document.getElementById('cotitularNombre')?.value,
+        tipoCotitularidad: document.getElementById('cotitularTipo')?.value,
+        facultades, bypass
+      })
+    });
+    mostrarToast('👥 Cotitular añadido — BLP-B-004 generado', 'success');
+    setTimeout(() => location.reload(), 600);
+  } catch { mostrarToast('⚠️ Error', 'error'); }
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// 5. QUITAR COTITULAR (BLP-B-005)
+// ═════════════════════════════════════════════════════════════════════════
 function mostrarQuitarCotitular(id) {
-  mostrarModal('🚫 Quitar Cotitular', `
+  const motivos = ['Solicitud voluntaria', 'Renuncia del cotitular', 'Incumplimiento contractual',
+    'Resolución administrativa', 'Reestructuración empresarial', 'Finalización autorización temporal'];
+  mostrarModal('🚫 Quitar Cotitular — BLP-B-005', `
     <p style="margin-bottom:8px;font-size:13px;color:#5c5566">Eliminar un cotitular de la cuenta:</p>
     <label>DIP del cotitular a eliminar</label>
-    <input type="text" id="quitarCotitularDip" class="form-input" placeholder="Ej: DIP-A1B2C3D4" style="margin-bottom:12px">
-    <button class="btn btn-danger" onclick="quitarCotitular('${id}')">🚫 Quitar</button>
+    <input type="text" id="quitarCotitularDip" class="form-input" placeholder="Ej: DIP-XXXX" style="margin-bottom:8px">
+    <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Motivo de la desvinculación:</p>
+    ${motivoHTML(motivos, ['Solicitud voluntaria'])}
+    ${bypassHTML()}
+    <button class="btn btn-danger mt-8" onclick="quitarCotitular('${id}')">🚫 Desvincular y generar BLP-B-005</button>
   `);
 }
 
 async function quitarCotitular(id) {
   const dip = document.getElementById('quitarCotitularDip')?.value;
+  const motivos = getMotivosSeleccionados();
+  const bypass = document.getElementById('chkBypass')?.checked || false;
   if (!dip) return mostrarToast('Introduce un DIP', 'error');
-  if (!confirm('¿Quitar a '+dip+' como cotitular?')) return;
-  mostrarToast('🚫 Cotitular eliminado (simulado)', 'success');
-  setTimeout(() => location.reload(), 600);
+  if (motivos.length === 0) return mostrarToast('Selecciona un motivo', 'error');
+  if (!confirm('🚫 ¿Desvincular a '+dip+' como cotitular?\nMotivo: '+motivos.join(', ')+(bypass?' [BY-PASS]':''))) return;
+  try {
+    await apiFetch('/banco/api/cuentas/modificar', {
+      method:'POST', body: JSON.stringify({ accountId:id, quitarCotitularDip: dip, motivos, bypass })
+    });
+    mostrarToast('🚫 Cotitular desvinculado — BLP-B-005 generado', 'success');
+    setTimeout(() => location.reload(), 600);
+  } catch { mostrarToast('⚠️ Error', 'error'); }
 }
 
-async function bloquearCuenta(id) {
-  if (!confirm('¿Bloquear/desbloquear esta cuenta?')) return;
-  mostrarToast('✅ Estado cambiado (simulado)', 'success');
-  setTimeout(() => location.reload(), 600);
+// ═════════════════════════════════════════════════════════════════════════
+// 6. BLOQUEAR / DESBLOQUEAR CUENTA (BLP-B-008 / BLP-B-009)
+// ═════════════════════════════════════════════════════════════════════════
+function bloquearCuenta(id, yaBloqueada) {
+  if (yaBloqueada) {
+    // DESBLOQUEO
+    const motivos = ['Investigación finalizada', 'No se aprecian irregularidades',
+      'Regularización tributaria completada', 'Error técnico corregido', 'Error administrativo corregido',
+      'Cumplimiento de requerimientos', 'Autorización judicial'];
+    const origenes = ['Solicitud del titular', 'Departamento de Cumplimiento', 'Tributos de La Placeta',
+      'Resolución judicial', 'Revisión automática del sistema'];
+    mostrarModal('🔓 Desbloquear Cuenta — BLP-B-009', `
+      <p style="margin-bottom:8px;font-size:13px">Desbloquear cuenta <strong>${id}</strong></p>
+      <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Origen:</p>
+      <select id="desbloqueoOrigen" class="form-input" style="margin-bottom:8px">
+        ${origenes.map(o => `<option value="${o}">${o}</option>`).join('')}
+      </select>
+      <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Motivo del desbloqueo:</p>
+      ${motivoHTML(motivos, ['Investigación finalizada'])}
+      <p style="font-size:11px;font-weight:600;color:#5c5566;margin:8px 0 4px">📊 Seguimiento posterior:</p>
+      <select id="desbloqueoSeguimiento" class="form-input" style="margin-bottom:8px">
+        <option value="Ninguna">Ninguno</option>
+        <option value="30 días">30 días</option>
+        <option value="90 días">90 días</option>
+        <option value="180 días">180 días</option>
+      </select>
+      ${bypassHTML()}
+      <button class="btn btn-success mt-8" onclick="ejecutarDesbloqueo('${id}')">🔓 Desbloquear y generar BLP-B-009</button>
+    `);
+  } else {
+    // BLOQUEO
+    const origenes = ['Sistema Antifraude', 'Departamento de Cumplimiento', 'Tributos de La Placeta',
+      'Resolución de la Junta', 'Solicitud del titular', 'Reclamación por fraude', 'Robo de credenciales'];
+    const motivos = ['Sospecha de fraude', 'Incumplimiento tributario', 'Operaciones incompatibles',
+      'Robo de identidad', 'Acceso no autorizado', 'Embargo', 'Investigación penal',
+      'Incumplimiento del Código Normativo', 'Solicitud expresa del titular'];
+    const alcances = ['Bloqueo total de la cuenta', 'Bloqueo de retiradas', 'Bloqueo de transferencias',
+      'Bloqueo de ingresos', 'Bloqueo de tarjetas', 'Bloqueo de domiciliaciones'];
+    const niveles = ['Bajo', 'Medio', 'Alto', 'Muy Alto'];
+    mostrarModal('🔒 Bloquear Cuenta — BLP-B-008', `
+      <p style="margin-bottom:8px;font-size:13px;color:#d03131">Bloquear cuenta <strong>${id}</strong></p>
+      <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Origen del procedimiento:</p>
+      <select id="bloqueoOrigen" class="form-input" style="margin-bottom:8px">
+        ${origenes.map(o => `<option value="${o}">${o}</option>`).join('')}
+      </select>
+      <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Motivo del bloqueo:</p>
+      ${motivoHTML(motivos, ['Sospecha de fraude'])}
+      <p style="font-size:11px;font-weight:600;color:#5c5566;margin:8px 0 4px">🔒 Alcance del bloqueo:</p>
+      ${motivoHTML(alcances, ['Bloqueo total de la cuenta'])}
+      <div class="grid-2" style="gap:8px;margin-top:8px">
+        <div><label>Nivel de riesgo</label>
+        <select id="bloqueoRiesgo" class="form-input">
+          ${niveles.map(n => `<option value="${n}" ${n==='Alto'?'selected':''}>${n}</option>`).join('')}
+        </select></div>
+        <div><label>Duración</label>
+        <select id="bloqueoDuracion" class="form-input">
+          <option value="Temporal">Temporal</option>
+          <option value="Indefinido">Indefinido</option>
+        </select></div>
+      </div>
+      ${bypassHTML()}
+      <button class="btn btn-danger mt-8" onclick="ejecutarBloqueo('${id}')">🔒 Bloquear y generar BLP-B-008</button>
+    `);
+  }
+}
+
+async function ejecutarBloqueo(id) {
+  const motivos = getMotivosSeleccionados();
+  const bypass = document.getElementById('chkBypass')?.checked || false;
+  if (motivos.length === 0) return mostrarToast('Selecciona al menos un motivo', 'error');
+  if (!confirm('🔒 ¿Bloquear la cuenta ' + id + '?\n\nMotivo: ' + motivos.join(', ') + '\nRiesgo: ' + (document.getElementById('bloqueoRiesgo')?.value||'Alto') + (bypass ? '\n\n⚠️ BYPASS activo' : ''))) return;
+  try {
+    await apiFetch('/banco/api/cuentas/modificar', {
+      method:'POST', body: JSON.stringify({
+        accountId:id, bloqueo: true, motivos,
+        origen: document.getElementById('bloqueoOrigen')?.value,
+        riesgo: document.getElementById('bloqueoRiesgo')?.value,
+        duracion: document.getElementById('bloqueoDuracion')?.value,
+        bypass
+      })
+    });
+    mostrarToast('🔒 Cuenta bloqueada — BLP-B-008 generado' + (bypass ? ' [BY-PASS]' : ''), 'warning');
+    setTimeout(() => location.reload(), 800);
+  } catch { mostrarToast('⚠️ Error', 'error'); }
+}
+
+async function ejecutarDesbloqueo(id) {
+  const motivos = getMotivosSeleccionados();
+  const bypass = document.getElementById('chkBypass')?.checked || false;
+  if (motivos.length === 0) return mostrarToast('Selecciona al menos un motivo', 'error');
+  if (!confirm('🔓 ¿Desbloquear la cuenta ' + id + '?\n\nMotivo: ' + motivos.join(', ') + (bypass ? '\n\n⚠️ BYPASS activo' : ''))) return;
+  try {
+    await apiFetch('/banco/api/cuentas/modificar', {
+      method:'POST', body: JSON.stringify({
+        accountId:id, desbloqueo: true, motivos,
+        origen: document.getElementById('desbloqueoOrigen')?.value,
+        seguimiento: document.getElementById('desbloqueoSeguimiento')?.value,
+        bypass
+      })
+    });
+    mostrarToast('🔓 Cuenta desbloqueada — BLP-B-009 generado' + (bypass ? ' [BY-PASS]' : ''), 'success');
+    setTimeout(() => location.reload(), 800);
+  } catch { mostrarToast('⚠️ Error', 'error'); }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 7. BAJA DEFINITIVA DE CUENTA (BLP-B-010)
+// ═════════════════════════════════════════════════════════════════════════
+function mostrarBajaCuenta(id) {
+  const origenes = ['Solicitud voluntaria del titular', 'Cierre por inactividad', 'Disolución de empresa',
+    'Incumplimiento grave normativa', 'Fraude acreditado', 'Duplicidad administrativa'];
+  const motivos = ['Cierre voluntario', 'Cuenta sin saldo', 'Cuenta sin actividad',
+    'Cambio de entidad bancaria', 'Reorganización empresarial', 'Resolución sancionadora'];
+  const destinos = ['Transferencia a otra cuenta', 'Entrega al titular', 'Distribución entre socios',
+    'Compensación tributaria'];
+  mostrarModal('🗑️ Baja Definitiva — BLP-B-010', `
+    <p style="margin-bottom:8px;font-size:13px;color:#d03131">Cancelación definitiva de la cuenta <strong>${id}</strong></p>
+    <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Origen del procedimiento:</p>
+    <select id="bajaOrigen" class="form-input" style="margin-bottom:8px">
+      ${origenes.map(o => `<option value="${o}">${o}</option>`).join('')}
+    </select>
+    <p style="font-size:11px;font-weight:600;color:#5c5566;margin-bottom:4px">📋 Motivo de la baja:</p>
+    ${motivoHTML(motivos, ['Cierre voluntario'])}
+    <p style="font-size:11px;font-weight:600;color:#5c5566;margin:8px 0 4px">💰 Destino del saldo:</p>
+    <select id="bajaDestino" class="form-input" style="margin-bottom:8px">
+      ${destinos.map(d => `<option value="${d}">${d}</option>`).join('')}
+    </select>
+    ${bypassHTML()}
+    <button class="btn btn-danger mt-8" onclick="ejecutarBaja('${id}')">🗑️ Dar de baja y generar BLP-B-010</button>
+  `);
+}
+
+async function ejecutarBaja(id) {
+  const motivos = getMotivosSeleccionados();
+  const bypass = document.getElementById('chkBypass')?.checked || false;
+  if (motivos.length === 0) return mostrarToast('Selecciona al menos un motivo', 'error');
+  if (!confirm('🗑️ ¿Cancelar DEFINITIVAMENTE la cuenta ' + id + '?\n\nEsta acción es irreversible.\nMotivo: ' + motivos.join(', ') + (bypass ? '\n\n⚠️ BYPASS activo' : ''))) return;
+  try {
+    await apiFetch('/banco/api/cuentas/modificar', {
+      method:'POST', body: JSON.stringify({
+        accountId:id, baja: true, motivos,
+        origen: document.getElementById('bajaOrigen')?.value,
+        destinoSaldo: document.getElementById('bajaDestino')?.value,
+        bypass
+      })
+    });
+    mostrarToast('🗑️ Cuenta cancelada — BLP-B-010 generado' + (bypass ? ' [BY-PASS]' : ''), 'warning');
+    setTimeout(() => location.reload(), 1000);
+  } catch { mostrarToast('⚠️ Error', 'error'); }
 }
 </script>
