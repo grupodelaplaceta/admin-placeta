@@ -1,12 +1,37 @@
 import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { apiBancoGetState, apiBancoPost } from '../config/db.js';
 import { verificarPermiso } from '../middleware/auth.js';
 
 const router = Router();
 
-// ── Almacén local de modificaciones de cuentas ──────────────────────────
-// Permite sobrescribir campos localmente cuando la API del banco no soporta cambios
-const overrideStore = new Map();
+// ── Almacén persistente de modificaciones de cuentas ────────────────────
+// Guarda en JSON para que los cambios sobrevivan reinicios del servidor
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const OVERRIDES_FILE = path.join(__dirname, '..', '..', 'data', 'cuentas-overrides.json');
+
+let overrideStore = new Map();
+
+function cargarOverrides() {
+  try {
+    fs.mkdirSync(path.dirname(OVERRIDES_FILE), { recursive: true });
+    if (fs.existsSync(OVERRIDES_FILE)) {
+      const raw = JSON.parse(fs.readFileSync(OVERRIDES_FILE, 'utf-8'));
+      overrideStore = new Map(Object.entries(raw));
+    }
+  } catch { overrideStore = new Map(); }
+}
+
+function guardarOverrides() {
+  try {
+    fs.mkdirSync(path.dirname(OVERRIDES_FILE), { recursive: true });
+    fs.writeFileSync(OVERRIDES_FILE, JSON.stringify(Object.fromEntries(overrideStore), null, 2));
+  } catch { /* silent */ }
+}
+
+cargarOverrides();
 
 function aplicarOverrides(cuentas) {
   return cuentas.map(c => {
@@ -173,13 +198,14 @@ router.post('/api/cuentas/modificar', async (req, res) => {
     if (result && !result.error) bancoOk = true;
   } catch {}
 
-  // 2) Siempre guardar localmente (override para que persista tras recarga)
+  // 2) Guardar localmente con persistencia a JSON
   const cambios = {};
   if (type) cambios.type = type;
   if (displayName !== undefined) cambios.displayName = displayName;
   if (sendLimitPz !== undefined) cambios.sendLimitPz = sendLimitPz;
   const existing = overrideStore.get(accountId) || {};
   overrideStore.set(accountId, { ...existing, ...cambios });
+  guardarOverrides(); // Persiste a disco
 
   res.json({
     success: true,
