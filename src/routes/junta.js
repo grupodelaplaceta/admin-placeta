@@ -256,6 +256,16 @@ router.post('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), (r
   };
   memVotaciones.set(id, votacion);
 
+  // Enviar a PlacetaID para notificar al grupo correspondiente
+  try {
+    const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+    const API_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
+    fetch(`${PLACETAID_API}/admin/votaciones`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY },
+      body: JSON.stringify(votacion), signal: AbortSignal.timeout(5000)
+    }).catch(() => {});
+  } catch {}
+
   // Si tiene reunionId, vincular a la reunión
   if (reunionId) {
     const r = memReuniones.get(reunionId);
@@ -292,6 +302,14 @@ router.put('/api/votaciones/:id/cerrar', verificarPermiso('junta', 'crear_votaci
   if (!v) return res.status(404).json({ error: 'No encontrada' });
   v.estado = 'Cerrada';
   v.resultado = (v.aFavor||0) > (v.enContra||0) ? 'Aprobada' : 'Rechazada';
+  // Notificar cierre a PlacetaID
+  try {
+    const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+    const API_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
+    fetch(`${PLACETAID_API}/admin/votaciones/${v.id}/cerrar`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY }
+    }).catch(() => {});
+  } catch {}
   res.json({ success: true, resultado: v.resultado });
 });
 
