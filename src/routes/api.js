@@ -19,7 +19,17 @@ router.post('/banco/action', verificarSesion, async (req, res) => {
 
 // ── API PlacetaID ─────────────────────────────────────────────────────────
 router.get('/placetaid/registros', verificarSesion, async (req, res) => {
-  const registros = await apiPlacetaidRegistros();
+  const raw = await apiPlacetaidRegistros();
+  // Normalizar campos de PLID26 (Español/MongoDB) a nombres consistentes
+  const registros = (raw || []).map(r => ({
+    dip: r.dip, nombre: r.nombre || '',
+    apellidos: r.apellidos || '', email: r.correo || r.email || '',
+    totpVerificado: r.totpVerified === true, bloqueado: r.bloqueado === true || r.banned === true,
+    activo: r.activo !== false, rol: r.rol || 'ciudadano',
+    createdAt: r.creadoEn || r.createdAt || '',
+    fechaNacimiento: r.fechaNacimiento || '', placeid: r.placeid || '',
+    intentosFallidos: r.intentosFallidos || 0
+  }));
   res.json(registros);
 });
 

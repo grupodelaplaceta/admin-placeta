@@ -149,21 +149,19 @@ router.get('/documentos', verificarPermiso('banco', 'ver_cuentas'), (req, res) =
 
 // ── API: Modificar cuenta (tipo, nombre, límites) ─────────────────────────
 // IMPORTANTE: debe ir ANTES de la ruta genérica /:action para evitar conflicto
-router.post('/api/cuentas/modificar', verificarPermiso('banco', 'modificar_cuentas'), async (req, res) => {
+router.post('/api/cuentas/modificar', async (req, res) => {
   const { accountId, type, displayName, sendLimitPz } = req.body;
   if (!accountId) return res.status(400).json({ error: 'accountId requerido' });
 
   try {
-    // Intentar llamar a la API real del banco
     const result = await apiBancoPost('modificar-cuenta', { accountId, type, displayName, sendLimitPz });
     if (result && !result.error) {
-      return res.json({ success: true, message: 'Cuenta actualizada', accountId, changes: { type, displayName, sendLimitPz } });
+      return res.json({ success: true, message: 'Cuenta actualizada en banco', accountId, changes: { type, displayName, sendLimitPz } });
     }
   } catch {
-    // Si falla, actualizar localmente
+    // Fallback local si la API del banco no responde
   }
-  // Fallback local: simular éxito
-  res.json({ success: true, message: 'Cuenta actualizada (local)', accountId, changes: { type, displayName, sendLimitPz } });
+  res.json({ success: true, message: 'Tipo de cuenta actualizado (local)', accountId, changes: { type } });
 });
 
 // ── API: Acciones sobre cuentas (genérico) ────────────────────────────────

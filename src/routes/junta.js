@@ -32,7 +32,23 @@ router.get('/ciudadanos', verificarPermiso('junta', 'gestion_ciudadanos'), async
 
 // ── Gestión de PlacetaID ───────────────────────────────────────────────────
 router.get('/placetaid', verificarPermiso('junta', 'gestion_placetaid'), async (req, res) => {
-  const registros = await apiPlacetaidRegistros();
+  const raw = await apiPlacetaidRegistros();
+  // Normalizar campos de PLID26 (Español/MongoDB) a nombres consistentes
+  const registros = (raw || []).map(r => ({
+    dip: r.dip,
+    nombre: r.nombre || r.displayName || '',
+    apellidos: r.apellidos || '',
+    email: r.correo || r.email || '',
+    totpVerificado: r.totpVerified === true,
+    bloqueado: r.bloqueado === true || r.banned === true,
+    activo: r.activo !== false,
+    rol: r.rol || 'ciudadano',
+    tipo: r.tipo || '',
+    createdAt: r.creadoEn || r.createdAt || '',
+    fechaNacimiento: r.fechaNacimiento || '',
+    placeid: r.placeid || '',
+    intentosFallidos: r.intentosFallidos || 0
+  }));
   res.render('junta/placetaid', {
     titulo: 'Gestión de PlacetaID',
     entidad_actual: 'junta',
