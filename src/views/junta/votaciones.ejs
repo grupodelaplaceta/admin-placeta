@@ -1,39 +1,92 @@
 <div class="info-card mb-16">
-  <h4>🗳️ Gestión de Votaciones</h4>
-  <p>Crea y gestiona votaciones con editor visual, grupos de usuarios y anonimización. Los resultados se registran con PlacetaID.</p>
+  <h4>🗳️ Sistema de Votaciones — Independientes y por Grupos</h4>
+  <p>Gestión completa de votaciones: crea propuestas, asigna grupos electorales (<strong>Junta, +18, 16-17, Junior, Público General</strong>), establece quórum y cierra cuando corresponda. Los resultados se registran con PlacetaID.</p>
 </div>
 
-<div class="flex gap-8 mb-16">
-  <button class="btn-primary" onclick="nuevaVotacion()">🗳️ Nueva Votación</button>
+<!-- KPIs -->
+<div class="grid-4 mb-16">
+  <div class="stat-card"><div class="stat-value"><%= votaciones?.length || 0 %></div><div class="stat-label">🗳️ Total</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (votaciones||[]).filter(v => v.estado === 'Activa').length %></div><div class="stat-label">🔓 Activas</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (votaciones||[]).filter(v => v.estado === 'Cerrada').length %></div><div class="stat-label">🔒 Cerradas</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (votaciones||[]).filter(v => v.resultado === 'Aprobada').length %></div><div class="stat-label">✅ Aprobadas</div></div>
+</div>
+
+<div class="flex gap-8 mb-16 flex-wrap items-center">
+  <button class="btn btn-primary" onclick="nuevaVotacion()">🗳️ Nueva Votación</button>
+  <select id="filtroVotEstado" class="form-input" style="width:150px" onchange="filtrarVotaciones()">
+    <option value="">📊 Todos los estados</option>
+    <option value="Activa">🔓 Activas</option>
+    <option value="Cerrada">🔒 Cerradas</option>
+    <option value="Programada">📅 Programadas</option>
+  </select>
+  <select id="filtroVotGrupo" class="form-input" style="width:160px" onchange="filtrarVotaciones()">
+    <option value="">👥 Todos los grupos</option>
+    <option value="Junta">🏛️ Junta</option>
+    <option value="+18">👤 +18</option>
+    <option value="16-17">🧑 16-17</option>
+    <option value="Junior">🧒 Junior</option>
+    <option value="Publico_General">🌍 Público</option>
+  </select>
+  <span class="text-sm" style="margin-left:auto">
+    <%= (votaciones||[]).reduce((s,v) => s + (v.aFavor||0) + (v.enContra||0) + (v.abstenciones||0), 0) %> votos emitidos
+  </span>
 </div>
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Título</th><th>Inicio</th><th>Fin</th><th>Participantes</th><th>Estado</th><th>Acciones</th></tr></thead>
-    <tbody>
-      <% 
-      const votacionesMock = [
-        { id: 'VOT-001', titulo: 'Aprobación Presupuestos 2026', inicio: '2025-04-01', fin: '2025-04-15', participantes: 45, estado: 'Activa' },
-        { id: 'VOT-002', titulo: 'Reforma Tributaria', inicio: '2025-03-01', fin: '2025-03-15', participantes: 38, estado: 'Cerrada', resultado: 'Aprobada' },
-        { id: 'VOT-003', titulo: 'Nuevo Cargo Directivo', inicio: '2025-05-01', fin: '2025-05-15', participantes: 0, estado: 'Programada' },
-      ];
-      %>
-      <% votacionesMock.forEach(v => { %>
+    <thead>
       <tr>
-        <td class="text-mono"><%= v.id %></td>
-        <td><strong><%= v.titulo %></strong></td>
-        <td><%= v.inicio %></td>
-        <td><%= v.fin %></td>
-        <td><%= v.participantes %></td>
-        <td><span class="badge <%= v.estado === 'Activa' ? 'badge-success' : v.estado === 'Cerrada' ? 'badge-info' : 'badge-warning' %>"><%= v.estado %></span></td>
+        <th style="width:36px">ID</th>
+        <th>🗳️ Propuesta</th>
+        <th style="width:90px">👥 Grupo</th>
+        <th style="width:60px">📊 Quórum</th>
+        <th style="width:80px">✅ A favor</th>
+        <th style="width:80px">❌ En contra</th>
+        <th style="width:60px">⬜ Abs.</th>
+        <th style="width:100px">📊 Estado</th>
+        <th style="width:140px">⚡ Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% const vots = votaciones || []; %>
+      <% if (vots.length === 0) { %>
+      <tr><td colspan="9" class="text-center text-muted">No hay votaciones registradas. Crea una nueva votación.</td></tr>
+      <% } %>
+      <% vots.forEach(v => { %>
+      <tr class="fila-vot" data-estado="<%= v.estado %>" data-grupo="<%= v.grupo %>">
+        <td class="text-mono" style="font-size:10px"><%= v.id?.slice(-6) %></td>
+        <td><strong style="font-size:12px"><%= v.titulo %></strong>
+          <% if (v.reunionId) { %><br><span class="text-sm" style="font-size:10px">🔗 Vinculada a reunión</span><% } %>
+        </td>
+        <td><span class="badge badge-outline" style="font-size:8px"><%= {Junta:'🏛️ Junta','+18':'👤 +18','16-17':'🧑 16-17',Junior:'🧒 Junior',Publico_General:'🌍 Público'}[v.grupo] || v.grupo || '—' %></span></td>
+        <td style="text-align:center;font-size:12px"><%= v.quorum || 50 %>%</td>
+        <td style="text-align:center">
+          <span style="color:#22a06b;font-weight:700;font-size:15px"><%= v.aFavor || 0 %></span>
+          <span class="text-sm" style="font-size:10px"><%= v.totalVotos ? ' ('+Math.round((v.aFavor||0)/v.totalVotos*100)+'%)' : '' %></span>
+        </td>
+        <td style="text-align:center">
+          <span style="color:#d03131;font-weight:700;font-size:15px"><%= v.enContra || 0 %></span>
+        </td>
+        <td style="text-align:center;font-size:12px;color:#888"><%= v.abstenciones || 0 %></td>
         <td>
-          <button class="btn-sm btn-secondary" onclick='verVotacion("<%= v.id %>")'>👁️ Ver</button>
-          <% if (v.estado === 'Activa') { %>
-          <button class="btn-sm btn-secondary" onclick='cerrarVotacion("<%= v.id %>")'>🔒 Cerrar</button>
-          <% } %>
-          <% if (v.estado === 'Cerrada' && v.resultado) { %>
-          <span class="badge badge-success"><%= v.resultado %></span>
-          <% } %>
+          <% const est = v.estado || 'Programada'; %>
+          <span class="badge badge-dot <%= est === 'Activa' ? 'active' : est === 'Cerrada' ? (v.resultado === 'Aprobada' ? 'active' : 'closed') : 'pending' %>
+            <%= est === 'Activa' ? 'badge-success' : est === 'Cerrada' && v.resultado === 'Aprobada' ? 'badge-success' : est === 'Cerrada' ? 'badge-info' : 'badge-warning' %>">
+            <%= est === 'Activa' ? '🔓 Activa' : est === 'Cerrada' ? (v.resultado === 'Aprobada' ? '✅ Aprobada' : '❌ Rechazada') : '📅 Programada' %>
+          </span>
+        </td>
+        <td>
+          <div class="flex gap-4" style="flex-wrap:nowrap">
+            <button class="btn-icon" onclick="verVotacion('<%= v.id %>')" title="Ver detalle">👁️</button>
+            <% if (est === 'Activa') { %>
+            <button class="btn-icon" onclick="editarVotos('<%= v.id %>')" title="Editar votos">✏️</button>
+            <button class="btn-icon" onclick="cerrarVotacion('<%= v.id %>')" title="🔒 Cerrar votación" style="color:#d03131">🔒</button>
+            <% } %>
+            <% if (est === 'Cerrada') { %>
+            <button class="btn-icon" onclick="verDocsDe('votacion','<%= v.id %>','junta','<%= v.titulo.slice(0,20).replace(/'/g,"\\'") %>')" title="Documentos">📎</button>
+            <button class="btn-icon" onclick="reabrirVotacion('<%= v.id %>')" title="Reabrir">🔓</button>
+            <% } %>
+          </div>
         </td>
       </tr>
       <% }) %>
@@ -42,40 +95,172 @@
 </div>
 
 <script>
+// ── Datos del servidor ──────────────────────────────────────────────────
+let votaciones = <%- JSON.stringify(votaciones || []) %>;
+
+function filtrarVotaciones() {
+  const est = document.getElementById('filtroVotEstado')?.value || '';
+  const grupo = document.getElementById('filtroVotGrupo')?.value || '';
+  document.querySelectorAll('.fila-vot').forEach(row => {
+    const e = row.dataset.estado;
+    const g = row.dataset.grupo;
+    row.style.display = (!est || e === est) && (!grupo || g === grupo) ? '' : 'none';
+  });
+}
+
+// ── Nueva votación ──────────────────────────────────────────────────────
 function nuevaVotacion() {
   mostrarModal('🗳️ Nueva Votación', `
-    <p style="margin-bottom:12px">Configura la nueva votación:</p>
-    <input type="text" id="votTitulo" class="form-input" placeholder="Título" style="width:100%;margin-bottom:8px">
-    <input type="date" id="votInicio" class="form-input" style="width:100%;margin-bottom:8px">
-    <input type="date" id="votFin" class="form-input" style="width:100%;margin-bottom:8px">
-    <textarea id="votOpciones" class="form-input" placeholder="Opciones (una por línea)" style="width:100%;margin-bottom:8px;min-height:60px"></textarea>
-    <button class="btn-primary mt-16" onclick='crearVotacion()'>💾 Crear Votación</button>
+    <p style="margin-bottom:12px;font-size:13px;color:#5c5566">Configura la propuesta y los grupos que votan:</p>
+    <label>Propuesta *</label>
+    <textarea id="votTitulo" class="form-input" placeholder="Describe la propuesta a votar..." style="min-height:60px;margin-bottom:8px"></textarea>
+    <div class="grid-2" style="gap:8px">
+      <div><label>👥 Grupo electoral</label>
+        <select id="votGrupo" class="form-input">
+          <option value="Junta">🏛️ Junta Directiva</option>
+          <option value="+18">👤 +18 (Ciudadanos plenos)</option>
+          <option value="16-17">🧑 16-17 años (Junior senior)</option>
+          <option value="Junior">🧒 Junior (menores 16)</option>
+          <option value="Publico_General">🌍 Público General</option>
+        </select>
+      </div>
+      <div><label>📊 Quórum requerido (%)</label><input type="number" id="votQuorum" class="form-input" value="50" min="1" max="100"></div>
+    </div>
+    <div class="grid-2" style="gap:8px;margin-top:8px">
+      <div><label>✅ A favor</label><input type="number" id="votFavor" class="form-input" value="0" min="0"></div>
+      <div><label>❌ En contra</label><input type="number" id="votContra" class="form-input" value="0" min="0"></div>
+    </div>
+    <div style="margin-top:8px"><label>⬜ Abstenciones</label><input type="number" id="votAbsten" class="form-input" value="0" min="0"></div>
+    <div class="flex gap-8 mt-16">
+      <button class="btn btn-primary" onclick='crearVotacion()'>🗳️ Crear votación</button>
+      <button class="btn btn-success" onclick='crearVotacionCerrada()'>🔒 Crear y cerrar</button>
+    </div>
   `);
 }
 
-function crearVotacion() {
+async function crearVotacion() {
   const t = document.getElementById('votTitulo')?.value;
-  if (!t) return mostrarToast('Introduce un título', 'error');
-  mostrarToast('✅ Votación "' + t + '" creada', 'success');
-  setTimeout(() => location.reload(), 1000);
+  if (!t) return mostrarToast('La propuesta es obligatoria', 'error');
+  try {
+    const r = await apiFetch('/junta/api/votaciones', {
+      method:'POST', body: JSON.stringify({
+        titulo: t, grupo: document.getElementById('votGrupo')?.value,
+        quorum: parseInt(document.getElementById('votQuorum')?.value) || 50,
+        aFavor: parseInt(document.getElementById('votFavor')?.value) || 0,
+        enContra: parseInt(document.getElementById('votContra')?.value) || 0,
+        abstenciones: parseInt(document.getElementById('votAbsten')?.value) || 0,
+        cerrar: false
+      })
+    });
+    if (r.success) { mostrarToast('✅ Votación creada', 'success'); setTimeout(() => location.reload(), 800); }
+    else mostrarToast(r.error||'Error', 'error');
+  } catch(e) { mostrarToast('Error de red', 'error'); }
+}
+async function crearVotacionCerrada() {
+  document.getElementById('votQuorum').value = parseInt(document.getElementById('votQuorum')?.value) || 50;
+  const t = document.getElementById('votTitulo')?.value;
+  if (!t) return mostrarToast('La propuesta es obligatoria', 'error');
+  try {
+    const r = await apiFetch('/junta/api/votaciones', {
+      method:'POST', body: JSON.stringify({
+        titulo: t, grupo: document.getElementById('votGrupo')?.value,
+        quorum: parseInt(document.getElementById('votQuorum')?.value) || 50,
+        aFavor: parseInt(document.getElementById('votFavor')?.value) || 0,
+        enContra: parseInt(document.getElementById('votContra')?.value) || 0,
+        abstenciones: parseInt(document.getElementById('votAbsten')?.value) || 0,
+        cerrar: true
+      })
+    });
+    if (r.success) { mostrarToast('✅ Votación creada y cerrada', 'success'); setTimeout(() => location.reload(), 800); }
+    else mostrarToast(r.error||'Error', 'error');
+  } catch(e) { mostrarToast('Error de red', 'error'); }
 }
 
+// ── Ver detalle ─────────────────────────────────────────────────────────
 function verVotacion(id) {
-  mostrarModal('🗳️ ' + id, `
-    <p><strong>Título:</strong> Aprobación Presupuestos 2026</p>
-    <p><strong>Periodo:</strong> 2025-04-01 → 2025-04-15</p>
-    <p><strong>Participantes:</strong> 45</p>
-    <p><strong>Estado:</strong> Activa</p>
-    <hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)">
-    <p><strong>Resultados parciales:</strong></p>
-    <p>✅ A favor: 28 (62%)</p>
-    <p>❌ En contra: 12 (27%)</p>
-    <p>⬜ Abstenciones: 5 (11%)</p>
+  const v = votaciones.find(x => x.id === id);
+  if (!v) return mostrarToast('No encontrada', 'error');
+  const total = (v.aFavor||0) + (v.enContra||0) + (v.abstenciones||0);
+  const pctFav = total > 0 ? Math.round((v.aFavor||0)/total*100) : 0;
+  const pctCon = total > 0 ? Math.round((v.enContra||0)/total*100) : 0;
+  const pctAbs = total > 0 ? Math.round((v.abstenciones||0)/total*100) : 0;
+  const resultado = v.estado === 'Cerrada' ? (v.aFavor > v.enContra ? '✅ APROBADA' : '❌ RECHAZADA') : '🔓 EN CURSO';
+  mostrarModal('🗳️ ' + v.titulo, `
+    <div class="grid-2" style="gap:8px;font-size:13px">
+      <p><strong>ID:</strong> <span class="text-mono">${v.id}</span></p>
+      <p><strong>Grupo:</strong> <span class="badge badge-outline">${v.grupo || '—'}</span></p>
+      <p><strong>Quórum:</strong> ${v.quorum||50}%</p>
+      <p><strong>Total votos:</strong> ${total}</p>
+      <p><strong>Estado:</strong> <span class="badge ${v.estado==='Cerrada'?'badge-info':'badge-success'}">${v.estado||'Programada'}</span></p>
+      <p><strong>Resultado:</strong> <span class="badge ${v.aFavor > v.enContra ? 'badge-success' : 'badge-danger'}">${resultado}</span></p>
+    </div>
+    <hr style="margin:8px 0">
+    <p style="font-weight:600;font-size:12px;margin-bottom:8px">📊 Resultados</p>
+    <div style="background:#f5f3f7;border-radius:8px;padding:12px">
+      <div style="display:flex;height:24px;border-radius:6px;overflow:hidden;margin-bottom:8px">
+        <div style="flex:${pctFav};background:#22a06b;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;min-width:${pctFav>0?'20px':'0'}">${pctFav}%</div>
+        <div style="flex:${pctCon};background:#d03131;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;min-width:${pctCon>0?'20px':'0'}">${pctCon}%</div>
+        <div style="flex:${pctAbs};background:#888;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;min-width:${pctAbs>0?'20px':'0'}">${pctAbs}%</div>
+      </div>
+      <div style="display:flex;justify-content:space-around;font-size:12px">
+        <span>✅ A favor: <strong>${v.aFavor||0}</strong> (${pctFav}%)</span>
+        <span>❌ En contra: <strong>${v.enContra||0}</strong> (${pctCon}%)</span>
+        <span>⬜ Abst.: <strong>${v.abstenciones||0}</strong> (${pctAbs}%)</span>
+      </div>
+    </div>
+    ${v.reunionId ? `<p style="margin-top:8px;font-size:11px;color:#5c5566">🔗 Vinculada a reunión: ${v.reunionId.slice(0,10)}</p>` : ''}
+    <div class="flex gap-8 mt-16">
+      ${v.estado === 'Activa' ? `<button class="btn btn-danger" onclick="cerrarVotacion('${id}')">🔒 Cerrar votación</button>` : ''}
+      <button class="btn btn-secondary" onclick="verDocsDe('votacion','${id}','junta','${v.titulo.slice(0,20).replace(/'/g,"\\'")}')">📎 Documentos</button>
+    </div>
+  `, '500px');
+}
+
+// ── Editar votos ────────────────────────────────────────────────────────
+function editarVotos(id) {
+  const v = votaciones.find(x => x.id === id);
+  if (!v) return;
+  mostrarModal('✏️ Editar votos', `
+    <p style="margin-bottom:8px;font-size:13px">Actualiza los votos de: <strong>${v.titulo}</strong></p>
+    <div class="grid-2" style="gap:8px">
+      <div><label>✅ A favor</label><input type="number" id="edFavor" class="form-input" value="${v.aFavor||0}"></div>
+      <div><label>❌ En contra</label><input type="number" id="edContra" class="form-input" value="${v.enContra||0}"></div>
+    </div>
+    <div style="margin-top:8px"><label>⬜ Abstenciones</label><input type="number" id="edAbsten" class="form-input" value="${v.abstenciones||0}"></div>
+    <button class="btn btn-primary mt-16" onclick='guardarVotos("${id}")'>💾 Actualizar</button>
   `);
 }
 
-function cerrarVotacion(id) {
-  mostrarToast('🔒 Votación ' + id + ' cerrada', 'success');
-  setTimeout(() => location.reload(), 1000);
+async function guardarVotos(id) {
+  try {
+    const r = await apiFetch('/junta/api/votaciones/'+id, {
+      method:'PUT', body: JSON.stringify({
+        aFavor: parseInt(document.getElementById('edFavor')?.value) || 0,
+        enContra: parseInt(document.getElementById('edContra')?.value) || 0,
+        abstenciones: parseInt(document.getElementById('edAbsten')?.value) || 0
+      })
+    });
+    if (r.success) { mostrarToast('✅ Votos actualizados', 'success'); setTimeout(() => location.reload(), 600); }
+  } catch(e) { mostrarToast('Error', 'error'); }
+}
+
+// ── Cerrar votación ─────────────────────────────────────────────────────
+async function cerrarVotacion(id) {
+  const v = votaciones.find(x => x.id === id);
+  if (!v) return;
+  if (!confirm('🔒 ¿Cerrar la votación "'+v.titulo+'" definitivamente?\n\nResultado: ' + ((v.aFavor||0) > (v.enContra||0) ? '✅ APROBADA' : '❌ RECHAZADA'))) return;
+  try {
+    const r = await apiFetch('/junta/api/votaciones/'+id+'/cerrar', { method:'PUT' });
+    if (r.success) { mostrarToast('🔒 Votación cerrada: ' + (r.resultado||''), 'success'); setTimeout(() => location.reload(), 800); }
+  } catch(e) { mostrarToast('Error', 'error'); }
+}
+
+// ── Reabrir votación ────────────────────────────────────────────────────
+async function reabrirVotacion(id) {
+  if (!confirm('🔓 ¿Reabrir esta votación?')) return;
+  try {
+    const r = await apiFetch('/junta/api/votaciones/'+id+'/reabrir', { method:'PUT' });
+    if (r.success) { mostrarToast('🔓 Votación reabierta', 'success'); setTimeout(() => location.reload(), 800); }
+  } catch(e) { mostrarToast('Error', 'error'); }
 }
 </script>

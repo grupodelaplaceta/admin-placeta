@@ -1,54 +1,70 @@
 <div class="info-card mb-16">
-  <h4>🤝 Gestión de Reuniones y Actas</h4>
-  <p>Convocatoria de reuniones, redacción de actas detalladas, registro de votaciones y firma digital con PlacetaID. Cada acta puede incluir asistentes, puntos tratados, votaciones por grupos y acuerdos.</p>
+  <h4>🤝 Sistema de Reuniones, Actas y Votaciones</h4>
+  <p>Gestión completa del ciclo de vida de reuniones: <strong>Planificación → Convocatoria → Celebración → Acta → Firma Digital</strong>.
+  Cada reunión puede incluir múltiples votaciones por grupos, control de asistencia y actas detalladas con firma PlacetaID.</p>
 </div>
 
-<!-- KPIs -->
-<div class="grid-3 mb-16">
-  <div class="stat-card"><div class="stat-value"><%= reuniones?.length || 0 %></div><div class="stat-label">Total Reuniones</div></div>
-  <div class="stat-card"><div class="stat-value"><%= (reuniones||[]).filter(r => r.estado === 'Planificada').length %></div><div class="stat-label">Planificadas</div></div>
-  <div class="stat-card"><div class="stat-value"><%= (reuniones||[]).filter(r => r.estado === 'Acta_Firmada').length %></div><div class="stat-label">Actas Firmadas</div></div>
+<!-- KPIs avanzados -->
+<div class="grid-4 mb-16">
+  <div class="stat-card"><div class="stat-value"><%= reuniones?.length || 0 %></div><div class="stat-label">🏛️ Total Reuniones</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (reuniones||[]).filter(r => r.estado === 'Planificada').length %></div><div class="stat-label">📅 Planificadas</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (reuniones||[]).filter(r => r.estado === 'Acta_Pendiente').length %></div><div class="stat-label">📝 Actas Pendientes</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (reuniones||[]).filter(r => r.estado === 'Acta_Firmada').length %></div><div class="stat-label">✅ Firmadas</div></div>
 </div>
 
-<div class="flex gap-8 mb-16 flex-wrap">
-  <button class="btn-primary" onclick="nuevaReunion()">🤝 Nueva Reunión</button>
-  <button class="btn-secondary" onclick="nuevaVotacionLibre()">🗳️ Votación independiente</button>
+<div class="flex gap-8 mb-16 flex-wrap items-center">
+  <button class="btn btn-primary" onclick="nuevaReunion()">🤝 Nueva Reunión</button>
+  <button class="btn btn-secondary" onclick="nuevaVotacionLibre()">🗳️ Votación independiente</button>
+  <span class="text-sm" style="margin-left:auto"><%= (reuniones||[]).reduce((s,r) => s + (r.votaciones?.length||0), 0) %> votaciones totales</span>
 </div>
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Título</th><th>Fecha</th><th>Convocante</th><th>Asistentes</th><th>Votaciones</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <thead>
+      <tr>
+        <th style="width:40px">ID</th>
+        <th>Título</th>
+        <th style="width:100px">📅 Fecha</th>
+        <th style="width:100px">👤 Convocante</th>
+        <th style="width:60px">👥 Asist.</th>
+        <th style="width:60px">🗳️ Vots.</th>
+        <th style="width:110px">📊 Estado</th>
+        <th style="width:200px">⚡ Acciones</th>
+      </tr>
+    </thead>
     <tbody>
       <% if (!reuniones || reuniones.length === 0) { %>
       <tr><td colspan="8" class="text-center text-muted">No hay reuniones registradas. Crea una nueva reunión.</td></tr>
       <% } %>
       <% (reuniones||[]).forEach(r => { %>
       <tr>
-        <td class="text-mono" style="font-size:10px"><%= r.id?.slice(0,10) %></td>
-        <td><strong><%= r.titulo %></strong></td>
-        <td><%= r.fecha ? new Date(r.fecha).toLocaleDateString('es-ES') : '—' %></td>
-        <td><%= r.convocante || '—' %></td>
-        <td><%= r.asistentes?.length || 0 %></td>
-        <td><%= r.votaciones?.length || 0 %></td>
+        <td class="text-mono" style="font-size:10px"><%= r.id?.slice(-6) %></td>
+        <td><strong><%= r.titulo %></strong><br><span class="text-sm"><%= r.tipoReunion || 'Ordinaria' %></span></td>
+        <td style="font-size:12px"><%= r.fecha ? new Date(r.fecha).toLocaleDateString('es-ES', {weekday:'short', day:'numeric', month:'short'}) : '—' %><br><span class="text-sm"><%= r.hora || '—' %></span></td>
+        <td style="font-size:12px"><%= r.convocante || '—' %></td>
+        <td style="text-align:center"><span class="badge badge-outline"><%= r.asistentes?.length || 0 %></span></td>
+        <td style="text-align:center"><span class="badge <%= (r.votaciones||[]).filter(v=>v.cerrada).length > 0 ? 'badge-success' : 'badge-outline' %>"><%= r.votaciones?.length || 0 %></span></td>
         <td>
           <% const est = r.estado || 'Planificada'; %>
-          <span class="badge <%= est === 'Acta_Firmada' ? 'badge-success' : est === 'Acta_Pendiente' ? 'badge-warning' : 'badge-info' %>">
-            <%= est === 'Acta_Firmada' ? 'Acta firmada' : est === 'Acta_Pendiente' ? 'Acta pendiente' : 'Planificada' %>
+          <span class="badge badge-dot <%= est === 'Acta_Firmada' ? 'active' : est === 'Acta_Pendiente' ? 'pending' : 'closed' %> 
+            <%= est === 'Acta_Firmada' ? 'badge-success' : est === 'Acta_Pendiente' ? 'badge-warning' : 'badge-info' %>">
+            <%= est === 'Acta_Firmada' ? '✅ Firmada' : est === 'Acta_Pendiente' ? '⏳ Pendiente' : '📅 Planificada' %>
           </span>
         </td>
         <td>
           <div class="flex gap-4" style="flex-wrap:nowrap">
-            <button class="btn-icon" onclick="verReunion('<%= r.id %>')" title="Ver">👁️</button>
+            <button class="btn-icon" onclick="verReunion('<%= r.id %>')" title="Ver detalle">👁️</button>
             <% if (r.estado === 'Planificada' || r.estado === 'Acta_Pendiente') { %>
-            <button class="btn-icon" onclick="editarReunion('<%= r.id %>')" title="Editar">✏️</button>
-            <button class="btn-icon" onclick="redactarActa('<%= r.id %>')" title="Redactar acta">📄</button>
-            <button class="btn-icon" onclick="agregarVotacion('<%= r.id %>')" title="Añadir votación">🗳️</button>
+            <button class="btn-icon" onclick="editarReunion('<%= r.id %>')" title="Editar reunión">✏️</button>
+            <button class="btn-icon" onclick="gestionarAsistentes('<%= r.id %>')" title="Asistentes">👥</button>
+            <button class="btn-icon" onclick="agregarVotacion('<%= r.id %>')" title="Nueva votación">🗳️</button>
+            <button class="btn-icon" onclick="redactarActa('<%= r.id %>')" title="Redactar/editar acta">📝</button>
             <% } %>
             <% if (r.estado === 'Acta_Pendiente') { %>
-            <button class="btn-icon" onclick="firmarActa('<%= r.id %>')" title="Firmar acta">✍️</button>
+            <button class="btn-icon btn-icon-lg" onclick="firmarActa('<%= r.id %>')" title="✍️ Firmar con PlacetaID" style="color:#3f00d8">✍️</button>
             <% } %>
             <% if (r.estado !== 'Planificada') { %>
-            <button class="btn-icon" onclick="verActaPDF('<%= r.id %>')" title="PDF acta">📄</button>
+            <button class="btn-icon" onclick="verActaPDF('<%= r.id %>')" title="Descargar acta PDF">📄</button>
             <% } %>
           </div>
         </td>
@@ -59,118 +75,211 @@
 </div>
 
 <script>
-// ── Datos desde servidor ─────────────────────────────────────────────────
-const reuniones = <%- JSON.stringify(reuniones || []) %>;
+// ── Datos del servidor ──────────────────────────────────────────────────
+let reuniones = <%- JSON.stringify(reuniones || []) %>;
 
-// ── Nueva reunión ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════
+// 1. NUEVA REUNIÓN
+// ═════════════════════════════════════════════════════════════════════════
 function nuevaReunion() {
-  mostrarModal('🤝 Nueva Reunión', `
-    <p style="margin-bottom:12px">Datos de la reunión:</p>
-    <input type="text" id="reuTitulo" class="form-input" placeholder="Título de la reunión" style="width:100%;margin-bottom:8px">
-    <div class="grid-2" style="gap:8px">
-      <input type="date" id="reuFecha" class="form-input" style="margin-bottom:8px">
-      <input type="time" id="reuHora" class="form-input" style="margin-bottom:8px">
+  mostrarModal('🤝 Nueva Reunión — Datos principales', `
+    <div style="max-height:70vh;overflow-y:auto;padding-right:4px">
+      <p style="margin-bottom:12px;font-size:13px;color:#5c5566">Completa los datos para convocar una nueva reunión:</p>
+      <label>Título de la reunión *</label>
+      <input type="text" id="reuTitulo" class="form-input" placeholder="Ej: Consejo de Gobierno Mensual" style="margin-bottom:8px">
+      <div class="grid-3" style="gap:8px">
+        <div><label>Fecha</label><input type="date" id="reuFecha" class="form-input"></div>
+        <div><label>Hora inicio</label><input type="time" id="reuHora" class="form-input" value="18:00"></div>
+        <div><label>Hora fin prevista</label><input type="time" id="reuHoraFin" class="form-input" value="20:00"></div>
+      </div>
+      <div class="grid-2" style="gap:8px;margin-top:8px">
+        <div><label>Lugar</label><input type="text" id="reuLugar" class="form-input" placeholder="Ej: Sala de Juntas Virtual"></div>
+        <div><label>Tipo de reunión</label>
+          <select id="reuTipo" class="form-input">
+            <option value="Ordinaria">📋 Ordinaria</option>
+            <option value="Extraordinaria">🔴 Extraordinaria</option>
+            <option value="Comité">🏛️ Comité</option>
+            <option value="Comisión">📊 Comisión</option>
+            <option value="Plenario">🗳️ Plenario</option>
+          </select>
+        </div>
+      </div>
+      <label style="margin-top:12px">Orden del día (uno por línea)</label>
+      <textarea id="reuOrden" class="form-input" placeholder="1. Aprobación del acta anterior&#10;2. Revisión de presupuestos&#10;3. Ruegos y preguntas" style="min-height:100px;margin-bottom:8px"></textarea>
+      <label>Asistentes previstos (DIP o nombre, uno por línea)</label>
+      <textarea id="reuAsistentes" class="form-input" placeholder="DIP-001&#10;DIP-002&#10;DIP-003" style="min-height:60px;margin-bottom:12px"></textarea>
+      <button class="btn btn-primary" onclick='crearReunion()'>💾 Crear y Convocar</button>
     </div>
-    <input type="text" id="reuLugar" class="form-input" placeholder="Lugar" style="width:100%;margin-bottom:8px">
-    <select id="reuTipo" class="form-input" style="width:100%;margin-bottom:8px">
-      <option value="Ordinaria">Ordinaria</option>
-      <option value="Extraordinaria">Extraordinaria</option>
-      <option value="Comité">Comité</option>
-      <option value="Comisión">Comisión</option>
-    </select>
-    <textarea id="reuOrden" class="form-input" placeholder="Orden del día (uno por línea)" style="width:100%;margin-bottom:8px;min-height:80px"></textarea>
-    <button class="btn-primary mt-16" onclick='crearReunion()'>💾 Crear Reunión</button>
-  `);
+  `, '600px');
 }
 
 async function crearReunion() {
   const t = document.getElementById('reuTitulo')?.value;
-  if (!t) return mostrarToast('Introduce un título', 'error');
+  if (!t) return mostrarToast('El título es obligatorio', 'error');
   const orden = (document.getElementById('reuOrden')?.value||'').split('\n').filter(Boolean);
+  const asistentes = (document.getElementById('reuAsistentes')?.value||'').split('\n').filter(Boolean).map(a => ({ nombre: a, presente: false }));
   try {
     const r = await apiFetch('/junta/api/reuniones', {
       method:'POST', body: JSON.stringify({
         titulo: t, fecha: document.getElementById('reuFecha')?.value,
-        hora: document.getElementById('reuHora')?.value, lugar: document.getElementById('reuLugar')?.value,
-        tipoReunion: document.getElementById('reuTipo')?.value,
-        ordenDelDia: orden
+        hora: document.getElementById('reuHora')?.value, horaFin: document.getElementById('reuHoraFin')?.value,
+        lugar: document.getElementById('reuLugar')?.value, tipoReunion: document.getElementById('reuTipo')?.value,
+        ordenDelDia: orden, asistentes
       })
     });
-    if (r.success) { mostrarToast('✅ Reunión creada', 'success'); setTimeout(() => location.reload(), 800); }
+    if (r.success) { mostrarToast('✅ Reunión "'+t+'" creada y convocada', 'success'); setTimeout(() => location.reload(), 800); }
     else mostrarToast(r.error||'Error', 'error');
   } catch(e) { mostrarToast('Error de red', 'error'); }
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// 2. VER REUNIÓN (DETALLE COMPLETO)
+// ═════════════════════════════════════════════════════════════════════════
 function verReunion(id) {
   const r = reuniones.find(x => x.id === id);
   if (!r) return mostrarToast('No encontrada', 'error');
-  const od = r.ordenDelDia?.map((o,i) => `${i+1}. ${typeof o === 'string' ? o : (o.titulo||o)}`).join('<br>') || '—';
-  const asis = r.asistentes?.filter(a => a.presente !== false)?.map(a => a.nombre||a).join(', ') || '—';
-  const vots = r.votaciones?.map((v,vi) => `
-    <p><strong>Votación ${vi+1}:</strong> ${v.titulo} — ${v.cerrada ? '🔒 Cerrada' : '🔓 Activa'}</p>
-    <p style="font-size:12px;color:#5c5566">${v.grupo||'Todos'} | A favor: ${v.aFavor||0} | En contra: ${v.enContra||0} | Abstención: ${v.abstenciones||0}</p>
-  `).join('') || '—';
-  mostrarModal('🤝 ' + id.slice(0,10), `
+  const od = r.ordenDelDia?.map((o,i) => `<li style="padding:2px 0">${typeof o === 'string' ? o : (o.titulo||o)}</li>`).join('') || '<li style="color:#999">—</li>';
+  const asisList = r.asistentes?.map(a => `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px">
+      <span style="width:20px;text-align:center">${a.presente !== false ? '✅' : '⬜'}</span>
+      <span>${a.nombre||a}${a.cargo ? ' <span class="badge badge-info" style="font-size:8px">'+a.cargo+'</span>' : ''}</span>
+    </div>
+  `).join('') || '<p style="color:#999;font-size:12px">Sin asistentes registrados</p>';
+  const votsHtml = r.votaciones?.map((v,vi) => {
+    const res = v.cerrada ? (v.aFavor > v.enContra ? '✅ APROBADA' : '❌ RECHAZADA') : '🔓 EN CURSO';
+    return `<div style="border:1px solid #e0daf0;border-radius:8px;padding:8px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <strong style="font-size:12px">${vi+1}. ${v.titulo}</strong>
+        <span class="badge ${v.cerrada ? 'badge-success' : 'badge-warning'}">${res}</span>
+      </div>
+      <div style="font-size:11px;color:#5c5566;margin-top:4px">
+        <span class="badge badge-outline">${v.grupo || 'Todos'}</span>
+        Quórum: ${v.quorum||50}% | 
+        ✅ ${v.aFavor||0} | ❌ ${v.enContra||0} | ⬜ ${v.abstenciones||0}
+      </div>
+    </div>`;
+  }).join('') || '<p style="color:#999;font-size:12px">Sin votaciones</p>';
+  mostrarModal('🤝 ' + r.titulo + ' <span class="badge badge-info" style="font-size:9px">'+r.id.slice(-6)+'</span>', `
     <div class="grid-2" style="gap:8px;font-size:13px">
-      <p><strong>Título:</strong> ${r.titulo}</p>
-      <p><strong>Fecha:</strong> ${r.fecha || '—'}</p>
-      <p><strong>Lugar:</strong> ${r.lugar || '—'}</p>
-      <p><strong>Convocante:</strong> ${r.convocante || '—'}</p>
-      <p><strong>Tipo:</strong> ${r.tipoReunion || 'Ordinaria'}</p>
-      <p><strong>Asistentes:</strong> ${r.asistentes?.length || 0}</p>
+      <p><strong>📅 Fecha:</strong> ${r.fecha ? new Date(r.fecha).toLocaleDateString('es-ES', {weekday:'long', day:'numeric', month:'long', year:'numeric'}) : '—'}</p>
+      <p><strong>⏰ Horario:</strong> ${r.hora||'—'} - ${r.horaFin||'—'}</p>
+      <p><strong>📍 Lugar:</strong> ${r.lugar || '—'}</p>
+      <p><strong>👤 Convocante:</strong> ${r.convocante || '—'}</p>
+      <p><strong>🏛️ Tipo:</strong> ${r.tipoReunion || 'Ordinaria'}</p>
+      <p><strong>📊 Estado:</strong> <span class="badge ${r.estado==='Acta_Firmada'?'badge-success':r.estado==='Acta_Pendiente'?'badge-warning':'badge-info'}">${r.estado||'Planificada'}</span></p>
     </div>
     <hr style="margin:8px 0">
-    <p><strong>Orden del día:</strong></p>
-    <p style="font-size:12px">${od}</p>
+    <p style="font-weight:600;font-size:12px">📋 Orden del día</p>
+    <ol style="font-size:12px;padding-left:20px">${od}</ol>
     <hr style="margin:8px 0">
-    <p><strong>Votaciones:</strong></p>
-    ${vots}
+    <p style="font-weight:600;font-size:12px">👥 Asistentes (${r.asistentes?.length||0})</p>
+    ${asisList}
     <hr style="margin:8px 0">
-    <p><strong>Asistentes:</strong> ${asis}</p>
-    ${r.estado !== 'Planificada' ? `<button class="btn-secondary mt-16" onclick="window.open('/junta/api/reuniones/${id}/pdf','_blank')">📄 Ver PDF</button>` : ''}
+    <p style="font-weight:600;font-size:12px">🗳️ Votaciones (${r.votaciones?.length||0})</p>
+    ${votsHtml}
+    ${r.estado !== 'Planificada' ? `<div style="margin-top:12px"><button class="btn btn-secondary" onclick="window.open('/junta/api/reuniones/${id}/pdf','_blank')">📄 Ver Acta PDF</button></div>` : ''}
+  `, '550px');
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 3. GESTIONAR ASISTENTES
+// ═════════════════════════════════════════════════════════════════════════
+function gestionarAsistentes(id) {
+  const r = reuniones.find(x => x.id === id);
+  if (!r) return;
+  const asisHtml = (r.asistentes||[]).map((a,i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ecf8">
+      <input type="checkbox" id="asis_${i}" ${a.presente !== false ? 'checked' : ''} onchange="toggleAsistente(${i})" style="width:16px;height:16px">
+      <span style="flex:1;font-size:13px">${a.nombre||a}${a.cargo ? ' <span class="badge badge-info" style="font-size:8px">'+a.cargo+'</span>' : ''}</span>
+      <button class="btn-icon btn-icon-sm" onclick="quitarAsistente(${i})" title="Quitar">✕</button>
+    </div>
+  `).join('') || '<p style="color:#999;font-size:12px">Sin asistentes. Añade a continuación:</p>';
+  mostrarModal('👥 Asistentes — ' + r.titulo.slice(0,30), `
+    <p style="margin-bottom:8px;font-size:12px;color:#5c5566">Marca quienes asistieron realmente:</p>
+    <div id="listaAsistentes">${asisHtml}</div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <input type="text" id="nuevoAsistente" class="form-input" placeholder="Nombre o DIP" style="flex:1">
+      <button class="btn btn-sm btn-secondary" onclick="anadirAsistente()">➕ Añadir</button>
+    </div>
+    <button class="btn btn-primary mt-16" onclick='guardarAsistentes("${id}")'>💾 Guardar asistencias</button>
   `);
 }
 
-// ── Redactar acta ─────────────────────────────────────────────────────────
+function toggleAsistente(i) { /* handled by checkbox state */ }
+function quitarAsistente(i) {
+  const div = document.querySelectorAll('#listaAsistentes > div')[i];
+  if (div) div.style.display = 'none';
+}
+function anadirAsistente() {
+  const nombre = document.getElementById('nuevoAsistente')?.value;
+  if (!nombre) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ecf8';
+  div.innerHTML = '<input type="checkbox" checked style="width:16px;height:16px"><span style="flex:1;font-size:13px">'+nombre+'</span><button class="btn-icon btn-icon-sm" onclick="this.parentElement.remove()">✕</button>';
+  document.getElementById('listaAsistentes').appendChild(div);
+  document.getElementById('nuevoAsistente').value = '';
+}
+async function guardarAsistentes(id) {
+  const asistentes = [];
+  document.querySelectorAll('#listaAsistentes > div').forEach(div => {
+    if (div.style.display === 'none') return;
+    const nombre = div.querySelector('span')?.textContent || '';
+    const presente = div.querySelector('input[type=checkbox]')?.checked || false;
+    if (nombre) asistentes.push({ nombre, presente });
+  });
+  try {
+    const res = await apiFetch('/junta/api/reuniones/'+id, { method:'PUT', body: JSON.stringify({ asistentes }) });
+    if (res.success) { mostrarToast('✅ Asistencias guardadas', 'success'); setTimeout(() => location.reload(), 600); }
+  } catch(e) { mostrarToast('Error', 'error'); }
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 4. REDACTAR ACTA
+// ═════════════════════════════════════════════════════════════════════════
 function redactarActa(id) {
   const r = reuniones.find(x => x.id === id);
-  const ordenHtml = r?.ordenDelDia?.map((o,i) => `
-    <div style="border:1px solid #e0daf0;border-radius:8px;padding:8px;margin-bottom:8px">
-      <p style="font-weight:600;margin-bottom:4px">Punto ${i+1}: ${typeof o === 'string' ? o : o.titulo}</p>
-      <textarea id="ptoDesc_${i}" class="form-input" placeholder="Desarrollo del punto..." style="width:100%;min-height:50px;margin-bottom:4px"></textarea>
-      <input type="text" id="ptoAcuerdo_${i}" class="form-input" placeholder="Acuerdo adoptado (opcional)" style="width:100%">
+  if (!r) return;
+  const ordenHtml = (r.ordenDelDia||[]).map((o,i) => {
+    const titulo = typeof o === 'string' ? o : (o.titulo||o);
+    return `<div style="border:1px solid #e0daf0;border-radius:8px;padding:10px;margin-bottom:8px;background:#faf8ff">
+      <p style="font-weight:600;font-size:12px;margin-bottom:6px">📌 Punto ${i+1}: ${titulo}</p>
+      <textarea id="ptoDesc_${i}" class="form-input" placeholder="Desarrollo del punto..." style="min-height:60px;margin-bottom:4px">${(r.acta?.puntosTratados?.[i]?.descripcion||'')}</textarea>
+      <input type="text" id="ptoAcuerdo_${i}" class="form-input" placeholder="Acuerdo adoptado" value="${(r.acta?.puntosTratados?.[i]?.acuerdo||'')}">
+    </div>`;
+  }).join('') || '<p style="color:#999">Sin orden del día configurado</p>';
+  mostrarModal('📝 Redactar Acta — ' + r.titulo.slice(0,30), `
+    <div style="max-height:65vh;overflow-y:auto;padding-right:4px">
+      <div class="grid-2" style="gap:8px;margin-bottom:8px">
+        <div><label>Hora inicio real</label><input type="time" id="actaHoraInicio" class="form-input" value="${r.acta?.horaInicio||r.hora||''}"></div>
+        <div><label>Hora fin real</label><input type="time" id="actaHoraFin" class="form-input" value="${r.acta?.horaFin||r.horaFin||''}"></div>
+      </div>
+      <label>📝 Desarrollo de la sesión</label>
+      <textarea id="actaDesarrollo" class="form-input" placeholder="Describe el desarrollo general de la sesión..." style="min-height:80px;margin-bottom:8px">${r.acta?.desarrollo||''}</textarea>
+      <label>📋 Puntos tratados</label>
+      ${ordenHtml}
+      <label>📌 Próximos pasos</label>
+      <textarea id="actaProximos" class="form-input" placeholder="Próximos pasos acordados..." style="min-height:50px;margin-bottom:8px">${r.acta?.proximosPasos||''}</textarea>
+      <label>🗳️ Votaciones de esta reunión</label>
+      <div id="actaVotaciones">
+        ${(r.votaciones||[]).map((v,i) => `
+          <div style="border:1px solid #e0daf0;border-radius:8px;padding:8px;margin-bottom:6px;font-size:12px;background:#f8f6ff">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <strong>${v.titulo}</strong>
+              <span class="badge ${v.cerrada?'badge-success':'badge-warning'}">${v.cerrada?'🔒 Cerrada':'🔓 Activa'}</span>
+            </div>
+            <p style="margin-top:4px">${v.grupo||'Todos'} | ✅ ${v.aFavor||0} | ❌ ${v.enContra||0} | ⬜ ${v.abstenciones||0}</p>
+          </div>
+        `).join('') || '<p style="font-size:12px;color:#5c5566">No hay votaciones. Añádelas desde la reunión.</p>'}
+      </div>
+      <button class="btn btn-primary mt-16" onclick='guardarActa("${id}")'>💾 Guardar Acta (como pendiente)</button>
     </div>
-  `).join('') || '<p>Sin orden del día</p>';
-
-  mostrarModal('📄 Redactar Acta', `
-    <p style="margin-bottom:8px;font-weight:600">${r?.titulo || id.slice(0,10)}</p>
-    <div class="grid-2" style="gap:8px;margin-bottom:8px">
-      <input type="time" id="actaHoraInicio" class="form-input" placeholder="Hora inicio">
-      <input type="time" id="actaHoraFin" class="form-input" placeholder="Hora fin">
-    </div>
-    <p style="font-size:12px;font-weight:600;margin:8px 0 4px">Desarrollo de la sesión:</p>
-    <textarea id="actaDesarrollo" class="form-input" placeholder="Describe el desarrollo general de la sesión..." style="width:100%;min-height:80px;margin-bottom:8px"></textarea>
-    <p style="font-size:12px;font-weight:600;margin:8px 0 4px">Puntos tratados:</p>
-    ${ordenHtml}
-    <p style="font-size:12px;font-weight:600;margin:8px 0 4px">Próximos pasos:</p>
-    <textarea id="actaProximos" class="form-input" placeholder="Próximos pasos acordados..." style="width:100%;min-height:50px;margin-bottom:8px"></textarea>
-    <p style="font-size:12px;font-weight:600;margin:8px 0 4px">Votaciones de esta reunión:</p>
-    <div id="actaVotaciones">
-      ${(r?.votaciones||[]).map((v,i) => `
-        <div style="border:1px solid #e0daf0;border-radius:8px;padding:8px;margin-bottom:6px;font-size:12px">
-          <p><strong>${v.titulo}</strong> (${v.grupo||'Todos'})</p>
-          <p>✅ ${v.aFavor||0} | ❌ ${v.enContra||0} | ⬜ ${v.abstenciones||0} | <strong>${v.cerrada?'🔒 Cerrada':'🔓 Activa'}</strong></p>
-        </div>
-      `).join('') || '<p style="font-size:12px;color:#5c5566">No hay votaciones asociadas. Añádelas desde la reunión.</p>'}
-    </div>
-    <button class="btn-primary mt-16" onclick='guardarActa("${id}")'>💾 Guardar Acta</button>
-  `);
+  `, '580px');
 }
 
 async function guardarActa(id) {
   const r = reuniones.find(x => x.id === id);
   const puntos = [];
-  r?.ordenDelDia?.forEach((o,i) => {
+  (r?.ordenDelDia||[]).forEach((o,i) => {
     const d = document.getElementById('ptoDesc_'+i)?.value;
     const a = document.getElementById('ptoAcuerdo_'+i)?.value;
     if (d || a) puntos.push({ titulo: typeof o === 'string' ? o : o.titulo, descripcion: d, acuerdo: a });
@@ -185,101 +294,149 @@ async function guardarActa(id) {
         proximosPasos: document.getElementById('actaProximos')?.value
       })
     });
-    if (res.success) { mostrarToast('✅ Acta guardada', 'success'); setTimeout(() => location.reload(), 800); }
+    if (res.success) { mostrarToast('✅ Acta guardada como pendiente de firma', 'success'); setTimeout(() => location.reload(), 800); }
     else mostrarToast(res.error||'Error', 'error');
   } catch(e) { mostrarToast('Error de red', 'error'); }
 }
 
-// ── Firmar acta ──────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════
+// 5. FIRMAR ACTA
+// ═════════════════════════════════════════════════════════════════════════
 async function firmarActa(id) {
-  if (!confirm('✍️ ¿Firmar el acta digitalmente con PlacetaID? Esta acción no se puede deshacer.')) return;
+  if (!confirm('✍️ ¿Firmar el acta digitalmente con PlacetaID?\n\nEsta acción es irreversible. El acta quedará sellada y se generará el hash de integridad.')) return;
   try {
     const res = await apiFetch('/junta/api/reuniones/'+id+'/firmar', { method:'PUT' });
-    if (res.success) { mostrarToast('✅ Acta firmada con PlacetaID', 'success'); setTimeout(() => location.reload(), 800); }
+    if (res.success) { mostrarToast('✅ Acta firmada digitalmente con PlacetaID. Hash: ' + (res.hash||'').slice(0,12)+'...', 'success'); setTimeout(() => location.reload(), 1000); }
     else mostrarToast(res.error||'Error', 'error');
   } catch(e) { mostrarToast('Error de red', 'error'); }
 }
 
-function verActaPDF(id) {
-  window.open('/junta/api/reuniones/'+id+'/pdf', '_blank');
-}
+function verActaPDF(id) { window.open('/junta/api/reuniones/'+id+'/pdf', '_blank'); }
 
-// ── Votaciones ───────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════
+// 6. VOTACIONES EN REUNIÓN
+// ═════════════════════════════════════════════════════════════════════════
 function agregarVotacion(reunionId) {
-  mostrarModal('🗳️ Nueva Votación en Reunión', `
-    <p style="margin-bottom:12px">Configura la votación:</p>
-    <input type="text" id="votTitulo" class="form-input" placeholder="Título/Propuesta a votar" style="width:100%;margin-bottom:8px">
-    <select id="votGrupo" class="form-input" style="width:100%;margin-bottom:8px">
-      <option value="Junta">🏛️ Junta Directiva</option>
-      <option value="+18">👤 +18 (Ciudadanos plenos)</option>
-      <option value="16-17">🧑 16-17 años (Junior senior)</option>
-      <option value="Junior">🧒 Junior (menores 16)</option>
-      <option value="Publico_General">🌍 Público General</option>
-    </select>
-    <input type="number" id="votQuorum" class="form-input" placeholder="Quórum requerido (%)" value="50" style="width:100%;margin-bottom:8px">
-    <button class="btn-primary mt-16" onclick='crearVotacionEnReunion("${reunionId}")'>🗳️ Crear Votación</button>
+  mostrarModal('🗳️ Nueva Votación', `
+    <p style="margin-bottom:12px;font-size:13px;color:#5c5566">Configura una nueva votación para esta reunión:</p>
+    <label>Propuesta a votar *</label>
+    <textarea id="votTitulo" class="form-input" placeholder="Describe la propuesta..." style="min-height:60px;margin-bottom:8px"></textarea>
+    <div class="grid-2" style="gap:8px">
+      <div><label>Grupo convocado</label>
+        <select id="votGrupo" class="form-input">
+          <option value="Junta">🏛️ Junta Directiva</option>
+          <option value="+18">👤 +18 (Ciudadanos plenos)</option>
+          <option value="16-17">🧑 16-17 años (Junior senior)</option>
+          <option value="Junior">🧒 Junior (menores 16)</option>
+          <option value="Publico_General">🌍 Público General</option>
+        </select>
+      </div>
+      <div><label>Quórum requerido (%)</label>
+        <input type="number" id="votQuorum" class="form-input" value="50" min="1" max="100">
+      </div>
+    </div>
+    <div class="grid-2" style="gap:8px;margin-top:8px">
+      <div><label>Votos a favor</label><input type="number" id="votFavor" class="form-input" value="0" min="0"></div>
+      <div><label>Votos en contra</label><input type="number" id="votContra" class="form-input" value="0" min="0"></div>
+    </div>
+    <div style="margin-top:8px"><label>Abstenciones</label><input type="number" id="votAbsten" class="form-input" value="0" min="0"></div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn btn-primary" onclick='crearVotacionEnReunion("${reunionId}")'>🗳️ Crear Votación</button>
+      <button class="btn btn-success" onclick='crearVotacionYCerrar("${reunionId}")'>🔒 Crear y cerrar</button>
+    </div>
   `);
 }
 
-async function crearVotacionEnReunion(reunionId) {
+async function crearVotacionEnReunion(reunionId, cerrarTambien) {
   const t = document.getElementById('votTitulo')?.value;
-  if (!t) return mostrarToast('Introduce un título', 'error');
+  if (!t) return mostrarToast('Introduce una propuesta', 'error');
   try {
     const res = await apiFetch('/junta/api/votaciones', {
       method:'POST', body: JSON.stringify({
         reunionId, titulo: t, grupo: document.getElementById('votGrupo')?.value,
-        quorum: parseInt(document.getElementById('votQuorum')?.value) || 50
+        quorum: parseInt(document.getElementById('votQuorum')?.value) || 50,
+        aFavor: parseInt(document.getElementById('votFavor')?.value) || 0,
+        enContra: parseInt(document.getElementById('votContra')?.value) || 0,
+        abstenciones: parseInt(document.getElementById('votAbsten')?.value) || 0,
+        cerrar: cerrarTambien || false
       })
     });
-    if (res.success) { mostrarToast('✅ Votación creada', 'success'); setTimeout(() => location.reload(), 800); }
-    else mostrarToast(res.error||'Error', 'error');
+    if (res.success) { 
+      mostrarToast('✅ Votación creada' + (cerrarTambien ? ' y cerrada' : ''), 'success'); 
+      setTimeout(() => location.reload(), 800); 
+    } else mostrarToast(res.error||'Error', 'error');
   } catch(e) { mostrarToast('Error de red', 'error'); }
 }
+function crearVotacionYCerrar(reunionId) { crearVotacionEnReunion(reunionId, true); }
 
+// ═════════════════════════════════════════════════════════════════════════
+// 7. VOTACIÓN INDEPENDIENTE
+// ═════════════════════════════════════════════════════════════════════════
 function nuevaVotacionLibre() {
-  mostrarModal('🗳️ Votación Independiente', `
-    <p style="margin-bottom:12px">Votación no vinculada a una reunión:</p>
-    <input type="text" id="votTituloLibre" class="form-input" placeholder="Título/Propuesta" style="width:100%;margin-bottom:8px">
-    <select id="votGrupoLibre" class="form-input" style="width:100%;margin-bottom:8px">
-      <option value="Junta">🏛️ Junta Directiva</option>
-      <option value="+18">👤 +18 (Ciudadanos plenos)</option>
-      <option value="16-17">🧑 16-17 años (Junior senior)</option>
-      <option value="Junior">🧒 Junior (menores 16)</option>
-      <option value="Publico_General">🌍 Público General</option>
-    </select>
-    <input type="number" id="votQuorumLibre" class="form-input" placeholder="Quórum (%)" value="50" style="width:100%;margin-bottom:12px">
-    <button class="btn-primary" onclick='crearVotacionLibre()'>🗳️ Crear Votación</button>
+  mostrarModal('🗳️ Votación Independiente (sin reunión)', `
+    <p style="margin-bottom:12px;font-size:13px;color:#5c5566">Crea una votación no vinculada a ninguna reunión:</p>
+    <label>Propuesta *</label>
+    <textarea id="votTituloLibre" class="form-input" placeholder="Describe la propuesta a votar..." style="min-height:60px;margin-bottom:8px"></textarea>
+    <div class="grid-2" style="gap:8px">
+      <div><label>Grupo</label>
+        <select id="votGrupoLibre" class="form-input">
+          <option value="Junta">🏛️ Junta Directiva</option>
+          <option value="+18">👤 +18 (Ciudadanos plenos)</option>
+          <option value="16-17">🧑 16-17 años</option>
+          <option value="Junior">🧒 Junior</option>
+          <option value="Publico_General">🌍 Público General</option>
+        </select>
+      </div>
+      <div><label>Quórum (%)</label><input type="number" id="votQuorumLibre" class="form-input" value="50"></div>
+    </div>
+    <div class="grid-2" style="gap:8px;margin-top:8px">
+      <div><label>A favor</label><input type="number" id="votFLibre" class="form-input" value="0"></div>
+      <div><label>En contra</label><input type="number" id="votCLibre" class="form-input" value="0"></div>
+    </div>
+    <div style="margin-top:8px"><label>Abstenciones</label><input type="number" id="votALibre" class="form-input" value="0"></div>
+    <div class="flex gap-8 mt-16">
+      <button class="btn btn-primary" onclick='crearVotacionLibre(false)'>🗳️ Crear abierta</button>
+      <button class="btn btn-success" onclick='crearVotacionLibre(true)'>🔒 Crear y cerrar</button>
+    </div>
   `);
 }
 
-async function crearVotacionLibre() {
+async function crearVotacionLibre(cerrar) {
   const t = document.getElementById('votTituloLibre')?.value;
-  if (!t) return mostrarToast('Introduce un título', 'error');
+  if (!t) return mostrarToast('Introduce una propuesta', 'error');
   try {
     const res = await apiFetch('/junta/api/votaciones', {
       method:'POST', body: JSON.stringify({
         titulo: t, grupo: document.getElementById('votGrupoLibre')?.value,
-        quorum: parseInt(document.getElementById('votQuorumLibre')?.value) || 50
+        quorum: parseInt(document.getElementById('votQuorumLibre')?.value) || 50,
+        aFavor: parseInt(document.getElementById('votFLibre')?.value) || 0,
+        enContra: parseInt(document.getElementById('votCLibre')?.value) || 0,
+        abstenciones: parseInt(document.getElementById('votALibre')?.value) || 0,
+        cerrar
       })
     });
-    if (res.success) { mostrarToast('✅ Votación creada', 'success'); setTimeout(() => location.reload(), 800); }
+    if (res.success) { mostrarToast('✅ Votación ' + (cerrar ? 'cerrada' : 'creada'), 'success'); setTimeout(() => location.reload(), 800); }
     else mostrarToast(res.error||'Error', 'error');
   } catch(e) { mostrarToast('Error de red', 'error'); }
 }
 
+// ═════════════════════════════════════════════════════════════════════════
+// 8. EDITAR REUNIÓN
+// ═════════════════════════════════════════════════════════════════════════
 function editarReunion(id) {
   const r = reuniones.find(x => x.id === id);
   if (!r) return mostrarToast('No encontrada', 'error');
-  const od = (r.ordenDelDia||[]).join('\n');
+  const od = (r.ordenDelDia||[]).map(o => typeof o === 'string' ? o : (o.titulo||'')).join('\n');
   mostrarModal('✏️ Editar Reunión', `
-    <input type="text" id="reuTituloEdit" class="form-input" value="${r.titulo}" style="width:100%;margin-bottom:8px">
-    <div class="grid-2" style="gap:8px">
-      <input type="date" id="reuFechaEdit" class="form-input" value="${r.fecha?.slice(0,10)||''}" style="margin-bottom:8px">
-      <input type="time" id="reuHoraEdit" class="form-input" value="${r.hora||''}" style="margin-bottom:8px">
+    <input type="text" id="reuTituloEdit" class="form-input" value="${r.titulo}" style="margin-bottom:8px">
+    <div class="grid-3" style="gap:8px">
+      <input type="date" id="reuFechaEdit" class="form-input" value="${(r.fecha||'').slice(0,10)}">
+      <input type="time" id="reuHoraEdit" class="form-input" value="${r.hora||''}">
+      <input type="time" id="reuHoraFinEdit" class="form-input" value="${r.horaFin||''}">
     </div>
-    <input type="text" id="reuLugarEdit" class="form-input" value="${r.lugar||''}" placeholder="Lugar" style="width:100%;margin-bottom:8px">
-    <textarea id="reuOrdenEdit" class="form-input" placeholder="Orden del día" style="width:100%;min-height:80px;margin-bottom:8px">${od}</textarea>
-    <button class="btn-primary mt-16" onclick='guardarEditReunion("${id}")'>💾 Guardar</button>
+    <input type="text" id="reuLugarEdit" class="form-input" value="${r.lugar||''}" placeholder="Lugar" style="margin-top:8px;margin-bottom:8px">
+    <textarea id="reuOrdenEdit" class="form-input" placeholder="Orden del día" style="min-height:80px;margin-bottom:12px">${od}</textarea>
+    <button class="btn btn-primary" onclick='guardarEditReunion("${id}")'>💾 Guardar cambios</button>
   `);
 }
 
@@ -290,7 +447,7 @@ async function guardarEditReunion(id) {
     const res = await apiFetch('/junta/api/reuniones/'+id, {
       method:'PUT', body: JSON.stringify({
         titulo: t, fecha: document.getElementById('reuFechaEdit')?.value,
-        hora: document.getElementById('reuHoraEdit')?.value,
+        hora: document.getElementById('reuHoraEdit')?.value, horaFin: document.getElementById('reuHoraFinEdit')?.value,
         lugar: document.getElementById('reuLugarEdit')?.value,
         ordenDelDia: (document.getElementById('reuOrdenEdit')?.value||'').split('\n').filter(Boolean)
       })
