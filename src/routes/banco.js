@@ -1,31 +1,25 @@
 import { Router } from 'express';
-import { apiBancoGetState, apiBancoPost, sbGetOverrides, sbSetOverride } from '../config/db.js';
+import { apiBancoGetState, apiBancoPost } from '../config/db.js';
 import { verificarPermiso } from '../middleware/auth.js';
 
 const router = Router();
 
-// ── Caché de overrides (se carga desde Supabase al arrancar) ────────────
-let overrideCache = {};
-
-async function asegurarCache() {
-  if (Object.keys(overrideCache).length === 0) {
-    overrideCache = await sbGetOverrides() || {};
+// ── Ayudante: llamar a acciones de la API real del banco ───────────────
+async function bancoAction(action, data = {}) {
+  try {
+    const result = await apiBancoPost(action, data);
+    return result || { success: false, error: 'La API del banco no respondió' };
+  } catch {
+    return { success: false, error: 'Error de conexión con el banco' };
   }
 }
-
-function aplicarOverrides(cuentas) {
-  return cuentas.map(c => {
-    const ov = overrideCache[c.id];
-    if (!ov) return c;
-    return { ...c, ...ov };
   });
 }
 
 // ── Dashboard Banco ────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
-  await asegurarCache();
   const state = await apiBancoGetState();
-  const cuentas = aplicarOverrides(state?.accounts || []);
+  const cuentas = state?.accounts || [];
   const totalCuentas = cuentas.length;
   const cuentasActivas = cuentas.filter(c => !c.closedAt).length;
   const saldoTotal = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
@@ -39,9 +33,8 @@ router.get('/', async (req, res) => {
 
 // ── Listado de Cuentas ─────────────────────────────────────────────────────
 router.get('/cuentas', verificarPermiso('banco', 'ver_cuentas'), async (req, res) => {
-  await asegurarCache();
   const state = await apiBancoGetState();
-  const cuentas = aplicarOverrides(state?.accounts || []);
+  const cuentas = state?.accounts || [];
 
   // Aplicar filtros
   let filtradas = [...cuentas];
@@ -68,11 +61,10 @@ router.get('/cuentas', verificarPermiso('banco', 'ver_cuentas'), async (req, res
 
 // ── Detalle de Cuenta ──────────────────────────────────────────────────────
 router.get('/cuentas/:id', verificarPermiso('banco', 'ver_cuentas'), async (req, res) => {
-  await asegurarCache();
-  const state = await apiBancoGetState();
-  const raw = state?.accounts?.find(a => a.id === req.params.id);
-  if (!raw) return res.status(404).render('parciales/error', { titulo: 'Error', error: 'Cuenta no encontrada' });
-  const cuenta = { ...raw, ...(overrideStore.get(raw.id) || {}) };
+  try {
+    const state = await apiBancoGetState();
+    const cuenta = state?.accounts?.find(a => a.id === req.params.id);
+    if (!cuenta) return res.status(404).render('parciales/error', { titulo: 'Error', error: 'Cuenta no encontrada' });
 
   res.render('banco/cuenta-detalle', {
     titulo: `Cuenta: ${cuenta.displayName || cuenta.id}`,
@@ -169,33 +161,30 @@ router.get('/documentos', verificarPermiso('banco', 'ver_cuentas'), (req, res) =
 });
 
 // ── API: Modificar cuenta (tipo, nombre, límites) ─────────────────────────
-// IMPORTANTE: debe ir ANTES de la ruta genérica /:action para evitar conflicto
+// Usa la API real del banco (backend-banco).
+// Acciones: cambiar-tipo, modificar-cuenta, asignar-eip, etc.
 router.post('/api/cuentas/modificar', async (req, res) => {
-  const { accountId, type, displayName, sendLimitPz } = req.body;
+  const { accountId, type, displayName, sendLimitPz, motivos, bypass } = req.body;
   if (!accountId) return res.status(400).json({ error: 'accountId requerido' });
 
-  // 1) Intentar en la API real del banco
-  let bancoOk = false;
+  const motivo = (motivos || []).join(', ') || 'Corrección administrativa';
+  let result = null;
+
   try {
-    const result = await apiBancoPost('modificar-cuenta', { accountId, type, displayName, sendLimitPz });
-    if (result && !result.error) bancoOk = true;
+    if (type) {
+      // Cambiar tipo de cuenta en la DB real del banco
+      result = await apiBancoPost('cambiar-tipo', { accountId, tipo: type, motivo, bypass: !!bypass });
+    } else if (displayName !== undefined || sendLimitPz !== undefined) {
+      // Modificar datos de la cuenta
+      result = await bancoAction('modificar-cuenta', { accountId, displayName, sendLimitPz, motivo, bypass: !!bypass });
+    }
   } catch {}
 
-  // 2) Guardar en Supabase (persiste entre reinicios y en Vercel)
-  const cambios = {};
-  if (type) cambios.type = type;
-  if (displayName !== undefined) cambios.displayName = displayName;
-  if (sendLimitPz !== undefined) cambios.sendLimitPz = sendLimitPz;
-  await sbSetOverride(accountId, cambios);
-  // Actualizar caché local
-  overrideCache[accountId] = { ...(overrideCache[accountId] || {}), ...cambios };
-
-  res.json({
-    success: true,
-    message: bancoOk ? 'Cuenta actualizada en banco' : 'Tipo de cuenta actualizado',
-    accountId,
-    changes: cambios
-  });
+  if (result && !result.error) {
+    return res.json({ success: true, message: '✅ Cambiado en el banco', accountId, changes: { type, displayName, sendLimitPz } });
+  }
+  // Si la API falla, devolver error
+  res.status(502).json({ success: false, error: result?.error || 'El banco no aceptó la operación' });
 });
 
 // ── API: Acciones sobre cuentas (genérico) ────────────────────────────────
