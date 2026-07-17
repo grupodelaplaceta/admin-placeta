@@ -68,6 +68,32 @@ router.post('/api/:entidad/documentos', verificarSesion, async (req, res) => {
     estado: 'borrador',
     hash: createHash('sha256').update(tipo + Date.now()).digest('hex').slice(0, 16)
   });
+
+  // Sync con PlacetaID para firma distribuida (notificación asíncrona)
+  if (req.body.enviarFirma !== false) {
+    try {
+      const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+      const destinatariosDIP = req.body.destinatariosDIP || (req.session.usuario?.dip ? [req.session.usuario.dip] : []);
+      fetch(`${PLACETAID_API}/admin/documentos`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb'
+        },
+        body: JSON.stringify({
+          id: doc.id,
+          titulo: doc.titulo,
+          tipo: doc.tipo,
+          entidad,
+          csv: doc.hash,
+          destinatariosDIP,
+          contenido: `Documento generado desde Admin Placeta: ${doc.titulo} (${ETIQUETAS_DOC[doc.tipo] || doc.tipo})`
+        }),
+        signal: AbortSignal.timeout(5000)
+      }).catch(() => {});
+    } catch { /* ignore */ }
+  }
+
   res.json(doc);
 });
 
@@ -101,6 +127,29 @@ router.post('/api/:entidad/documentos/:id/firmar', verificarSesion, async (req, 
     firmado: true,
     datos: { ...existente.datos, firmadoPor: req.session.usuario?.dip || 'sistema', fechaFirma: new Date().toISOString() }
   });
+
+  // Sincronizar con PlacetaID: notificar firma a la plataforma de identidad
+  try {
+    const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+    await fetch(`${PLACETAID_API}/admin/documentos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb'
+      },
+      body: JSON.stringify({
+        id: doc.id,
+        titulo: doc.titulo || existente.titulo,
+        tipo: doc.tipo,
+        entidad,
+        csv: doc.hash || `CSV-${Date.now().toString(36).toUpperCase()}`,
+        destinatariosDIP: req.session.usuario?.dip ? [req.session.usuario.dip] : [],
+        contenido: `Documento firmado electrónicamente: ${doc.titulo} (${ETIQUETAS_DOC[doc.tipo] || doc.tipo})`
+      }),
+      signal: AbortSignal.timeout(5000)
+    }).catch(() => {/* PlacetaID no disponible, firma local ok */});
+  } catch { /* ignore */ }
+
   res.json(doc);
 });
 

@@ -18,6 +18,20 @@ const tituloEntidad = { banco: 'Banco de La Placeta', tributos: 'Tributos de La 
     <p style="font-size:12px;color:#888">Genera documentos oficiales, certificados, informes y más. Los datos se guardan como JSON y los PDFs se generan bajo demanda. <a href="#" onclick="mostrarPanelDocs();return false">Crear documento →</a></p>
   </div>
 
+  <!-- PlacetaID Documentos pendientes de firma -->
+  <div id="placetaidDocsAlert" style="display:none;margin-bottom:16px">
+    <div class="info-card" style="border-left:3px solid #ff9800;background:#fff8e1">
+      <div class="flex gap-8" style="align-items:center">
+        <span style="font-size:24px">🔑</span>
+        <div style="flex:1">
+          <strong style="font-size:14px">Documentos pendientes en PlacetaID</strong>
+          <p id="placetaidDocsInfo" style="font-size:12px;color:#666;margin:0"></p>
+        </div>
+        <button class="btn-sm btn-secondary" onclick="cargarPlacetaidDocs()">🔄 Recargar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Filtros -->
   <div class="flex gap-8 mb-16 flex-wrap">
     <input type="text" id="docsBusqueda" class="form-input" placeholder="🔍 Buscar documentos..." style="width:240px;max-width:100%" oninput="filtrarDocs()">
@@ -59,7 +73,25 @@ let docsData = [];
 let docsTipos = [];
 
 // Inicializar
-document.addEventListener('DOMContentLoaded', cargarDocs);
+document.addEventListener('DOMContentLoaded', () => {
+  cargarDocs();
+  cargarPlacetaidDocs();
+});
+
+async function cargarPlacetaidDocs() {
+  try {
+    const data = await apiFetch('/api/placetaid/documentos-pendientes');
+    const docs = data.documentos || [];
+    const alert = document.getElementById('placetaidDocsAlert');
+    const info = document.getElementById('placetaidDocsInfo');
+    if (docs.length > 0) {
+      alert.style.display = 'block';
+      info.textContent = `${docs.length} documento(s) pendiente(s) de firma en PlacetaID. Último: ${docs[0].titulo || docs[0].id}`;
+    } else {
+      alert.style.display = 'none';
+    }
+  } catch { /* PlacetaID no disponible */ }
+}
 
 async function cargarDocs() {
   try {
@@ -299,7 +331,7 @@ async function crearDocumento() {
   try {
     const result = await apiFetch('/api/<%= entidadDoc %>/documentos', {
       method: 'POST',
-      body: JSON.stringify({ tipo, datos })
+      body: JSON.stringify({ tipo, datos, enviarFirma: true, titulo: datos.titulo || '' })
     });
     mostrarToast('✅ Documento creado: ' + (result.titulo || tipo), 'success');
     // Cerrar modal y recargar

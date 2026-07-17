@@ -1,71 +1,157 @@
 <div class="info-card mb-16">
   <h4>📄 Actas y Documentos Oficiales</h4>
-  <p>Gestión de actas de reuniones, documentos oficiales y su archivo. Firmados digitalmente con PlacetaID.</p>
+  <p>Gestión de actas de reuniones, documentos oficiales y su archivo. Firmados digitalmente con PlacetaID. Integrado con el sistema global de documentos.</p>
 </div>
 
-<div class="flex gap-8 mb-16">
-  <button class="btn-primary" onclick="nuevaActa()">📄 Nueva Acta</button>
+<div class="flex gap-8 mb-16 flex-wrap">
+  <button class="btn-primary" onclick="nuevaActa()">📄 Nueva Acta / Documento</button>
+  <input type="text" id="docsBusqueda" class="form-input" placeholder="🔍 Buscar..." style="width:200px" oninput="filtrarDocs()">
+  <select id="docsFiltroEstado" class="form-input" style="width:auto;min-width:140px" onchange="filtrarDocs()">
+    <option value="">Todos los estados</option>
+    <option value="borrador">Borrador</option>
+    <option value="final">Final</option>
+    <option value="firmado">Firmado</option>
+  </select>
 </div>
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Título</th><th>Tipo</th><th>Fecha</th><th>Firmada</th><th>Acciones</th></tr></thead>
-    <tbody>
-      <% 
-      const actasMock = [
-        { id: 'ACTA-001', titulo: 'Consejo de Gobierno - Abril 2025', tipo: 'Acta Reunión', fecha: '2025-04-01', firmada: true },
-        { id: 'ACTA-002', titulo: 'Nombramiento Vicepresidente', tipo: 'Documento Oficial', fecha: '2025-03-15', firmada: true },
-        { id: 'ACTA-003', titulo: 'Comité Tributos - Marzo 2025', tipo: 'Acta Reunión', fecha: '2025-03-10', firmada: false },
-        { id: 'ACTA-004', titulo: 'Presupuestos 2026 - Borrador', tipo: 'Documento Oficial', fecha: '2025-04-05', firmada: false },
-      ];
-      %>
-      <% actasMock.forEach(a => { %>
-      <tr>
-        <td class="text-mono"><%= a.id %></td>
-        <td><strong><%= a.titulo %></strong></td>
-        <td><%= a.tipo %></td>
-        <td><%= a.fecha %></td>
-        <td><span class="badge <%= a.firmada ? 'badge-success' : 'badge-warning' %>"><%= a.firmada ? '✅ Firmada' : '⏳ Pendiente' %></span></td>
-        <td>
-          <button class="btn-sm btn-secondary" onclick='verActa("<%= a.id %>")'>👁️ Ver</button>
-          <% if (!a.firmada) { %>
-          <button class="btn-sm btn-primary" onclick='firmarActaAdmin("<%= a.id %>")'>✍️ Firmar</button>
-          <% } %>
-        </td>
-      </tr>
-      <% }) %>
+    <thead><tr><th>ID</th><th>Título</th><th>Tipo</th><th>Fecha</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody id="actasTablaBody">
+      <tr><td colspan="6" style="text-align:center;padding:40px;color:#999">Cargando documentos...</td></tr>
     </tbody>
   </table>
 </div>
 
 <script>
+let docsCache = [];
+
+document.addEventListener('DOMContentLoaded', cargarActas);
+
+async function cargarActas() {
+  try {
+    const data = await apiFetch('/api/administracion/documentos');
+    docsCache = (data.documentos || []).filter(d =>
+      ['acta','acta-firmada','resolucion-admin','certificado-admin','informe-admin','oficio','comunicacion','informe-pdf','certificado','notificacion'].includes(d.tipo)
+    );
+    renderActas(docsCache);
+  } catch {
+    document.getElementById('actasTablaBody').innerHTML =
+      '<tr><td colspan="6" style="text-align:center;padding:40px;color:#999">Error al cargar</td></tr>';
+  }
+}
+
+function renderActas(lista) {
+  const tbody = document.getElementById('actasTablaBody');
+  if (lista.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#999"><div style="font-size:40px;margin-bottom:8px;opacity:0.4">📄</div>No hay documentos. Crea el primero.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(d => {
+    const esAuto = d.id?.startsWith('auto-');
+    const estCls = d.estado === 'firmado' ? 'badge-success' : d.estado === 'final' ? 'badge-info' : 'badge-warning';
+    const estLbl = d.estado === 'firmado' ? '✅ Firmado' : d.estado === 'final' ? 'Final' : 'Borrador';
+    const fecha = d.createdAt ? new Date(d.createdAt).toLocaleDateString() : '—';
+    const tipoDoc = { 'acta':'Acta Reunión','acta-firmada':'Acta Firmada','resolucion-admin':'Resolución','certificado-admin':'Certificado','informe-admin':'Informe','oficio':'Oficio','comunicacion':'Comunicación','informe-pdf':'Informe','certificado':'Certificado','notificacion':'Notificación' };
+    return `<tr>
+      <td class="text-mono">${d.id.slice(0, 12)}</td>
+      <td><strong>${d.titulo || '—'}</strong>${esAuto ? ' <span class="badge badge-purple">Auto</span>' : ''}</td>
+      <td><span class="badge badge-purple">${tipoDoc[d.tipo] || d.tipo}</span></td>
+      <td style="color:#888;font-size:12px">${fecha}</td>
+      <td><span class="badge ${estCls}">${estLbl}</span></td>
+      <td>
+        <button class="btn-sm btn-secondary" onclick="verActa('${d.id}')">👁️ Ver</button>
+        <button class="btn-sm btn-primary" onclick="descargarPDFActa('${d.id}')">📥 PDF</button>
+        ${d.estado !== 'firmado' && !esAuto ? `<button class="btn-sm btn-secondary" onclick="firmarActaAdmin('${d.id}')">✍️ Firmar</button>` : ''}
+        ${!esAuto ? `<button class="btn-sm btn-danger" onclick="eliminarActa('${d.id}')">🗑️</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarDocs() {
+  const q = document.getElementById('docsBusqueda')?.value.toLowerCase() || '';
+  const estado = document.getElementById('docsFiltroEstado')?.value || '';
+  let filtradas = docsCache.filter(d => {
+    if (q && !d.titulo?.toLowerCase().includes(q) && !d.tipo?.toLowerCase().includes(q)) return false;
+    if (estado && d.estado !== estado) return false;
+    return true;
+  });
+  renderActas(filtradas);
+}
+
 function nuevaActa() {
-  mostrarModal('📄 Nueva Acta', `
-    <p style="margin-bottom:12px">Crear un nuevo documento:</p>
-    <input type="text" id="actaTitulo" class="form-input" placeholder="Título" style="width:100%;margin-bottom:8px">
+  mostrarModal('📄 Nueva Acta / Documento', `
+    <p style="margin-bottom:12px;color:#666">Crear un nuevo documento oficial en el sistema.</p>
     <select id="actaTipo" class="form-input" style="width:100%;margin-bottom:8px">
-      <option value="Acta Reunión">Acta de Reunión</option>
-      <option value="Documento Oficial">Documento Oficial</option>
-      <option value="Informe">Informe</option>
+      <option value="acta">Acta de Reunión</option>
+      <option value="resolucion-admin">Resolución Administrativa</option>
+      <option value="certificado-admin">Certificado Administrativo</option>
+      <option value="informe-admin">Informe</option>
+      <option value="oficio">Oficio</option>
+      <option value="comunicacion">Comunicación Oficial</option>
     </select>
-    <textarea id="actaContenido" class="form-input" placeholder="Contenido del documento..." style="width:100%;min-height:100px;margin-bottom:8px"></textarea>
-    <button class="btn-primary mt-16" onclick='crearActa()'>💾 Crear Documento</button>
+    <input type="text" id="actaTitulo" class="form-input" placeholder="Título del documento" style="width:100%;margin-bottom:8px">
+    <textarea id="actaDescripcion" class="form-input" placeholder="Descripción / contenido..." style="width:100%;min-height:80px;margin-bottom:8px"></textarea>
+    <button class="btn-primary mt-16" onclick="crearActa()">💾 Crear Documento</button>
   `);
 }
 
-function crearActa() {
-  const t = document.getElementById('actaTitulo')?.value;
-  if (!t) return mostrarToast('Introduce un título', 'error');
-  mostrarToast('✅ Documento creado: ' + t, 'success');
-  setTimeout(() => location.reload(), 1000);
+async function crearActa() {
+  const tipo = document.getElementById('actaTipo')?.value;
+  const titulo = document.getElementById('actaTitulo')?.value;
+  const descripcion = document.getElementById('actaDescripcion')?.value;
+  if (!titulo) return mostrarToast('Introduce un título', 'error');
+  try {
+    await apiFetch('/api/administracion/documentos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo, titulo, descripcion, datos: { contenido: descripcion } })
+    });
+    mostrarToast('✅ Documento creado: ' + titulo, 'success');
+    document.querySelector('.modal-overlay')?.remove();
+    cargarActas();
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
 }
 
-function verActa(id) {
-  mostrarModal('📄 ' + id, `<p><strong>Título:</strong> Consejo de Gobierno</p><p><strong>Fecha:</strong> 2025-04-01</p><p><strong>Tipo:</strong> Acta Reunión</p><p><strong>Firmada:</strong> Sí</p><hr style="margin:12px 0;border-color:rgba(139,92,246,0.1)"><p>Contenido del acta disponible para descarga.</p><button class="btn-secondary mt-16">📥 Descargar PDF</button>`);
+async function verActa(id) {
+  try {
+    const doc = await apiFetch('/api/administracion/documentos/' + id);
+    const datos = doc.datos || {};
+    let html = '<div style="margin-bottom:12px">';
+    html += '<p><strong>ID:</strong> ' + doc.id + '</p>';
+    html += '<p><strong>Tipo:</strong> ' + doc.tipo + '</p>';
+    html += '<p><strong>Estado:</strong> ' + doc.estado + '</p>';
+    html += '<p><strong>Creado:</strong> ' + (doc.createdAt ? new Date(doc.createdAt).toLocaleString() : '—') + '</p>';
+    if (doc.firmado) html += '<p class="badge badge-success" style="margin-top:8px">✅ Firmado digitalmente</p>';
+    html += '</div><hr style="margin:12px 0;border:none;border-top:1px solid #f0ecf8"><div style="font-size:13px">';
+    for (const [k, v] of Object.entries(datos)) {
+      html += '<p><strong>' + k + ':</strong> ' + (typeof v === 'object' ? JSON.stringify(v) : v) + '</p>';
+    }
+    html += '</div><div class="actions" style="margin-top:16px"><button class="btn-primary" onclick="descargarPDFActa(\'' + doc.id + '\')">📥 Descargar PDF</button></div>';
+    mostrarModal('📄 ' + (doc.titulo || 'Documento'), html);
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
 }
 
-function firmarActaAdmin(id) {
-  mostrarToast('✍️ Documento firmado digitalmente con PlacetaID', 'success');
-  setTimeout(() => location.reload(), 1000);
+function descargarPDFActa(id) {
+  window.open('/api/administracion/documentos/' + id + '/pdf', '_blank');
+  mostrarToast('📄 Generando PDF...', 'info');
+}
+
+async function firmarActaAdmin(id) {
+  if (!confirm('¿Firmar digitalmente este documento?')) return;
+  try {
+    await apiFetch('/api/administracion/documentos/' + id + '/firmar', { method: 'POST' });
+    mostrarToast('✍️ Documento firmado digitalmente con PlacetaID', 'success');
+    cargarActas();
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
+}
+
+async function eliminarActa(id) {
+  if (!confirm('¿Eliminar este documento definitivamente?')) return;
+  try {
+    await apiFetch('/api/administracion/documentos/' + id, { method: 'DELETE' });
+    mostrarToast('🗑️ Documento eliminado', 'success');
+    cargarActas();
+  } catch (e) { mostrarToast('Error: ' + e.message, 'error'); }
 }
 </script>

@@ -99,6 +99,47 @@ router.get('/placetaid/grupos/:grupo/dips', verificarSesion, async (req, res) =>
   } catch { res.json([]); }
 });
 
+// ── API: Documentos pendientes en PlacetaID ───────────────────────────────
+router.get('/placetaid/documentos-pendientes', verificarSesion, async (req, res) => {
+  try {
+    const r = await fetch(`${PLACETAID_API}/admin/documentos`, {
+      headers: { 'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb' },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) return res.json({ documentos: [], total: 0 });
+    const data = await r.json();
+    const docs = Array.isArray(data) ? data : (data.documentos || []);
+    // Filtrar solo los pendientes de firma (si el usuario admin puede firmar)
+    const pendientes = docs.filter(d => d.estado === 'Pendiente_Firma');
+    res.json({ documentos: pendientes, total: pendientes.length });
+  } catch {
+    res.json({ documentos: [], total: 0 });
+  }
+});
+
+// ── API: Firmar documento en PlacetaID (bypass como admin) ────────────────
+router.post('/placetaid/documentos/:id/firmar-admin', verificarSesion, async (req, res) => {
+  try {
+    const r = await fetch(`${PLACETAID_API}/admin/documentos/${req.params.id}/firmar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb'
+      },
+      body: JSON.stringify({
+        dip: req.session.usuario?.dip || 'admin',
+        bypass: true
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) return res.json({ success: false, error: 'No se pudo firmar en PlacetaID' });
+    const data = await r.json();
+    res.json(data);
+  } catch {
+    res.json({ success: false, error: 'PlacetaID no disponible' });
+  }
+});
+
 // ── API Sesión actual ──────────────────────────────────────────────────────
 router.get('/session', verificarSesion, (req, res) => {
   res.json({

@@ -57,13 +57,36 @@
     });
 })();
 
-function mostrarCtxDocs(refTipo, refId, entidad) {
+async function mostrarCtxDocs(refTipo, refId, entidad) {
+  // Cargar tipos disponibles primero
+  if (!window.TIPOS_CTX_LOADED) {
+    try {
+      const data = await fetch('/api/' + entidad + '/tipos-documento').then(r => r.json());
+      window.TIPOS_CTX_OPTIONS = window.TIPOS_CTX_OPTIONS || {};
+      const all = [];
+      (data.categorias || []).forEach(c => c.documentos.forEach(d => all.push(d)));
+      const tiposPorRef = {
+        cuenta: all,
+        tarjeta: all.filter(d => d.tipo.includes('tarjeta')),
+        operacion: all.filter(d => ['informe-operacion','comprobante','justificante-transferencia','justificante-iva','informe-impuestos','reversion'].includes(d.tipo)),
+        contribuyente: all.filter(d => d.tipo.includes('contribuyente') || d.tipo.includes('declaracion') || d.tipo.includes('situacion')),
+        declaracion: all.filter(d => d.tipo.includes('declaracion') || d.tipo.includes('liquidacion'))
+      };
+      Object.assign(window.TIPOS_CTX_OPTIONS, tiposPorRef);
+      window.TIPOS_CTX_OPTIONS.default = all;
+      window.TIPOS_CTX_LOADED = true;
+    } catch { /* fallback */ }
+  }
+
+  const opts = window.TIPOS_CTX_OPTIONS?.[refTipo] || window.TIPOS_CTX_OPTIONS?.default || [];
+  const optsHtml = opts.length > 0
+    ? opts.map(t => `<option value="${t.tipo}">${t.etiqueta}</option>`).join('')
+    : '<option value="informe-pdf">Informe PDF</option>';
+
   mostrarModal('📄 Nuevo Documento', `
     <p style="color:#666;margin-bottom:16px">Crear documento vinculado a este elemento.</p>
     <div style="margin-bottom:16px">
-      <select id="ctxDocTipo" class="form-input" style="margin-bottom:8px">
-        ${TIPOS_CTX_OPTIONS[refTipo] ? TIPOS_CTX_OPTIONS[refTipo].map(t => `<option value="${t.tipo}">${t.etiqueta}</option>`).join('') : '<option value="informe-pdf">Informe PDF</option>'}
-      </select>
+      <select id="ctxDocTipo" class="form-input" style="margin-bottom:8px">${optsHtml}</select>
       <input type="text" id="ctxDocTitulo" class="form-input" placeholder="Título del documento" style="margin-bottom:8px">
       <textarea id="ctxDocContenido" class="form-input" placeholder="Contenido / observaciones..." style="min-height:80px;margin-bottom:8px"></textarea>
       <input type="hidden" id="ctxRefTipo" value="${refTipo}">
@@ -71,24 +94,6 @@ function mostrarCtxDocs(refTipo, refId, entidad) {
     </div>
     <button class="btn-primary" onclick="crearDocCtx('${entidad}')">💾 Guardar</button>
   `);
-  // Cargar tipos disponibles
-  if (!window.TIPOS_CTX_OPTIONS) {
-    fetch('/api/' + entidad + '/tipos-documento').then(r => r.json()).then(data => {
-      window.TIPOS_CTX_OPTIONS = window.TIPOS_CTX_OPTIONS || {};
-      const all = [];
-      (data.categorias || []).forEach(c => c.documentos.forEach(d => all.push(d)));
-      // Guardar por refTipo
-      const tiposPorRef = { cuenta: all, tarjeta: all.filter(d => d.tipo.includes('tarjeta')), operacion: all.filter(d => ['informe-operacion','comprobante','justificante-transferencia','justificante-iva','informe-impuestos','reversion'].includes(d.tipo)), contribuyente: all.filter(d => d.tipo.includes('contribuyente') || d.tipo.includes('declaracion') || d.tipo.includes('situacion')), declaracion: all.filter(d => d.tipo.includes('declaracion') || d.tipo.includes('liquidacion')) };
-      Object.assign(window.TIPOS_CTX_OPTIONS, tiposPorRef);
-      window.TIPOS_CTX_OPTIONS.default = all;
-      // Actualizar select si está abierto
-      const sel = document.getElementById('ctxDocTipo');
-      if (sel) {
-        const opts = window.TIPOS_CTX_OPTIONS[refTipo] || window.TIPOS_CTX_OPTIONS.default || [];
-        sel.innerHTML = opts.map(t => `<option value="${t.tipo}">${t.etiqueta}</option>`).join('');
-      }
-    });
-  }
 }
 
 async function crearDocCtx(entidad) {

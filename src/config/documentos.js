@@ -537,7 +537,7 @@ export async function generarPDF(entidad, documento) {
       const fecha = documento.createdAt ? new Date(documento.createdAt).toLocaleDateString('es-ES',{year:'numeric',month:'long',day:'numeric'}) : '—';
       const datos = documento.datos || {};
       const esAuto = documento.id?.startsWith('auto-');
-      const lineas = generarContratoDocumento(documento.tipo, datos, documento.refId, documento.refTipo);
+      const lineas = generarContenidoDocumento(documento.tipo, datos);
 
       // ── Footer automático en cada página ──
       doc.on('pageAdded', () => {
