@@ -7,9 +7,11 @@ import { Router } from 'express';
 import { createHash, randomUUID } from 'crypto';
 import { verificarSesion, verificarPermiso } from '../middleware/auth.js';
 import {
-  getDocumentos, getDocumentoById, getDocumentosPorRef, saveDocumento, deleteDocumento,
+  getDocumentos, getDocumentoById, getDocumentosPorRef, getDocumentosPorRefAsync,
+  getDocumentosByEntidadAsync,
+  saveDocumento, deleteDocumento,
   generarPDF, getPlantilla, TIPOS_DOCUMENTO, DOCUMENTOS_COMUNES,
-  ETIQUETAS_DOC, getDocumentosByEntidad
+  ETIQUETAS_DOC
 } from '../config/documentos.js';
 
 const router = Router();
@@ -21,7 +23,7 @@ router.get('/api/:entidad/documentos', verificarSesion, async (req, res) => {
   if (!entidadesPermitidas.includes(entidad) && !req.session.roles?.includes('superadmin')) {
     return res.status(403).json({ error: 'Sin acceso a esta entidad' });
   }
-  const docs = getDocumentosByEntidad(entidad);
+  const docs = await getDocumentosByEntidadAsync(entidad);
   const { tipo, estado, busqueda } = req.query;
   let filtrados = [...docs];
   if (tipo) filtrados = filtrados.filter(d => d.tipo === tipo);
@@ -36,19 +38,22 @@ router.get('/api/:entidad/documentos', verificarSesion, async (req, res) => {
 // ── API: Documentos por referencia (cuenta, tarjeta, etc.) ────────────────
 router.get('/api/:entidad/documentos/por-ref/:refTipo/:refId', verificarSesion, async (req, res) => {
   const { entidad, refTipo, refId } = req.params;
-  const docs = getDocumentosPorRef(entidad, refTipo, refId);
+  const docs = await getDocumentosPorRefAsync(entidad, refTipo, refId);
   res.json({ documentos: docs, total: docs.length });
 });
 
 // ── API: Obtener un documento ─────────────────────────────────────────────
 router.get('/api/:entidad/documentos/:id', verificarSesion, async (req, res) => {
   const { entidad, id } = req.params;
-  const doc = getDocumentoById(entidad, id);
-  // También buscar en automáticos
-  const allDocs = getDocumentosByEntidad(entidad);
-  const docFull = doc || allDocs.find(d => d.id === id);
-  if (!docFull) return res.status(404).json({ error: 'Documento no encontrado' });
-  res.json(docFull);
+  // Buscar en Supabase + memoria
+  const { getDocumentoByIdAsync } = await import('../config/documentos.js');
+  let doc = await getDocumentoByIdAsync(entidad, id);
+  if (!doc) {
+    const allDocs = await getDocumentosByEntidadAsync(entidad);
+    doc = allDocs.find(d => d.id === id);
+  }
+  if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+  res.json(doc);
 });
 
 // ── API: Crear documento ──────────────────────────────────────────────────
@@ -158,7 +163,7 @@ router.get('/api/:entidad/documentos/:id/pdf', verificarSesion, async (req, res)
   const { entidad, id } = req.params;
   let doc = getDocumentoById(entidad, id);
   if (!doc) {
-    const allDocs = getDocumentosByEntidad(entidad);
+    const allDocs = await getDocumentosByEntidadAsync(entidad);
     doc = allDocs.find(d => d.id === id);
   }
   if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
@@ -225,7 +230,7 @@ function verificarApiKey(req, res, next) {
 // Listar documentos públicos de una entidad
 router.get('/publico/:entidad/documentos', verificarApiKey, async (req, res) => {
   const { entidad } = req.params;
-  const docs = getDocumentosByEntidad(entidad);
+  const docs = await getDocumentosByEntidadAsync(entidad);
   // Solo devolver documentos en estado 'final' o 'firmado'
   const publicos = docs.filter(d => d.estado === 'final' || d.estado === 'firmado');
   res.json({ documentos: publicos, total: publicos.length });
@@ -234,9 +239,10 @@ router.get('/publico/:entidad/documentos', verificarApiKey, async (req, res) => 
 // Obtener PDF público
 router.get('/publico/:entidad/documentos/:id/pdf', verificarApiKey, async (req, res) => {
   const { entidad, id } = req.params;
-  let doc = getDocumentoById(entidad, id);
+  const { getDocumentoByIdAsync } = await import('../config/documentos.js');
+  let doc = await getDocumentoByIdAsync(entidad, id);
   if (!doc) {
-    const allDocs = getDocumentosByEntidad(entidad);
+    const allDocs = await getDocumentosByEntidadAsync(entidad);
     doc = allDocs.find(d => d.id === id);
   }
   if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });

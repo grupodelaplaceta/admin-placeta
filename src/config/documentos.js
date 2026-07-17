@@ -1,15 +1,16 @@
 /**
  * SISTEMA DE DOCUMENTACIÓN GLOBAL
  * 
- * Almacena datos como JSON en memoria (compatible con serverless Vercel).
+ * Almacena datos en Supabase (persistente) con fallback a memoria.
  * Genera PDFs bajo demanda con pdfkit.
  * Accesible por entidad con permisos. Exportable vía API pública.
  */
 import { createHash, randomUUID } from 'crypto';
 import PDFDocument from 'pdfkit';
 import { PLANTILLAS_BANCO } from './plantillas-banco.js';
+import { supabase } from './supabase.js';
 
-// Almacenamiento en memoria (fallback cuando fs no está disponible en serverless)
+// Almacenamiento en memoria (fallback cuando Supabase no está disponible)
 const memStore = {};
 
 const LOGOS = {
@@ -209,14 +210,92 @@ DOCUMENTOS_AUTOMATICOS.forEach(d => {
   ETIQUETAS_DOC[d] = d.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 });
 
-// ── ALMACENAMIENTO (Memoria + fs opcional) ────────────────────────────────
+// ── ALMACENAMIENTO (Supabase + fallback memoria) ─────────────────────────
+// En Vercel serverless la memoria no persiste entre requests.
+// Supabase da persistencia real. MemStore es fallback local/desarrollo.
+
+const DOCS_TABLE = 'documentos';
+
+async function sbListDocs(entidad) {
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.from(DOCS_TABLE).select('*').eq('entidad', entidad).order('created_at', { ascending: false });
+    return data || [];
+  } catch { return null; }
+}
+
+async function sbSaveDoc(doc) {
+  if (!supabase) return null;
+  try {
+    const record = {
+      id: doc.id, entidad: doc.entidad, tipo: doc.tipo,
+      categoria: doc.categoria || 'general', titulo: doc.titulo,
+      descripcion: doc.descripcion || '', datos: JSON.stringify(doc.datos || {}),
+      ref_id: doc.refId, ref_tipo: doc.refTipo,
+      created_by: doc.createdBy, estado: doc.estado || 'borrador',
+      firmado: doc.firmado || false, hash: doc.hash || '',
+      updated_at: new Date().toISOString()
+    };
+    const { data } = await supabase.from(DOCS_TABLE).upsert(record, { onConflict: 'id' }).select().maybeSingle();
+    return data;
+  } catch { return null; }
+}
+
+async function sbDeleteDoc(id) {
+  if (!supabase) return false;
+  try { await supabase.from(DOCS_TABLE).delete().eq('id', id); return true; }
+  catch { return false; }
+}
+
+async function sbGetDoc(id) {
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.from(DOCS_TABLE).select('*').eq('id', id).maybeSingle();
+    return data;
+  } catch { return null; }
+}
+
 export function getDocumentos(entidad) {
   if (!memStore[entidad]) memStore[entidad] = [];
   return memStore[entidad];
 }
 
+export async function getDocumentosAsync(entidad) {
+  // Intentar Supabase primero
+  const sbData = await sbListDocs(entidad);
+  if (sbData) {
+    // Normalizar campos de Supabase a camelCase
+    const docs = sbData.map(normalizarDoc);
+    memStore[entidad] = docs;
+    return docs;
+  }
+  return getDocumentos(entidad);
+}
+
+function normalizarDoc(sb) {
+  return {
+    id: sb.id, entidad: sb.entidad, tipo: sb.tipo,
+    categoria: sb.categoria || 'general',
+    titulo: sb.titulo, descripcion: sb.descripcion || '',
+    datos: typeof sb.datos === 'string' ? JSON.parse(sb.datos || '{}') : (sb.datos || {}),
+    refId: sb.ref_id || null, refTipo: sb.ref_tipo || null,
+    createdBy: sb.created_by || 'sistema',
+    createdAt: sb.created_at || sb.createdAt || new Date().toISOString(),
+    updatedAt: sb.updated_at || sb.updatedAt || new Date().toISOString(),
+    estado: sb.estado || 'borrador', firmado: sb.firmado || false,
+    hash: sb.hash || ''
+  };
+}
+
 export function getDocumentoById(entidad, id) {
   return getDocumentos(entidad).find(d => d.id === id) || null;
+}
+
+export async function getDocumentoByIdAsync(entidad, id) {
+  // Intentar de Supabase primero
+  const sbDoc = await sbGetDoc(id);
+  if (sbDoc) return normalizarDoc(sbDoc);
+  return getDocumentoById(entidad, id);
 }
 
 export function saveDocumento(entidad, data) {
@@ -229,8 +308,8 @@ export function saveDocumento(entidad, data) {
     titulo: data.titulo,
     descripcion: data.descripcion || '',
     datos: data.datos || {},
-    refId: data.refId || null,       // ID del objeto al que pertenece (cuenta, tarjeta, etc.)
-    refTipo: data.refTipo || null,   // tipo de referencia: 'cuenta', 'tarjeta', 'operacion', 'contribuyente', etc.
+    refId: data.refId || null,
+    refTipo: data.refTipo || null,
     createdBy: data.createdBy || 'sistema',
     createdAt: data.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -241,6 +320,16 @@ export function saveDocumento(entidad, data) {
   const idx = docs.findIndex(d => d.id === doc.id);
   if (idx >= 0) docs[idx] = doc;
   else docs.push(doc);
+
+  // Persistir en Supabase (asíncrono, no bloquea)
+  sbSaveDoc(doc).catch(() => {});
+
+  return doc;
+}
+
+export async function saveDocumentoAsync(entidad, data) {
+  const doc = saveDocumento(entidad, data);
+  await sbSaveDoc(doc);
   return doc;
 }
 
@@ -249,9 +338,26 @@ export function getDocumentosPorRef(entidad, refTipo, refId) {
   return getDocumentos(entidad).filter(d => d.refTipo === refTipo && d.refId === refId);
 }
 
+export async function getDocumentosPorRefAsync(entidad, refTipo, refId) {
+  // Intentar Supabase primero
+  const sbData = await sbListDocs(entidad);
+  if (sbData) {
+    const docs = sbData.map(normalizarDoc).filter(d => d.refTipo === refTipo && d.refId === refId);
+    return docs;
+  }
+  return getDocumentosPorRef(entidad, refTipo, refId);
+}
+
 export function deleteDocumento(entidad, id) {
   const docs = getDocumentos(entidad).filter(d => d.id !== id);
   memStore[entidad] = docs;
+  sbDeleteDoc(id).catch(() => {});
+  return true;
+}
+
+export async function deleteDocumentoAsync(entidad, id) {
+  deleteDocumento(entidad, id);
+  await sbDeleteDoc(id);
   return true;
 }
 
@@ -905,6 +1011,28 @@ export function getDocumentosByEntidad(entidad) {
     hash: createHash('sha256').update(tipo + entidad).digest('hex').slice(0, 16)
   }));
   return [...autoDocs, ...docs];
+}
+
+export async function getDocumentosByEntidadAsync(entidad) {
+  // Cargar desde Supabase primero, después combinamos con auto-docs
+  const sbData = await sbListDocs(entidad);
+  if (sbData) {
+    const docs = sbData.map(normalizarDoc);
+    memStore[entidad] = docs;
+    const autoDocs = DOCUMENTOS_AUTOMATICOS.map((tipo, i) => ({
+      id: `auto-${entidad}-${i}`,
+      entidad, tipo, categoria: 'automatico',
+      titulo: ETIQUETAS_DOC[tipo] || tipo,
+      descripcion: 'Generado automáticamente por el sistema',
+      datos: { generadoEl: new Date().toISOString(), periodo: 'Últimos 30 días' },
+      createdBy: 'sistema',
+      createdAt: new Date(Date.now() - i * 86400000).toISOString(),
+      estado: 'final', firmado: true,
+      hash: createHash('sha256').update(tipo + entidad).digest('hex').slice(0, 16)
+    }));
+    return [...autoDocs, ...docs];
+  }
+  return getDocumentosByEntidad(entidad);
 }
 
 export default {

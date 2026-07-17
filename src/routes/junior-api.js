@@ -19,7 +19,7 @@
 import { Router } from 'express';
 import { createHash } from 'crypto';
 import { verificarSesion } from '../middleware/auth.js';
-import { getDocumentosByEntidad, DOCUMENTOS_AUTOMATICOS, ETIQUETAS_DOC } from '../config/documentos.js';
+import { getDocumentosByEntidadAsync, ETIQUETAS_DOC } from '../config/documentos.js';
 
 const router = Router();
 
@@ -145,10 +145,10 @@ router.post('/firma/firmar-manuscrito', verificarSesion, async (req, res) => {
 //  Igual que las votaciones, que se muestran según la identidad/rol.
 // ═══════════════════════════════════════════════════════════════════════════
 
-function listarDocumentosPorDip(dip) {
+async function listarDocumentosPorDipAsync(dip) {
   const todos = [];
   for (const entidad of ENTIDADES) {
-    const docs = getDocumentosByEntidad(entidad);
+    const docs = await getDocumentosByEntidadAsync(entidad);
     for (const d of docs) {
       if (d.id?.startsWith('auto-')) continue;
       const datos = d.datos || {};
@@ -185,7 +185,7 @@ function listarDocumentosPorDip(dip) {
 router.get('/documentos/pendientes', verificarSesion, async (req, res) => {
   try {
     const dip = req.query.dip || req.session.usuario?.dip;
-    res.json(listarDocumentosPorDip(dip));
+    res.json(await listarDocumentosPorDipAsync(dip));
   } catch (e) {
     res.status(500).json({ error: 'Error al cargar documentos', detalle: e.message });
   }
@@ -195,7 +195,7 @@ router.get('/documentos/pendientes', verificarSesion, async (req, res) => {
 router.get('/admin/junior/documentos', verificarSesion, async (req, res) => {
   try {
     const dip = req.query.dip || req.session.usuario?.dip;
-    res.json(listarDocumentosPorDip(dip));
+    res.json(await listarDocumentosPorDipAsync(dip));
   } catch (e) {
     res.status(500).json({ error: 'Error al cargar documentos', detalle: e.message });
   }
