@@ -532,6 +532,49 @@ export function plantillaBajaCuenta(datos, L, cf, sf, tx, ln, hoy) {
   return L;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BLP-B-011: CONTRATO DE CIERRE DE CUENTA BANCARIA
+// ═══════════════════════════════════════════════════════════════════════════
+export function plantillaCierreCuenta(datos, L, cf, sf, tx, ln, hoy) {
+  sf('DATOS DE LA CUENTA');
+  cf('IBAN', datos.iban || '______________________');
+  cf('Tipo de cuenta', datos.tipoCuenta || datos.tipo || 'Particular');
+  cf('Fecha de apertura', datos.fechaApertura || '—');
+  cf('Estado actual', datos.estado || 'Activa');
+  ln(); sf('TITULAR / REPRESENTANTE');
+  cf('Nombre / Razón Social', datos.titular || datos.nombre || '______________________');
+  cf('DIP / EIP', datos.dip || '______________________');
+  cf('Correo electrónico', datos.email || '______________________');
+  ln(); sf('MOTIVO DEL CIERRE');
+  cf('Motivo', datos.motivo || 'Solicitud del titular');
+  if (datos.descripcionMotivo) tx(datos.descripcionMotivo);
+  ln(); sf('LIQUIDACIÓN');
+  cf('Saldo final', datos.saldo !== undefined ? datos.saldo.toLocaleString() + ' Pz' : '0 Pz');
+  cf('Destino del saldo', datos.destinoSaldo || 'Transferencia bancaria');
+  cf('Cuenta de destino', datos.cuentaDestino || '—');
+  ln(); sf('PRODUCTOS A CANCELAR');
+  ['Tarjetas','Depósitos','Domiciliaciones','Seguros','Créditos'].forEach(p => {
+    cf(`☐ ${p}`, (datos.productosCancelar || []).includes(p) ? '✓' : '');
+  });
+  ln(); sf('EXPONE');
+  tx('El titular solicita el cierre definitivo de la cuenta bancaria, manifestando su voluntad de extinguir la relación contractual con el Banco de La Placeta.');
+  tx('Realizadas las comprobaciones previstas, no existen impedimentos para acordar el cierre.');
+  ln(); sf('FUNDAMENTOS JURÍDICOS');
+  tx('Artículos del Código Normativo Interno relativos a la cancelación de cuentas, liquidación de saldos y baja de productos asociados.');
+  ln(); sf('RESUELVE');
+  tx('Primero. Aprobar el cierre definitivo de la cuenta bancaria.');
+  tx('Segundo. Cancelar el IBAN y todos los productos vinculados.');
+  tx('Tercero. Liquidar el saldo según lo indicado.');
+  tx('Cuarto. Actualizar el Registro Bancario Oficial.');
+  tx('Quinto. Notificar electrónicamente mediante PlacetaID.');
+  proteccionDatos(L, sf, tx);
+  firma(L, cf, ln, sf, 'Titular', { nombre: datos.titular || datos.nombre, dip: datos.dip });
+  firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre });
+  validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
+  pie(L, sf, tx, 'BLP-B-011', 'Contrato de Cierre de Cuenta Bancaria');
+  return L;
+}
+
 // ── Mapa de tipos a funciones ──────────────────────────────────────────────
 export const PLANTILLAS_BANCO = {
   'contrato-apertura': plantillaAperturaCuenta,
@@ -544,4 +587,5 @@ export const PLANTILLAS_BANCO = {
   'bloqueo-cuenta': plantillaBloqueoCuenta,
   'desbloqueo-cuenta': plantillaDesbloqueoCuenta,
   'baja-cuenta': plantillaBajaCuenta,
+  'contrato-cierre': plantillaCierreCuenta,
 };

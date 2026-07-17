@@ -275,6 +275,12 @@ async function seleccionarTipo(tipo) {
     html += `<p style="font-size:12px;color:#888;margin-bottom:12px">${plantilla.descripcion || ''}</p>`;
     html += `<input type="hidden" id="docTipoSeleccionado" value="${tipo}">`;
 
+    // Campo Título (visible, para que el usuario ponga el título que quiera)
+    html += `<div style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600;color:#666;margin-bottom:4px;display:block">Título del documento</label>
+      <input type="text" id="docTitulo" class="form-input" placeholder="Título personalizado (o déjalo vacío para usar el predeterminado)" value="${plantilla.titulo || ''}" style="margin-bottom:12px">
+    </div>`;
+
     // Campos del formulario
     const datos = plantilla.datos || {};
     for (const [key, value] of Object.entries(datos)) {
@@ -312,6 +318,9 @@ async function crearDocumento() {
   const tipo = document.getElementById('docTipoSeleccionado')?.value;
   if (!tipo) return mostrarToast('Selecciona un tipo', 'error');
 
+  // Título personalizado (el usuario puede editarlo)
+  const titulo = document.getElementById('docTitulo')?.value?.trim() || '';
+
   // Recoger campos del formulario
   const inputs = document.querySelectorAll('#docFormContainer [id^="docField_"]');
   const datos = {};
@@ -331,7 +340,7 @@ async function crearDocumento() {
   try {
     const result = await apiFetch('/api/<%= entidadDoc %>/documentos', {
       method: 'POST',
-      body: JSON.stringify({ tipo, datos, enviarFirma: true, titulo: datos.titulo || '' })
+      body: JSON.stringify({ tipo, titulo, datos, enviarFirma: true })
     });
     mostrarToast('✅ Documento creado: ' + (result.titulo || tipo), 'success');
     // Cerrar modal y recargar

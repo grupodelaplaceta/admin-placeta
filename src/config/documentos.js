@@ -272,7 +272,8 @@ function generarContenidoDocumento(tipo, datos = {}) {
     case 'modificacion-eip':
     case 'bloqueo-cuenta':
     case 'desbloqueo-cuenta':
-    case 'baja-cuenta': {
+    case 'baja-cuenta':
+    case 'contrato-cierre': {
       const plantilla = PLANTILLAS_BANCO[tipo];
       if (plantilla) return plantilla(datos, L, cf, sf, tx, ln, hoy);
       break;
@@ -495,6 +496,88 @@ function generarContenidoDocumento(tipo, datos = {}) {
     case 'solicitud':
       sf('SOLICITUD'); cf('Solicitante', datos.solicitante); cf('DIP', datos.dip);
       cf('Trámite', datos.tramite); cf('Fecha', datos.fecha||hoy); cf('Descripción', datos.descripcion);
+      break;
+
+    // ── Tarjetas ─────────────────────────────────────────────────────────
+    case 'alta-tarjeta':
+      sf('SOLICITUD DE ALTA DE TARJETA');
+      cf('Titular', datos.titular||datos.nombre); cf('DIP', datos.dip);
+      cf('Tipo de tarjeta', datos.tipoTarjeta||'Débito'); cf('Cuenta vinculada', datos.iban);
+      cf('Límite diario', datos.limiteDiario ? datos.limiteDiario+' Pz' : '—');
+      cf('Límite mensual', datos.limiteMensual ? datos.limiteMensual+' Pz' : '—');
+      L.push({nota:'La tarjeta será activada una vez firmado el presente documento. El PIN se generará de forma segura y se comunicará al titular por canal seguro.'});
+      break;
+
+    case 'bloqueo-tarjeta':
+      sf('BLOQUEO DE TARJETA');
+      cf('Titular', datos.titular||datos.nombre); cf('DIP', datos.dip);
+      cf('Número de tarjeta', datos.numeroTarjeta||'—'); cf('Motivo', datos.motivo||'Robo');
+      cf('Fecha de bloqueo', datos.fechaBloqueo||hoy);
+      L.push({nota:'La tarjeta queda bloqueada para cualquier uso. Para desbloquear, el titular deberá solicitarlo expresamente.'});
+      break;
+
+    case 'baja-tarjeta':
+      sf('BAJA DE TARJETA');
+      cf('Titular', datos.titular||datos.nombre); cf('DIP', datos.dip);
+      cf('Número de tarjeta', datos.numeroTarjeta||'—'); cf('Motivo', datos.motivo||'Solicitud titular');
+      cf('Fecha de baja', datos.fechaBaja||hoy);
+      break;
+
+    case 'renovacion-tarjeta':
+      sf('RENOVACIÓN DE TARJETA');
+      cf('Titular', datos.titular||datos.nombre); cf('DIP', datos.dip);
+      cf('Tarjeta actual', datos.numeroTarjeta||'—'); cf('Motivo', datos.motivoRenovacion||'Caducidad');
+      cf('Nuevo límite', datos.nuevoLimite ? datos.nuevoLimite+' Pz' : 'Igual');
+      break;
+
+    // ── Productos ────────────────────────────────────────────────────────
+    case 'apertura-deposito':
+      sf('APERTURA DE DEPÓSITO');
+      cf('Titular', datos.titular||datos.nombre); cf('DIP', datos.dip);
+      cf('Importe', datos.importe ? datos.importe.toLocaleString()+' Pz' : '—');
+      cf('Plazo', datos.plazoDias ? datos.plazoDias+' días' : '—');
+      cf('Interés', datos.interes ? datos.interes+'%' : '—');
+      cf('Renovación automática', datos.renovacionAutomatica||'Sí');
+      break;
+
+    case 'apertura-ahorro':
+      sf('APERTURA DE CUENTA AHORRO');
+      cf('Titular', datos.titular||datos.nombre); cf('DIP', datos.dip);
+      cf('Importe inicial', datos.importeInicial ? datos.importeInicial.toLocaleString()+' Pz' : '0 Pz');
+      cf('Tipo de interés', datos.tipoInteres ? datos.tipoInteres+'%' : '—');
+      break;
+
+    // ── Cumplimiento ──────────────────────────────────────────────────────
+    case 'informe-aml':
+      sf('INFORME AML — PREVENCIÓN DE BLANQUEO');
+      cf('Sujeto', datos.sujeto); cf('DIP', datos.dip);
+      cf('Nivel de riesgo', datos.nivelRiesgo||'—'); cf('Fecha análisis', datos.fechaAnalisis||hoy);
+      cf('Resultado', datos.resultado||'Pendiente');
+      if (datos.medidas?.length) { sf('MEDIDAS'); datos.medidas.forEach((m,i) => cf(`${i+1}`, m)); }
+      break;
+
+    case 'informe-kyc':
+      sf('INFORME KYC — CONOCIMIENTO DEL CLIENTE');
+      cf('Cliente', datos.cliente); cf('DIP', datos.dip);
+      cf('Nivel verificación', datos.nivelVerificacion||'—');
+      cf('Estado', datos.estado||'Pendiente');
+      cf('Observaciones', datos.observaciones||'—');
+      break;
+
+    // ── Comunicaciones ────────────────────────────────────────────────────
+    case 'comunicacion-oficial':
+      sf('COMUNICACIÓN OFICIAL');
+      cf('Emisor', datos.emisor); cf('Destinatario', datos.destinatario);
+      cf('Asunto', datos.asunto); cf('Fecha', datos.fecha||hoy);
+      if (datos.cuerpo) tx(datos.cuerpo);
+      break;
+
+    case 'oficio':
+      sf('OFICIO');
+      cf('Emisor', datos.emisor); if (datos.cargo) cf('Cargo', datos.cargo);
+      cf('Destinatario', datos.destinatario); cf('Asunto', datos.asunto);
+      cf('Fecha', datos.fecha||hoy);
+      if (datos.texto) tx(datos.texto);
       break;
 
     case 'informe-pdf':
@@ -733,6 +816,71 @@ export function getPlantilla(tipo, entidad) {
       titulo: 'Certificado',
       descripcion: 'Certificado oficial',
       datos: { titular: '', dip: '', asunto: '', fechaEmision: '', validoHasta: '', emitidoPor: '' }
+    },
+    // ── Tarjetas ────────────────────────────────────────────────────────
+    'alta-tarjeta': {
+      titulo: 'Alta de Tarjeta',
+      descripcion: 'Solicitud de alta de tarjeta bancaria',
+      datos: { titular: '', dip: '', tipoTarjeta: 'Débito', iban: '', limiteDiario: 1000, limiteMensual: 5000, moneda: 'Pz', pinGenerado: 'No' }
+    },
+    'renovacion-tarjeta': {
+      titulo: 'Renovación de Tarjeta',
+      descripcion: 'Renovación de tarjeta bancaria',
+      datos: { titular: '', dip: '', iban: '', numeroTarjeta: '', motivoRenovacion: 'Caducidad', nuevoLimite: 1000 }
+    },
+    'bloqueo-tarjeta': {
+      titulo: 'Bloqueo de Tarjeta',
+      descripcion: 'Bloqueo de tarjeta por pérdida, robo o sospecha',
+      datos: { titular: '', dip: '', iban: '', numeroTarjeta: '', motivo: 'Robo', fechaBloqueo: '' }
+    },
+    'baja-tarjeta': {
+      titulo: 'Baja de Tarjeta',
+      descripcion: 'Cancelación de tarjeta bancaria',
+      datos: { titular: '', dip: '', iban: '', numeroTarjeta: '', motivo: 'Solicitud titular', fechaBaja: '' }
+    },
+    // ── Productos ───────────────────────────────────────────────────────
+    'apertura-deposito': {
+      titulo: 'Apertura de Depósito',
+      descripcion: 'Apertura de depósito bancario',
+      datos: { titular: '', dip: '', importe: 0, plazoDias: 365, interes: 2.5, moneda: 'Pz', fechaApertura: '', renovacionAutomatica: 'Sí' }
+    },
+    'apertura-ahorro': {
+      titulo: 'Apertura de Cuenta Ahorro',
+      descripcion: 'Apertura de cuenta de ahorro',
+      datos: { titular: '', dip: '', iban: '', importeInicial: 0, tipoInteres: 1.0, moneda: 'Pz' }
+    },
+    // ── Contrato cierre ─────────────────────────────────────────────────
+    'contrato-cierre': {
+      titulo: 'Contrato de Cierre de Cuenta',
+      descripcion: 'Cierre definitivo de cuenta bancaria (BLP-B-011)',
+      datos: { titular: '', dip: '', iban: '', motivo: 'Solicitud del titular', saldo: 0, destinoSaldo: 'Transferencia', cuentaDestino: '', productosCancelar: [] }
+    },
+    // ── Cumplimiento ────────────────────────────────────────────────────
+    'informe-aml': {
+      titulo: 'Informe AML',
+      descripcion: 'Informe de prevención de blanqueo de capitales',
+      datos: { sujeto: '', dip: '', nivelRiesgo: 'Bajo', fechaAnalisis: '', resultado: '', medidas: [] }
+    },
+    'informe-kyc': {
+      titulo: 'Informe KYC',
+      descripcion: 'Informe de conocimiento del cliente',
+      datos: { cliente: '', dip: '', nivelVerificacion: 'Completa', fechaVerificacion: '', estado: 'Verificado', observaciones: '' }
+    },
+    // ── Notificaciones ─────────────────────────────────────────────────
+    'notificacion': {
+      titulo: 'Notificación',
+      descripcion: 'Notificación oficial',
+      datos: { destinatario: '', dip: '', asunto: '', cuerpo: '', fecha: '', emitidoPor: '' }
+    },
+    'comunicacion-oficial': {
+      titulo: 'Comunicación Oficial',
+      descripcion: 'Comunicación oficial entre entidades',
+      datos: { emisor: '', destinatario: '', asunto: '', cuerpo: '', fecha: '', referencia: '' }
+    },
+    'oficio': {
+      titulo: 'Oficio',
+      descripcion: 'Oficio administrativo',
+      datos: { emisor: '', cargo: '', destinatario: '', asunto: '', texto: '', fecha: '' }
     }
   };
 
