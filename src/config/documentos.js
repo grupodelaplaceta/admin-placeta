@@ -255,86 +255,93 @@ function putInStore(entidad, docs) {
 }
 
 export async function initDocsTable(intento = 0) {
-  if (sbReady || !supabase) return false;
-  try {
-    const { error } = await supabase.from(DOCS_TABLE).select('id').limit(1);
-    if (!error) { sbReady = true; return true; }
-    // La tabla no existe, intentar crearla
-    console.log('[Docs] Tabla documentos no existe en Supabase, intentando crear...');
-    const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
-    const SUPABASE_URL = process.env.SUPABASE_URL || '';
-    if (SERVICE_KEY && SUPABASE_URL) {
-      const sql = `CREATE TABLE IF NOT EXISTS public.documentos (
-        id TEXT PRIMARY KEY, entidad TEXT NOT NULL, tipo TEXT NOT NULL,
-        categoria TEXT DEFAULT 'general', titulo TEXT, descripcion TEXT DEFAULT '',
-        datos JSONB DEFAULT '{}', ref_id TEXT, ref_tipo TEXT,
-        created_by TEXT DEFAULT 'sistema',
-        created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
-        estado TEXT DEFAULT 'borrador', firmado BOOLEAN DEFAULT FALSE, hash TEXT DEFAULT ''
-      );`.replace(/\s+/g, ' ').trim();
-      // Usar endpoint pg_graphql de Supabase
-      const resp = await fetch(`${SUPABASE_URL}/rest/v1/query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SERVICE_KEY,
-          'Authorization': `Bearer ${SERVICE_KEY}`,
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ query: sql })
-      });
-      if (resp.ok) {
-        console.log('[Docs] Tabla documentos creada en Supabase');
-      } else {
-        // Fallback: intentar con el endpoint /rest/v1/rpc/exec_sql si existe
-        const resp2 = await fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': SERVICE_KEY,
-            'Authorization': `Bearer ${SERVICE_KEY}`
-          },
-          body: JSON.stringify({ query: sql })
-        });
-        if (resp2.ok) console.log('[Docs] Tabla creada via exec_sql');
-      }
+  if (sbReady) return true;
+  
+  // Intentar 1: Usar el cliente Supabase
+  if (supabase) {
+    try {
+      const { error } = await supabase.from(DOCS_TABLE).select('id').limit(1);
+      if (!error) { sbReady = true; return true; }
+      console.warn('[Docs] initDocsTable con cliente falló:', error?.message);
+    } catch (e) {
+      console.warn('[Docs] initDocsTable cliente exception:', e.message);
     }
-    // Verificar de nuevo
-    const { error: err2 } = await supabase.from(DOCS_TABLE).select('id').limit(1);
-    if (!err2) { sbReady = true; return true; }
-  } catch (e) {
-    console.warn('[Docs] No se pudo inicializar Supabase:', e.message);
   }
+  
+  // Intentar 2: Usar fetch directo a Supabase REST API
+  try {
+    const SUPABASE_URL = process.env.SUPABASE_URL || 'htikrqaywapshlkdonvs.supabase.co';
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || 
+      process.env.SUPABASE_SECRET_KEY || 
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0aWtycWF5d2Fwc2hsa2RvbnZzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mjg0MTQ2NywiZXhwIjoyMDk4NDE3NDY3fQ.wiL-rKidW9XawEISg56mOLZEFCfq4UMm1ufil5BdaG0';
+    const fullUrl = SUPABASE_URL.startsWith('http') ? SUPABASE_URL : `https://${SUPABASE_URL}`;
+    const resp = await fetch(`${fullUrl}/rest/v1/${DOCS_TABLE}?select=id&limit=1`, {
+      headers: {
+        'apikey': SERVICE_KEY,
+        'Authorization': `Bearer ${SERVICE_KEY}`
+      }
+    });
+    if (resp.ok) {
+      console.log('[Docs] initDocsTable via REST API OK');
+      sbReady = true;
+      return true;
+    }
+    console.warn('[Docs] initDocsTable REST API falló:', resp.status);
+  } catch (e) {
+    console.warn('[Docs] initDocsTable REST exception:', e.message);
+  }
+  
   if (intento < 2) {
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 1500));
     return initDocsTable(intento + 1);
   }
   return false;
 }
 
 async function sbListDocs(entidad) {
-  if (!supabase) return null;
   await initDocsTable();
-  if (!sbReady) return null;
+  if (sbReady && supabase) {
+    try {
+      const { data, error } = await supabase.from(DOCS_TABLE).select('*').eq('entidad', entidad).order('created_at', { ascending: false });
+      if (!error && data) return data;
+    } catch (e) { console.warn('[Docs] sbListDocs exception:', e.message); }
+  }
+  // Fallback: raw fetch
   try {
-    const { data, error } = await supabase.from(DOCS_TABLE).select('*').eq('entidad', entidad).order('created_at', { ascending: false });
-    if (error) { console.warn('[Docs] sbListDocs error:', error.message); return null; }
-    return data || [];
-  } catch (e) { console.warn('[Docs] sbListDocs exception:', e.message); return null; }
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SECRET_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0aWtycWF5d2Fwc2hsa2RvbnZzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mjg0MTQ2NywiZXhwIjoyMDk4NDE3NDY3fQ.wiL-rKidW9XawEISg56mOLZEFCfq4UMm1ufil5BdaG0';
+    const SUPABASE_URL = 'https://htikrqaywapshlkdonvs.supabase.co';
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/${DOCS_TABLE}?entidad=eq.${entidad}&order=created_at.desc`, {
+      headers: { 'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}` }
+    });
+    if (resp.ok) { const data = await resp.json(); return data || []; }
+  } catch (e) { console.warn('[Docs] sbListDocs raw fallback exception:', e.message); }
+  return null;
 }
 
 async function sbSaveDoc(doc, intento = 0) {
-  if (!supabase) return null;
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SECRET_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0aWtycWF5d2Fwc2hsa2RvbnZzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mjg0MTQ2NywiZXhwIjoyMDk4NDE3NDY3fQ.wiL-rKidW9XawEISg56mOLZEFCfq4UMm1ufil5BdaG0';
+  const SUPABASE_URL = 'https://htikrqaywapshlkdonvs.supabase.co';
+  
   await initDocsTable();
-  if (!sbReady) {
-    if (intento < 2) {
-      // Reintentar después de un breve delay (para cold starts lentos)
-      await new Promise(r => setTimeout(r, 500));
-      return sbSaveDoc(doc, intento + 1);
-    }
-    console.warn('[Docs] sbSaveDoc: sbReady=false tras reintentar');
-    return null;
+  
+  // Intentar 1: Cliente Supabase
+  if (sbReady && supabase) {
+    try {
+      const record = {
+        id: doc.id, entidad: doc.entidad, tipo: doc.tipo,
+        categoria: doc.categoria || 'general', titulo: doc.titulo,
+        descripcion: doc.descripcion || '', datos: JSON.stringify(doc.datos || {}),
+        ref_id: doc.refId, ref_tipo: doc.refTipo,
+        created_by: doc.createdBy, estado: doc.estado || 'borrador',
+        firmado: doc.firmado || false, hash: doc.hash || '',
+        updated_at: new Date().toISOString()
+      };
+      const { data, error } = await supabase.from(DOCS_TABLE).upsert(record, { onConflict: 'id' }).select().maybeSingle();
+      if (!error && data) return data;
+    } catch (e) { console.warn('[Docs] sbSaveDoc client exception:', e.message); }
   }
+  
+  // Intentar 2: Raw fetch
   try {
     const record = {
       id: doc.id, entidad: doc.entidad, tipo: doc.tipo,
@@ -345,24 +352,24 @@ async function sbSaveDoc(doc, intento = 0) {
       firmado: doc.firmado || false, hash: doc.hash || '',
       updated_at: new Date().toISOString()
     };
-    const { data, error } = await supabase.from(DOCS_TABLE).upsert(record, { onConflict: 'id' }).select().maybeSingle();
-    if (error) {
-      console.warn('[Docs] sbSaveDoc error:', error.message);
-      if (intento < 2) {
-        await new Promise(r => setTimeout(r, 500));
-        return sbSaveDoc(doc, intento + 1);
-      }
-      return null;
-    }
-    return data;
-  } catch (e) {
-    console.warn('[Docs] sbSaveDoc exception:', e.message);
-    if (intento < 2) {
-      await new Promise(r => setTimeout(r, 500));
-      return sbSaveDoc(doc, intento + 1);
-    }
-    return null;
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/${DOCS_TABLE}?on_conflict=id`, {
+      method: 'POST',
+      headers: {
+        'apikey': SERVICE_KEY, 'Authorization': `Bearer ${SERVICE_KEY}`,
+        'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=representation'
+      },
+      body: JSON.stringify(record)
+    });
+    if (resp.ok) { const data = await resp.json(); return Array.isArray(data) ? data[0] : data; }
+    console.warn('[Docs] sbSaveDoc raw fallback error:', resp.status);
+  } catch (e) { console.warn('[Docs] sbSaveDoc raw exception:', e.message); }
+  
+  if (intento < 2) {
+    await new Promise(r => setTimeout(r, 1000));
+    return sbSaveDoc(doc, intento + 1);
   }
+  console.warn('[Docs] sbSaveDoc: todos los intentos fallaron');
+  return null;
 }
 
 async function sbDeleteDoc(id) {
