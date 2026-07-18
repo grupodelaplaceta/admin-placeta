@@ -170,18 +170,45 @@ router.post('/api/cuentas/modificar', async (req, res) => {
 
   const motivo = (motivos || []).join(', ') || 'Corrección administrativa';
   let result = null;
+  let cambios = [];
 
   try {
     if (type) {
       // Cambiar tipo de cuenta en la DB real del banco
       result = await apiBancoPost('cambiar-tipo', { accountId, tipo: type, motivo, bypass: !!bypass });
+      cambios.push({ campo: 'tipo', valor: type });
     } else if (displayName !== undefined || sendLimitPz !== undefined) {
       // Modificar datos de la cuenta
       result = await bancoAction('modificar-cuenta', { accountId, displayName, sendLimitPz, motivo, bypass: !!bypass });
+      if (displayName !== undefined) cambios.push({ campo: 'nombre', valor: displayName });
+      if (sendLimitPz !== undefined) cambios.push({ campo: 'limite', valor: sendLimitPz });
     }
   } catch {}
 
   if (result && !result.error) {
+    // Auto-generar documento de la modificación
+    try {
+      const { createHash, randomUUID } = await import('crypto');
+      const { saveDocumentoAsync } = await import('../config/documentos.js');
+      const docTipo = type ? 'cambio-titularidad' : 'modificacion-datos';
+      const docTitulo = type ? `Cambio de tipo a ${type}` : `Modificación de datos: ${cambios.map(c => c.campo).join(', ')}`;
+      await saveDocumentoAsync('banco', {
+        id: `mod-${Date.now()}-${randomUUID().slice(0, 6)}`,
+        tipo: docTipo,
+        titulo: docTitulo,
+        descripcion: motivo,
+        datos: { accountId, cambios, motivo, modificadoPor: req.session?.usuario?.dip || 'admin' },
+        refId: accountId,
+        refTipo: 'cuenta',
+        createdBy: req.session?.usuario?.dip || 'sistema',
+        estado: 'final',
+        firmado: true,
+        hash: createHash('sha256').update(accountId + Date.now()).digest('hex').slice(0, 16)
+      });
+    } catch (e) {
+      console.error('[Banco] Error al generar documento:', e.message);
+    }
+
     return res.json({ success: true, message: '✅ Cambiado en el banco', accountId, changes: { type, displayName, sendLimitPz } });
   }
   // Si la API falla, devolver error
