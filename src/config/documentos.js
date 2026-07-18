@@ -518,15 +518,22 @@ function generarContenidoDocumento(tipo, datos = {}) {
       ln(); sf('MOTIVO');
       tx(datos.motivo || 'Reclasificación bancaria');
       ln(); sf('EXPONE');
-      tx('Comparece el titular de la cuenta bancaria identificada en el presente documento, solicitando la reclasificación del tipo de cuenta.');
-      tx('El Banco de La Placeta, realizadas las comprobaciones previstas en el Código Normativo Interno, no encuentra impedimentos para acordar el cambio solicitado.');
+      tx('Comparece el titular de la cuenta bancaria identificada en el presente documento, con domicilio a efectos de notificaciones en el registrado en el sistema PlacetaID, solicitando la reclasificación del tipo de cuenta bancaria conforme a las necesidades y requisitos establecidos en el Código Normativo Interno del Grupo de La Placeta.');
+      tx('El Banco de La Placeta, una vez verificada la identidad del solicitante mediante el sistema oficial de autenticación PlacetaID, ha procedido a examinar la solicitud presentada, realizando las comprobaciones automáticas y manuales previstas en la normativa vigente, incluyendo la verificación de la titularidad de la cuenta, el estado de cumplimiento de obligaciones tributarias y bancarias, y la inexistencia de impedimentos legales o administrativos que pudieran obstaculizar el cambio solicitado.');
+      tx('Realizadas las comprobaciones oportunas, se acredita que concurren los requisitos necesarios para acceder a la reclasificación solicitada, no existiendo impedimento alguno para acordar el cambio de tipo de cuenta en los términos interesados por el titular.');
       ln(); sf('FUNDAMENTOS JURÍDICOS');
-      tx('La presente resolución se adopta conforme al Código Normativo Interno del Grupo de La Placeta, en particular las disposiciones sobre tipos de cuentas bancarias, la identificación mediante PlacetaID y las facultades de administración del Banco de La Placeta.');
+      tx('La presente resolución se adopta de conformidad con las disposiciones del Código Normativo Interno del Grupo de La Placeta, y en particular:');
+      tx('• Las normas reguladoras del sistema PlacetaID como método oficial de identificación y autenticación electrónica.');
+      tx('• Las disposiciones sobre el Documento de Identidad de La Placeta (DIP) y el Identificador de Empresa de La Placeta (EIP) como identificadores oficiales.');
+      tx('• Las normas reguladoras de los tipos de cuentas bancarias, sus requisitos de apertura, mantenimiento y modificación.');
+      tx('• Las facultades de administración, supervisión y control atribuidas al Banco de La Placeta como entidad gestora del sistema bancario.');
+      tx('• Los procedimientos establecidos para la modificación de las condiciones contractuales de las cuentas bancarias.');
       ln(); sf('RESUELVE');
-      tx('Primero. Aprobar el cambio de tipo de cuenta bancaria.');
-      tx('Segundo. Actualizar el Registro Bancario Oficial.');
-      tx('Tercero. Notificar electrónicamente la presente resolución al titular mediante PlacetaID.');
-      L.push({nota: 'Documento emitido por el Banco de La Placeta.'});
+      tx('Primero. Aprobar el cambio de tipo de cuenta bancaria solicitado, pasando la cuenta identificada a la nueva categoría indicada en el presente documento, con efectos desde la fecha de la presente resolución.');
+      tx('Segundo. Actualizar el Registro Bancario Oficial del Banco de La Placeta, dejando constancia del cambio de tipo de cuenta y de todas las circunstancias concurrentes.');
+      tx('Tercero. Notificar electrónicamente la presente resolución al titular de la cuenta mediante el sistema PlacetaID, con acuse de recibo y constancia de la fecha y hora de notificación.');
+      tx('Cuarto. La presente resolución agota la vía administrativa bancaria, pudiendo interponerse contra ella reclamación ante la Administración del Grupo de La Placeta en el plazo de quince días hábiles siguientes a su notificación.');
+      L.push({nota: 'Documento oficial emitido por el Banco de La Placeta. Pendiente de firma electrónica por el titular.'});
       break;
     }
 
@@ -925,32 +932,22 @@ export async function generarPDF(entidad, documento) {
       // ── CABECERA CON LOGO ──
       doc.save();
       // Fondo de cabecera color acento
-      doc.rect(0, 16, doc.page.width, 90).fill('#341087');
+      doc.rect(0, 16, doc.page.width, 85).fill('#341087');
       // Barra superior
       doc.rect(0, 0, doc.page.width, 3.5).fill('#5a2fc2');
-      // Logo (blanco sobre fondo morado)
+      // Logo grande (el nombre de entidad está en el logo)
       const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
       if (!fs.existsSync(logoPath)) {
         const logoPath2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
-        try { if (fs.existsSync(logoPath2)) doc.image(logoPath2, 50, 26, { width: 36 }); } catch {}
+        try { if (fs.existsSync(logoPath2)) doc.image(logoPath2, 50, 22, { width: 56 }); } catch {}
       } else {
-        try { doc.image(logoPath, 50, 26, { width: 36 }); } catch {}
+        try { doc.image(logoPath, 50, 22, { width: 56 }); } catch {}
       }
-      doc.font(fontBold).fontSize(16).fillColor('#ffffff').text(entL, 94, 30);
-      doc.font(fontReg).fontSize(8).fillColor('#d9cdfa').text(documento.titulo||'Documento', 94, 52);
-      doc.font(fontBold).fontSize(19).fillColor('#ffffff').text(documento.titulo||'Documento', 50, 76);
-      doc.rect(50, 108, 500, 1.5).fill('#5a2fc2');
-      doc.y = 120;
-      doc.restore();
-      doc.y = 110;
-      doc.restore();
-
-      // ── METADATOS ──
-      doc.save();
-      doc.rect(50, doc.y, 3, 22).fill(C);
-      doc.font(fontReg).fontSize(7).fillColor('#1c1226');
-      doc.text(`${documento.titulo||'Documento'}  |  ${fecha}  |  ${documento.estado}`, 62, doc.y+3, { width: 480 });
-      doc.y += 30;
+      doc.font(fontBold).fontSize(20).fillColor('#ffffff').text(documento.titulo||'Documento', 120, 28);
+      doc.font(fontReg).fontSize(8).fillColor('#d9cdfa').text(entL, 120, 54);
+      doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text(`ID: ${(documento.id||'').slice(0,20)}  |  ${fecha}`, 120, 70);
+      doc.rect(50, 104, 500, 1.5).fill('#5a2fc2');
+      doc.y = 116;
       doc.restore();
 
       // ── CUERPO ──
