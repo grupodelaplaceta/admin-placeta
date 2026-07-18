@@ -259,26 +259,48 @@ router.get('/publico/:entidad/documentos/:id/pdf', verificarApiKey, async (req, 
 
 // ── Diagnóstico del sistema de documentos ─────────────────────────────────
 router.get('/api/documentos/diagnostico', async (req, res) => {
-  const { initDocsTable, getDocumentos } = await import('../config/documentos.js');
+  const documentosConfig = await import('../config/documentos.js');
+  const { initDocsTable, getDocumentos } = documentosConfig;
   
   const sbOk = await initDocsTable();
   const memBanco = getDocumentos('banco')?.length || 0;
   
-  let sbWrite = 'no probado', sbDocs = [];
+  let estado = { conectado: sbOk, docs_en_supabase: 0, escritura: 'no probado', docs: [] };
+  
   if (sbOk) {
     try {
       const { supabase } = await import('../config/supabase.js');
+      // 1. Leer
       const { data, error } = await supabase.from('documentos').select('id, entidad, titulo, tipo, estado, created_at').limit(20).order('created_at', { ascending: false });
-      sbWrite = error ? `error: ${error.message}` : 'ok';
-      sbDocs = data || [];
-    } catch (e) { sbWrite = `excepción: ${e.message}`; }
+      if (error) { estado.lectura = `error: ${error.message}`; }
+      else {
+        estado.lectura = 'ok';
+        estado.docs_en_supabase = data.length;
+        estado.docs = data;
+      }
+      
+      // 2. Probar escritura real: crear un doc temporal y borrarlo
+      const testId = 'test-' + Date.now();
+      const { error: writeErr } = await supabase.from('documentos').insert({
+        id: testId, entidad: 'banco', tipo: 'test-diagnostico',
+        titulo: 'Test de escritura', descripcion: 'Auto-generado',
+        datos: {}, estado: 'borrador', firmado: false, hash: 'test'
+      });
+      if (writeErr) estado.escritura = `error al insertar: ${writeErr.message}`;
+      else {
+        // Borrar el test
+        await supabase.from('documentos').delete().eq('id', testId);
+        estado.escritura = 'ok (insert+delete OK)';
+      }
+    } catch (e) { estado.escritura = `excepción: ${e.message}`; }
   }
 
   res.json({
-    supabase: sbOk ? 'conectado' : 'no disponible',
-    escritura: sbWrite,
-    docs_en_supabase: sbDocs.length,
-    docs: sbDocs,
+    supabase: estado.conectado ? 'conectado' : 'no disponible',
+    lectura: estado.lectura || 'no probado',
+    escritura: estado.escritura,
+    docs_en_supabase: estado.docs_en_supabase,
+    docs: estado.docs,
     memoria: { banco: memBanco },
     ts: new Date().toISOString()
   });
