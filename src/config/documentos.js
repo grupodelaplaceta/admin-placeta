@@ -923,33 +923,34 @@ export async function generarPDF(entidad, documento) {
       // ── Función para dibujar cabecera en cualquier página ──
       function dibujarCabecera(esPrimera = false) {
         doc.save();
-        const alto = esPrimera ? 85 : 42;
+        const alto = esPrimera ? 80 : 40;
         const topY = esPrimera ? 16 : 10;
         doc.rect(0, topY, doc.page.width, alto).fill('#341087');
         doc.rect(0, 0, doc.page.width, 3.5).fill('#5a2fc2');
-        // Logo
+        // Logo grande centrado verticalmente con el texto
         const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
-        const logoW = esPrimera ? 48 : 32;
-        const logoX = esPrimera ? 50 : 50;
-        const logoY = esPrimera ? 24 : 16;
-        let logoOk = false;
+        const logoW = esPrimera ? 64 : 38;
+        const logoX = 45;
+        const logoY = esPrimera ? 24 : 14;
         try {
           if (!fs.existsSync(logoPath)) {
-            const logoPath2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
-            if (fs.existsSync(logoPath2)) { doc.image(logoPath2, logoX, logoY, { width: logoW }); logoOk = true; }
-          } else { doc.image(logoPath, logoX, logoY, { width: logoW }); logoOk = true; }
+            const p2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
+            if (fs.existsSync(p2)) doc.image(p2, logoX, logoY, { width: logoW });
+          } else { doc.image(logoPath, logoX, logoY, { width: logoW }); }
         } catch {}
         if (esPrimera) {
-          doc.font(fontBold).fontSize(18).fillColor('#ffffff').text(documento.titulo||'Documento', logoX + logoW + 16, 28);
-          doc.font(fontReg).fontSize(8).fillColor('#d9cdfa').text(entL, logoX + logoW + 16, 52);
-          doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text(`${fecha}`, logoX + logoW + 16, 68);
-          doc.rect(50, 104, 500, 1.5).fill('#5a2fc2');
-          doc.y = 116;
+          const tx = logoX + logoW + 16;
+          doc.font(fontBold).fontSize(16).fillColor('#ffffff').text(documento.titulo||'Documento', tx, 30);
+          doc.font(fontReg).fontSize(8).fillColor('#d9cdfa').text(entL, tx, 54);
+          doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text(fecha, tx, 70);
+          doc.rect(50, 100, 500, 1.5).fill('#5a2fc2');
+          doc.y = 112;
         } else {
-          doc.font(fontBold).fontSize(10).fillColor('#ffffff').text(entL, logoX + logoW + 12, 18);
-          doc.font(fontReg).fontSize(7).fillColor('#d9cdfa').text(documento.titulo||'Documento', logoX + logoW + 12, 34);
-          doc.rect(50, 54, 500, 1).fill('#5a2fc2');
-          doc.y = 62;
+          const tx = logoX + logoW + 12;
+          doc.font(fontBold).fontSize(10).fillColor('#ffffff').text(entL, tx, 18);
+          doc.font(fontReg).fontSize(7).fillColor('#d9cdfa').text(documento.titulo||'Documento', tx, 34);
+          doc.rect(50, 52, 500, 1).fill('#5a2fc2');
+          doc.y = 60;
         }
         doc.restore();
       }
@@ -985,7 +986,7 @@ export async function generarPDF(entidad, documento) {
       // ── CUERPO ──
       for (const item of lineas) {
         // Salto de página si queda poco espacio
-        if (doc.y > doc.page.height - 100) doc.addPage();
+        if (doc.y > doc.page.height - 80) doc.addPage();
 
         if (item.seccion) {
           doc.moveDown(0.3);
@@ -1013,7 +1014,7 @@ export async function generarPDF(entidad, documento) {
 
       // ── FIRMA ──
       // Dejar espacio suficiente
-      if (doc.y > doc.page.height - 140) doc.addPage();
+      if (doc.y > doc.page.height - 120) doc.addPage();
       doc.moveDown(0.5);
       doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(1).strokeColor(C).stroke();
       doc.moveDown(0.5);
@@ -1049,14 +1050,14 @@ export async function generarPDF(entidad, documento) {
       }
 
       // ── CSV ──
-      if (doc.y > doc.page.height - 130) doc.addPage();
+      if (doc.y > doc.page.height - 110) doc.addPage();
       doc.moveDown(0.5);
       const hash = documento.hash || createHash('sha256').update(documento.id+Date.now()).digest('hex');
       doc.font(fontReg).fontSize(6).fillColor('#9a8aaa');
       doc.text(`CSV: ${hash.substring(0,20).toUpperCase()}`, {width:500, align:'center'});
 
       // ── PIE ──
-      if (doc.y > doc.page.height - 100) doc.addPage();
+      if (doc.y > doc.page.height - 85) doc.addPage();
       dibujarFooter();
       doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
       const leyenda = esAuto ? 'Informe automático del sistema · Código Normativo Interno' : `${entL} · Documento oficial · Código Normativo Interno GDLP`;
