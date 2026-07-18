@@ -531,7 +531,7 @@ function generarContenidoDocumento(tipo, datos = {}) {
       tx('Segundo. Actualizar el Registro Bancario Oficial.');
       tx('Tercero. Notificar al titular mediante PlacetaID.');
       ln(); L.push({nota: 'Documento oficial emitido por el Banco de La Placeta.'});
-      L.push({nota: 'AVISO LEGAL: Banco de La Placeta es una entidad dentro del ecosistema de ASOCIACIÓN GRUPO DE LA PLACETA que se rige por sus Estatutos y el Código Normativo Interno vigente. Al usar los servicios del mencionado ecosistema aceptas cumplir con las normativas vigentes que lo regulan.'});
+      L.push({nota: 'AVISO LEGAL: Banco de La Placeta es una entidad dentro del ecosistema de ASOCIACIÓN GRUPO DE LA PLACETA que se rige por sus Estatutos y el Código Normativo Interno vigente. Al firmar digitalmente este documento vía PlacetaID Móvil le estoy proporcionando autenticidad y dándole la misma validez que a una firma en papel mía, entendiendo que el contenido del mismo y mi firma quieren representar conformidad.'});
       break;
     }
 
