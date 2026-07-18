@@ -28,7 +28,7 @@ function validacion(L, cf, ln, sf, uuid, hash, csv) {
 }
 
 // ── Helper: pie de documento ──────────────────────────────────────────────
-function pie(L, sf, tx, codigo, titulo) {
+function pie(L, sf, tx, ln, codigo, titulo) {
   ln(); sf('PIE DE DOCUMENTO');
   tx('BANCO DE LA PLACETA');
   tx(`Documento Oficial ${codigo} – ${titulo}`);
@@ -36,14 +36,14 @@ function pie(L, sf, tx, codigo, titulo) {
 }
 
 // ── Helper: protección de datos ───────────────────────────────────────────
-function proteccionDatos(L, sf, tx) {
+function proteccionDatos(L, sf, tx, ln) {
   ln(); sf('PROTECCIÓN DE DATOS');
   tx('Los datos personales contenidos en este expediente serán tratados por el Banco de La Placeta con la finalidad de gestionar la relación bancaria, ejecutar las operaciones solicitadas, cumplir las obligaciones legales y mantener los registros de auditoría y seguridad.');
   tx('El tratamiento se realizará conforme al Reglamento (UE) 2016/679 (RGPD), la Ley Orgánica 3/2018 (LOPDGDD) y el Código Normativo Interno del Grupo de La Placeta. El titular podrá ejercer sus derechos de acceso, rectificación, supresión, oposición, limitación del tratamiento y demás derechos reconocidos por la normativa aplicable mediante solicitud dirigida a la Administración de La Placeta.');
 }
 
 // ── Helper: recursos ──────────────────────────────────────────────────────
-function recursos(L, sf, tx) {
+function recursos(L, sf, tx, ln) {
   ln(); sf('RECURSOS');
   tx('Contra la presente resolución podrá interponerse reclamación administrativa ante el Banco de La Placeta en los términos establecidos por el Código Normativo Interno. La interposición del recurso no suspenderá por sí misma los efectos de la resolución, salvo resolución expresa en contrario.');
 }
@@ -110,12 +110,12 @@ export function plantillaAperturaCuenta(datos, L, cf, sf, tx, ln, hoy) {
   sf('OBLIGACIONES DEL TITULAR');
   tx('El titular se obliga a:');
   tx('• Mantener actualizados sus datos. • Custodiar sus credenciales PlacetaID. • Cumplir la normativa bancaria. • Cumplir la normativa tributaria. • No utilizar la cuenta para operaciones fraudulentas. • Comunicar cualquier uso indebido.');
-  proteccionDatos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre, dip: datos.gestorDip });
   firma(L, cf, ln, sf, 'Administrador (si procede)', { nombre: datos.adminNombre, cargo: datos.adminCargo });
   firma(L, cf, ln, sf, 'Titular', { nombre: datos.titular || datos.nombre });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-001', 'Contrato de Apertura de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-001', 'Contrato de Apertura de Cuenta Bancaria');
   return L;
 }
 
@@ -160,12 +160,12 @@ export function plantillaModificacionCuenta(datos, L, cf, sf, tx, ln, hoy) {
   tx('Tercero. Mantener inalteradas todas aquellas condiciones contractuales que no hayan sido expresamente modificadas.');
   tx('Cuarto. Registrar automáticamente esta actuación en el historial de auditoría del Banco de La Placeta.');
   tx('Quinto. Notificar electrónicamente la resolución al titular mediante PlacetaID.');
-  proteccionDatos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre, dip: datos.gestorDip });
   firma(L, cf, ln, sf, 'Administrador del Banco (cuando proceda)', { nombre: datos.adminNombre, cargo: datos.adminCargo });
   firma(L, cf, ln, sf, 'Titular de la cuenta', { nombre: datos.titular || datos.nombre });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-002', 'Contrato de Modificación de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-002', 'Contrato de Modificación de Cuenta Bancaria');
   return L;
 }
 
@@ -206,14 +206,14 @@ export function plantillaCambioTitularidad(datos, L, cf, sf, tx, ln, hoy) {
   tx('Tercero. Inscribir como nuevo titular al ciudadano identificado en este documento.');
   tx('Cuarto. Actualizar automáticamente los sistemas bancarios, tributarios y administrativos.');
   tx('Quinto. Notificar electrónicamente la resolución a todas las personas afectadas mediante PlacetaID.');
-  proteccionDatos(L, sf, tx);
-  recursos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
+  recursos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Titular saliente', { nombre: datos.titularSaliente, dip: datos.dipSaliente });
   firma(L, cf, ln, sf, 'Nuevo titular', { nombre: datos.titularEntrante, dip: datos.dipEntrante });
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre, dip: datos.gestorDip });
   firma(L, cf, ln, sf, 'Administrador del Banco (cuando proceda)', { nombre: datos.adminNombre, cargo: datos.adminCargo });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-003', 'Contrato de Cambio de Titularidad de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-003', 'Contrato de Cambio de Titularidad de Cuenta Bancaria');
   return L;
 }
 
@@ -253,12 +253,12 @@ export function plantillaIncorporacionCotitular(datos, L, cf, sf, tx, ln, hoy) {
   tx('Segundo. Inscribir la modificación en el Registro Bancario Oficial.');
   tx('Tercero. Asignar al nuevo cotitular las facultades expresamente autorizadas.');
   tx('Cuarto. Registrar electrónicamente la presente actuación en el historial permanente de la cuenta.');
-  proteccionDatos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Titular principal', { nombre: datos.titular, dip: datos.dip });
   firma(L, cf, ln, sf, 'Nuevo cotitular', { nombre: datos.cotitular, dip: datos.dipCotitular });
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-004', 'Contrato de Incorporación de Cotitular de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-004', 'Contrato de Incorporación de Cotitular de Cuenta Bancaria');
   return L;
 }
 
@@ -292,13 +292,13 @@ export function plantillaDesvinculacionCotitular(datos, L, cf, sf, tx, ln, hoy) 
   tx('Tercero. Mantener íntegro el historial de operaciones realizadas con anterioridad.');
   tx('Cuarto. Actualizar el Registro Bancario Oficial y los permisos asociados al PlacetaID.');
   tx('Quinto. Notificar electrónicamente la presente resolución mediante PlacetaID.');
-  proteccionDatos(L, sf, tx);
-  recursos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
+  recursos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Titular principal', { nombre: datos.titular, dip: datos.dip });
   firma(L, cf, ln, sf, 'Cotitular (cuando proceda)', { nombre: datos.cotitular, dip: datos.dipCotitular });
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-005', 'Contrato de Desvinculación de Cotitular de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-005', 'Contrato de Desvinculación de Cotitular de Cuenta Bancaria');
   return L;
 }
 
@@ -337,13 +337,13 @@ export function plantillaVinculacionEIP(datos, L, cf, sf, tx, ln, hoy) {
   tx('Segundo. Inscribir la empresa como titular o entidad autorizada en el Registro Bancario Oficial.');
   tx('Tercero. Vincular automáticamente los productos bancarios seleccionados.');
   tx('Cuarto. Notificar electrónicamente la resolución al representante legal mediante PlacetaID.');
-  proteccionDatos(L, sf, tx);
-  recursos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
+  recursos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Representante legal de la empresa', { nombre: datos.representante, dip: datos.dipRepresentante });
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre });
   firma(L, cf, ln, sf, 'Administrador del Banco', { nombre: datos.adminNombre, cargo: datos.adminCargo });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-006', 'Contrato de Vinculación de Empresa (EIP) a Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-006', 'Contrato de Vinculación de Empresa (EIP) a Cuenta Bancaria');
   return L;
 }
 
@@ -375,13 +375,13 @@ export function plantillaModificacionEIP(datos, L, cf, sf, tx, ln, hoy) {
   tx('Segundo. Actualizar el EIP, los datos societarios y la representación legal en el Registro Bancario Oficial.');
   tx('Tercero. Mantener la continuidad jurídica de la cuenta bancaria.');
   tx('Cuarto. Conservar el historial completo de la empresa anteriormente vinculada.');
-  proteccionDatos(L, sf, tx);
-  recursos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
+  recursos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Representante legal empresa saliente', { nombre: datos.representanteAnterior });
   firma(L, cf, ln, sf, 'Representante legal empresa entrante', { nombre: datos.representanteNuevo });
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-007', 'Contrato de Modificación de Empresa Vinculada (EIP)');
+  pie(L, sf, tx, ln, 'BLP-B-007', 'Contrato de Modificación de Empresa Vinculada (EIP)');
   return L;
 }
 
@@ -424,13 +424,13 @@ export function plantillaBloqueoCuenta(datos, L, cf, sf, tx, ln, hoy) {
   cf('Tipo', datos.duracion || 'Temporal');
   cf('Fecha de inicio', datos.fechaInicio || hoy);
   cf('Fecha prevista de revisión', datos.fechaRevision || '______________________');
-  proteccionDatos(L, sf, tx);
-  recursos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
+  recursos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Inspector de Cumplimiento Normativo', { nombre: datos.inspectorNombre, dip: datos.inspectorDip });
   firma(L, cf, ln, sf, 'Administrador del Banco', { nombre: datos.adminNombre, cargo: datos.adminCargo });
   firma(L, cf, ln, sf, 'Presidente del Banco (cuando proceda)', { nombre: datos.presidenteNombre });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-008', 'Resolución de Bloqueo de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-008', 'Resolución de Bloqueo de Cuenta Bancaria');
   return L;
 }
 
@@ -468,12 +468,12 @@ export function plantillaDesbloqueoCuenta(datos, L, cf, sf, tx, ln, hoy) {
   tx('Tercero. Aplicar, cuando proceda, las limitaciones o medidas de seguimiento indicadas.');
   tx('Cuarto. Actualizar el estado de la cuenta en el Registro Bancario Oficial.');
   tx('Quinto. Notificar la presente resolución al titular mediante PlacetaID.');
-  proteccionDatos(L, sf, tx);
-  recursos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
+  recursos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Inspector de Cumplimiento Normativo', { nombre: datos.inspectorNombre, dip: datos.inspectorDip });
   firma(L, cf, ln, sf, 'Administrador del Banco', { nombre: datos.adminNombre, cargo: datos.adminCargo });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-009', 'Resolución de Desbloqueo de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-009', 'Resolución de Desbloqueo de Cuenta Bancaria');
   return L;
 }
 
@@ -521,14 +521,14 @@ export function plantillaBajaCuenta(datos, L, cf, sf, tx, ln, hoy) {
   ln(); sf('EFECTOS');
   tx('A partir de la fecha efectiva de cancelación:');
   tx('• El IBAN dejará de existir. • No podrán recibirse ingresos ni emitirse transferencias. • Quedarán canceladas las tarjetas asociadas. • Se eliminarán las domiciliaciones. • Finalizarán los pagos automáticos. • El expediente pasará al Archivo Histórico Bancario.');
-  proteccionDatos(L, sf, tx);
-  recursos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
+  recursos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre });
   firma(L, cf, ln, sf, 'Inspector de Cumplimiento (cuando proceda)', { nombre: datos.inspectorNombre });
   firma(L, cf, ln, sf, 'Administrador del Banco', { nombre: datos.adminNombre, cargo: datos.adminCargo });
   firma(L, cf, ln, sf, 'Titular / Representante legal (cuando proceda)', { nombre: datos.titular || datos.nombre });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-010', 'Resolución de Baja Definitiva de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-010', 'Resolución de Baja Definitiva de Cuenta Bancaria');
   return L;
 }
 
@@ -567,11 +567,11 @@ export function plantillaCierreCuenta(datos, L, cf, sf, tx, ln, hoy) {
   tx('Tercero. Liquidar el saldo según lo indicado.');
   tx('Cuarto. Actualizar el Registro Bancario Oficial.');
   tx('Quinto. Notificar electrónicamente mediante PlacetaID.');
-  proteccionDatos(L, sf, tx);
+  proteccionDatos(L, sf, tx, ln);
   firma(L, cf, ln, sf, 'Titular', { nombre: datos.titular || datos.nombre, dip: datos.dip });
   firma(L, cf, ln, sf, 'Gestor Bancario', { nombre: datos.gestorNombre });
   validacion(L, cf, ln, sf, datos.uuid, datos.hash, datos.csv);
-  pie(L, sf, tx, 'BLP-B-011', 'Contrato de Cierre de Cuenta Bancaria');
+  pie(L, sf, tx, ln, 'BLP-B-011', 'Contrato de Cierre de Cuenta Bancaria');
   return L;
 }
 
