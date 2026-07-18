@@ -506,25 +506,29 @@ function generarContenidoDocumento(tipo, datos = {}) {
   switch (tipo) {
     // ── Cambio de tipo de cuenta ────────────────────────────────────────
     case 'cambio-tipo-cuenta': {
-      sf('DATOS DE LA CUENTA');
-      cf('Cuenta', datos.cuenta || datos.accountId || '—');
+      sf('DATOS DEL TITULAR');
+      cf('Nombre', datos.titular || datos.cuenta || '—');
+      cf('PlacetaID', datos.placetaId || '—');
+      if (datos.eip) cf('EIP', datos.eip);
+      ln(); sf('DATOS DE LA CUENTA');
+      cf('IBAN', datos.iban || '—');
       cf('Tipo anterior', datos.tipoAnterior || '—');
-      cf('Tipo nuevo', datos.tipoNuevo || datos.tipo || '—');
+      cf('Tipo nuevo', datos.tipoNuevo || '—');
       cf('Fecha', datos.fecha || hoy);
       ln(); sf('MOTIVO');
       tx(datos.motivo || 'Reclasificación bancaria');
       ln(); sf('EXPONE');
-      tx('El titular solicita la reclasificación de la cuenta bancaria, modificando su tipo a la categoría indicada en el presente documento.');
-      tx('Realizadas las comprobaciones previstas, no existen impedimentos para acordar el cambio.');
+      tx('Comparece el titular de la cuenta bancaria identificada en el presente documento, solicitando la reclasificación del tipo de cuenta.');
+      tx('El Banco de La Placeta, realizadas las comprobaciones previstas en el Código Normativo Interno, no encuentra impedimentos para acordar el cambio solicitado.');
       ln(); sf('FUNDAMENTOS JURÍDICOS');
-      tx('La presente resolución se adopta conforme al Código Normativo Interno del Grupo de La Placeta, en particular las disposiciones sobre tipos de cuentas bancarias y facultades de administración del Banco de La Placeta.');
+      tx('La presente resolución se adopta conforme al Código Normativo Interno del Grupo de La Placeta, en particular las disposiciones sobre tipos de cuentas bancarias, la identificación mediante PlacetaID y las facultades de administración del Banco de La Placeta.');
       ln(); sf('RESUELVE');
-      tx('Primero. Aprobar el cambio de tipo de cuenta.');
+      tx('Primero. Aprobar el cambio de tipo de cuenta bancaria.');
       tx('Segundo. Actualizar el Registro Bancario Oficial.');
-      tx('Tercero. Notificar electrónicamente mediante PlacetaID.');
-      ln(); sf('PROTECCIÓN DE DATOS');
-      tx('Los datos personales contenidos en este expediente serán tratados conforme al RGPD, la LOPDGDD y el Código Normativo Interno GDLP.');
-      L.push({nota: 'Documento generado electrónicamente por Admin Placeta — Banco de La Placeta'});
+      tx('Tercero. Notificar electrónicamente la presente resolución al titular mediante PlacetaID.');
+      ln(); sf('FIRMA');
+      tx('El presente documento queda sujeto a la firma electrónica del titular a través de PlacetaID Móvil para su plena validez.');
+      L.push({nota: 'Documento emitido por el Banco de La Placeta. Pendiente de firma digital por el titular mediante PlacetaID Móvil.'});
       break;
     }
 
@@ -872,8 +876,8 @@ const A = '#1c005f', B = '#341087', C = '#5a2fc2'; // purple palette
 
 // Registrar fuente Outfit
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FONT_REG = path.join(__dirname, '..', 'public', 'fonts', 'outfit_regular.ttf');
-const FONT_BOLD = path.join(__dirname, '..', 'public', 'fonts', 'outfit_bold.ttf');
+const FONT_REG = path.join(__dirname, '..', 'src', 'fonts', 'outfit_regular.ttf');
+const FONT_BOLD = path.join(__dirname, '..', 'src', 'fonts', 'outfit_bold.ttf');
 
 export async function generarPDF(entidad, documento) {
   return new Promise((resolve, reject) => {

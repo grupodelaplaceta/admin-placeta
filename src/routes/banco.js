@@ -207,16 +207,13 @@ router.post('/api/cuentas/modificar', async (req, res) => {
         titulo: docTitulo,
         descripcion: motivo,
         datos: {
-          // Para la plantilla legal
-          cuenta: datosCuenta.displayName || displayName || accountId,
-          iban: datosCuenta.iban || '—',
+          // Solo datos del cliente - sin IDs internos
           titular: datosCuenta.displayName || displayName || '—',
           placetaId: datosCuenta.placetaId || '—',
-          eip: datosCuenta.eip || '—',
+          eip: datosCuenta.eip || '',
+          iban: datosCuenta.iban || '—',
           tipoAnterior: datosCuenta.type || '',
           tipoNuevo: type || '',
-          // Para respaldo
-          accountId,
           motivo,
           fecha: new Date().toISOString()
         },
