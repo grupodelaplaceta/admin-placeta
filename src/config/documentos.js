@@ -874,8 +874,8 @@ const A = '#1c005f', B = '#341087', C = '#5a2fc2'; // purple palette
 
 // Registrar fuente Outfit
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FONT_REG = path.join(__dirname, '..', 'src', 'fonts', 'outfit_regular.ttf');
-const FONT_BOLD = path.join(__dirname, '..', 'src', 'fonts', 'outfit_bold.ttf');
+const FONT_REG = path.join(__dirname, '..', 'fonts', 'outfit_regular.ttf');
+const FONT_BOLD = path.join(__dirname, '..', 'fonts', 'outfit_bold.ttf');
 
 export async function generarPDF(entidad, documento) {
   return new Promise((resolve, reject) => {
@@ -929,9 +929,9 @@ export async function generarPDF(entidad, documento) {
       // Barra superior
       doc.rect(0, 0, doc.page.width, 3.5).fill('#5a2fc2');
       // Logo (blanco sobre fondo morado)
-      const logoPath = path.join(__dirname, '..', 'src', 'img', logos[entidad] || 'logo-web.png');
+      const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
       if (!fs.existsSync(logoPath)) {
-        const logoPath2 = path.join(__dirname, '..', 'public', 'img', logos[entidad] || 'logo-web.png');
+        const logoPath2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
         try { if (fs.existsSync(logoPath2)) doc.image(logoPath2, 50, 26, { width: 36 }); } catch {}
       } else {
         try { doc.image(logoPath, 50, 26, { width: 36 }); } catch {}
