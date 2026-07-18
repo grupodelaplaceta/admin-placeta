@@ -201,6 +201,7 @@ router.post('/api/cuentas/modificar', async (req, res) => {
       const cambiosStr = cambios.map(c => `${c.campo}: ${c.valor}`).join(', ');
       const esCambioTipo = !!type;
       const docTitulo = esCambioTipo ? `Cambio de tipo a ${type}` : `Modificación: ${cambiosStr}`;
+      await saveDocumentoAsync('banco', {
         id: `mod-${Date.now()}-${randomUUID().slice(0, 6)}`,
         tipo: esCambioTipo ? 'cambio-tipo-cuenta' : 'modificacion-datos',
         titulo: docTitulo,
