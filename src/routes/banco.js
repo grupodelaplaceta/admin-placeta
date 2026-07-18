@@ -209,7 +209,7 @@ router.post('/api/cuentas/modificar', async (req, res) => {
         datos: {
           // Solo datos del cliente - sin IDs internos
           titular: datosCuenta.displayName || displayName || '—',
-          placetaId: datosCuenta.placetaId || '—',
+          dip: datosCuenta.placetaId || '—',
           eip: datosCuenta.eip || '',
           iban: datosCuenta.iban || '—',
           tipoAnterior: datosCuenta.type || '',

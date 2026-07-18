@@ -508,7 +508,7 @@ function generarContenidoDocumento(tipo, datos = {}) {
     case 'cambio-tipo-cuenta': {
       sf('DATOS DEL TITULAR');
       cf('Nombre', datos.titular || datos.cuenta || '—');
-      cf('PlacetaID', datos.placetaId || '—');
+      cf('DIP', datos.dip || '—');
       if (datos.eip) cf('EIP', datos.eip);
       ln(); sf('DATOS DE LA CUENTA');
       cf('IBAN', datos.iban || '—');
