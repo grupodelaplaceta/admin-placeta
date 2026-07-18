@@ -998,6 +998,15 @@ export async function generarPDF(entidad, documento) {
         doc.moveDown(0.8);
         doc.moveTo(150, doc.y).lineTo(450, doc.y).lineWidth(0.3).strokeColor('#e0daf0').stroke();
         doc.moveDown(0.3);
+        // Firma manuscrita (base64) si existe
+        const firmaImg = documento.datos?.firma_base64 || documento.datos?.firmaImagen;
+        if (firmaImg) {
+          try {
+            const imgData = firmaImg.includes('base64,') ? firmaImg : `data:image/png;base64,${firmaImg}`;
+            doc.image(imgData, 180, doc.y, { width: 200, height: 50 });
+            doc.y += 56;
+          } catch {}
+        }
         doc.font(fontReg).fontSize(7).fillColor('#5c5566');
         doc.text(`Firmado digitalmente por: ${documento.datos.firmadoPor}`, {width:500, align:'center'});
         if (documento.datos.fechaFirma) {
@@ -1011,7 +1020,7 @@ export async function generarPDF(entidad, documento) {
       doc.moveDown(0.5);
       const hash = documento.hash || createHash('sha256').update(documento.id+Date.now()).digest('hex');
       doc.font(fontReg).fontSize(6).fillColor('#9a8aaa');
-      doc.text(`CSV: ${hash.substring(0,20).toUpperCase()} · Verificable en admin-placeta.vercel.app`, {width:500, align:'center'});
+      doc.text(`CSV: ${hash.substring(0,20).toUpperCase()}`, {width:500, align:'center'});
 
       // ── PIE ──
       doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
