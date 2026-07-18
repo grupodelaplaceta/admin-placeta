@@ -258,8 +258,52 @@ export async function initDocsTable() {
   try {
     const { error } = await supabase.from(DOCS_TABLE).select('id').limit(1);
     if (!error) { sbReady = true; return true; }
-  } catch {}
-  // No se pudo acceder a Supabase, usamos solo archivo/memoria
+    // La tabla no existe, intentar crearla
+    console.log('[Docs] Tabla documentos no existe en Supabase, intentando crear...');
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+    const SUPABASE_URL = process.env.SUPABASE_URL || '';
+    if (SERVICE_KEY && SUPABASE_URL) {
+      const sql = `CREATE TABLE IF NOT EXISTS public.documentos (
+        id TEXT PRIMARY KEY, entidad TEXT NOT NULL, tipo TEXT NOT NULL,
+        categoria TEXT DEFAULT 'general', titulo TEXT, descripcion TEXT DEFAULT '',
+        datos JSONB DEFAULT '{}', ref_id TEXT, ref_tipo TEXT,
+        created_by TEXT DEFAULT 'sistema',
+        created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
+        estado TEXT DEFAULT 'borrador', firmado BOOLEAN DEFAULT FALSE, hash TEXT DEFAULT ''
+      );`.replace(/\s+/g, ' ').trim();
+      // Usar endpoint pg_graphql de Supabase
+      const resp = await fetch(`${SUPABASE_URL}/rest/v1/query`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SERVICE_KEY,
+          'Authorization': `Bearer ${SERVICE_KEY}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ query: sql })
+      });
+      if (resp.ok) {
+        console.log('[Docs] Tabla documentos creada en Supabase');
+      } else {
+        // Fallback: intentar con el endpoint /rest/v1/rpc/exec_sql si existe
+        const resp2 = await fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SERVICE_KEY,
+            'Authorization': `Bearer ${SERVICE_KEY}`
+          },
+          body: JSON.stringify({ query: sql })
+        });
+        if (resp2.ok) console.log('[Docs] Tabla creada via exec_sql');
+      }
+    }
+    // Verificar de nuevo
+    const { error: err2 } = await supabase.from(DOCS_TABLE).select('id').limit(1);
+    if (!err2) { sbReady = true; return true; }
+  } catch (e) {
+    console.warn('[Docs] No se pudo inicializar Supabase:', e.message);
+  }
   return false;
 }
 
