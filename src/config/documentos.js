@@ -7,6 +7,8 @@
  */
 import { createHash, randomUUID } from 'crypto';
 import PDFDocument from 'pdfkit';
+import fs from 'fs';
+import path from 'path';
 import { PLANTILLAS_BANCO } from './plantillas-banco.js';
 import { supabase } from './supabase.js';
 
@@ -217,11 +219,9 @@ DOCUMENTOS_AUTOMATICOS.forEach(d => {
 
 const DOCS_TABLE = 'documentos';
 let sbReady = false;
-const fs = await import('fs');
-const path_mod = await import('path');
 
 function storePath() {
-  try { return path_mod.default.join('/tmp', 'admin-placeta-docs.json'); }
+  try { return path.join('/tmp', 'admin-placeta-docs.json'); }
   catch { return null; }
 }
 
@@ -229,7 +229,7 @@ function loadStoreFromFile() {
   const fp = storePath();
   if (!fp) return {};
   try {
-    const raw = fs.default.readFileSync(fp, 'utf8');
+    const raw = fs.readFileSync(fp, 'utf8');
     return JSON.parse(raw);
   } catch { return {}; }
 }
@@ -237,7 +237,7 @@ function loadStoreFromFile() {
 function saveStoreToFile(store) {
   const fp = storePath();
   if (!fp) return;
-  try { fs.default.writeFileSync(fp, JSON.stringify(store), 'utf8'); }
+  try { fs.writeFileSync(fp, JSON.stringify(store), 'utf8'); }
   catch {}
 }
 
