@@ -522,25 +522,16 @@ function generarContenidoDocumento(tipo, datos = {}) {
       cf('Tipo anterior', datos.tipoAnterior || '—');
       cf('Tipo nuevo', datos.tipoNuevo || '—');
       cf('Fecha', datos.fecha || hoy);
-      ln(); sf('MOTIVO');
-      tx(datos.motivo || 'Reclasificación bancaria');
       ln(); sf('EXPONE');
-      tx('Comparece el titular de la cuenta bancaria identificada en el presente documento, con domicilio a efectos de notificaciones en el registrado en el sistema PlacetaID, solicitando la reclasificación del tipo de cuenta bancaria conforme a las necesidades y requisitos establecidos en el Código Normativo Interno del Grupo de La Placeta.');
-      tx('El Banco de La Placeta, una vez verificada la identidad del solicitante mediante el sistema oficial de autenticación PlacetaID, ha procedido a examinar la solicitud presentada, realizando las comprobaciones automáticas y manuales previstas en la normativa vigente, incluyendo la verificación de la titularidad de la cuenta, el estado de cumplimiento de obligaciones tributarias y bancarias, y la inexistencia de impedimentos legales o administrativos que pudieran obstaculizar el cambio solicitado.');
-      tx('Realizadas las comprobaciones oportunas, se acredita que concurren los requisitos necesarios para acceder a la reclasificación solicitada, no existiendo impedimento alguno para acordar el cambio de tipo de cuenta en los términos interesados por el titular.');
+      tx('El titular solicita la reclasificación del tipo de cuenta bancaria. Verificada la identidad mediante PlacetaID y realizadas las comprobaciones previstas en el Código Normativo Interno, no existen impedimentos para acordar el cambio.');
       ln(); sf('FUNDAMENTOS JURÍDICOS');
-      tx('La presente resolución se adopta de conformidad con las disposiciones del Código Normativo Interno del Grupo de La Placeta, y en particular:');
-      tx('• Las normas reguladoras del sistema PlacetaID como método oficial de identificación y autenticación electrónica.');
-      tx('• Las disposiciones sobre el Documento de Identidad de La Placeta (DIP) y el Identificador de Empresa de La Placeta (EIP) como identificadores oficiales.');
-      tx('• Las normas reguladoras de los tipos de cuentas bancarias, sus requisitos de apertura, mantenimiento y modificación.');
-      tx('• Las facultades de administración, supervisión y control atribuidas al Banco de La Placeta como entidad gestora del sistema bancario.');
-      tx('• Los procedimientos establecidos para la modificación de las condiciones contractuales de las cuentas bancarias.');
+      tx('La presente resolución se adopta conforme al Código Normativo Interno del Grupo de La Placeta, en particular las disposiciones sobre identificación electrónica, tipos de cuentas bancarias y facultades de administración del Banco de La Placeta.');
       ln(); sf('RESUELVE');
-      tx('Primero. Aprobar el cambio de tipo de cuenta bancaria solicitado, pasando la cuenta identificada a la nueva categoría indicada en el presente documento, con efectos desde la fecha de la presente resolución.');
-      tx('Segundo. Actualizar el Registro Bancario Oficial del Banco de La Placeta, dejando constancia del cambio de tipo de cuenta y de todas las circunstancias concurrentes.');
-      tx('Tercero. Notificar electrónicamente la presente resolución al titular de la cuenta mediante el sistema PlacetaID, con acuse de recibo y constancia de la fecha y hora de notificación.');
-      tx('Cuarto. La presente resolución agota la vía administrativa bancaria, pudiendo interponerse contra ella reclamación ante la Administración del Grupo de La Placeta en el plazo de quince días hábiles siguientes a su notificación.');
-      L.push({nota: 'Documento oficial emitido por el Banco de La Placeta. Pendiente de firma electrónica por el titular.'});
+      tx('Primero. Aprobar el cambio de tipo de cuenta.');
+      tx('Segundo. Actualizar el Registro Bancario Oficial.');
+      tx('Tercero. Notificar al titular mediante PlacetaID.');
+      ln(); L.push({nota: 'Documento oficial emitido por el Banco de La Placeta.'});
+      L.push({nota: 'AVISO LEGAL: Banco de La Placeta es una entidad dentro del ecosistema de ASOCIACIÓN GRUPO DE LA PLACETA que se rige por sus Estatutos y el Código Normativo Interno vigente. Al usar los servicios del mencionado ecosistema aceptas cumplir con las normativas vigentes que lo regulan.'});
       break;
     }
 
@@ -973,11 +964,8 @@ export async function generarPDF(entidad, documento) {
       doc.on('pageAdded', () => {
         if (_addingPage) return;
         _addingPage = true;
-        try {
-          const prevY = doc.y;
-          dibujarCabecera(false);
-          doc.y = prevY;
-        } finally { _addingPage = false; }
+        try { dibujarCabecera(false); }
+        finally { _addingPage = false; }
       });
 
       // ── CABECERA (página 1) ──
