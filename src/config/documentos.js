@@ -253,7 +253,7 @@ function putInStore(entidad, docs) {
   memStore[entidad] = docs;
 }
 
-export async function initDocsTable() {
+export async function initDocsTable(intento = 0) {
   if (sbReady || !supabase) return false;
   try {
     const { error } = await supabase.from(DOCS_TABLE).select('id').limit(1);
@@ -304,6 +304,10 @@ export async function initDocsTable() {
   } catch (e) {
     console.warn('[Docs] No se pudo inicializar Supabase:', e.message);
   }
+  if (intento < 2) {
+    await new Promise(r => setTimeout(r, 1000));
+    return initDocsTable(intento + 1);
+  }
   return false;
 }
 
@@ -318,10 +322,18 @@ async function sbListDocs(entidad) {
   } catch (e) { console.warn('[Docs] sbListDocs exception:', e.message); return null; }
 }
 
-async function sbSaveDoc(doc) {
+async function sbSaveDoc(doc, intento = 0) {
   if (!supabase) return null;
   await initDocsTable();
-  if (!sbReady) { console.warn('[Docs] sbSaveDoc: sbReady=false'); return null; }
+  if (!sbReady) {
+    if (intento < 2) {
+      // Reintentar después de un breve delay (para cold starts lentos)
+      await new Promise(r => setTimeout(r, 500));
+      return sbSaveDoc(doc, intento + 1);
+    }
+    console.warn('[Docs] sbSaveDoc: sbReady=false tras reintentar');
+    return null;
+  }
   try {
     const record = {
       id: doc.id, entidad: doc.entidad, tipo: doc.tipo,
@@ -333,9 +345,23 @@ async function sbSaveDoc(doc) {
       updated_at: new Date().toISOString()
     };
     const { data, error } = await supabase.from(DOCS_TABLE).upsert(record, { onConflict: 'id' }).select().maybeSingle();
-    if (error) { console.warn('[Docs] sbSaveDoc error:', error.message); return null; }
+    if (error) {
+      console.warn('[Docs] sbSaveDoc error:', error.message);
+      if (intento < 2) {
+        await new Promise(r => setTimeout(r, 500));
+        return sbSaveDoc(doc, intento + 1);
+      }
+      return null;
+    }
     return data;
-  } catch (e) { console.warn('[Docs] sbSaveDoc exception:', e.message); return null; }
+  } catch (e) {
+    console.warn('[Docs] sbSaveDoc exception:', e.message);
+    if (intento < 2) {
+      await new Promise(r => setTimeout(r, 500));
+      return sbSaveDoc(doc, intento + 1);
+    }
+    return null;
+  }
 }
 
 async function sbDeleteDoc(id) {
