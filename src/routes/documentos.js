@@ -62,44 +62,49 @@ router.post('/api/:entidad/documentos', verificarSesion, async (req, res) => {
   const { tipo, titulo, descripcion, datos, refId, refTipo } = req.body;
   if (!tipo) return res.status(400).json({ error: 'Tipo de documento requerido' });
 
-  const doc = await saveDocumentoAsync(entidad, {
-    tipo,
-    titulo: titulo || ETIQUETAS_DOC[tipo] || tipo,
-    descripcion: descripcion || '',
-    datos: datos || {},
-    refId: refId || null,
-    refTipo: refTipo || null,
-    createdBy: req.session.usuario?.dip || 'sistema',
-    estado: 'borrador',
-    hash: createHash('sha256').update(tipo + Date.now()).digest('hex').slice(0, 16)
-  });
+  try {
+    const doc = await saveDocumentoAsync(entidad, {
+      tipo,
+      titulo: titulo || ETIQUETAS_DOC[tipo] || tipo,
+      descripcion: descripcion || '',
+      datos: datos || {},
+      refId: refId || null,
+      refTipo: refTipo || null,
+      createdBy: req.session.usuario?.dip || 'sistema',
+      estado: 'borrador',
+      hash: createHash('sha256').update(tipo + Date.now()).digest('hex').slice(0, 16)
+    });
 
-  // Sync con PlacetaID para firma distribuida (notificación asíncrona)
-  if (req.body.enviarFirma !== false) {
-    try {
-      const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
-      const destinatariosDIP = req.body.destinatariosDIP || (req.session.usuario?.dip ? [req.session.usuario.dip] : []);
-      fetch(`${PLACETAID_API}/admin/documentos`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb'
-        },
-        body: JSON.stringify({
-          id: doc.id,
-          titulo: doc.titulo,
-          tipo: doc.tipo,
-          entidad,
-          csv: doc.hash,
-          destinatariosDIP,
-          contenido: `Documento generado desde Admin Placeta: ${doc.titulo} (${ETIQUETAS_DOC[doc.tipo] || doc.tipo})`
-        }),
-        signal: AbortSignal.timeout(5000)
-      }).catch(() => {});
-    } catch { /* ignore */ }
+    // Sync con PlacetaID para firma distribuida (notificación asíncrona)
+    if (req.body.enviarFirma !== false) {
+      try {
+        const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+        const destinatariosDIP = req.body.destinatariosDIP || (req.session.usuario?.dip ? [req.session.usuario.dip] : []);
+        fetch(`${PLACETAID_API}/admin/documentos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb'
+          },
+          body: JSON.stringify({
+            id: doc.id,
+            titulo: doc.titulo,
+            tipo: doc.tipo,
+            entidad,
+            csv: doc.hash,
+            destinatariosDIP,
+            contenido: `Documento generado desde Admin Placeta: ${doc.titulo} (${ETIQUETAS_DOC[doc.tipo] || doc.tipo})`
+          }),
+          signal: AbortSignal.timeout(5000)
+        }).catch(() => {});
+      } catch { /* ignore */ }
+    }
+
+    res.json(doc);
+  } catch (e) {
+    console.error('[Docs] Error creando documento:', e.message);
+    res.status(500).json({ error: e.message || 'Error al crear documento' });
   }
-
-  res.json(doc);
 });
 
 // ── API: Actualizar documento ─────────────────────────────────────────────
