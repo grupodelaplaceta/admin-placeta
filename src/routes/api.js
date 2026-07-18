@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { apiBancoGetState, apiBancoPost, apiPlacetaidRegistros, apiPlacetaidStats, apiPlacetaidDesbloquear, sbFindSolicitanteByDip, sbListSolicitantes } from '../config/db.js';
 import { verificarSesion } from '../middleware/auth.js';
+import { initDocsTable } from '../config/documentos.js';
 
 const router = Router();
 
@@ -148,6 +149,17 @@ router.get('/session', verificarSesion, (req, res) => {
     entidades_permitidas: req.session.entidades_permitidas || [],
     cargos: req.session.cargos || []
   });
+});
+
+// ── Migrar esquema documentos en Supabase ──────────────────────────────────
+router.post('/admin/migrar-documentos', verificarSesion, async (req, res) => {
+  try {
+    const ok = await initDocsTable();
+    const { getDocumentos } = await import('../config/documentos.js');
+    res.json({ success: ok, message: ok ? 'Tabla documentos lista' : 'No se pudo migrar. Crea la tabla manualmente en Supabase usando el script en docs/migrar-documentos.sql' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 export default router;

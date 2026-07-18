@@ -63,7 +63,7 @@ async function proxyFetch(path, options = {}) {
 //  JUNIOR — Menores vinculados a un tutor
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.get('/junior/menores/:dipTutor', verificarSesion, async (req, res) => {
+router.get('/junior/menores/:dipTutor', async (req, res) => {
   try {
     const result = await proxyFetch(`/api/junior/menores/${req.params.dipTutor}`);
     if (!result.ok) return res.status(result.status).json(result.data);
@@ -78,7 +78,7 @@ router.get('/junior/menores/:dipTutor', verificarSesion, async (req, res) => {
 //  JUNIOR — Perfil del junior
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.get('/junior/perfil', verificarSesion, async (req, res) => {
+router.get('/junior/perfil', async (req, res) => {
   try {
     const result = await proxyFetch('/api/junior/perfil', { headers: req.headers });
     if (!result.ok) return res.status(result.status).json(result.data);
@@ -92,7 +92,7 @@ router.get('/junior/perfil', verificarSesion, async (req, res) => {
 //  JUNIOR LEGAL — Documentos pendientes de firma
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.get('/junior/documentos-pendientes/:juniorId', verificarSesion, async (req, res) => {
+router.get('/junior/documentos-pendientes/:juniorId', async (req, res) => {
   try {
     const result = await proxyFetch(`/api/junior/legal/documentos-pendientes/${req.params.juniorId}`);
     if (!result.ok) return res.status(result.status).json(result.data);
@@ -107,7 +107,7 @@ router.get('/junior/documentos-pendientes/:juniorId', verificarSesion, async (re
 //  JUNIOR LEGAL — Firmar documento
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.post('/junior/firmar-documento', verificarSesion, async (req, res) => {
+router.post('/junior/firmar-documento', async (req, res) => {
   try {
     const result = await proxyFetch('/api/junior/legal/firmar-documento', {
       method: 'POST',
@@ -125,7 +125,7 @@ router.post('/junior/firmar-documento', verificarSesion, async (req, res) => {
 //  FIRMA MANUSCRITA — Endpoint general de firma
 // ═══════════════════════════════════════════════════════════════════════════
 
-router.post('/firma/firmar-manuscrito', verificarSesion, async (req, res) => {
+router.post('/firma/firmar-manuscrito', async (req, res) => {
   try {
     const result = await proxyFetch('/api/firma/firmar-manuscrito', {
       method: 'POST',
@@ -182,9 +182,9 @@ async function listarDocumentosPorDipAsync(dip) {
 }
 
 // Endpoint principal (sin "junior" en la ruta)
-router.get('/documentos/pendientes', verificarSesion, async (req, res) => {
+router.get('/documentos/pendientes', async (req, res) => {
   try {
-    const dip = req.query.dip || req.session.usuario?.dip;
+    const dip = req.query.dip;
     res.json(await listarDocumentosPorDipAsync(dip));
   } catch (e) {
     res.status(500).json({ error: 'Error al cargar documentos', detalle: e.message });
@@ -192,9 +192,9 @@ router.get('/documentos/pendientes', verificarSesion, async (req, res) => {
 });
 
 // Alias legacy para retrocompatibilidad (redirige al nuevo)
-router.get('/admin/junior/documentos', verificarSesion, async (req, res) => {
+router.get('/admin/junior/documentos', async (req, res) => {
   try {
-    const dip = req.query.dip || req.session.usuario?.dip;
+    const dip = req.query.dip;
     res.json(await listarDocumentosPorDipAsync(dip));
   } catch (e) {
     res.status(500).json({ error: 'Error al cargar documentos', detalle: e.message });

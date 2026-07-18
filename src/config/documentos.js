@@ -215,9 +215,48 @@ DOCUMENTOS_AUTOMATICOS.forEach(d => {
 // Supabase da persistencia real. MemStore es fallback local/desarrollo.
 
 const DOCS_TABLE = 'documentos';
+let sbReady = false;
+
+export async function initDocsTable() {
+  if (sbReady || !supabase) return false;
+  try {
+    const { error } = await supabase.from(DOCS_TABLE).select('id').limit(1);
+    if (!error) { sbReady = true; return true; }
+    // Si el error es que la tabla no existe, intentar crearla con supabase SQL
+    if (error?.message?.includes('does not exist') || error?.code === '42P01') {
+      const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+      const SUPABASE_URL = process.env.SUPABASE_URL || '';
+      const ref = SUPABASE_URL ? new URL(SUPABASE_URL).hostname.split('.')[0] : '';
+      if (SERVICE_KEY && ref) {
+        const sql = `CREATE TABLE IF NOT EXISTS public.documentos (
+          id TEXT PRIMARY KEY, entidad TEXT NOT NULL, tipo TEXT NOT NULL,
+          categoria TEXT DEFAULT 'general', titulo TEXT, descripcion TEXT DEFAULT '',
+          datos JSONB DEFAULT '{}', ref_id TEXT, ref_tipo TEXT,
+          created_by TEXT DEFAULT 'sistema',
+          created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
+          estado TEXT DEFAULT 'borrador', firmado BOOLEAN DEFAULT FALSE, hash TEXT DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_documentos_entidad ON public.documentos(entidad);
+        CREATE INDEX IF NOT EXISTS idx_documentos_ref ON public.documentos(ref_id, ref_tipo);`;
+        try {
+          await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
+            body: JSON.stringify({ query: sql.replace(/\s+/g, ' ').trim() })
+          });
+        } catch {}
+      }
+      // Verificar de nuevo
+      const { error: err2 } = await supabase.from(DOCS_TABLE).select('id').limit(1);
+      if (!err2) sbReady = true;
+    }
+  } catch { /* no supabase */ }
+  return sbReady;
+}
 
 async function sbListDocs(entidad) {
   if (!supabase) return null;
+  await initDocsTable();
+  if (!sbReady) return null;
   try {
     const { data } = await supabase.from(DOCS_TABLE).select('*').eq('entidad', entidad).order('created_at', { ascending: false });
     return data || [];
@@ -225,7 +264,7 @@ async function sbListDocs(entidad) {
 }
 
 async function sbSaveDoc(doc) {
-  if (!supabase) return null;
+  if (!supabase || !sbReady) return null;
   try {
     const record = {
       id: doc.id, entidad: doc.entidad, tipo: doc.tipo,
@@ -242,13 +281,13 @@ async function sbSaveDoc(doc) {
 }
 
 async function sbDeleteDoc(id) {
-  if (!supabase) return false;
+  if (!supabase || !sbReady) return false;
   try { await supabase.from(DOCS_TABLE).delete().eq('id', id); return true; }
   catch { return false; }
 }
 
 async function sbGetDoc(id) {
-  if (!supabase) return null;
+  if (!supabase || !sbReady) return null;
   try {
     const { data } = await supabase.from(DOCS_TABLE).select('*').eq('id', id).maybeSingle();
     return data;
