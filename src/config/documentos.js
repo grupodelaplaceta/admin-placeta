@@ -948,15 +948,14 @@ export async function generarPDF(entidad, documento) {
 
       // ── Footer ──
       function dibujarFooter() {
-        const prevY = doc.y;
         doc.save();
-        doc.rect(50, doc.page.height - 42, 500, 0.5).fill(C);
+        const fy = doc.page.height - 38;
+        doc.rect(50, fy, 500, 0.5).fill(C);
         doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
-        doc.text('Grupo de La Placeta · Documento oficial', 50, doc.page.height - 36, { width: 400 });
+        doc.text('Grupo de La Placeta · Documento oficial', 50, fy + 4, { width: 400 });
         const pg = doc.bufferedPageRange().count;
-        doc.text(`Pág. ${pg}`, doc.page.width - 90, doc.page.height - 36, { width: 50, align:'right' });
+        doc.text(`Pág. ${pg}`, doc.page.width - 90, fy + 4, { width: 50, align:'right' });
         doc.restore();
-        doc.y = prevY; // Restaurar posición Y
       }
 
       // ── Helper: nueva página con cabecera ──
@@ -972,28 +971,28 @@ export async function generarPDF(entidad, documento) {
       for (const item of lineas) {
 
         if (item.seccion) {
-          doc.moveDown(0.3);
-          doc.font(fontBold).fontSize(11).fillColor(B).text(item.seccion.toUpperCase());
           doc.moveDown(0.2);
+          doc.font(fontBold).fontSize(10).fillColor(B).text(item.seccion.toUpperCase());
+          doc.moveDown(0.1);
         } else if (item.linea) {
           doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(0.5).strokeColor('#e0daf0').stroke();
-          doc.moveDown(0.3);
+          doc.moveDown(0.2);
         } else if (item.texto) {
-          if (doc.y > doc.page.height - 80) nuevaPagina();
-          doc.font(fontReg).fontSize(8.5).fillColor('#1c1226').text(item.texto, 50, doc.y, {width:500, align:'justify', lineGap: 1});
-          doc.moveDown(0.1);
-        } else if (item.nota) {
           if (doc.y > doc.page.height - 60) nuevaPagina();
+          doc.font(fontReg).fontSize(8).fillColor('#1c1226').text(item.texto, 50, doc.y, {width:500, align:'justify', lineGap: 0});
+          doc.moveDown(0.05);
+        } else if (item.nota) {
+          if (doc.y > doc.page.height - 50) nuevaPagina();
           const ny = doc.y;
           doc.save(); doc.rect(50, ny, 3, 3).fill(C);
-          doc.font(fontReg).fontSize(7).fillColor('#5c5566').text(item.nota, 58, ny, {width:482, lineGap: 0});
-          doc.y = Math.max(doc.y, ny+6)+2;
+          doc.font(fontReg).fontSize(6.5).fillColor('#5c5566').text(item.nota, 58, ny, {width:482, lineGap: 0});
+          doc.y = Math.max(doc.y, ny+4)+1;
           doc.restore();
         } else if (item.campo) {
           const [k,v] = item.campo;
-          doc.font(fontBold).fontSize(8.5).fillColor('#1c1226').text(`${k}: `, 50, doc.y, {continued:true});
+          doc.font(fontBold).fontSize(8).fillColor('#1c1226').text(`${k}: `, 50, doc.y, {continued:true});
           doc.font(fontReg).fillColor('#5c5566').text(v||'—');
-          doc.y += 1;
+          doc.y += 0.5;
         }
       }
 
@@ -1049,8 +1048,8 @@ export async function generarPDF(entidad, documento) {
       // ── PIE ──
       doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
       const leyenda = esAuto ? 'Informe automático del sistema · Código Normativo Interno' : `${entL} · Documento oficial · Código Normativo Interno GDLP`;
-      doc.text(leyenda, 50, doc.page.height-80, {width:500, align:'center'});
-      doc.text(`Generado el ${new Date().toLocaleString('es-ES')}`, 50, doc.page.height-66, {width:500, align:'center'});
+      doc.text(leyenda, 50, doc.page.height-68, {width:500, align:'center'});
+      doc.text(`Generado el ${new Date().toLocaleString('es-ES')}`, 50, doc.page.height-56, {width:500, align:'center'});
       dibujarFooter();
 
       doc.end();
