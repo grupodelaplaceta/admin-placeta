@@ -270,6 +270,28 @@ router.get('/publico/:entidad/documentos/:id/pdf', verificarApiKey, async (req, 
   }
 });
 
+// ── Endpoint público para actualizar firma (desde PLID) ─────────────────
+router.put('/publico/:entidad/documentos/:id/firmar', verificarApiKey, async (req, res) => {
+  const { entidad, id } = req.params;
+  const { saveDocumentoAsync, getDocumentoByIdAsync, getDocumentosByEntidadAsync } = await import('../config/documentos.js');
+  let doc = await getDocumentoByIdAsync(entidad, id);
+  if (!doc) {
+    const allDocs = await getDocumentosByEntidadAsync(entidad);
+    doc = allDocs.find(d => d.id === id);
+  }
+  if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+  try {
+    const { estado, firmado, datos } = req.body;
+    const updated = await saveDocumentoAsync(entidad, {
+      ...doc,
+      estado: estado || doc.estado,
+      firmado: firmado !== undefined ? firmado : doc.firmado,
+      datos: datos ? { ...doc.datos, ...datos } : doc.datos
+    });
+    res.json({ success: true, documento: updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Diagnóstico del sistema de documentos ─────────────────────────────────
 router.get('/api/documentos/diagnostico', async (req, res) => {
   const documentosConfig = await import('../config/documentos.js');
