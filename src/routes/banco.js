@@ -4,6 +4,22 @@ import { verificarPermiso } from '../middleware/auth.js';
 
 const router = Router();
 
+// ── Ayudante: buscar nombre real de un usuario por DIP ─────────────────
+async function buscarNombreTitular(dip) {
+  if (!dip) return null;
+  try {
+    const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+    const r = await fetch(`${PLACETAID_API}/admin/registros`, {
+      headers: { 'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb' }
+    });
+    if (!r.ok) return null;
+    const lista = await r.json();
+    const user = lista.find(u => u.dip === dip);
+    if (user) return `${user.nombre} ${user.apellidos || ''}`.trim() || null;
+  } catch {}
+  return null;
+}
+
 // ── Ayudante: llamar a acciones de la API real del banco ───────────────
 async function bancoAction(action, data = {}) {
   try {
@@ -201,6 +217,8 @@ router.post('/api/cuentas/modificar', async (req, res) => {
       const cambiosStr = cambios.map(c => `${c.campo}: ${c.valor}`).join(', ');
       const esCambioTipo = !!type;
       const docTitulo = esCambioTipo ? `Cambio de tipo a ${type}` : `Modificación: ${cambiosStr}`;
+      // Buscar el nombre real del titular por su DIP
+      const nombreTitular = (await buscarNombreTitular(datosCuenta.placetaId)) || datosCuenta.displayName || displayName || '—';
       await saveDocumentoAsync('banco', {
         id: `mod-${Date.now()}-${randomUUID().slice(0, 6)}`,
         tipo: esCambioTipo ? 'cambio-tipo-cuenta' : 'modificacion-datos',
@@ -208,7 +226,7 @@ router.post('/api/cuentas/modificar', async (req, res) => {
         descripcion: motivo,
         datos: {
           // Solo datos del cliente - sin IDs internos
-          titular: datosCuenta.displayName || displayName || '—',
+          titular: nombreTitular,
           dip: datosCuenta.placetaId || '—',
           eip: datosCuenta.eip || '',
           iban: datosCuenta.iban || '—',
