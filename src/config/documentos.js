@@ -210,47 +210,57 @@ DOCUMENTOS_AUTOMATICOS.forEach(d => {
   ETIQUETAS_DOC[d] = d.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 });
 
-// ── ALMACENAMIENTO (Supabase + fallback memoria) ─────────────────────────
-// En Vercel serverless la memoria no persiste entre requests.
-// Supabase da persistencia real. MemStore es fallback local/desarrollo.
+// ── ALMACENAMIENTO (Archivo /tmp + Supabase opcional) ────────────────────
+// En Vercel serverless /tmp persiste dentro de la misma instancia.
+// Supabase da persistencia global cuando la tabla existe.
+// MemStore es el respaldo local/desarrollo.
 
 const DOCS_TABLE = 'documentos';
 let sbReady = false;
+const fs = await import('fs');
+const path_mod = await import('path');
+
+function storePath() {
+  try { return path_mod.default.join('/tmp', 'admin-placeta-docs.json'); }
+  catch { return null; }
+}
+
+function loadStoreFromFile() {
+  const fp = storePath();
+  if (!fp) return {};
+  try {
+    const raw = fs.default.readFileSync(fp, 'utf8');
+    return JSON.parse(raw);
+  } catch { return {}; }
+}
+
+function saveStoreToFile(store) {
+  const fp = storePath();
+  if (!fp) return;
+  try { fs.default.writeFileSync(fp, JSON.stringify(store), 'utf8'); }
+  catch {}
+}
+
+function getStore() {
+  return loadStoreFromFile();
+}
+
+function putInStore(entidad, docs) {
+  const store = loadStoreFromFile();
+  store[entidad] = docs;
+  saveStoreToFile(store);
+  if (!memStore[entidad]) memStore[entidad] = [];
+  memStore[entidad] = docs;
+}
 
 export async function initDocsTable() {
   if (sbReady || !supabase) return false;
   try {
     const { error } = await supabase.from(DOCS_TABLE).select('id').limit(1);
     if (!error) { sbReady = true; return true; }
-    // Si el error es que la tabla no existe, intentar crearla con supabase SQL
-    if (error?.message?.includes('does not exist') || error?.code === '42P01') {
-      const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
-      const SUPABASE_URL = process.env.SUPABASE_URL || '';
-      const ref = SUPABASE_URL ? new URL(SUPABASE_URL).hostname.split('.')[0] : '';
-      if (SERVICE_KEY && ref) {
-        const sql = `CREATE TABLE IF NOT EXISTS public.documentos (
-          id TEXT PRIMARY KEY, entidad TEXT NOT NULL, tipo TEXT NOT NULL,
-          categoria TEXT DEFAULT 'general', titulo TEXT, descripcion TEXT DEFAULT '',
-          datos JSONB DEFAULT '{}', ref_id TEXT, ref_tipo TEXT,
-          created_by TEXT DEFAULT 'sistema',
-          created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(),
-          estado TEXT DEFAULT 'borrador', firmado BOOLEAN DEFAULT FALSE, hash TEXT DEFAULT ''
-        );
-        CREATE INDEX IF NOT EXISTS idx_documentos_entidad ON public.documentos(entidad);
-        CREATE INDEX IF NOT EXISTS idx_documentos_ref ON public.documentos(ref_id, ref_tipo);`;
-        try {
-          await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SERVICE_KEY}` },
-            body: JSON.stringify({ query: sql.replace(/\s+/g, ' ').trim() })
-          });
-        } catch {}
-      }
-      // Verificar de nuevo
-      const { error: err2 } = await supabase.from(DOCS_TABLE).select('id').limit(1);
-      if (!err2) sbReady = true;
-    }
-  } catch { /* no supabase */ }
-  return sbReady;
+  } catch {}
+  // No se pudo acceder a Supabase, usamos solo archivo/memoria
+  return false;
 }
 
 async function sbListDocs(entidad) {
@@ -296,6 +306,11 @@ async function sbGetDoc(id) {
 
 export function getDocumentos(entidad) {
   if (!memStore[entidad]) memStore[entidad] = [];
+  // Si memStore está vacío, intentar cargar desde archivo
+  if (memStore[entidad].length === 0) {
+    const store = loadStoreFromFile();
+    if (store[entidad]) memStore[entidad] = store[entidad];
+  }
   return memStore[entidad];
 }
 
@@ -303,9 +318,8 @@ export async function getDocumentosAsync(entidad) {
   // Intentar Supabase primero
   const sbData = await sbListDocs(entidad);
   if (sbData) {
-    // Normalizar campos de Supabase a camelCase
     const docs = sbData.map(normalizarDoc);
-    memStore[entidad] = docs;
+    putInStore(entidad, docs);
     return docs;
   }
   return getDocumentos(entidad);
@@ -359,16 +373,16 @@ export function saveDocumento(entidad, data) {
   const idx = docs.findIndex(d => d.id === doc.id);
   if (idx >= 0) docs[idx] = doc;
   else docs.push(doc);
-
-  // Persistir en Supabase (asíncrono, no bloquea)
+  // Persistir a archivo
+  putInStore(entidad, docs);
+  // Persistir a Supabase (asíncrono, no bloquea)
   sbSaveDoc(doc).catch(() => {});
-
   return doc;
 }
 
 export async function saveDocumentoAsync(entidad, data) {
   const doc = saveDocumento(entidad, data);
-  await sbSaveDoc(doc);
+  await sbSaveDoc(doc).catch(() => {});
   return doc;
 }
 
@@ -381,22 +395,23 @@ export async function getDocumentosPorRefAsync(entidad, refTipo, refId) {
   // Intentar Supabase primero
   const sbData = await sbListDocs(entidad);
   if (sbData) {
-    const docs = sbData.map(normalizarDoc).filter(d => d.refTipo === refTipo && d.refId === refId);
-    return docs;
+    const docs = sbData.map(normalizarDoc);
+    putInStore(entidad, docs);
+    return docs.filter(d => d.refTipo === refTipo && d.refId === refId);
   }
   return getDocumentosPorRef(entidad, refTipo, refId);
 }
 
 export function deleteDocumento(entidad, id) {
   const docs = getDocumentos(entidad).filter(d => d.id !== id);
-  memStore[entidad] = docs;
+  putInStore(entidad, docs);
   sbDeleteDoc(id).catch(() => {});
   return true;
 }
 
 export async function deleteDocumentoAsync(entidad, id) {
   deleteDocumento(entidad, id);
-  await sbDeleteDoc(id);
+  await sbDeleteDoc(id).catch(() => {});
   return true;
 }
 
