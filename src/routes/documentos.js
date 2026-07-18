@@ -303,8 +303,25 @@ router.get('/api/documentos/diagnostico', async (req, res) => {
       } else {
         const test1 = await sb.from('documentos').select('id').limit(1);
         estado.error_init = `select error: ${test1?.error?.message || 'unknown'}, status: ${test1?.status || 'no status'}`;
+        // Also try another table to see if it's a table-specific issue
         const test2 = await sb.from('solicitantes').select('id').limit(1);
-        estado.error_init += ` | solicitantes: ${test2?.error?.message || 'ok'}`;
+        estado.error_init += ` | solicitantes: ${test2?.error?.message || 'ok'}, status: ${test2?.status || 'no status'}`;
+        // Try raw fetch to Supabase REST API
+        const SUPABASE_URL = process.env.SUPABASE_URL || 'https://htikrqaywapshlkdonvs.supabase.co';
+        const key = process.env.SUPABASE_SERVICE_KEY || '';
+        if (key) {
+          try {
+            const r = await fetch(`${SUPABASE_URL}/rest/v1/documentos?select=id&limit=1`, {
+              headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+            });
+            const txt = await r.text();
+            estado.error_init += ` | raw_api: ${r.status} ${txt.substring(0, 100)}`;
+          } catch (e) {
+            estado.error_init += ` | raw_api exception: ${e.message}`;
+          }
+        } else {
+          estado.error_init += ` | no SERVICE_KEY env var for raw API test`;
+        }
       }
     } catch (e) {
       estado.error_init = `exception: ${e.message}`;

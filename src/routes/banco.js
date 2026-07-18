@@ -206,7 +206,7 @@ router.post('/api/cuentas/modificar', async (req, res) => {
         refTipo: 'cuenta',
         createdBy: req.session?.usuario?.dip || 'sistema',
         estado: 'final',
-        firmado: true,
+        firmado: false,
         hash: createHash('sha256').update(accountId + Date.now()).digest('hex').slice(0, 16)
       });
     } catch (e) {
