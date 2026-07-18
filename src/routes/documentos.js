@@ -188,6 +188,14 @@ router.get('/api/:entidad/documentos/:id/pdf', verificarSesion, async (req, res)
 // ── API: Eliminar documento ───────────────────────────────────────────────
 router.delete('/api/:entidad/documentos/:id', verificarSesion, async (req, res) => {
   const { entidad, id } = req.params;
+  // Buscar el documento primero
+  const { getDocumentoByIdAsync } = await import('../config/documentos.js');
+  const doc = await getDocumentoByIdAsync(entidad, id);
+  if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+  // No permitir eliminar documentos firmados
+  if (doc.firmado || doc.estado === 'firmado') {
+    return res.status(403).json({ error: 'No se puede eliminar un documento firmado' });
+  }
   await deleteDocumentoAsync(entidad, id);
   res.json({ success: true });
 });

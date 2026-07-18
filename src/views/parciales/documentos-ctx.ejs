@@ -46,6 +46,7 @@
                 <button class="btn-sm btn-secondary" onclick="verDocCtx('${d.id}','<%= entidad %>')">👁️</button>
                 <button class="btn-sm btn-primary" onclick="descargarPDFCtx('${d.id}','<%= entidad %>')">📥</button>
                 ${d.estado !== 'firmado' ? `<button class="btn-sm btn-secondary" onclick="firmarDocCtx('${d.id}','<%= entidad %>')">✍️</button>` : ''}
+                ${d.estado !== 'firmado' ? `<button class="btn-sm btn-danger" onclick="eliminarDocCtx('${d.id}','<%= entidad %>')">🗑️</button>` : ''}
               </td>
             </tr>`;
           }).join('')}</tbody>
@@ -135,6 +136,14 @@ function firmarDocCtx(id, entidad) {
   if (!confirm('¿Firmar digitalmente?')) return;
   fetch('/api/' + entidad + '/documentos/' + id + '/firmar', { method: 'POST' })
     .then(() => { mostrarToast('✍️ Firmado', 'success'); location.reload(); })
+    .catch(e => mostrarToast('Error: ' + e.message, 'error'));
+}
+
+function eliminarDocCtx(id, entidad) {
+  if (!confirm('¿Eliminar este documento definitivamente?')) return;
+  fetch('/api/' + entidad + '/documentos/' + id, { method: 'DELETE' })
+    .then(r => r.json())
+    .then(d => { mostrarToast('🗑️ Eliminado', 'success'); location.reload(); })
     .catch(e => mostrarToast('Error: ' + e.message, 'error'));
 }
 </script>
