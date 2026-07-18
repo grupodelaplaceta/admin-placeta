@@ -980,17 +980,38 @@ export async function generarPDF(entidad, documento) {
       }
 
       // ── FIRMA ──
-      doc.moveDown(1);
-      if (doc.y > doc.page.height - 120) doc.addPage();
-      doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(1).strokeColor(C).stroke();
-      doc.moveDown(0.8);
-      doc.font(fontBold).fontSize(10).fillColor(A).text('CÚMPLEASE Y NOTIFÍQUESE.', 50, doc.y, {width:500, align:'center'});
-      doc.moveDown(1.8);
-      doc.rect(200, doc.y, 200, 0.8).fill(A);
+      // Dejar espacio suficiente
+      if (doc.y > doc.page.height - 140) doc.addPage();
       doc.moveDown(0.5);
-      doc.font(fontReg).fontSize(8).fillColor('#5c5566').text(entL, 50, doc.y, {width:500, align:'center'});
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(1).strokeColor(C).stroke();
+      doc.moveDown(0.5);
+      doc.font(fontBold).fontSize(10).fillColor(A).text('CÚMPLEASE Y NOTIFÍQUESE.', 50, doc.y, {width:500, align:'center'});
+      doc.moveDown(1.5);
+      doc.rect(200, doc.y, 200, 0.8).fill(A);
+      doc.moveDown(0.3);
+      doc.font(fontReg).fontSize(8).fillColor('#5c5566').text('Fdo.: La Administración del Grupo de La Placeta', 50, doc.y, {width:500, align:'center'});
+      doc.moveDown(0.3);
+      doc.font(fontReg).fontSize(7).fillColor('#5c5566').text(entL, {width:500, align:'center'});
+
+      // ── DATOS DE FIRMA (si está firmado) ──
+      if (documento.firmado && documento.datos?.firmadoPor) {
+        doc.moveDown(0.8);
+        doc.moveTo(150, doc.y).lineTo(450, doc.y).lineWidth(0.3).strokeColor('#e0daf0').stroke();
+        doc.moveDown(0.3);
+        doc.font(fontReg).fontSize(7).fillColor('#5c5566');
+        doc.text(`Firmado digitalmente por: ${documento.datos.firmadoPor}`, {width:500, align:'center'});
+        if (documento.datos.fechaFirma) {
+          const fFecha = new Date(documento.datos.fechaFirma).toLocaleString('es-ES');
+          doc.text(`Fecha de firma: ${fFecha}`, {width:500, align:'center'});
+        }
+        doc.text('Firma electrónica PlacetaID', {width:500, align:'center'});
+      }
+
+      // ── CSV ──
+      doc.moveDown(0.5);
       const hash = documento.hash || createHash('sha256').update(documento.id+Date.now()).digest('hex');
-      doc.font(fontReg).fontSize(6).fillColor('#9a8aaa').text(`CSV: ${hash.substring(0,20).toUpperCase()} · Verificable en admin-placeta.vercel.app`, {width:500, align:'center'});
+      doc.font(fontReg).fontSize(6).fillColor('#9a8aaa');
+      doc.text(`CSV: ${hash.substring(0,20).toUpperCase()} · Verificable en admin-placeta.vercel.app`, {width:500, align:'center'});
 
       // ── PIE ──
       doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
