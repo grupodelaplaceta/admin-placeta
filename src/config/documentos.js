@@ -503,6 +503,30 @@ function generarContenidoDocumento(tipo, datos = {}) {
   const tx = (t) => L.push({texto:t}); const ln = () => L.push({linea:true});
 
   switch (tipo) {
+    // ── Cambio de tipo de cuenta ────────────────────────────────────────
+    case 'cambio-tipo-cuenta': {
+      sf('DATOS DE LA CUENTA');
+      cf('Cuenta', datos.cuenta || datos.accountId || '—');
+      cf('Tipo anterior', datos.tipoAnterior || '—');
+      cf('Tipo nuevo', datos.tipoNuevo || datos.tipo || '—');
+      cf('Fecha', datos.fecha || hoy);
+      ln(); sf('MOTIVO');
+      tx(datos.motivo || 'Reclasificación bancaria');
+      ln(); sf('EXPONE');
+      tx('El titular solicita la reclasificación de la cuenta bancaria, modificando su tipo a la categoría indicada en el presente documento.');
+      tx('Realizadas las comprobaciones previstas, no existen impedimentos para acordar el cambio.');
+      ln(); sf('FUNDAMENTOS JURÍDICOS');
+      tx('La presente resolución se adopta conforme al Código Normativo Interno del Grupo de La Placeta, en particular las disposiciones sobre tipos de cuentas bancarias y facultades de administración del Banco de La Placeta.');
+      ln(); sf('RESUELVE');
+      tx('Primero. Aprobar el cambio de tipo de cuenta.');
+      tx('Segundo. Actualizar el Registro Bancario Oficial.');
+      tx('Tercero. Notificar electrónicamente mediante PlacetaID.');
+      ln(); sf('PROTECCIÓN DE DATOS');
+      tx('Los datos personales contenidos en este expediente serán tratados conforme al RGPD, la LOPDGDD y el Código Normativo Interno GDLP.');
+      L.push({nota: 'Documento generado electrónicamente por Admin Placeta — Banco de La Placeta'});
+      break;
+    }
+
     // ── Plantillas oficiales del Banco de La Placeta (BLP-B-001 a B-010) ──
     case 'contrato-apertura':
     case 'contrato-modificacion':

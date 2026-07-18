@@ -195,19 +195,17 @@ router.post('/api/cuentas/modificar', async (req, res) => {
       const docTitulo = esCambioTipo ? `Cambio de tipo a ${type}` : `Modificación: ${cambiosStr}`;
       await saveDocumentoAsync('banco', {
         id: `mod-${Date.now()}-${randomUUID().slice(0, 6)}`,
-        tipo: esCambioTipo ? 'contrato-modificacion' : 'modificacion-datos',
+        tipo: esCambioTipo ? 'cambio-tipo-cuenta' : 'modificacion-datos',
         titulo: docTitulo,
         descripcion: motivo,
         datos: {
-          titular: displayName || '—',
-          dip: req.session?.usuario?.dip || '',
-          iban: accountId,
-          tipoCuenta: type || '—',
-          modificaciones: esCambioTipo ? ['Cambio clasificación'] : [],
-          otrasModificaciones: `${cambiosStr} — ${motivo}`,
-          gestorNombre: req.session?.usuario?.dip || 'admin',
+          accountId,
+          tipoAnterior: '',
+          tipoNuevo: type || '',
+          tipo: type || '',
           motivo,
-          accountId
+          fecha: new Date().toISOString(),
+          cuenta: accountId
         },
         refId: accountId,
         refTipo: 'cuenta',
