@@ -922,7 +922,7 @@ export async function generarPDF(entidad, documento) {
         const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
         const logoW = esPrimera ? 64 : 38;
         const logoX = 45;
-        const logoY = esPrimera ? 26 : 14;
+        const logoY = esPrimera ? 34 : 16;
         try {
           if (!fs.existsSync(logoPath)) {
             const p2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
