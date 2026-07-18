@@ -922,7 +922,7 @@ export async function generarPDF(entidad, documento) {
         const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
         const logoW = esPrimera ? 64 : 38;
         const logoX = 45;
-        const logoY = esPrimera ? 10 : 6;
+        const logoY = esPrimera ? 22 : 14;
         try {
           if (!fs.existsSync(logoPath)) {
             const p2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
@@ -1011,12 +1011,14 @@ export async function generarPDF(entidad, documento) {
       doc.moveDown(0.3);
       doc.font(fontReg).fontSize(7).fillColor('#5c5566').text(entL, {width:500, align:'center'});
 
-      // ── DATOS DE FIRMA (si está firmado) ──
-      if (documento.firmado && documento.datos?.firmadoPor) {
-        doc.moveDown(0.8);
-        doc.moveTo(150, doc.y).lineTo(450, doc.y).lineWidth(0.3).strokeColor('#e0daf0').stroke();
-        doc.moveDown(0.3);
-        // Firma manuscrita (base64) si existe
+      // ── FIRMA DEL TITULAR ──
+      doc.moveDown(0.8);
+      doc.moveTo(150, doc.y).lineTo(450, doc.y).lineWidth(0.3).strokeColor('#e0daf0').stroke();
+      doc.moveDown(0.5);
+      doc.font(fontBold).fontSize(8).fillColor(A).text('FIRMA DEL TITULAR', {width:500, align:'center'});
+
+      // Firma manuscrita si existe
+      if (documento.firmado) {
         const firmaImg = documento.datos?.firma_base64 || documento.datos?.firmaImagen;
         if (firmaImg) {
           try {
@@ -1026,12 +1028,17 @@ export async function generarPDF(entidad, documento) {
           } catch {}
         }
         doc.font(fontReg).fontSize(7).fillColor('#5c5566');
-        doc.text(`Firmado digitalmente por: ${documento.datos.firmadoPor}`, {width:500, align:'center'});
-        if (documento.datos.fechaFirma) {
-          const fFecha = new Date(documento.datos.fechaFirma).toLocaleString('es-ES');
-          doc.text(`Fecha de firma: ${fFecha}`, {width:500, align:'center'});
+        doc.text(`Firmado digitalmente por: ${documento.datos?.firmadoPor || '—'}`, {width:500, align:'center'});
+        if (documento.datos?.fechaFirma) {
+          doc.text(`Fecha: ${new Date(documento.datos.fechaFirma).toLocaleString('es-ES')}`, {width:500, align:'center'});
         }
         doc.text('Firma electrónica PlacetaID', {width:500, align:'center'});
+      } else {
+        // Espacio para firma pendiente
+        doc.rect(200, doc.y, 200, 50).fill('#f5f3fa');
+        doc.font(fontReg).fontSize(7).fillColor('#b8a8e0');
+        doc.text('Firma pendiente', 200, doc.y + 20, {width:200, align:'center'});
+        doc.y += 56;
       }
 
       // ── CSV ──
