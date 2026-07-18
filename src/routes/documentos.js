@@ -262,6 +262,20 @@ router.get('/api/documentos/diagnostico', async (req, res) => {
   const documentosConfig = await import('../config/documentos.js');
   const { initDocsTable, getDocumentos } = documentosConfig;
   
+  // Verificar Supabase
+  let supabaseModule = null;
+  try { supabaseModule = await import('../config/supabase.js'); } catch {}
+  const hasSupabaseModule = !!supabaseModule;
+  const hasSupabaseClient = supabaseModule?.supabase ? 'si' : 'no';
+  
+  // Verificar env vars (sin mostrar el valor completo)
+  const envKeys = {
+    SUPABASE_URL: process.env.SUPABASE_URL ? 'definida' : 'no definida',
+    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY ? `definida (${process.env.SUPABASE_SERVICE_KEY.length} chars)` : 'no definida',
+    SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY ? 'definida' : 'no definida',
+    mostrar_preview: process.env.SUPABASE_SERVICE_KEY ? process.env.SUPABASE_SERVICE_KEY.substring(0, 10) + '...' : 'N/A'
+  };
+  
   const sbOk = await initDocsTable();
   const memBanco = getDocumentos('banco')?.length || 0;
   
@@ -269,7 +283,7 @@ router.get('/api/documentos/diagnostico', async (req, res) => {
   
   if (sbOk) {
     try {
-      const { supabase } = await import('../config/supabase.js');
+      const { supabase } = supabaseModule;
       // 1. Leer
       const { data, error } = await supabase.from('documentos').select('id, entidad, titulo, tipo, estado, created_at').limit(20).order('created_at', { ascending: false });
       if (error) { estado.lectura = `error: ${error.message}`; }
@@ -279,16 +293,15 @@ router.get('/api/documentos/diagnostico', async (req, res) => {
         estado.docs = data;
       }
       
-      // 2. Probar escritura real: crear un doc temporal y borrarlo
-      const testId = 'test-' + Date.now();
+      // 2. Probar escritura real
+      const testId = 'diag-' + Date.now();
       const { error: writeErr } = await supabase.from('documentos').insert({
         id: testId, entidad: 'banco', tipo: 'test-diagnostico',
-        titulo: 'Test de escritura', descripcion: 'Auto-generado',
+        titulo: 'Test escritura', descripcion: 'Auto-generado',
         datos: {}, estado: 'borrador', firmado: false, hash: 'test'
       });
-      if (writeErr) estado.escritura = `error al insertar: ${writeErr.message}`;
+      if (writeErr) estado.escritura = `error: ${writeErr.message}`;
       else {
-        // Borrar el test
         await supabase.from('documentos').delete().eq('id', testId);
         estado.escritura = 'ok (insert+delete OK)';
       }
@@ -296,13 +309,18 @@ router.get('/api/documentos/diagnostico', async (req, res) => {
   }
 
   res.json({
-    supabase: estado.conectado ? 'conectado' : 'no disponible',
+    timestamp: new Date().toISOString(),
+    supabase: {
+      modulo_cargado: hasSupabaseModule,
+      cliente_disponible: hasSupabaseClient,
+      init_docs_table: sbOk ? 'ok' : 'falló',
+      env: envKeys
+    },
     lectura: estado.lectura || 'no probado',
     escritura: estado.escritura,
     docs_en_supabase: estado.docs_en_supabase,
     docs: estado.docs,
-    memoria: { banco: memBanco },
-    ts: new Date().toISOString()
+    memoria: { banco: memBanco }
   });
 });
 
