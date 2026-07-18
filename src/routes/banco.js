@@ -191,17 +191,23 @@ router.post('/api/cuentas/modificar', async (req, res) => {
       const { createHash, randomUUID } = await import('crypto');
       const { saveDocumentoAsync } = await import('../config/documentos.js');
       const cambiosStr = cambios.map(c => `${c.campo}: ${c.valor}`).join(', ');
-      const docTitulo = type ? `Cambio de tipo a ${type}` : `Modificación: ${cambiosStr}`;
+      const esCambioTipo = !!type;
+      const docTitulo = esCambioTipo ? `Cambio de tipo a ${type}` : `Modificación: ${cambiosStr}`;
       await saveDocumentoAsync('banco', {
         id: `mod-${Date.now()}-${randomUUID().slice(0, 6)}`,
-        tipo: type ? 'cambio-tipo-cuenta' : 'modificacion-datos',
+        tipo: esCambioTipo ? 'contrato-modificacion' : 'modificacion-datos',
         titulo: docTitulo,
         descripcion: motivo,
         datos: {
-          accountId, tipoAnterior: '', tipoNuevo: type || '', cambios: cambiosStr,
-          motivo, modificadoPor: req.session?.usuario?.dip || 'admin',
-          nombreActual: displayName || '', limiteEnvio: sendLimitPz || '',
-          fecha: new Date().toISOString()
+          titular: displayName || '—',
+          dip: req.session?.usuario?.dip || '',
+          iban: accountId,
+          tipoCuenta: type || '—',
+          modificaciones: esCambioTipo ? ['Cambio clasificación'] : [],
+          otrasModificaciones: `${cambiosStr} — ${motivo}`,
+          gestorNombre: req.session?.usuario?.dip || 'admin',
+          motivo,
+          accountId
         },
         refId: accountId,
         refTipo: 'cuenta',
