@@ -172,11 +172,19 @@ router.post('/api/cuentas/modificar', async (req, res) => {
   let result = null;
   let cambios = [];
 
+  // Obtener datos de la cuenta ANTES del cambio
+  let datosCuenta = {};
+  try {
+    const state = await apiBancoGetState();
+    const cta = state?.accounts?.find(a => a.id === accountId);
+    if (cta) datosCuenta = cta;
+  } catch {}
+
   try {
     if (type) {
       // Cambiar tipo de cuenta en la DB real del banco
       result = await apiBancoPost('cambiar-tipo', { accountId, tipo: type, motivo, bypass: !!bypass });
-      cambios.push({ campo: 'tipo', valor: type });
+      cambios.push({ campo: 'tipo', valor: `${datosCuenta.type || ''} → ${type}` });
     } else if (displayName !== undefined || sendLimitPz !== undefined) {
       // Modificar datos de la cuenta
       result = await bancoAction('modificar-cuenta', { accountId, displayName, sendLimitPz, motivo, bypass: !!bypass });
@@ -193,19 +201,23 @@ router.post('/api/cuentas/modificar', async (req, res) => {
       const cambiosStr = cambios.map(c => `${c.campo}: ${c.valor}`).join(', ');
       const esCambioTipo = !!type;
       const docTitulo = esCambioTipo ? `Cambio de tipo a ${type}` : `Modificación: ${cambiosStr}`;
-      await saveDocumentoAsync('banco', {
         id: `mod-${Date.now()}-${randomUUID().slice(0, 6)}`,
         tipo: esCambioTipo ? 'cambio-tipo-cuenta' : 'modificacion-datos',
         titulo: docTitulo,
         descripcion: motivo,
         datos: {
-          accountId,
-          tipoAnterior: '',
+          // Para la plantilla legal
+          cuenta: datosCuenta.displayName || displayName || accountId,
+          iban: datosCuenta.iban || '—',
+          titular: datosCuenta.displayName || displayName || '—',
+          placetaId: datosCuenta.placetaId || '—',
+          eip: datosCuenta.eip || '—',
+          tipoAnterior: datosCuenta.type || '',
           tipoNuevo: type || '',
-          tipo: type || '',
+          // Para respaldo
+          accountId,
           motivo,
-          fecha: new Date().toISOString(),
-          cuenta: accountId
+          fecha: new Date().toISOString()
         },
         refId: accountId,
         refTipo: 'cuenta',
