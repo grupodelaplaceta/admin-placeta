@@ -191,6 +191,7 @@ router.post('/api/cuentas/modificar', async (req, res) => {
       const { createHash, randomUUID } = await import('crypto');
       const { saveDocumentoAsync } = await import('../config/documentos.js');
       const cambiosStr = cambios.map(c => `${c.campo}: ${c.valor}`).join(', ');
+      const docTitulo = type ? `Cambio de tipo a ${type}` : `Modificación: ${cambiosStr}`;
       await saveDocumentoAsync('banco', {
         id: `mod-${Date.now()}-${randomUUID().slice(0, 6)}`,
         tipo: type ? 'cambio-tipo-cuenta' : 'modificacion-datos',
