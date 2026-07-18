@@ -190,14 +190,18 @@ router.post('/api/cuentas/modificar', async (req, res) => {
     try {
       const { createHash, randomUUID } = await import('crypto');
       const { saveDocumentoAsync } = await import('../config/documentos.js');
-      const docTipo = type ? 'cambio-titularidad' : 'modificacion-datos';
-      const docTitulo = type ? `Cambio de tipo a ${type}` : `Modificación de datos: ${cambios.map(c => c.campo).join(', ')}`;
+      const cambiosStr = cambios.map(c => `${c.campo}: ${c.valor}`).join(', ');
       await saveDocumentoAsync('banco', {
         id: `mod-${Date.now()}-${randomUUID().slice(0, 6)}`,
-        tipo: docTipo,
+        tipo: type ? 'cambio-tipo-cuenta' : 'modificacion-datos',
         titulo: docTitulo,
         descripcion: motivo,
-        datos: { accountId, cambios, motivo, modificadoPor: req.session?.usuario?.dip || 'admin' },
+        datos: {
+          accountId, tipoAnterior: '', tipoNuevo: type || '', cambios: cambiosStr,
+          motivo, modificadoPor: req.session?.usuario?.dip || 'admin',
+          nombreActual: displayName || '', limiteEnvio: sendLimitPz || '',
+          fecha: new Date().toISOString()
+        },
         refId: accountId,
         refTipo: 'cuenta',
         createdBy: req.session?.usuario?.dip || 'sistema',
