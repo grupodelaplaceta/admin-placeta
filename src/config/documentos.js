@@ -458,7 +458,12 @@ export function saveDocumento(entidad, data) {
 
 export async function saveDocumentoAsync(entidad, data) {
   const doc = saveDocumento(entidad, data);
-  await sbSaveDoc(doc).catch(() => {});
+  const sbResult = await sbSaveDoc(doc);
+  if (!sbResult) {
+    console.error('[Docs] CRÍTICO: sbSaveDoc falló - documento no persistido en Supabase:', doc.id, doc.titulo);
+    // Lanzar error para que el POST handler devuelva 500 y el usuario no vea falso éxito
+    throw new Error('No se pudo guardar el documento en la base de datos. Inténtalo de nuevo.');
+  }
   return doc;
 }
 
