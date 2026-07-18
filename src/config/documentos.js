@@ -864,14 +864,19 @@ export async function generarPDF(entidad, documento) {
       const lineas = generarContenidoDocumento(documento.tipo, datos);
 
       // ── Footer automático en cada página ──
+      let _addingPage = false;
       doc.on('pageAdded', () => {
-        doc.save();
-        doc.rect(40, doc.page.height - 40, doc.page.width - 80, 0.5).fill(C);
-        doc.font('Helvetica').fontSize(6).fillColor('#5c5566');
-        doc.text('Grupo de La Placeta · Documento oficial', 40, doc.page.height - 35, { width: 400 });
-        const pg = doc.bufferedPageRange().count;
-        doc.text(`Pág. ${pg}`, doc.page.width - 90, doc.page.height - 35, { width: 50, align:'right' });
-        doc.restore();
+        if (_addingPage) return;
+        _addingPage = true;
+        try {
+          doc.save();
+          doc.rect(40, doc.page.height - 40, doc.page.width - 80, 0.5).fill(C);
+          doc.font('Helvetica').fontSize(6).fillColor('#5c5566');
+          doc.text('Grupo de La Placeta · Documento oficial', 40, doc.page.height - 35, { width: 400 });
+          const pg = doc.bufferedPageRange().count;
+          doc.text(`Pág. ${pg}`, doc.page.width - 90, doc.page.height - 35, { width: 50, align:'right' });
+          doc.restore();
+        } finally { _addingPage = false; }
       });
 
       // ── PORTADA (solo automáticos) ──
