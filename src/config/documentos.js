@@ -920,42 +920,67 @@ export async function generarPDF(entidad, documento) {
       const esAuto = documento.id?.startsWith('auto-');
       const lineas = generarContenidoDocumento(documento.tipo, datos);
 
-      // ── Footer automático en cada página ──
+      // ── Función para dibujar cabecera en cualquier página ──
+      function dibujarCabecera(esPrimera = false) {
+        doc.save();
+        const alto = esPrimera ? 85 : 42;
+        const topY = esPrimera ? 16 : 10;
+        doc.rect(0, topY, doc.page.width, alto).fill('#341087');
+        doc.rect(0, 0, doc.page.width, 3.5).fill('#5a2fc2');
+        // Logo
+        const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
+        const logoW = esPrimera ? 48 : 32;
+        const logoX = esPrimera ? 50 : 50;
+        const logoY = esPrimera ? 24 : 16;
+        let logoOk = false;
+        try {
+          if (!fs.existsSync(logoPath)) {
+            const logoPath2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
+            if (fs.existsSync(logoPath2)) { doc.image(logoPath2, logoX, logoY, { width: logoW }); logoOk = true; }
+          } else { doc.image(logoPath, logoX, logoY, { width: logoW }); logoOk = true; }
+        } catch {}
+        if (esPrimera) {
+          doc.font(fontBold).fontSize(18).fillColor('#ffffff').text(documento.titulo||'Documento', logoX + logoW + 16, 28);
+          doc.font(fontReg).fontSize(8).fillColor('#d9cdfa').text(entL, logoX + logoW + 16, 52);
+          doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text(`${fecha}`, logoX + logoW + 16, 68);
+          doc.rect(50, 104, 500, 1.5).fill('#5a2fc2');
+          doc.y = 116;
+        } else {
+          doc.font(fontBold).fontSize(10).fillColor('#ffffff').text(entL, logoX + logoW + 12, 18);
+          doc.font(fontReg).fontSize(7).fillColor('#d9cdfa').text(documento.titulo||'Documento', logoX + logoW + 12, 34);
+          doc.rect(50, 54, 500, 1).fill('#5a2fc2');
+          doc.y = 62;
+        }
+        doc.restore();
+      }
+
+      // ── Footer ──
+      function dibujarFooter() {
+        const prevY = doc.y;
+        doc.save();
+        doc.rect(50, doc.page.height - 42, 500, 0.5).fill(C);
+        doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
+        doc.text('Grupo de La Placeta · Documento oficial', 50, doc.page.height - 36, { width: 400 });
+        const pg = doc.bufferedPageRange().count;
+        doc.text(`Pág. ${pg}`, doc.page.width - 90, doc.page.height - 36, { width: 50, align:'right' });
+        doc.restore();
+        doc.y = prevY; // Restaurar posición Y
+      }
+
+      // ── pageAdded: dibujar cabecera en páginas siguientes ──
       let _addingPage = false;
       doc.on('pageAdded', () => {
         if (_addingPage) return;
         _addingPage = true;
         try {
-          doc.save();
-          doc.rect(40, doc.page.height - 42, doc.page.width - 80, 0.5).fill(C);
-          doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
-          doc.text('Grupo de La Placeta · Documento oficial', 50, doc.page.height - 36, { width: 400 });
-          const pg = doc.bufferedPageRange().count;
-          doc.text(`Pág. ${pg}`, doc.page.width - 90, doc.page.height - 36, { width: 50, align:'right' });
-          doc.restore();
+          const prevY = doc.y;
+          dibujarCabecera(false);
+          doc.y = prevY;
         } finally { _addingPage = false; }
       });
 
-      // ── CABECERA CON LOGO ──
-      doc.save();
-      // Fondo de cabecera color acento
-      doc.rect(0, 16, doc.page.width, 85).fill('#341087');
-      // Barra superior
-      doc.rect(0, 0, doc.page.width, 3.5).fill('#5a2fc2');
-      // Logo grande (el nombre de entidad está en el logo)
-      const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
-      if (!fs.existsSync(logoPath)) {
-        const logoPath2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
-        try { if (fs.existsSync(logoPath2)) doc.image(logoPath2, 50, 22, { width: 56 }); } catch {}
-      } else {
-        try { doc.image(logoPath, 50, 22, { width: 56 }); } catch {}
-      }
-      doc.font(fontBold).fontSize(20).fillColor('#ffffff').text(documento.titulo||'Documento', 120, 28);
-      doc.font(fontReg).fontSize(8).fillColor('#d9cdfa').text(entL, 120, 54);
-      doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text(`ID: ${(documento.id||'').slice(0,20)}  |  ${fecha}`, 120, 70);
-      doc.rect(50, 104, 500, 1.5).fill('#5a2fc2');
-      doc.y = 116;
-      doc.restore();
+      // ── CABECERA (página 1) ──
+      dibujarCabecera(true);
 
       // ── CUERPO ──
       for (const item of lineas) {
@@ -1024,12 +1049,15 @@ export async function generarPDF(entidad, documento) {
       }
 
       // ── CSV ──
+      if (doc.y > doc.page.height - 130) doc.addPage();
       doc.moveDown(0.5);
       const hash = documento.hash || createHash('sha256').update(documento.id+Date.now()).digest('hex');
       doc.font(fontReg).fontSize(6).fillColor('#9a8aaa');
       doc.text(`CSV: ${hash.substring(0,20).toUpperCase()}`, {width:500, align:'center'});
 
       // ── PIE ──
+      if (doc.y > doc.page.height - 100) doc.addPage();
+      dibujarFooter();
       doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
       const leyenda = esAuto ? 'Informe automático del sistema · Código Normativo Interno' : `${entL} · Documento oficial · Código Normativo Interno GDLP`;
       doc.text(leyenda, 50, doc.page.height-80, {width:500, align:'center'});
