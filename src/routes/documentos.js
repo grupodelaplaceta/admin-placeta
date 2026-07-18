@@ -259,29 +259,28 @@ router.get('/publico/:entidad/documentos/:id/pdf', verificarApiKey, async (req, 
 
 // ── Diagnóstico del sistema de documentos ─────────────────────────────────
 router.get('/api/documentos/diagnostico', async (req, res) => {
-  const { initDocsTable, getDocumentos, ETIQUETAS_DOC } = await import('../config/documentos.js');
+  const { initDocsTable, getDocumentos } = await import('../config/documentos.js');
   
   const sbOk = await initDocsTable();
   const memBanco = getDocumentos('banco')?.length || 0;
-  const memTributos = getDocumentos('tributos')?.length || 0;
-  const memJunta = getDocumentos('junta')?.length || 0;
-  const memAdmin = getDocumentos('administracion')?.length || 0;
   
-  // Probar escritura directa en Supabase
-  let sbWrite = 'no probado';
+  let sbWrite = 'no probado', sbDocs = [];
   if (sbOk) {
     try {
       const { supabase } = await import('../config/supabase.js');
-      const { error } = await supabase.from('documentos').select('id').limit(5);
+      const { data, error } = await supabase.from('documentos').select('id, entidad, titulo, tipo, estado, created_at').limit(20).order('created_at', { ascending: false });
       sbWrite = error ? `error: ${error.message}` : 'ok';
+      sbDocs = data || [];
     } catch (e) { sbWrite = `excepción: ${e.message}`; }
   }
 
   res.json({
-    supabase_lista: sbOk ? 'conectado' : 'no disponible',
-    supabase_escritura: sbWrite,
-    memoria: { banco: memBanco, tributos: memTributos, junta: memJunta, administracion: memAdmin },
-    timestamp: new Date().toISOString()
+    supabase: sbOk ? 'conectado' : 'no disponible',
+    escritura: sbWrite,
+    docs_en_supabase: sbDocs.length,
+    docs: sbDocs,
+    memoria: { banco: memBanco },
+    ts: new Date().toISOString()
   });
 });
 
