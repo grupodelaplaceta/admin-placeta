@@ -318,7 +318,9 @@ async function sbListDocs(entidad) {
 }
 
 async function sbSaveDoc(doc) {
-  if (!supabase || !sbReady) return null;
+  if (!supabase) return null;
+  await initDocsTable();
+  if (!sbReady) return null;
   try {
     const record = {
       id: doc.id, entidad: doc.entidad, tipo: doc.tipo,
@@ -335,13 +337,17 @@ async function sbSaveDoc(doc) {
 }
 
 async function sbDeleteDoc(id) {
-  if (!supabase || !sbReady) return false;
+  if (!supabase) return false;
+  await initDocsTable();
+  if (!sbReady) return false;
   try { await supabase.from(DOCS_TABLE).delete().eq('id', id); return true; }
   catch { return false; }
 }
 
 async function sbGetDoc(id) {
-  if (!supabase || !sbReady) return null;
+  if (!supabase) return null;
+  await initDocsTable();
+  if (!sbReady) return null;
   try {
     const { data } = await supabase.from(DOCS_TABLE).select('*').eq('id', id).maybeSingle();
     return data;
