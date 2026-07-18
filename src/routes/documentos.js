@@ -9,7 +9,7 @@ import { verificarSesion, verificarPermiso } from '../middleware/auth.js';
 import {
   getDocumentos, getDocumentoById, getDocumentosPorRef, getDocumentosPorRefAsync,
   getDocumentosByEntidadAsync,
-  saveDocumento, deleteDocumento,
+  saveDocumentoAsync, deleteDocumentoAsync,
   generarPDF, getPlantilla, TIPOS_DOCUMENTO, DOCUMENTOS_COMUNES,
   ETIQUETAS_DOC
 } from '../config/documentos.js';
@@ -62,7 +62,7 @@ router.post('/api/:entidad/documentos', verificarSesion, async (req, res) => {
   const { tipo, titulo, descripcion, datos, refId, refTipo } = req.body;
   if (!tipo) return res.status(400).json({ error: 'Tipo de documento requerido' });
 
-  const doc = saveDocumento(entidad, {
+  const doc = await saveDocumentoAsync(entidad, {
     tipo,
     titulo: titulo || ETIQUETAS_DOC[tipo] || tipo,
     descripcion: descripcion || '',
@@ -109,7 +109,7 @@ router.put('/api/:entidad/documentos/:id', verificarSesion, async (req, res) => 
   if (!existente) return res.status(404).json({ error: 'Documento no encontrado' });
 
   const { titulo, descripcion, datos, estado, firmado } = req.body;
-  const doc = saveDocumento(entidad, {
+  const doc = await saveDocumentoAsync(entidad, {
     ...existente,
     titulo: titulo || existente.titulo,
     descripcion: descripcion !== undefined ? descripcion : existente.descripcion,
@@ -126,7 +126,7 @@ router.post('/api/:entidad/documentos/:id/firmar', verificarSesion, async (req, 
   const existente = getDocumentoById(entidad, id);
   if (!existente) return res.status(404).json({ error: 'Documento no encontrado' });
 
-  const doc = saveDocumento(entidad, {
+  const doc = await saveDocumentoAsync(entidad, {
     ...existente,
     estado: 'firmado',
     firmado: true,
@@ -183,7 +183,7 @@ router.get('/api/:entidad/documentos/:id/pdf', verificarSesion, async (req, res)
 // ── API: Eliminar documento ───────────────────────────────────────────────
 router.delete('/api/:entidad/documentos/:id', verificarSesion, async (req, res) => {
   const { entidad, id } = req.params;
-  deleteDocumento(entidad, id);
+  await deleteDocumentoAsync(entidad, id);
   res.json({ success: true });
 });
 
