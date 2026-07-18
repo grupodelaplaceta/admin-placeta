@@ -909,6 +909,30 @@ function generarContenidoDocumento(tipo, datos = {}) {
       }
       break;
 
+    // ── Documento desde el editor personalizado ─────────────────────────
+    case 'editor-personalizado': {
+      if (datos.titular) { sf('DATOS'); cf('Titular', datos.titular); if (datos.dip) cf('DIP', datos.dip); if (datos.iban) cf('IBAN/Ref.', datos.iban); ln(); }
+      if (datos.expone) {
+        sf('EXPONE');
+        datos.expone.split('\n').filter(l=>l.trim()).forEach(p => tx(p.trim()));
+        ln();
+      }
+      if (datos.fundamentos) {
+        sf('FUNDAMENTOS JURÍDICOS');
+        datos.fundamentos.split('\n').filter(l=>l.trim()).forEach(p => tx(p.trim()));
+        ln();
+      }
+      if (datos.resuelve) {
+        sf('RESUELVE');
+        datos.resuelve.split('\n').filter(l=>l.trim()).forEach(p => tx(p.trim()));
+        ln();
+      }
+      if (datos.notas) {
+        datos.notas.split('\n').filter(l=>l.trim()).forEach(n => L.push({nota: n.trim()}));
+      }
+      break;
+    }
+
     default:
       sf('DATOS');
       for (const [k,v] of Object.entries(datos)) {

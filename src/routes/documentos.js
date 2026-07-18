@@ -10,11 +10,51 @@ import {
   getDocumentos, getDocumentoById, getDocumentosPorRef, getDocumentosPorRefAsync,
   getDocumentosByEntidadAsync,
   saveDocumentoAsync, deleteDocumentoAsync,
-  generarPDF, getPlantilla, TIPOS_DOCUMENTO, DOCUMENTOS_COMUNES,
+  generarPDF, getPlantilla, TIPOS_DOCUMENTO, DOCUMENTOS_COMUNES, DOCUMENTOS_AUTOMATICOS,
   ETIQUETAS_DOC
 } from '../config/documentos.js';
 
 const router = Router();
+
+// ── Editor de documentos ─────────────────────────────────────────────────
+router.get('/documentos/editor', verificarSesion, async (req, res) => {
+  res.render('editor-documentos', {
+    titulo: 'Editor de Documentos',
+    layout: 'layouts/admin',
+    entidad_actual: req.session.entidades_permitidas?.[0] || 'banco',
+    TIPOS_DOCUMENTO, DOCUMENTOS_COMUNES, ETIQUETAS_DOC
+  });
+});
+
+// ── API: Crear documento desde el editor ─────────────────────────────────
+router.post('/api/documentos/crear', verificarSesion, async (req, res) => {
+  const { entidad, tipo, titulo, titular, dip, iban, descripcion, expone, fundamentos, resuelve, notas, destinatariosDIP } = req.body;
+  if (!entidad || !tipo) return res.status(400).json({ error: 'Entidad y tipo requeridos' });
+  const DEFAULT_NOTAS = 'AVISO LEGAL: El Grupo de La Placeta se rige por sus Estatutos y el Código Normativo Interno vigente. Al firmar digitalmente este documento vía PlacetaID Móvil le está proporcionando autenticidad y dándole la misma validez que a una firma en papel.';
+  try {
+    const doc = await saveDocumentoAsync(entidad, {
+      id: `doc-${Date.now()}-${randomUUID().slice(0,6)}`,
+      tipo: tipo || 'editor-personalizado',
+      titulo: titulo || ETIQUETAS_DOC[tipo] || tipo,
+      descripcion: descripcion || '',
+      datos: {
+        titular: titular || '—',
+        dip: dip || '—',
+        iban: iban || '—',
+        expone,
+        fundamentos,
+        resuelve,
+        notas: notas || DEFAULT_NOTAS,
+        fecha: new Date().toISOString()
+      },
+      createdBy: req.session.usuario?.dip || 'sistema',
+      estado: 'final',
+      firmado: false,
+      hash: createHash('sha256').update(Date.now().toString()).digest('hex').slice(0,16)
+    });
+    res.json({ success: true, documento: doc });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── API: Listar documentos de una entidad ─────────────────────────────────
 router.get('/api/:entidad/documentos', verificarSesion, async (req, res) => {

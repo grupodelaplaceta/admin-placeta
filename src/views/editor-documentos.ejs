@@ -1,0 +1,192 @@
+<% 
+  const entidades = [
+    {id:'banco', nombre:'Banco de La Placeta'},
+    {id:'tributos', nombre:'Tributos de La Placeta'},
+    {id:'junta', nombre:'Junta de La Placeta'},
+    {id:'administracion', nombre:'Administración de La Placeta'}
+  ];
+  const TIPOS_AGRUPADOS = typeof TIPOS_DOCUMENTO !== 'undefined' ? TIPOS_DOCUMENTO : {};
+%>
+<div class="page-header">
+  <div>
+    <h1><%- icono('documento') %> Editor de Documentos</h1>
+    <p class="text-muted">Crea documentos oficiales con formato GDLP, firmables mediante PlacetaID</p>
+  </div>
+</div>
+
+<div class="editor-container" style="display:grid;grid-template-columns:320px 1fr;gap:20px">
+  <!-- Panel izquierdo: configuración -->
+  <div class="info-card">
+    <div class="section-header"><h3>⚙️ Configuración</h3></div>
+    <form id="editorForm" style="display:flex;flex-direction:column;gap:12px;padding:12px 0">
+      
+      <div class="form-group">
+        <label>Entidad</label>
+        <select id="entidad" class="form-input" onchange="cargarTipos()">
+          <% entidades.forEach(e => { %>
+            <option value="<%= e.id %>"><%= e.nombre %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Categoría</label>
+        <select id="categoria" class="form-input" onchange="cargarTipos()">
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Tipo de documento</label>
+        <select id="tipo" class="form-input" onchange="cargarPlantilla()">
+        </select>
+      </div>
+
+      <hr style="border-color:#e0daf0;margin:8px 0">
+
+      <div class="form-group">
+        <label>Título del documento</label>
+        <input id="titulo" class="form-input" placeholder="Título personalizado" value="">
+      </div>
+
+      <div class="form-group">
+        <label>Titular / Asunto</label>
+        <input id="titular" class="form-input" placeholder="Nombre del titular o asunto">
+      </div>
+
+      <div class="form-group">
+        <label>DIP / Identificador</label>
+        <input id="dip" class="form-input" placeholder="DIP del titular">
+      </div>
+
+      <div class="form-group">
+        <label>IBAN / Referencia</label>
+        <input id="iban" class="form-input" placeholder="IBAN o referencia">
+      </div>
+
+      <div class="form-group">
+        <label>Descripción / Motivo</label>
+        <textarea id="descripcion" class="form-input" rows="2" placeholder="Breve descripción"></textarea>
+      </div>
+
+      <hr style="border-color:#e0daf0;margin:8px 0">
+
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn btn-primary" onclick="guardarBorrador()" style="flex:1">💾 Guardar</button>
+        <button type="button" class="btn btn-outline" onclick="vistaPrevia()" style="flex:1">👁️ Previsualizar</button>
+      </div>
+      <button type="button" class="btn btn-success" onclick="publicar()" style="width:100%">📄 Publicar y generar PDF</button>
+    </form>
+  </div>
+
+  <!-- Panel derecho: editor de contenido -->
+  <div class="info-card">
+    <div class="section-header"><h3>📝 Contenido del documento</h3></div>
+    
+    <div id="contenidoEditor" style="padding:12px 0;display:flex;flex-direction:column;gap:8px">
+      <p class="text-muted" style="font-size:13px">Selecciona un tipo de documento para cargar su plantilla o escribe contenido personalizado abajo.</p>
+      
+      <div class="form-group">
+        <label>🔤 EXPONE (motivación del documento)</label>
+        <textarea id="exponeText" class="form-input textarea-editor" rows="6" placeholder="Escribe el texto expositivo del documento...&#10;&#10;Ej: Que el titular solicita..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>⚖️ FUNDAMENTOS JURÍDICOS</label>
+        <textarea id="fundamentosText" class="form-input textarea-editor" rows="5" placeholder="Base legal y fundamentos...&#10;&#10;Ej: Conforme al Artículo 5 del Código Normativo Interno..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>📋 RESUELVE (puntos uno por línea)</label>
+        <textarea id="resuelveText" class="form-input textarea-editor" rows="6" placeholder="Cada punto en una línea:&#10;&#10;Primero. — Aprobar...&#10;Segundo. — Ordenar...&#10;Tercero. — Notificar..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>📌 Notas / Observaciones</label>
+        <textarea id="notasText" class="form-input textarea-editor" rows="3" placeholder="Notas adicionales, avisos legales..."></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Estilos adicionales -->
+<style>
+.textarea-editor {
+  min-height: 100px;
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.editor-container .form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5c5566;
+  margin-bottom: 4px;
+  display: block;
+}
+.editor-container .form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid #e0daf0;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+  color: #1c1226;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+.editor-container .form-input:focus {
+  outline: none;
+  border-color: #5a2fc2;
+  box-shadow: 0 0 0 3px rgba(90,47,194,0.1);
+}
+.editor-container select.form-input {
+  cursor: pointer;
+}
+</style>
+
+<script>
+// Datos de tipos de documento (pasados desde el servidor)
+const TIPOS_DOC = <%- JSON.stringify(TIPOS_DOCUMENTO) %>;
+const ETIQUETAS = <%- JSON.stringify(ETIQUETAS_DOC) %>;
+
+function cargarCategorias(entidad) {
+  const cats = TIPOS_DOC[entidad] || {};
+  const sel = document.getElementById('categoria');
+  sel.innerHTML = '';
+  Object.keys(cats).forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c.charAt(0).toUpperCase() + c.slice(1);
+    sel.appendChild(opt);
+  });
+  cargarTipos();
+}
+
+function cargarTipos() {
+  const ent = document.getElementById('entidad').value;
+  const cat = document.getElementById('categoria').value;
+  const tipos = (TIPOS_DOC[ent] || {})[cat] || [];
+  const sel = document.getElementById('tipo');
+  sel.innerHTML = '';
+  tipos.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = ETIQUETAS[t] || t.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+    sel.appendChild(opt);
+  });
+  // Also add common docs
+  const comunes = <%- JSON.stringify(DOCUMENTOS_COMUNES) %>;
+  if (comunes.length) {
+    const sep = document.createElement('option');
+    sep.disabled = true; sep.textContent = '— Comunes —';
+    sel.appendChild(sep);
+    comunes.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t;
+      opt.textContent = ETIQUETAS[t] || t.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+      sel.appendChild(opt);
+    });
+  }
+}
+</script>
