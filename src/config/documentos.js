@@ -949,13 +949,13 @@ export async function generarPDF(entidad, documento) {
       // ── Footer ──
       function dibujarFooter() {
         doc.save();
-        const fy = doc.page.height - 38;
-        doc.rect(50, fy, 500, 0.5).fill(C);
+        doc.rect(50, doc.y, 500, 0.5).fill(C);
         doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
-        doc.text('Grupo de La Placeta · Documento oficial', 50, fy + 4, { width: 400 });
+        doc.text('Grupo de La Placeta · Documento oficial', 50, doc.y + 4, { width: 400 });
         const pg = doc.bufferedPageRange().count;
-        doc.text(`Pág. ${pg}`, doc.page.width - 90, fy + 4, { width: 50, align:'right' });
+        doc.text(`Pág. ${pg}`, doc.page.width - 90, doc.y + 4, { width: 50, align:'right' });
         doc.restore();
+        doc.y += 15;
       }
 
       // ── Helper: nueva página con cabecera ──
@@ -1040,16 +1040,20 @@ export async function generarPDF(entidad, documento) {
       }
 
       // ── CSV ──
-      doc.moveDown(0.5);
+      doc.moveDown(0.3);
       const hash = documento.hash || createHash('sha256').update(documento.id+Date.now()).digest('hex');
       doc.font(fontReg).fontSize(6).fillColor('#9a8aaa');
       doc.text(`CSV: ${hash.substring(0,20).toUpperCase()}`, {width:500, align:'center'});
 
-      // ── PIE ──
+      // ── PIE + FOOTER ── (relativo a doc.y, SIN posiciones absolutas)
+      const espacioRestante = doc.page.height - 45 - doc.y;
+      if (espacioRestante < 40) nuevaPagina();
       doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
       const leyenda = esAuto ? 'Informe automático del sistema · Código Normativo Interno' : `${entL} · Documento oficial · Código Normativo Interno GDLP`;
-      doc.text(leyenda, 50, doc.page.height-68, {width:500, align:'center'});
-      doc.text(`Generado el ${new Date().toLocaleString('es-ES')}`, 50, doc.page.height-56, {width:500, align:'center'});
+      doc.text(leyenda, 50, doc.y, {width:500, align:'center'});
+      doc.moveDown(0.1);
+      doc.text(`Generado el ${new Date().toLocaleString('es-ES')}`, {width:500, align:'center'});
+      doc.moveDown(0.3);
       dibujarFooter();
 
       doc.end();
