@@ -924,9 +924,11 @@ export async function generarPDF(entidad, documento) {
 
       // ── CABECERA CON LOGO ──
       doc.save();
+      // Fondo de cabecera color acento
+      doc.rect(0, 16, doc.page.width, 90).fill('#341087');
       // Barra superior
-      doc.rect(30, 16, 540, 2.5).fill(C);
-      // Logo
+      doc.rect(0, 0, doc.page.width, 3.5).fill('#5a2fc2');
+      // Logo (blanco sobre fondo morado)
       const logoPath = path.join(__dirname, '..', 'src', 'img', logos[entidad] || 'logo-web.png');
       if (!fs.existsSync(logoPath)) {
         const logoPath2 = path.join(__dirname, '..', 'public', 'img', logos[entidad] || 'logo-web.png');
@@ -934,10 +936,12 @@ export async function generarPDF(entidad, documento) {
       } else {
         try { doc.image(logoPath, 50, 26, { width: 36 }); } catch {}
       }
-      doc.font(fontBold).fontSize(15).fillColor(A).text(entL, 94, 32);
-      doc.font(fontReg).fontSize(7.5).fillColor('#5c5566').text(documento.titulo||'Documento', 94, 52);
-      doc.font(fontBold).fontSize(18).fillColor(A).text(documento.titulo||'Documento', 50, 74);
-      doc.rect(50, 98, 500, 1.5).fill(C);
+      doc.font(fontBold).fontSize(16).fillColor('#ffffff').text(entL, 94, 30);
+      doc.font(fontReg).fontSize(8).fillColor('#d9cdfa').text(documento.titulo||'Documento', 94, 52);
+      doc.font(fontBold).fontSize(19).fillColor('#ffffff').text(documento.titulo||'Documento', 50, 76);
+      doc.rect(50, 108, 500, 1.5).fill('#5a2fc2');
+      doc.y = 120;
+      doc.restore();
       doc.y = 110;
       doc.restore();
 
