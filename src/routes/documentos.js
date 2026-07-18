@@ -279,7 +279,24 @@ router.get('/api/documentos/diagnostico', async (req, res) => {
   const sbOk = await initDocsTable();
   const memBanco = getDocumentos('banco')?.length || 0;
   
-  let estado = { conectado: sbOk, docs_en_supabase: 0, escritura: 'no probado', docs: [] };
+  let estado = { conectado: sbOk, docs_en_supabase: 0, escritura: 'no probado', docs: [], error_init: null };
+  
+  if (!sbOk) {
+    // Diagnosticar POR QUÉ falló initDocsTable
+    try {
+      const { supabase: sb } = supabaseModule;
+      if (!sb) {
+        estado.error_init = 'supabase client is null';
+      } else {
+        const test1 = await sb.from('documentos').select('id').limit(1);
+        estado.error_init = `select error: ${test1?.error?.message || 'unknown'}, status: ${test1?.status || 'no status'}`;
+        const test2 = await sb.from('solicitantes').select('id').limit(1);
+        estado.error_init += ` | solicitantes: ${test2?.error?.message || 'ok'}`;
+      }
+    } catch (e) {
+      estado.error_init = `exception: ${e.message}`;
+    }
+  }
   
   if (sbOk) {
     try {
