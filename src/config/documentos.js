@@ -17,10 +17,10 @@ import { supabase } from './supabase.js';
 const memStore = {};
 
 const LOGOS = {
-  banco: 'img/logo-banco.jpg',
-  tributos: 'img/logo-tributos.png',
-  junta: 'img/logo-gdlp.svg',
-  administracion: 'img/logo-web.png',
+  banco: 'logo-banco.png',
+  tributos: 'logo-tributos.png',
+  junta: 'logo-gdlp.svg',
+  administracion: 'logo-web.png',
   placetaid: 'img/logo-placetaid.jpg',
 };
 
@@ -526,9 +526,7 @@ function generarContenidoDocumento(tipo, datos = {}) {
       tx('Primero. Aprobar el cambio de tipo de cuenta bancaria.');
       tx('Segundo. Actualizar el Registro Bancario Oficial.');
       tx('Tercero. Notificar electrónicamente la presente resolución al titular mediante PlacetaID.');
-      ln(); sf('FIRMA');
-      tx('El presente documento queda sujeto a la firma electrónica del titular a través de PlacetaID Móvil para su plena validez.');
-      L.push({nota: 'Documento emitido por el Banco de La Placeta. Pendiente de firma digital por el titular mediante PlacetaID Móvil.'});
+      L.push({nota: 'Documento emitido por el Banco de La Placeta.'});
       break;
     }
 
@@ -901,7 +899,7 @@ export async function generarPDF(entidad, documento) {
 
       const etiqueta = ETIQUETAS_DOC[documento.tipo] || documento.tipo;
       const nomE = { banco:'Banco de La Placeta', tributos:'Tributos de La Placeta', junta:'Junta de La Placeta', administracion:'Administración de La Placeta' };
-      const logos = { banco:'logo-banco.jpg', tributos:'logo-tributos.png', junta:'logo-gdlp.svg', administracion:'logo-web.png' };
+      const logos = { banco:'logo-banco.png', tributos:'logo-tributos.png', junta:'logo-gdlp.svg', administracion:'logo-web.png' };
       const entL = nomE[entidad] || entidad;
       const fecha = documento.createdAt ? new Date(documento.createdAt).toLocaleDateString('es-ES',{year:'numeric',month:'long',day:'numeric'}) : '—';
       const datos = documento.datos || {};
@@ -929,10 +927,15 @@ export async function generarPDF(entidad, documento) {
       // Barra superior
       doc.rect(30, 16, 540, 2.5).fill(C);
       // Logo
-      const logoPath = path.join(__dirname, '..', 'public', 'img', logos[entidad] || 'logo-web.png');
-      try { if (fs.existsSync(logoPath)) doc.image(logoPath, 50, 30, { width: 32 }); } catch {}
-      doc.font(fontBold).fontSize(16).fillColor(A).text('GRUPO DE LA PLACETA', 90, 32);
-      doc.font(fontReg).fontSize(7.5).fillColor('#5c5566').text(entL + ' · ' + etiqueta, 90, 52);
+      const logoPath = path.join(__dirname, '..', 'src', 'img', logos[entidad] || 'logo-web.png');
+      if (!fs.existsSync(logoPath)) {
+        const logoPath2 = path.join(__dirname, '..', 'public', 'img', logos[entidad] || 'logo-web.png');
+        try { if (fs.existsSync(logoPath2)) doc.image(logoPath2, 50, 26, { width: 36 }); } catch {}
+      } else {
+        try { doc.image(logoPath, 50, 26, { width: 36 }); } catch {}
+      }
+      doc.font(fontBold).fontSize(15).fillColor(A).text(entL, 94, 32);
+      doc.font(fontReg).fontSize(7.5).fillColor('#5c5566').text(documento.titulo||'Documento', 94, 52);
       doc.font(fontBold).fontSize(18).fillColor(A).text(documento.titulo||'Documento', 50, 74);
       doc.rect(50, 98, 500, 1.5).fill(C);
       doc.y = 110;
@@ -940,12 +943,10 @@ export async function generarPDF(entidad, documento) {
 
       // ── METADATOS ──
       doc.save();
-      doc.rect(50, doc.y, 3, 28).fill(C);
+      doc.rect(50, doc.y, 3, 22).fill(C);
       doc.font(fontReg).fontSize(7).fillColor('#1c1226');
-      doc.text(`ID: ${documento.id}  |  ${fecha}  |  Estado: ${documento.estado}`, 62, doc.y+3, { width: 480 });
-      const refStr = documento.refId ? `${documento.refTipo}:${documento.refId.slice(0, 12)}` : '—';
-      doc.text(`Entidad: ${entL}  |  Ref: ${refStr}`, 62, doc.y+15, { width: 480 });
-      doc.y += 36;
+      doc.text(`${documento.titulo||'Documento'}  |  ${fecha}  |  ${documento.estado}`, 62, doc.y+3, { width: 480 });
+      doc.y += 30;
       doc.restore();
 
       // ── CUERPO ──
@@ -986,9 +987,7 @@ export async function generarPDF(entidad, documento) {
       doc.moveDown(1.8);
       doc.rect(200, doc.y, 200, 0.8).fill(A);
       doc.moveDown(0.5);
-      doc.font(fontReg).fontSize(8).fillColor('#5c5566').text('Fdo.: La Administración del Grupo de La Placeta', 50, doc.y, {width:500, align:'center'});
-      doc.moveDown(0.5);
-      doc.font(fontReg).fontSize(7).fillColor('#5c5566').text('DEPARTAMENTO OFICIAL · GRUPO DE LA PLACETA', {width:500, align:'center'});
+      doc.font(fontReg).fontSize(8).fillColor('#5c5566').text(entL, 50, doc.y, {width:500, align:'center'});
       const hash = documento.hash || createHash('sha256').update(documento.id+Date.now()).digest('hex');
       doc.font(fontReg).fontSize(6).fillColor('#9a8aaa').text(`CSV: ${hash.substring(0,20).toUpperCase()} · Verificable en admin-placeta.vercel.app`, {width:500, align:'center'});
 
