@@ -312,15 +312,16 @@ async function sbListDocs(entidad) {
   await initDocsTable();
   if (!sbReady) return null;
   try {
-    const { data } = await supabase.from(DOCS_TABLE).select('*').eq('entidad', entidad).order('created_at', { ascending: false });
+    const { data, error } = await supabase.from(DOCS_TABLE).select('*').eq('entidad', entidad).order('created_at', { ascending: false });
+    if (error) { console.warn('[Docs] sbListDocs error:', error.message); return null; }
     return data || [];
-  } catch { return null; }
+  } catch (e) { console.warn('[Docs] sbListDocs exception:', e.message); return null; }
 }
 
 async function sbSaveDoc(doc) {
   if (!supabase) return null;
   await initDocsTable();
-  if (!sbReady) return null;
+  if (!sbReady) { console.warn('[Docs] sbSaveDoc: sbReady=false'); return null; }
   try {
     const record = {
       id: doc.id, entidad: doc.entidad, tipo: doc.tipo,
@@ -331,9 +332,10 @@ async function sbSaveDoc(doc) {
       firmado: doc.firmado || false, hash: doc.hash || '',
       updated_at: new Date().toISOString()
     };
-    const { data } = await supabase.from(DOCS_TABLE).upsert(record, { onConflict: 'id' }).select().maybeSingle();
+    const { data, error } = await supabase.from(DOCS_TABLE).upsert(record, { onConflict: 'id' }).select().maybeSingle();
+    if (error) { console.warn('[Docs] sbSaveDoc error:', error.message); return null; }
     return data;
-  } catch { return null; }
+  } catch (e) { console.warn('[Docs] sbSaveDoc exception:', e.message); return null; }
 }
 
 async function sbDeleteDoc(id) {
@@ -425,8 +427,6 @@ export function saveDocumento(entidad, data) {
   else docs.push(doc);
   // Persistir a archivo
   putInStore(entidad, docs);
-  // Persistir a Supabase (asíncrono, no bloquea)
-  sbSaveDoc(doc).catch(() => {});
   return doc;
 }
 

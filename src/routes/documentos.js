@@ -257,4 +257,32 @@ router.get('/publico/:entidad/documentos/:id/pdf', verificarApiKey, async (req, 
   }
 });
 
+// ── Diagnóstico del sistema de documentos ─────────────────────────────────
+router.get('/api/documentos/diagnostico', async (req, res) => {
+  const { initDocsTable, getDocumentos, ETIQUETAS_DOC } = await import('../config/documentos.js');
+  
+  const sbOk = await initDocsTable();
+  const memBanco = getDocumentos('banco')?.length || 0;
+  const memTributos = getDocumentos('tributos')?.length || 0;
+  const memJunta = getDocumentos('junta')?.length || 0;
+  const memAdmin = getDocumentos('administracion')?.length || 0;
+  
+  // Probar escritura directa en Supabase
+  let sbWrite = 'no probado';
+  if (sbOk) {
+    try {
+      const { supabase } = await import('../config/supabase.js');
+      const { error } = await supabase.from('documentos').select('id').limit(5);
+      sbWrite = error ? `error: ${error.message}` : 'ok';
+    } catch (e) { sbWrite = `excepción: ${e.message}`; }
+  }
+
+  res.json({
+    supabase_lista: sbOk ? 'conectado' : 'no disponible',
+    supabase_escritura: sbWrite,
+    memoria: { banco: memBanco, tributos: memTributos, junta: memJunta, administracion: memAdmin },
+    timestamp: new Date().toISOString()
+  });
+});
+
 export default router;
