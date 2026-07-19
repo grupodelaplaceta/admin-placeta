@@ -899,6 +899,25 @@ function generarContenidoDocumento(tipo, datos = {}) {
       if (datos.texto) tx(datos.texto);
       break;
 
+    case 'alta-junior': {
+      sf('AUTORIZACIÓN LEGAL — PLACETA JUNIOR');
+      if (datos.menor) { cf('Menor', `${datos.menor.nombre||''} ${datos.menor.apellidos||''}`); cf('Fecha nacimiento', datos.menor.fecha_nacimiento||'—'); }
+      ln(); sf('TUTOR LEGAL');
+      if (datos.tutor) { cf('Nombre', `${datos.tutor.nombre||''} ${datos.tutor.apellidos||''}`); cf('DIP', datos.tutor.dip||'—'); cf('Email', datos.tutor.email||'—'); }
+      ln(); sf('EXPONE');
+      tx(`Que el tutor legal identificado, ${datos.tutor?.nombre||''} ${datos.tutor?.apellidos||''}, con DIP ${datos.tutor?.dip||'—'}, solicita el alta del menor ${datos.menor?.nombre||''} ${datos.menor?.apellidos||''} en el programa Placeta Junior del Grupo de La Placeta.`);
+      tx('Que el tutor manifiesta conocer y aceptar las condiciones de uso, la política de privacidad y el Código Normativo Interno que rige el funcionamiento de Placeta Junior.');
+      ln(); sf('FUNDAMENTOS JURÍDICOS');
+      tx('La presente autorización se fundamenta en el Artículo 5 del Código Normativo Interno (PlacetaID como sistema de identificación), el Artículo 6 (DIP como identificador único) y la normativa de protección de datos aplicable a menores de edad según el RGPD y la LOPDGDD.');
+      ln(); sf('RESUELVE');
+      tx('Primero. — AUTORIZAR al menor a participar en el programa Placeta Junior.');
+      tx('Segundo. — ASIGNAR un DIP Junior y crear la cuenta asociada.');
+      tx('Tercero. — VINCULAR la cuenta del menor a la tutela del adulto responsable.');
+      ln(); L.push({nota: 'Documento oficial del programa Placeta Junior · Grupo de La Placeta.'});
+      L.push({nota: 'AVISO LEGAL: Al firmar electrónicamente este documento vía PlacetaID, el tutor otorga su consentimiento expreso para la participación del menor en Placeta Junior.'});
+      break;
+    }
+
     case 'informe-pdf':
     case 'certificado':
     case 'notificacion':

@@ -17,9 +17,9 @@
  *   GET  /api/admin/junior/documentos            → Documentos locales (TODAS las entidades)
  */
 import { Router } from 'express';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { verificarSesion } from '../middleware/auth.js';
-import { getDocumentosByEntidadAsync, ETIQUETAS_DOC } from '../config/documentos.js';
+import { getDocumentosByEntidadAsync, saveDocumentoAsync, ETIQUETAS_DOC } from '../config/documentos.js';
 
 const router = Router();
 
@@ -202,3 +202,36 @@ router.get('/admin/junior/documentos', async (req, res) => {
 });
 
 export default router;
+
+// ── API: Solicitar alta de menor ────────────────────────────────────────
+// Crea el documento legal de autorización y lo envía al tutor vía PLID
+router.post('/api/junior/solicitar-alta', verificarSesion, async (req, res) => {
+  try {
+    const { nombre, apellidos, fecha_nacimiento, nombre_tutor, apellidos_tutor, dni_tutor, email, fecha_nacimiento_tutor, tutor_ya_existe } = req.body;
+    if (!nombre || !apellidos || !dni_tutor) return res.status(400).json({ error: 'nombre, apellidos y dni_tutor requeridos' });
+
+    const docId = `junior-alta-${Date.now()}-${randomUUID().slice(0,6)}`;
+    const csv = createHash('sha256').update(docId).digest('hex').slice(0, 16);
+
+    const doc = await saveDocumentoAsync('junta', {
+      id: docId, tipo: 'alta-junior',
+      titulo: `Autorización legal - ${nombre} ${apellidos}`,
+      descripcion: `Alta de menor ${nombre} ${apellidos} - Tutor: ${nombre_tutor} ${apellidos_tutor} (${dni_tutor})`,
+      datos: { menor: { nombre, apellidos, fecha_nacimiento }, tutor: { nombre: nombre_tutor, apellidos: apellidos_tutor, dip: dni_tutor, email, fecha_nacimiento: fecha_nacimiento_tutor }, csv, estado: 'pendiente_firma_tutor', fechaSolicitud: new Date().toISOString() },
+      createdBy: dni_tutor || 'sistema', estado: 'final', firmado: false, hash: csv
+    });
+
+    // Notificar a PLID
+    try {
+      const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+      await fetch(`${PLACETAID_API}/admin/documentos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb' },
+        body: JSON.stringify({ id: doc.id, titulo: doc.titulo, tipo: 'alta-junior', entidad: 'junta', csv, destinatariosDIP: [dni_tutor], contenido: `Documento de autorización legal para que ${nombre} ${apellidos} use Placeta Junior.` }),
+        signal: AbortSignal.timeout(5000)
+      }).catch(() => {});
+    } catch {}
+
+    res.json({ success: true, documento: doc, mensaje: 'Solicitud registrada. El tutor recibirá un documento para firmar.' });
+  } catch (e) { console.error('[Junior] Error:', e.message); res.status(500).json({ error: e.message }); }
+});
