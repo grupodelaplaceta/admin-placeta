@@ -24,6 +24,7 @@ import apiRoutes from './src/routes/api.js';
 import documentosRoutes from './src/routes/documentos.js';
 import empresasRoutes from './src/routes/empresas.js';
 import juniorApiRoutes from './src/routes/junior-api.js';
+import accionesDocumentoRoutes from './src/routes/acciones-documento.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -124,6 +125,7 @@ app.use('/administracion', verificarSesion, verificarAccesoEntidad('administraci
 app.use('/api', apiRoutes);
 app.use('/api', juniorApiRoutes); // Proxy junior → CRM
 app.use(documentosRoutes); // /api/:entidad/documentos...
+app.use(accionesDocumentoRoutes); // /api/acciones/*
 app.use('/junta', empresasRoutes);
 app.use('/administracion', empresasRoutes);
 // También accesible desde banco
