@@ -390,6 +390,86 @@ const API_REGISTRY = {
     ]
   },
 
+  // ── PLACETA JUNIOR ──────────────────────────────────────────────────
+  junior: {
+    iban: 'GDLP-AP76-179',
+    nombre: 'Placeta Junior',
+    descripcion: 'API de Placeta Junior: menores, tutores, cuentas infantiles, autorizaciones',
+    contacto: 'junior@laplaceta.org',
+    endpoints: [
+      {
+        path: '/menores',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Obtener listado de menores registrados',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del menor' },
+          { campo: 'nombre', tipo: DATA_TYPE.STRING, descripcion: 'Nombre del menor' },
+          { campo: 'apellidos', tipo: DATA_TYPE.STRING, descripcion: 'Apellidos' },
+          { campo: 'tutorDip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del tutor legal' },
+          { campo: 'fechaNacimiento', tipo: DATA_TYPE.DATE, descripcion: 'Fecha de nacimiento' }
+        ]
+      },
+      {
+        path: '/menores/:dip',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Obtener detalle de un menor',
+        platforms: ['android', 'ios', 'web'],
+        params: [{ campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del menor', requerido: true }],
+        dataReturn: [
+          { campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del menor' },
+          { campo: 'nombre', tipo: DATA_TYPE.STRING, descripcion: 'Nombre' },
+          { campo: 'cuenta', tipo: DATA_TYPE.OBJECT, descripcion: 'Datos de la cuenta infantil (iban, saldo)' }
+        ]
+      },
+      {
+        path: '/tutores/:dip/menores',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Obtener menores a cargo de un tutor',
+        platforms: ['android', 'ios'],
+        dataReturn: [
+          { campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del menor' },
+          { campo: 'nombre', tipo: DATA_TYPE.STRING, descripcion: 'Nombre del menor' },
+          { campo: 'tutorDip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del tutor' }
+        ]
+      },
+      {
+        path: '/autorizaciones',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Crear autorización para un menor (firma tutor requerida)',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'dipMenor', tipo: DATA_TYPE.DIP, descripcion: 'DIP del menor', requerido: true },
+          { campo: 'tipo', tipo: DATA_TYPE.STRING, descripcion: 'Tipo de autorización', requerido: true },
+          { campo: 'descripcion', tipo: DATA_TYPE.STRING, descripcion: 'Descripción', requerido: true }
+        ],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'autorizacion', tipo: DATA_TYPE.OBJECT, descripcion: 'Datos de la autorización' }
+        ]
+      },
+      {
+        path: '/cuentas',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Obtener cuentas infantiles',
+        platforms: ['web'],
+        dataReturn: [
+          { campo: 'id', tipo: DATA_TYPE.STRING, descripcion: 'ID de la cuenta' },
+          { campo: 'iban', tipo: DATA_TYPE.IBAN, descripcion: 'IBAN (GDLP-APxx-xxx)' },
+          { campo: 'titularDip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del menor titular' },
+          { campo: 'tutorDip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del tutor' },
+          { campo: 'saldo', tipo: DATA_TYPE.AMOUNT, descripcion: 'Saldo en Placetas' },
+          { campo: 'limiteEnvio', tipo: DATA_TYPE.AMOUNT, descripcion: 'Límite de envío diario' }
+        ]
+      }
+    ]
+  },
+
   // ── RED DE SERVICIOS DE LA PLACETA (RSP) ─────────────────────────────
   rsp: {
     iban: 'GDLP-AP99-001',

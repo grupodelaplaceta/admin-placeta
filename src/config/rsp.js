@@ -11,9 +11,15 @@
  * 
  * Fondos iniciales transferidos desde "Red del Grupo de La Placeta": 18,309.83 Pz
  * Sanción por IVA no abonado: 2,461.77 Pz
+ * 
+ * Pagos: Se procesan a través del Banco de La Placeta real.
+ *   - Base del servicio → Cuenta RSP (GDLP-AP99-001)
+ *   - IVA → Tributos TGLP (GDLP-AP98-605)
+ *   - Sanciones → Administración (AGLDP)
  */
 
 import { supabase } from './supabase.js';
+import { pagarFacturaBanco, pagarSancionBanco } from './pagos.js';
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────
 const IVA = 0.12;
@@ -128,35 +134,61 @@ export function generarFactura({ entidad, periodoInicio, periodoFin, conexiones 
   return factura;
 }
 
-// ── PAGAR FACTURA ─────────────────────────────────────────────────────────
-export function pagarFactura(facturaId) {
+// ── PAGAR FACTURA (vía Banco de La Placeta real + IVA a Tributos) ────────
+export async function pagarFactura(facturaId) {
   const factura = memFacturas.find(f => f.id === facturaId);
   if (!factura) return { success: false, error: 'Factura no encontrada' };
   if (factura.estado === 'pagada') return { success: false, error: 'Factura ya pagada' };
 
   const total = factura.detalle.total;
+  const base = factura.detalle.baseTotal;
+  const ivaTotal = factura.detalle.iva;
+
   if (memFondos.saldo < total) {
     return { success: false, error: `Fondos insuficientes: ${memFondos.saldo.toFixed(2)} Pz disponibles, ${total.toFixed(2)} Pz requeridos` };
   }
 
-  memFondos.saldo -= total;
-  factura.estado = 'pagada';
-  factura.pagadaEn = new Date().toISOString();
-
-  memFondos.historial.push({
-    tipo: 'PAGO_FACTURA',
-    concepto: `Pago factura ${facturaId} - ${factura.entidad}`,
-    importe: -total,
-    fecha: factura.pagadaEn,
-    saldo: memFondos.saldo,
+  // Procesar pago vía Banco de La Placeta real (base→RSP, IVA→TGLP)
+  const pagoBanco = await pagarFacturaBanco({
+    entidad: factura.entidad,
+    base,
+    iva: ivaTotal,
+    total,
+    concepto: `Servicios RSP - ${factura.entidad} (${factura.conexiones} conexiones)`,
     facturaId
   });
 
-  return { success: true, factura, nuevoSaldo: memFondos.saldo };
+  if (!pagoBanco.success) {
+    return { success: false, error: `Error en pago bancario: ${pagoBanco.errores?.[0]?.error || 'desconocido'}`, detalle: pagoBanco };
+  }
+
+  // Actualizar estado local
+  memFondos.saldo -= total;
+  factura.estado = 'pagada';
+  factura.pagadaEn = new Date().toISOString();
+  factura.pagoBanco = pagoBanco;
+
+  memFondos.historial.push({
+    tipo: 'PAGO_FACTURA',
+    concepto: `Pago factura ${facturaId} - ${factura.entidad}. Base: ${base} Pz, IVA: ${ivaTotal} Pz a TGLP`,
+    importe: -total,
+    fecha: factura.pagadaEn,
+    saldo: memFondos.saldo,
+    facturaId,
+    desglose: { base, iva: ivaTotal }
+  });
+
+  return {
+    success: true,
+    factura,
+    nuevoSaldo: memFondos.saldo,
+    pagoBanco: true,
+    desglose: `Base ${base.toFixed(3)} Pz → RSP (GDLP-AP99-001) · IVA ${ivaTotal.toFixed(3)} Pz → Tributos TGLP (GDLP-AP98-605)`
+  };
 }
 
-// ── PAGAR SANCIÓN IVA ────────────────────────────────────────────────────
-export function pagarSancionIVA() {
+// ── PAGAR SANCIÓN IVA (vía Banco de La Placeta real) ─────────────────────
+export async function pagarSancionIVA() {
   if (memFondos.sancionPagada) {
     return { success: false, error: 'Sanción ya pagada' };
   }
@@ -164,19 +196,36 @@ export function pagarSancionIVA() {
     return { success: false, error: `Fondos insuficientes: ${memFondos.saldo.toFixed(2)} Pz disponibles, ${SANCION_IVA.toFixed(2)} Pz requeridos` };
   }
 
+  // Procesar pago vía Banco de La Placeta real
+  const pagoBanco = await pagarSancionBanco(SANCION_IVA, 'IVA no abonado — Red del Grupo de La Placeta');
+
+  if (!pagoBanco.success) {
+    return { success: false, error: `Error procesando pago en Banco: ${pagoBanco.errores?.[0]?.error || 'desconocido'}` };
+  }
+
+  // Actualizar estado local
   memFondos.saldo -= SANCION_IVA;
   memFondos.sancionPagada = true;
   memFondos.sancionPendiente = 0;
 
   memFondos.historial.push({
     tipo: 'SANCION_IVA',
-    concepto: 'Sanción por IVA no abonado — Red del Grupo de La Placeta (Art. Constitución GDLP)',
+    concepto: 'Sanción por IVA no abonado — Red del Grupo de La Placeta (Art. Constitución GDLP). Cobrado vía Banco de La Placeta.',
     importe: -SANCION_IVA,
     fecha: new Date().toISOString(),
-    saldo: memFondos.saldo
+    saldo: memFondos.saldo,
+    referenciaBanco: pagoBanco
   });
 
-  return { success: true, importe: SANCION_IVA, nuevoSaldo: memFondos.saldo };
+  return {
+    success: true,
+    importe: SANCION_IVA,
+    nuevoSaldo: memFondos.saldo,
+    pagoBanco: true,
+    detalle: `Sanción de ${SANCION_IVA} Pz pagada. ` +
+             `Desglose: RSP (GDLP-AP99-001) → Administración (AGLDP). ` +
+             `Operación registrada en Banco de La Placeta.`
+  };
 }
 
 // ── CONSULTAR FONDOS ──────────────────────────────────────────────────────

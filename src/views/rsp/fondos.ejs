@@ -33,6 +33,28 @@
   </div>
 </div>
 
+<!-- Info Bancaria -->
+<div class="info-card mb-16" style="background:#f0fdf4;border-color:#bbf7d0">
+  <h4>🏦 Pagos vía Banco de La Placeta</h4>
+  <p style="font-size:12px">
+    Todos los cobros y pagos se procesan a través del Banco de La Placeta real:
+  </p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:10px">
+    <div style="padding:10px;background:#fff;border-radius:8px;border:1px solid #e8e4f0">
+      <strong style="font-size:12px">💰 Base servicios</strong>
+      <p style="font-size:11px;color:#666;margin-top:2px">→ RSP (GDLP-AP99-001)</p>
+    </div>
+    <div style="padding:10px;background:#fff;border-radius:8px;border:1px solid #e8e4f0">
+      <strong style="font-size:12px">📊 IVA (12%)</strong>
+      <p style="font-size:11px;color:#666;margin-top:2px">→ Tributos TGLP (GDLP-AP98-605)</p>
+    </div>
+    <div style="padding:10px;background:#fff;border-radius:8px;border:1px solid #e8e4f0">
+      <strong style="font-size:12px">⚖️ Sanciones</strong>
+      <p style="font-size:11px;color:#666;margin-top:2px">→ Administración (AGLDP)</p>
+    </div>
+  </div>
+</div>
+
 <!-- Sanción IVA -->
 <% if (!fondos.sancionPagada) { %>
 <div class="alert <%= fondos.saldo >= fondos.sancionPendiente ? 'alert-success' : 'alert-error' %>" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">

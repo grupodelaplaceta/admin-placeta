@@ -59,6 +59,17 @@
     <span class="entidad-arrow">→</span>
   </a>
   <% } %>
+
+  <% if (entidades_permitidas && entidades_permitidas.includes('junior')) { %>
+  <a href="/junior" class="entidad-card junior" style="border-left:4px solid #e91e63">
+    <div class="entidad-icon">🧒</div>
+    <div class="entidad-info">
+      <h3>Placeta Junior</h3>
+      <p>Gestión de menores, tutores y cuentas infantiles</p>
+    </div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <% } %>
 </div>
 
 <!-- Info de sesión -->

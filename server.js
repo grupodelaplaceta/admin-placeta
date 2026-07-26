@@ -168,6 +168,7 @@ app.use('/tributos/apis', verificarSesion, verificarAccesoEntidad('tributos'), w
 app.use('/junta/apis', verificarSesion, verificarAccesoEntidad('junta'), workspaceAPIMiddleware('junta'), apiGatewayRoutes);
 app.use('/administracion/apis', verificarSesion, verificarAccesoEntidad('administracion'), workspaceAPIMiddleware('administracion'), apiGatewayRoutes);
 app.use('/rsp/apis', verificarSesion, verificarAccesoEntidad('rsp'), workspaceAPIMiddleware('rsp'), apiGatewayRoutes);
+app.use('/junior/apis', verificarSesion, verificarAccesoEntidad('junior'), workspaceAPIMiddleware('junior'), apiGatewayRoutes);
 
 // ═══ SISTEMA UNIFICADO DE DOCUMENTOS Y FIRMAS ════════════════════════
 // Rutas web: /{entidad}/documentos para cada workspace
@@ -176,6 +177,7 @@ app.use('/tributos/documentos', verificarSesion, verificarAccesoEntidad('tributo
 app.use('/junta/documentos', verificarSesion, verificarAccesoEntidad('junta'), (req, res, next) => { req.entidad = 'junta'; next(); }, firmasRoutes);
 app.use('/administracion/documentos', verificarSesion, verificarAccesoEntidad('administracion'), (req, res, next) => { req.entidad = 'administracion'; next(); }, firmasRoutes);
 app.use('/rsp/documentos', verificarSesion, verificarAccesoEntidad('rsp'), (req, res, next) => { req.entidad = 'rsp'; next(); }, firmasRoutes);
+app.use('/junior/documentos', verificarSesion, verificarAccesoEntidad('junior'), (req, res, next) => { req.entidad = 'junior'; next(); }, firmasRoutes);
 
 // API de firmas (webhook PlacetaID + consultas)
 app.use('/api/firmas', firmasRoutes);
@@ -187,6 +189,7 @@ app.get('/tributos/gastos-rsp', verificarSesion, verificarAccesoEntidad('tributo
 app.get('/junta/gastos-rsp', verificarSesion, verificarAccesoEntidad('junta'), (req, res) => res.redirect('/rsp/gastos/junta'));
 app.get('/administracion/gastos-rsp', verificarSesion, verificarAccesoEntidad('administracion'), (req, res) => res.redirect('/rsp/gastos/administracion'));
 app.get('/rsp/gastos', verificarSesion, verificarAccesoEntidad('rsp'), (req, res) => res.redirect('/rsp/gastos/rsp'));
+app.get('/junior/gastos-rsp', verificarSesion, verificarAccesoEntidad('junior'), (req, res) => res.redirect('/rsp/gastos/junior'));
 
 // ── Landing / Login ────────────────────────────────────────────────────────
 app.get('/', (req, res) => {

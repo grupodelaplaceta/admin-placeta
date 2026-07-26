@@ -188,13 +188,41 @@ const WORKSPACES = {
         ]
       }
     ]
+  },
+  junior: {
+    id: 'junior',
+    nombre: 'Placeta Junior',
+    icono: '🧒',
+    logo: '/img/logo-web.png',
+    descripcion: 'Gestión de menores, tutores, cuentas infantiles y autorizaciones',
+    color: '#e91e63',
+    colorDark: '#880e4f',
+    iban: 'GDLP-AP76-179',
+    background: 'linear-gradient(135deg, #880e4f 0%, #e91e63 100%)',
+    secciones: [
+      {
+        titulo: '🧒 Placeta Junior',
+        enlaces: [
+          { texto: 'Dashboard', url: '/junior', icono: '📊' },
+          { texto: 'Menores', url: '/junior/menores', icono: '👶' },
+          { texto: 'Tutores', url: '/junior/tutores', icono: '👤' },
+          { texto: 'Autorizaciones', url: '/junior/autorizaciones', icono: '📝' },
+          { texto: 'Cuentas', url: '/junior/cuentas', icono: '🏦' },
+          { texto: 'Documentos', url: '/junior/documentos', icono: '📑' },
+        ]
+      },
+      {
+        titulo: '🔌 Desarrollo',
+        enlaces: [
+          { texto: 'APIs', url: '/junior/apis', icono: '🔌' },
+          { texto: 'Gastos RSP', url: '/junior/gastos-rsp', icono: '💰' },
+        ]
+      }
+    ]
   }
 };
 
-/**
- * Orden de workspaces en el selector
- */
-const ORDEN_WORKSPACES = ['banco', 'tributos', 'junta', 'administracion', 'rsp'];
+const ORDEN_WORKSPACES = ['banco', 'tributos', 'junta', 'administracion', 'rsp', 'junior'];
 
 /**
  * Obtiene la configuración de un workspace por su ID

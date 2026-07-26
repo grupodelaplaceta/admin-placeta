@@ -1,7 +1,7 @@
 /**
  * SISTEMA DE PERMISOS Y ROLES
  * 
- * Entidades: banco, tributos, junta, administracion, rsp
+ * Entidades: banco, tributos, junta, administracion, rsp, junior
  * Roles globales: superadmin, admin, gestor, inspector, secretario, presidente, vicepresidente, funcionario, cargo_autorizado
  * 
  * Cada entidad define qué roles tienen acceso a qué secciones.
@@ -25,8 +25,11 @@ const ROLES_ENTIDADES = {
   // RSP
   'rsp_admin': ['rsp'],
   'rsp_operador': ['rsp'],
+  // Junior
+  'junior_admin': ['junior'],
+  'junior_gestor': ['junior'],
   // Superadmin (todo)
-  'superadmin': ['banco', 'tributos', 'junta', 'administracion', 'rsp'],
+  'superadmin': ['banco', 'tributos', 'junta', 'administracion', 'rsp', 'junior'],
 };
 
 // Permisos específicos por entidad y rol
@@ -117,7 +120,7 @@ export function getEntidadesPermitidas(roles = []) {
   }
   // Si tiene superadmin, todas
   if (roles.includes('superadmin')) {
-    return ['banco', 'tributos', 'junta', 'administracion', 'rsp'];
+    return ['banco', 'tributos', 'junta', 'administracion', 'rsp', 'junior'];
   }
   return [...entidades];
 }
@@ -173,6 +176,7 @@ export function determinarRoles(cargos = [], permisosAlmacenados = [], dip = '')
     roles.add('banco_admin');
     roles.add('tributos_admin');
     roles.add('rsp_admin');
+    roles.add('junior_admin');
     return [...roles];
   }
 
@@ -208,6 +212,8 @@ export function determinarRoles(cargos = [], permisosAlmacenados = [], dip = '')
     if (tipo === 'funcionario') roles.add('funcionario');
     if (tipo === 'rsp_admin') roles.add('rsp_admin');
     if (tipo === 'rsp_operador') roles.add('rsp_operador');
+    if (tipo === 'junior_admin') roles.add('junior_admin');
+    if (tipo === 'junior_gestor') roles.add('junior_gestor');
   }
 
   return [...roles];

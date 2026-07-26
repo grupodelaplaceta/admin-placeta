@@ -210,7 +210,7 @@ router.post('/api/webhook', async (req, res) => {
 
   try {
     // Buscar el documento en todas las entidades
-    const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp'];
+    const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp', 'junior'];
     let docEncontrado = null;
     let entidadDoc = null;
 
@@ -262,7 +262,7 @@ router.post('/api/webhook', async (req, res) => {
  */
 router.get('/api/pendientes/:dip', async (req, res) => {
   const { dip } = req.params;
-  const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp'];
+  const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp', 'junior'];
   const pendientes = [];
 
   for (const e of entidades) {
@@ -298,7 +298,7 @@ router.get('/api/pendientes/:dip', async (req, res) => {
  */
 router.get('/api/estado/:docId', async (req, res) => {
   const { docId } = req.params;
-  const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp'];
+  const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp', 'junior'];
 
   for (const e of entidades) {
     const d = await getDocumentoByIdAsync(e, docId);
@@ -360,7 +360,7 @@ async function enviarAPlacetaID(docId, titulo, tipo, entidad, csv, dip, hash) {
  */
 router.post('/api/reenviar/:docId', async (req, res) => {
   const { docId } = req.params;
-  const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp'];
+  const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp', 'junior'];
 
   for (const e of entidades) {
     const doc = await getDocumentoByIdAsync(e, docId);

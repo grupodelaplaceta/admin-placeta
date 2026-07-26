@@ -182,13 +182,21 @@ router.post('/api/facturas/generar', verificarSesion, verificarPermiso('rsp', 'g
   const factura = generarFactura({ entidad, periodoInicio, periodoFin });
   if (!factura) return res.status(400).json({ error: 'No hay conexiones para facturar en esta entidad' });
 
-  res.json({ success: true, factura });
+  res.json({
+    success: true,
+    factura,
+    desglosePago: `Base: ${factura.detalle.baseTotal.toFixed(3)} Pz (→RSP) | IVA: ${factura.detalle.iva.toFixed(3)} Pz (→TGLP) | Total: ${factura.detalle.total.toFixed(3)} Pz`
+  });
 });
 
-// ── API: Pagar factura ────────────────────────────────────────────────────
-router.post('/api/facturas/:id/pagar', verificarSesion, verificarPermiso('rsp', 'gestionar_facturas'), (req, res) => {
-  const result = pagarFactura(req.params.id);
-  res.json(result);
+// ── API: Pagar factura (vía Banco real) ───────────────────────────────────
+router.post('/api/facturas/:id/pagar', verificarSesion, verificarPermiso('rsp', 'gestionar_facturas'), async (req, res) => {
+  try {
+    const result = await pagarFactura(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ── API: Estado de fondos ─────────────────────────────────────────────────
@@ -196,10 +204,14 @@ router.get('/api/fondos', verificarSesion, verificarPermiso('rsp', 'ver_fondos')
   res.json(getEstadoFondos());
 });
 
-// ── API: Pagar sanción IVA ────────────────────────────────────────────────
-router.post('/api/fondos/pagar-sancion', verificarSesion, verificarPermiso('rsp', 'pagar_sancion'), (req, res) => {
-  const result = pagarSancionIVA();
-  res.json(result);
+// ── API: Pagar sanción IVA (vía Banco real) ──────────────────────────────
+router.post('/api/fondos/pagar-sancion', verificarSesion, verificarPermiso('rsp', 'pagar_sancion'), async (req, res) => {
+  try {
+    const result = await pagarSancionIVA();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ── API: Registrar conexión externa ───────────────────────────────────────

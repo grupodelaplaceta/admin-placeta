@@ -54,8 +54,11 @@ function initAPIKeys() {
     'android-rsp-key-2026':        { nombre: 'RSP App Android',    plataforma: 'android', entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['laplaceta.org', 'rsp.laplaceta.org'] },
     'ios-rsp-key-2026':            { nombre: 'RSP App iOS',        plataforma: 'ios',     entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['laplaceta.org', 'rsp.laplaceta.org'] },
     'web-rsp-key-2026':            { nombre: 'RSP App Web',        plataforma: 'web',     entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'rsp.laplaceta.org'] },
+    'android-junior-key-2026':     { nombre: 'Junior App Android', plataforma: 'android', entidadesPermitidas: ['junior'], activa: true, allowedOrigins: ['laplaceta.org', 'junior.laplaceta.org'] },
+    'ios-junior-key-2026':         { nombre: 'Junior App iOS',     plataforma: 'ios',     entidadesPermitidas: ['junior'], activa: true, allowedOrigins: ['laplaceta.org', 'junior.laplaceta.org'] },
+    'web-junior-key-2026':         { nombre: 'Junior App Web',     plataforma: 'web',     entidadesPermitidas: ['junior'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'junior.laplaceta.org'] },
     // Clave maestra (solo para administración interna)
-    'admin-master-key-2026':       { nombre: 'Admin Master',       plataforma: 'web',     entidadesPermitidas: ['banco','tributos','junta','administracion','rsp'], activa: true, allowedOrigins: ['*'] },
+    'admin-master-key-2026':       { nombre: 'Admin Master',       plataforma: 'web',     entidadesPermitidas: ['banco','tributos','junta','administracion','rsp','junior'], activa: true, allowedOrigins: ['*'] },
   };
   for (const [key, value] of Object.entries(keys)) {
     API_KEYS.set(key, value);
@@ -299,6 +302,8 @@ async function handleEntityRequest(entidad, path, method, req) {
       return handleAdminAPI(path, method, req);
     case 'rsp':
       return handleRSPAPI(path, method, req);
+    case 'junior':
+      return handleJuniorAPI(path, method, req);
     default:
       return null;
   }
@@ -458,6 +463,67 @@ async function handleAdminAPI(path, method, req) {
       data: [
         { dip: 'MENOR-001', nombre: 'Menor Ejemplo', tutorDip, fechaNacimiento: '2018-05-10' }
       ]
+    };
+  }
+
+  return null;
+}
+
+// ── JUNIOR ─────────────────────────────────────────────────────────────
+async function handleJuniorAPI(path, method, req) {
+  const state = await apiBancoGetState();
+
+  if (path === '/menores' && method === 'GET') {
+    // Buscar cuentas Child en el estado del banco
+    const cuentasChild = state?.accounts?.filter(a => a.kind === 'CHILD' || a.type === 'Child') || [];
+    const menores = cuentasChild.map(c => ({
+      dip: c.placetaId || c.id?.replace('u-', '') || '',
+      nombre: c.displayName || '—',
+      tutorDip: c.parentAccountId?.replace('u-', '') || '—'
+    }));
+    return { success: true, total: menores.length, data: menores };
+  }
+
+  if (path.match(/^\/menores\/([^/]+)$/) && method === 'GET') {
+    const dip = path.match(/^\/menores\/([^/]+)$/)[1];
+    const cuenta = state?.accounts?.find(a => (a.placetaId === dip || a.id === `u-${dip.toLowerCase()}`) && (a.kind === 'CHILD' || a.type === 'Child'));
+    if (!cuenta) return { success: false, error: 'Menor no encontrado' };
+    return {
+      success: true,
+      data: {
+        dip: cuenta.placetaId || '',
+        nombre: cuenta.displayName || '—',
+        cuenta: { iban: cuenta.iban || '—', saldo: cuenta.balancePz || 0 }
+      }
+    };
+  }
+
+  if (path.match(/^\/tutores\/([^/]+)\/menores$/) && method === 'GET') {
+    const tutorDip = path.match(/^\/tutores\/([^/]+)\/menores$/)[1];
+    const tutorId = `u-${tutorDip.toLowerCase()}`;
+    const hijos = state?.accounts?.filter(a => a.parentAccountId === tutorId) || [];
+    return {
+      success: true,
+      data: hijos.map(h => ({
+        dip: h.placetaId || '',
+        nombre: h.displayName || '—',
+        tutorDip,
+        cuentaIban: h.iban || '—'
+      }))
+    };
+  }
+
+  if (path === '/cuentas' && method === 'GET') {
+    const cuentasChild = state?.accounts?.filter(a => a.kind === 'CHILD' || a.type === 'Child') || [];
+    return {
+      success: true, total: cuentasChild.length,
+      data: cuentasChild.map(c => ({
+        id: c.id, iban: c.iban || '—',
+        titularDip: c.placetaId || '',
+        tutorDip: c.parentAccountId?.replace('u-', '') || '—',
+        saldo: c.balancePz || 0,
+        limiteEnvio: c.sendLimitPz || 0
+      }))
     };
   }
 
