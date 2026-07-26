@@ -13,6 +13,7 @@ import jwt from 'jsonwebtoken';
 import { testConnection } from './src/config/supabase.js';
 import { sbFindSolicitanteByDip } from './src/config/db.js';
 import { verificarSesion, cargarPermisosUsuario, verificarAccesoEntidad, verificarPermiso } from './src/middleware/auth.js';
+import { detectarWorkspace, getWorkspace, getWorkspacesDisponibles } from './src/config/workspaces.js';
 
 // Importar rutas
 import authRoutes from './src/routes/auth.js';
@@ -25,6 +26,8 @@ import documentosRoutes from './src/routes/documentos.js';
 import empresasRoutes from './src/routes/empresas.js';
 import juniorApiRoutes from './src/routes/junior-api.js';
 import accionesDocumentoRoutes from './src/routes/acciones-documento.js';
+import rspRoutes from './src/routes/rsp.js';
+import { apiGatewayRoutes } from './src/routes/api-gateway.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -90,17 +93,29 @@ app.set('views', path.join(__dirname, 'src/views'));
 app.use(ejsLayouts);
 app.set('layout', 'layouts/admin');
 
-// Variables globales
+// Cargar permisos en sesión
+app.use(cargarPermisosUsuario);
+
+// Variables globales + contexto de workspace
 app.use((req, res, next) => {
   res.locals.usuario = req.session?.usuario || null;
   res.locals.entidad_actual = '';
   res.locals.pathActual = req.path;
   res.locals.anoActual = 2026;
+
+  // Detectar workspace activo desde la ruta
+  const wsId = detectarWorkspace(req.path);
+  const workspace = wsId ? getWorkspace(wsId) : null;
+  res.locals.workspaceActivo = workspace;
+  res.locals.workspacesDisponibles = getWorkspacesDisponibles(req.session?.entidades_permitidas || []);
+
+  // Guardar entidad_actual para compatibilidad
+  if (workspace) {
+    res.locals.entidad_actual = workspace.id;
+  }
+
   next();
 });
-
-// Cargar permisos en sesión
-app.use(cargarPermisosUsuario);
 
 // ── Health Check ───────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
@@ -131,6 +146,29 @@ app.use('/administracion', empresasRoutes);
 // También accesible desde banco
 app.use('/banco', empresasRoutes);
 
+// Red de Servicios de La Placeta (RSP)
+app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspRoutes);
+
+// ═══ API GATEWAY v1 — APIs externas por entidad ═══════════════════════
+// Las rutas /api/v1/:entidad/* son públicas (con API Key) para apps externas
+app.use('/api', apiGatewayRoutes);
+
+// Panel de gestión de APIs para cada workspace
+// Middleware helper: pasa req.entidad al handler del gateway
+function workspaceAPIMiddleware(entidad) {
+  return (req, res, next) => {
+    req.entidad = entidad;
+    next();
+  };
+}
+
+// Montar el panel de APIs en cada entidad
+app.use('/banco/apis', verificarSesion, verificarAccesoEntidad('banco'), workspaceAPIMiddleware('banco'), apiGatewayRoutes);
+app.use('/tributos/apis', verificarSesion, verificarAccesoEntidad('tributos'), workspaceAPIMiddleware('tributos'), apiGatewayRoutes);
+app.use('/junta/apis', verificarSesion, verificarAccesoEntidad('junta'), workspaceAPIMiddleware('junta'), apiGatewayRoutes);
+app.use('/administracion/apis', verificarSesion, verificarAccesoEntidad('administracion'), workspaceAPIMiddleware('administracion'), apiGatewayRoutes);
+app.use('/rsp/apis', verificarSesion, verificarAccesoEntidad('rsp'), workspaceAPIMiddleware('rsp'), apiGatewayRoutes);
+
 // ── Landing / Login ────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   if (req.session?.usuario) return res.redirect('/dashboard');
@@ -155,12 +193,15 @@ async function startServer() {
   await testConnection();
   app.listen(PORT, () => {
     console.log(`
-╔══════════════════════════════════════════════════════╗
-║    Admin Placeta - Plataforma Unificada             ║
-║    http://localhost:${PORT}                           ║
-║                                                      ║
-║  Entidades: Banco | Tributos | Junta | Admin        ║
-╚══════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════╗
+║    Admin Placeta - Plataforma Centralizada de APIs y Entidades ║
+║    http://localhost:${PORT}                                      ║
+║                                                                ║
+║  Workspaces: Banco | Tributos | Junta | Admin | RSP            ║
+║  API Gateway: /api/v1/{entidad}  (tarifas RSP)                 ║
+║  API Docs:    /api/v1/docs  |  /api/v1/{entidad}/docs          ║
+║  IBANs:      Cada entidad con su propia cuenta bancaria        ║
+╚══════════════════════════════════════════════════════════════════╝
     `);
   });
 }

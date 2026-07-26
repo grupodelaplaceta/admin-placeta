@@ -1,0 +1,159 @@
+<div class="info-card mb-16">
+  <h4>🌐 Red de Servicios de La Placeta (RSP)</h4>
+  <p>Plataforma centralizada de servicios de datos para todas las entidades públicas del Grupo de La Placeta. Proporciona acceso a los datos necesarios para el funcionamiento, almacenamiento y modificación de los mismos.</p>
+  <p style="margin-top:8px;font-size:12px;color:#888">
+    <strong>Fondos iniciales transferidos:</strong> 18,309.83 Pz (desde Red del Grupo de La Placeta) ·
+    <strong>Sanción pendiente:</strong> 2,461.77 Pz (IVA no abonado)
+  </p>
+</div>
+
+<!-- KPIs principales -->
+<div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.totalConexiones.toLocaleString() %></div>
+    <div class="stat-label">Total Conexiones</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.conexionesHoy %></div>
+    <div class="stat-label">Hoy</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.saldoActual.toFixed(2) %></div>
+    <div class="stat-label">Saldo (Pz)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.ingresosEsteMes.toFixed(3) %></div>
+    <div class="stat-label">Ingresos Mes (Pz)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.facturasEmitidas %></div>
+    <div class="stat-label">Facturas</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:<%= stats.facturasPendientes > 0 ? '#d7a02d' : '#22a06b' %>"><%= stats.facturasPendientes %></div>
+    <div class="stat-label">Pendientes</div>
+  </div>
+</div>
+
+<!-- Tarifas vigentes -->
+<div class="card-grid card-grid-2 mb-16" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+  <div class="info-card">
+    <h4>📖 Consulta de Datos</h4>
+    <p><strong style="font-size:24px;color:var(--p)"><%= tarifas.consulta.total.toFixed(4) %></strong> Pz/conexión</p>
+    <p style="font-size:12px;color:#888">
+      Base: <%= tarifas.consulta.precio %> Pz · IVA <%= tarifas.iva %>: <%= tarifas.consulta.iva.toFixed(4) %> Pz
+    </p>
+    <p style="font-size:11px;color:#999;margin-top:4px"><%= tarifas.consulta.descripcion %></p>
+  </div>
+  <div class="info-card">
+    <h4>✏️ Modificación de Datos</h4>
+    <p><strong style="font-size:24px;color:var(--p)"><%= tarifas.modificacion.total.toFixed(3) %></strong> Pz/conexión</p>
+    <p style="font-size:12px;color:#888">
+      Base: <%= tarifas.modificacion.precio %> Pz · IVA <%= tarifas.iva %>: <%= tarifas.modificacion.iva.toFixed(3) %> Pz
+    </p>
+    <p style="font-size:11px;color:#999;margin-top:4px"><%= tarifas.modificacion.descripcion %></p>
+  </div>
+</div>
+
+<!-- Acceso rápido -->
+<div class="flex gap-8 mb-16 flex-wrap">
+  <a href="/rsp/conexiones" class="btn btn-primary">📡 Ver Conexiones</a>
+  <a href="/rsp/facturacion" class="btn btn-secondary">📄 Facturación</a>
+  <a href="/rsp/fondos" class="btn btn-secondary">💰 Fondos</a>
+</div>
+
+<!-- Últimas conexiones -->
+<div class="info-card">
+  <div class="section-header">
+    <h4>📡 Últimas Conexiones</h4>
+    <a href="/rsp/conexiones" class="btn-link">Ver todas →</a>
+  </div>
+
+  <% if (conexionesRecientes.length === 0) { %>
+  <div class="empty-state" style="padding:24px">
+    <div class="empty-icon" style="font-size:32px">📡</div>
+    <h3 style="font-size:15px">Sin conexiones registradas</h3>
+    <p style="font-size:12px">Las conexiones se registrarán automáticamente al usar las APIs.</p>
+  </div>
+  <% } else { %>
+  <div class="table-container" style="border:none;border-radius:0">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Entidad</th>
+          <th>Tipo</th>
+          <th>Endpoint</th>
+          <th>Importe</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% conexionesRecientes.forEach(c => { %>
+        <tr>
+          <td class="id-cell"><%= c.id %></td>
+          <td><span class="badge badge-purple"><%= c.entidad %></span></td>
+          <td>
+            <span class="badge <%= c.tipo === 'modificacion' ? 'badge-warning' : 'badge-info' %>">
+              <%= c.tipo === 'modificacion' ? '✏️ MOD' : '👁️ CON' %>
+            </span>
+          </td>
+          <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= c.endpoint %></td>
+          <td><strong><%= c.total.toFixed(4) %></strong> Pz</td>
+          <td style="font-size:11px;color:#888"><%= new Date(c.timestamp).toLocaleString('es-ES') %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</div>
+
+<!-- Facturas pendientes -->
+<% if (facturasPendientes.length > 0) { %>
+<div class="info-card mt-16">
+  <div class="section-header">
+    <h4>⚠️ Facturas Pendientes</h4>
+    <a href="/rsp/facturacion" class="btn-link">Ver todas →</a>
+  </div>
+  <div class="table-container" style="border:none;border-radius:0">
+    <table>
+      <thead><tr><th>Factura</th><th>Entidad</th><th>Conexiones</th><th>Total</th><th>Emitida</th></tr></thead>
+      <tbody>
+        <% facturasPendientes.forEach(f => { %>
+        <tr>
+          <td class="id-cell"><%= f.id %></td>
+          <td><span class="badge badge-purple"><%= f.entidad %></span></td>
+          <td><%= f.detalle.consultas %> cons + <%= f.detalle.modificaciones %> mod</td>
+          <td><strong style="color:var(--go)"><%= f.detalle.total.toFixed(2) %></strong> Pz</td>
+          <td style="font-size:11px;color:#888"><%= new Date(f.emitida).toLocaleString('es-ES') %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+<% } %>
+
+<!-- Info normativa -->
+<div class="info-card mt-16">
+  <h4>📜 Resumen Normativo — RSP</h4>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:12px">💰 Transferencia Inicial</strong>
+      <p style="font-size:11px;color:#666;margin-top:3px">18,309.83 Pz transferidos desde "Red del Grupo de La Placeta"</p>
+    </div>
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:12px">🚫 Facturas Anuladas</strong>
+      <p style="font-size:11px;color:#666;margin-top:3px">Facturas pendientes por cambios bancarios quedan anuladas. Más de 20,000 Pz liberados.</p>
+    </div>
+    <div style="padding:12px;background:#fff8e6;border-radius:10px;border:1px solid #fcd34d">
+      <strong style="color:#92400e;font-size:12px">⚠️ Sanción IVA Pendiente</strong>
+      <p style="font-size:11px;color:#666;margin-top:3px">2,461.77 Pz por IVA no abonado a la administración. <a href="/rsp/fondos" class="btn-link">Gestionar →</a></p>
+    </div>
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <strong style="color:var(--p);font-size:12px">🏛️ Entidades Conectadas</strong>
+      <p style="font-size:11px;color:#666;margin-top:3px">Banco, Tributos, Junta, Administración y entidades públicas de GDLP</p>
+    </div>
+  </div>
+</div>

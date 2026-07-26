@@ -9,122 +9,141 @@
   <link rel="stylesheet" href="/css/admin.css">
   <link rel="icon" href="https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png" type="image/png">
 </head>
-<body>
+<body class="<%= workspaceActivo ? 'workspace-active' : '' %>">
   <% if (usuario) { %>
-  <!-- Sidebar -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-logo"><img src="https://i.postimg.cc/RZYKzdmX/Diseno-sin-titulo-76.png" alt="GDLP"></div>
-      <div class="sidebar-brand">
-        <span class="brand-title">Admin Placeta</span>
-        <span class="brand-sub"><%= usuario.nombre %></span>
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar" id="sidebar"
+    <% if (workspaceActivo) { %>
+    data-workspace="<%= workspaceActivo.id %>"
+    style="--ws-color: <%= workspaceActivo.color %>; --ws-dark: <%= workspaceActivo.colorDark %>"
+    <% } %>
+  >
+    <!-- Workspace Switcher -->
+    <div class="sidebar-switcher">
+      <button class="ws-switcher-btn" onclick="toggleWorkspaceSwitcher()" title="Cambiar de workspace">
+        <% if (workspaceActivo) { %>
+        <span class="ws-switcher-icon"><%= workspaceActivo.icono %></span>
+        <span class="ws-switcher-info">
+          <span class="ws-switcher-name"><%= workspaceActivo.nombre %></span>
+          <span class="ws-switcher-hint">Cambiar workspace ▾</span>
+        </span>
+        <% } else { %>
+        <span class="ws-switcher-icon">🏛️</span>
+        <span class="ws-switcher-info">
+          <span class="ws-switcher-name">Admin Placeta</span>
+          <span class="ws-switcher-hint">Panel Principal</span>
+        </span>
+        <% } %>
+      </button>
+      <!-- Dropdown workspaces -->
+      <div class="ws-dropdown" id="wsDropdown">
+        <div class="ws-dropdown-header">Tus Workspaces</div>
+        <a href="/dashboard" class="ws-option <%= !workspaceActivo ? 'active' : '' %>" data-ws="inicio">
+          <span class="ws-option-icon">🏛️</span>
+          <span class="ws-option-info">
+            <span class="ws-option-name">Panel Principal</span>
+            <span class="ws-option-desc">Inicio y resumen general</span>
+          </span>
+        </a>
+        <% workspacesDisponibles && workspacesDisponibles.forEach(function(ws) { %>
+        <a href="/<%= ws.id %>" class="ws-option <%= workspaceActivo && workspaceActivo.id === ws.id ? 'active' : '' %>"
+           data-ws="<%= ws.id %>"
+           style="--ws-opt-color: <%= ws.color %>">
+          <span class="ws-option-icon"><%= ws.icono %></span>
+          <span class="ws-option-info">
+            <span class="ws-option-name"><%= ws.nombre %></span>
+            <span class="ws-option-desc"><%= ws.descripcion %></span>
+          </span>
+        </a>
+        <% }); %>
       </div>
-      <button class="sidebar-toggle" onclick="toggleSidebar()">✕</button>
     </div>
 
+    <!-- Navegación del Workspace -->
     <nav class="sidebar-nav">
-      <a href="/dashboard" class="nav-item <%= pathActual === '/dashboard' ? 'active' : '' %>">
-        <span class="nav-icon">📊</span>
-        <span class="nav-label">Panel Principal</span>
-      </a>
-
-      <% if (entidades_permitidas && entidades_permitidas.includes('banco')) { %>
-      <div class="nav-section">
-        <span class="nav-section-title">💰 Banco</span>
-        <a href="/banco" class="nav-item <%= pathActual.startsWith('/banco') ? 'active' : '' %>">
-          <span class="nav-icon">🏦</span>
-          <span class="nav-label">Dashboard Banco</span>
-        </a>
-        <a href="/banco/cuentas" class="nav-item">📋 Cuentas</a>
-        <a href="/banco/operaciones" class="nav-item">🔄 Operaciones</a>
-        <a href="/banco/tarjetas" class="nav-item">💳 Tarjetas</a>
-        <a href="/banco/control-cumplimiento" class="nav-item">🛡️ Cumplimiento</a>
-        <a href="/banco/trabajadores" class="nav-item">👥 Trabajadores</a>
-        <a href="/banco/nominas" class="nav-item">📄 Nóminas</a>
-        <a href="/banco/documentos" class="nav-item">📑 Documentos</a>
-      </div>
-      <% } %>
-
-      <% if (entidades_permitidas && entidades_permitidas.includes('tributos')) { %>
-      <div class="nav-section">
-        <span class="nav-section-title">📊 Tributos</span>
-        <a href="/tributos" class="nav-item <%= pathActual.startsWith('/tributos') ? 'active' : '' %>">
-          <span class="nav-icon">🏛️</span>
-          <span class="nav-label">Dashboard Tributos</span>
-        </a>
-        <a href="/tributos/contribuyentes" class="nav-item">👤 Contribuyentes</a>
-        <a href="/tributos/declaraciones" class="nav-item">📝 Declaraciones</a>
-        <a href="/tributos/inspeccion" class="nav-item">🔍 Inspección</a>
-        <a href="/tributos/incidencias" class="nav-item">⚠️ Incidencias</a>
-        <a href="/tributos/regimenes" class="nav-item">📋 Regímenes</a>
-        <a href="/tributos/trabajadores" class="nav-item">👥 Trabajadores</a>
-        <a href="/tributos/documentos" class="nav-item">📑 Documentos</a>
-      </div>
-      <% } %>
-
-      <% if (entidades_permitidas && entidades_permitidas.includes('junta')) { %>
-      <div class="nav-section">
-        <span class="nav-section-title">⚖️ Junta</span>
-        <a href="/junta" class="nav-item <%= pathActual.startsWith('/junta') ? 'active' : '' %>">
-          <span class="nav-icon">🏛️</span>
-          <span class="nav-label">Dashboard Junta</span>
-        </a>
-        <a href="/junta/ciudadanos" class="nav-item">👥 Ciudadanos</a>
-        <a href="/junta/placetaid" class="nav-item">🔑 PlacetaID</a>
-        <a href="/junta/reclamaciones" class="nav-item">📨 Reclamaciones</a>
-        <a href="/junta/reuniones" class="nav-item">🤝 Reuniones</a>
-        <a href="/junta/votaciones" class="nav-item">🗳️ Votaciones</a>
-        <a href="/junta/cargos" class="nav-item">👤 Cargos</a>
-        <a href="/junta/departamentos" class="nav-item">🏢 Departamentos</a>
-        <a href="/junta/recursos" class="nav-item">📦 Recursos</a>
-        <a href="/junta/junior" class="nav-item">🧒 Junior</a>
-        <a href="/junta/empresas" class="nav-item">🏢 Empresas</a>
-        <a href="/junta/empresas/cumplimiento" class="nav-item">📊 Cumplimiento</a>
-        <a href="/junta/documentos" class="nav-item">📑 Documentos</a>
-      </div>
-      <% } %>
-
-      <% if (entidades_permitidas && entidades_permitidas.includes('administracion')) { %>
-      <div class="nav-section">
-        <span class="nav-section-title">📋 Administración</span>
-        <a href="/administracion" class="nav-item <%= pathActual.startsWith('/administracion') ? 'active' : '' %>">
-          <span class="nav-icon">⚙️</span>
-          <span class="nav-label">Dashboard Admin</span>
-        </a>
-        <a href="/administracion/tramites" class="nav-item">📋 Trámites</a>
-        <a href="/administracion/ciudadanos" class="nav-item">👥 Ciudadanos</a>
-        <a href="/administracion/tributos" class="nav-item">📊 Tributos</a>
-        <a href="/administracion/banco" class="nav-item">🏦 Banco</a>
-        <a href="/administracion/actas" class="nav-item">📄 Actas</a>
-        <a href="/administracion/votaciones" class="nav-item">🗳️ Votaciones</a>
-        <a href="/administracion/placetaid" class="nav-item">🔑 PlacetaID</a>
-        <a href="/administracion/junior" class="nav-item">🧒 Junior</a>
-        <a href="/administracion/empresas" class="nav-item">🏢 Empresas</a>
-        <a href="/administracion/empresas/cumplimiento" class="nav-item">📊 Cumplimiento</a>
-        <a href="/administracion/documentos" class="nav-item">📑 Documentos</a>
-      </div>
+      <% if (workspaceActivo) { %>
+        <% workspaceActivo.secciones && workspaceActivo.secciones.forEach(function(seccion) { %>
+        <div class="nav-section">
+          <span class="nav-section-title"><%= seccion.titulo %></span>
+          <% seccion.enlaces && seccion.enlaces.forEach(function(enlace) { %>
+          <a href="<%= enlace.url %>"
+             class="nav-item <%= pathActual === enlace.url || (enlace.url !== '/' + workspaceActivo.id && pathActual.startsWith(enlace.url + '/')) ? 'active' : '' %>">
+            <span class="nav-icon"><%= enlace.icono %></span>
+            <span class="nav-label"><%= enlace.texto %></span>
+          </a>
+          <% }); %>
+        </div>
+        <% }); %>
+      <% } else { %>
+        <!-- Vista global: mostrar acceso rápido a todos los workspaces -->
+        <div class="nav-section">
+          <span class="nav-section-title">🏛️ INICIO</span>
+          <a href="/dashboard" class="nav-item <%= pathActual === '/dashboard' ? 'active' : '' %>">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Panel Principal</span>
+          </a>
+        </div>
+        <% workspacesDisponibles && workspacesDisponibles.forEach(function(ws) { %>
+        <div class="nav-section">
+          <span class="nav-section-title"><%= ws.icono %> <%= ws.nombre %></span>
+          <% if (ws.secciones && ws.secciones[0]) { %>
+            <% ws.secciones[0].enlaces && ws.secciones[0].enlaces.slice(0, 4).forEach(function(enlace) { %>
+            <a href="<%= enlace.url %>" class="nav-item">
+              <span class="nav-icon"><%= enlace.icono %></span>
+              <span class="nav-label"><%= enlace.texto %></span>
+            </a>
+            <% }); %>
+          <% } %>
+          <a href="/<%= ws.id %>" class="nav-item nav-item-more">
+            <span class="nav-icon">→</span>
+            <span class="nav-label">Ver todo</span>
+          </a>
+        </div>
+        <% }); %>
       <% } %>
     </nav>
 
+    <!-- Footer -->
     <div class="sidebar-footer">
       <div class="user-info">
         <div class="user-avatar"><%= (usuario.nombre || 'U').charAt(0).toUpperCase() %></div>
         <div class="user-data">
           <div class="user-name"><%= usuario.nombre %></div>
-          <div class="user-roles"><%= (roles || []).join(', ') %></div>
+          <div class="user-roles"><%= (roles || []).slice(0, 2).join(', ') %></div>
         </div>
       </div>
-      <a href="/logout" class="logout-btn" title="Cerrar sesión">🚪</a>
+      <div class="sidebar-footer-actions">
+        <a href="/dashboard" class="footer-btn" title="Panel Principal">🏛️</a>
+        <a href="/logout" class="logout-btn" title="Cerrar sesión">🚪</a>
+      </div>
     </div>
   </aside>
 
-  <!-- Main Content -->
+  <!-- ═══ MAIN CONTENT ═══ -->
   <main class="main-content" id="mainContent">
     <div class="content-header">
       <button class="hamburger" onclick="toggleSidebar()">☰</button>
-      <h1><%= titulo %></h1>
+      <div class="content-breadcrumb">
+        <% if (workspaceActivo) { %>
+        <a href="/dashboard" class="breadcrumb-link">Inicio</a>
+        <span class="breadcrumb-sep">›</span>
+        <a href="/<%= workspaceActivo.id %>" class="breadcrumb-link active"><%= workspaceActivo.icono %> <%= workspaceActivo.nombre %></a>
+        <% if (seccionActual) { %>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-current"><%= seccionActual %></span>
+        <% } %>
+        <% } else { %>
+        <span class="breadcrumb-current">🏛️ Panel Principal</span>
+        <% } %>
+      </div>
       <div class="header-actions">
-        <span class="badge-entidad"><%= entidad_actual || 'general' %></span>
+        <% if (workspaceActivo) { %>
+        <span class="badge-entidad" style="background: <%= workspaceActivo.color %>15; color: <%= workspaceActivo.color %>">
+          <%= workspaceActivo.icono %> <%= workspaceActivo.nombre %>
+        </span>
+        <% } else { %>
+        <span class="badge-entidad">🏛️ Admin Placeta</span>
+        <% } %>
       </div>
     </div>
     <div class="content-body">

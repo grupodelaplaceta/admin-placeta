@@ -48,6 +48,17 @@
     <span class="entidad-arrow">→</span>
   </a>
   <% } %>
+
+  <% if (entidades_permitidas && entidades_permitidas.includes('rsp')) { %>
+  <a href="/rsp" class="entidad-card rsp" style="border-left:4px solid #0891b2">
+    <div class="entidad-icon">🌐</div>
+    <div class="entidad-info">
+      <h3>Red de Servicios de La Placeta</h3>
+      <p>Conexiones, facturación y fondos de la RSP</p>
+    </div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <% } %>
 </div>
 
 <!-- Info de sesión -->

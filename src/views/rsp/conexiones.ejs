@@ -1,0 +1,101 @@
+<div class="info-card mb-16">
+  <h4>📡 Registro de Conexiones RSP</h4>
+  <p>Todas las conexiones a la Red de Servicios de La Placeta. Cada conexión (consulta o modificación) genera un cargo según las tarifas vigentes.</p>
+</div>
+
+<!-- KPIs -->
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-value"><%= total %></div><div class="stat-label">Total Conexiones</div></div>
+  <div class="stat-card"><div class="stat-value"><%= totalConsultas %></div><div class="stat-label">Consultas</div></div>
+  <div class="stat-card"><div class="stat-value"><%= totalModificaciones %></div><div class="stat-label">Modificaciones</div></div>
+  <div class="stat-card"><div class="stat-value"><%= ingresosConsultas.toFixed(4) %></div><div class="stat-label">Ing. Consultas (Pz)</div></div>
+  <div class="stat-card"><div class="stat-value"><%= ingresosModificaciones.toFixed(3) %></div><div class="stat-label">Ing. Modificaciones (Pz)</div></div>
+  <div class="stat-card"><div class="stat-value"><%= (ingresosConsultas + ingresosModificaciones).toFixed(3) %></div><div class="stat-label">Total Ingresos (Pz)</div></div>
+</div>
+
+<!-- Filtros -->
+<div class="flex gap-8 mb-16 flex-wrap items-center">
+  <form method="GET" action="/rsp/conexiones" class="flex gap-8 flex-wrap items-center">
+    <select name="entidad" class="form-input" style="width:140px" onchange="this.form.submit()">
+      <option value="">Todas las entidades</option>
+      <option value="banco" <%= filtroEntidad === 'banco' ? 'selected' : '' %>>🏦 Banco</option>
+      <option value="tributos" <%= filtroEntidad === 'tributos' ? 'selected' : '' %>>📊 Tributos</option>
+      <option value="junta" <%= filtroEntidad === 'junta' ? 'selected' : '' %>>⚖️ Junta</option>
+      <option value="administracion" <%= filtroEntidad === 'administracion' ? 'selected' : '' %>>📋 Administración</option>
+      <option value="placetaid" <%= filtroEntidad === 'placetaid' ? 'selected' : '' %>>🔑 PlacetaID</option>
+      <option value="crm" <%= filtroEntidad === 'crm' ? 'selected' : '' %>>📇 CRM</option>
+      <option value="general" <%= filtroEntidad === 'general' ? 'selected' : '' %>>🌐 General</option>
+    </select>
+    <select name="tipo" class="form-input" style="width:140px" onchange="this.form.submit()">
+      <option value="">Todos los tipos</option>
+      <option value="consulta" <%= filtroTipo === 'consulta' ? 'selected' : '' %>>👁️ Consulta</option>
+      <option value="modificacion" <%= filtroTipo === 'modificacion' ? 'selected' : '' %>>✏️ Modificación</option>
+    </select>
+    <% if (filtroEntidad || filtroTipo) { %>
+    <a href="/rsp/conexiones" class="btn btn-ghost btn-sm">✕ Limpiar filtros</a>
+    <% } %>
+  </form>
+</div>
+
+<% if (conexiones.length === 0) { %>
+<div class="empty-state">
+  <div class="empty-icon">📡</div>
+  <h3>Sin conexiones registradas</h3>
+  <p>No hay conexiones que coincidan con los filtros seleccionados.</p>
+</div>
+<% } else { %>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Entidad</th>
+        <th>Tipo</th>
+        <th>Endpoint</th>
+        <th>Usuario</th>
+        <th>Tarifa Base</th>
+        <th>IVA</th>
+        <th>Total</th>
+        <th>Fecha</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% conexiones.forEach(c => { %>
+      <tr>
+        <td class="id-cell"><%= c.id %></td>
+        <td><span class="badge badge-purple"><%= c.entidad %></span></td>
+        <td>
+          <span class="badge <%= c.tipo === 'modificacion' ? 'badge-warning' : 'badge-info' %>">
+            <%= c.tipo === 'modificacion' ? '✏️ MOD' : '👁️ CON' %>
+          </span>
+        </td>
+        <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<%= c.endpoint %>">
+          <%= c.endpoint %>
+        </td>
+        <td style="font-size:11px"><%= c.usuario %><% if (c.dip) { %><br><span class="text-mono"><%= c.dip %></span><% } %></td>
+        <td><%= c.tarifa.toFixed(4) %> Pz</td>
+        <td><%= c.iva.toFixed(4) %> Pz</td>
+        <td><strong><%= c.total.toFixed(4) %></strong> Pz</td>
+        <td style="font-size:10px;color:#888;white-space:nowrap"><%= new Date(c.timestamp).toLocaleString('es-ES') %></td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<p style="font-size:12px;color:#999;margin-top:8px">Total: <strong><%= total %></strong> conexiones · Ingresos acumulados: <strong><%= (ingresosConsultas + ingresosModificaciones).toFixed(3) %> Pz</strong></p>
+<% } %>
+
+<!-- Resumen de tarifas -->
+<div class="info-card mt-16">
+  <h4>💰 Tarifas Vigentes</h4>
+  <div class="grid-2" style="gap:12px">
+    <div style="padding:12px;background:#f0eeff;border-radius:10px">
+      <span class="badge badge-info">👁️ Consulta</span>
+      <p style="margin-top:6px;font-size:13px"><strong>0.001 Pz</strong> + IVA 12% = <strong>0.00112 Pz</strong>/conexión</p>
+    </div>
+    <div style="padding:12px;background:#fff8e6;border-radius:10px">
+      <span class="badge badge-warning">✏️ Modificación</span>
+      <p style="margin-top:6px;font-size:13px"><strong>0.1 Pz</strong> + IVA 12% = <strong>0.112 Pz</strong>/conexión</p>
+    </div>
+  </div>
+</div>

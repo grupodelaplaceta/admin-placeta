@@ -1,0 +1,173 @@
+<div class="info-card mb-16">
+  <h4>💰 Gestión de Fondos RSP</h4>
+  <p>Administración de los fondos de la Red de Servicios de La Placeta. Incluye saldo actual, historial de transacciones y gestión de la sanción pendiente.</p>
+</div>
+
+<!-- KPIs -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value" style="font-size:22px"><%= fondos.saldo.toFixed(2) %></div>
+    <div class="stat-label">Saldo Actual (Pz)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= fondos.totalIngresos.toFixed(2) %></div>
+    <div class="stat-label">Total Ingresos (Pz)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= fondos.totalEgresos.toFixed(2) %></div>
+    <div class="stat-label">Total Egresos (Pz)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.conexionesEsteMes %></div>
+    <div class="stat-label">Conexiones este mes</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value"><%= stats.ingresosEsteMes.toFixed(3) %></div>
+    <div class="stat-label">Ingresos este mes (Pz)</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value" style="color:<%= fondos.sancionPagada ? '#22a06b' : '#d03131' %>">
+      <%= fondos.sancionPagada ? '✅ Pagada' : fondos.sancionPendiente.toFixed(2) %>
+    </div>
+    <div class="stat-label">Sanción IVA</div>
+  </div>
+</div>
+
+<!-- Sanción IVA -->
+<% if (!fondos.sancionPagada) { %>
+<div class="alert <%= fondos.saldo >= fondos.sancionPendiente ? 'alert-success' : 'alert-error' %>" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+  <span>
+    <strong>⚠️ Sanción por IVA no abonado:</strong> <strong style="color:var(--r)"><%= fondos.sancionPendiente.toFixed(2) %> Pz</strong>
+    — IVA de "Red del Grupo de La Placeta" no transferido a la administración (contravención constitucional).
+    <%= fondos.saldo >= fondos.sancionPendiente ? '✅ Fondos suficientes para pagar.' : '❌ Fondos insuficientes.' %>
+  </span>
+  <% if (esAdmin && fondos.saldo >= fondos.sancionPendiente) { %>
+  <button class="btn btn-warning btn-sm" onclick="pagarSancion()">💸 Pagar Sanción</button>
+  <% } %>
+</div>
+<% } else { %>
+<div class="alert alert-success">
+  <strong>✅ Sanción de IVA pagada.</strong> La deuda de 2,461.77 Pz por IVA no abonado ha sido saldada.
+</div>
+<% } %>
+
+<!-- Info fondos iniciales -->
+<div class="info-card mb-16">
+  <h4>📋 Resumen de Fondos</h4>
+  <div class="grid-2" style="gap:12px">
+    <div style="padding:12px;background:#f0eeff;border-radius:10px">
+      <p style="font-size:11px;color:#888">Fondos Iniciales</p>
+      <p style="font-size:18px;font-weight:700;color:var(--p)"><%= fondos.fondosIniciales.toFixed(2) %> Pz</p>
+      <p style="font-size:10px;color:#999">Transferidos desde "Red del Grupo de La Placeta"</p>
+    </div>
+    <div style="padding:12px;background:#f0fdf4;border-radius:10px">
+      <p style="font-size:11px;color:#888">Total Ingresos por Conexiones</p>
+      <p style="font-size:18px;font-weight:700;color:var(--g)"><%= (fondos.totalIngresos - fondos.fondosIniciales).toFixed(2) %> Pz</p>
+      <p style="font-size:10px;color:#999">Acumulado desde conexiones de entidades</p>
+    </div>
+    <div style="padding:12px;background:#fef2f2;border-radius:10px">
+      <p style="font-size:11px;color:#888">Total Egresos</p>
+      <p style="font-size:18px;font-weight:700;color:var(--r)"><%= fondos.totalEgresos.toFixed(2) %> Pz</p>
+      <p style="font-size:10px;color:#999">Incluye facturas pagadas y sanciones</p>
+    </div>
+    <div style="padding:12px;background:linear-gradient(135deg,#f0eeff,#f0fdf4);border-radius:10px">
+      <p style="font-size:11px;color:#888">Saldo Neto</p>
+      <p style="font-size:22px;font-weight:800;color:var(--p)"><%= fondos.saldo.toFixed(2) %> Pz</p>
+    </div>
+  </div>
+</div>
+
+<!-- Historial de transacciones -->
+<div class="info-card">
+  <div class="section-header">
+    <h4>📜 Historial de Transacciones</h4>
+  </div>
+
+  <% if (fondos.historial.length === 0) { %>
+  <div class="empty-state" style="padding:24px">
+    <div class="empty-icon" style="font-size:32px">💰</div>
+    <h3 style="font-size:15px">Sin historial</h3>
+    <p style="font-size:12px">No hay transacciones registradas.</p>
+  </div>
+  <% } else { %>
+  <div class="table-container" style="border:none;border-radius:0">
+    <table>
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Concepto</th>
+          <th>Importe</th>
+          <th>Saldo</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% [...fondos.historial].reverse().forEach(h => { %>
+        <tr>
+          <td>
+            <span class="badge <%= 
+              h.tipo === 'TRANSFERENCIA_INICIAL' ? 'badge-gold' :
+              h.tipo === 'CONEXION' ? 'badge-info' :
+              h.tipo === 'PAGO_FACTURA' ? 'badge-success' :
+              h.tipo === 'SANCION_IVA' ? 'badge-danger' : 'badge-outline'
+            %>"><%= h.tipo %></span>
+          </td>
+          <td style="font-size:12px;max-width:300px"><%= h.concepto %></td>
+          <td style="font-weight:600;color:<%= h.importe >= 0 ? 'var(--g)' : 'var(--r)' %>">
+            <%= h.importe >= 0 ? '+' : '' %><%= h.importe.toFixed(2) %> Pz
+          </td>
+          <td style="font-weight:600"><%= h.saldo.toFixed(2) %> Pz</td>
+          <td style="font-size:11px;color:#888;white-space:nowrap"><%= new Date(h.fecha).toLocaleString('es-ES') %></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</div>
+
+<!-- Tarifas informativas -->
+<div class="info-card mt-16">
+  <h4>💰 Tarifas de Conexión RSP</h4>
+  <div class="grid-2" style="gap:12px">
+    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
+      <span class="badge badge-info">👁️ Consulta</span>
+      <p style="margin-top:6px"><strong>0.001 Pz</strong> + IVA 12%</p>
+      <p style="font-size:11px;color:#888">Conexión para consulta de datos</p>
+    </div>
+    <div style="padding:12px;background:#fff8e6;border-radius:10px">
+      <span class="badge badge-warning">✏️ Modificación</span>
+      <p style="margin-top:6px"><strong>0.1 Pz</strong> + IVA 12%</p>
+      <p style="font-size:11px;color:#888">Conexión para modificación de datos</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Pagar Sanción IVA ──────────────────────────────────────────────────
+function pagarSancion() {
+  mostrarModal('⚠️ Pagar Sanción IVA', `
+    <p><strong>Importe:</strong> 2,461.77 Pz</p>
+    <p><strong>Concepto:</strong> Sanción por IVA no abonado a la administración — "Red del Grupo de La Placeta"</p>
+    <p style="font-size:12px;color:#888;margin-top:8px">Según la normativa aprobada el 3 de marzo de 2025, el IVA de "Red del Grupo de La Placeta" no se abonaba a la administración. Esto es anticonstitucional según los artículos vigentes.</p>
+    <hr style="margin:12px 0;border:none;border-top:1px solid #f0ecf8">
+    <p style="font-size:13px;color:#666">¿Confirmas el pago de la sanción?</p>
+    <div class="flex gap-8" style="margin-top:12px">
+      <button class="btn btn-danger" onclick="confirmarPagoSancion()">💸 Pagar 2,461.77 Pz</button>
+      <button class="btn btn-secondary" onclick="document.querySelector('.modal-overlay').remove()">Cancelar</button>
+    </div>
+  `);
+}
+
+async function confirmarPagoSancion() {
+  try {
+    const r = await apiFetch('/rsp/api/fondos/pagar-sancion', { method: 'POST' });
+    if (r.success) {
+      mostrarToast('✅ Sanción pagada: ' + r.importe.toFixed(2) + ' Pz. Nuevo saldo: ' + r.nuevoSaldo.toFixed(2) + ' Pz', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      mostrarToast(r.error || 'Error', 'error');
+    }
+  } catch (e) { mostrarToast('Error de red', 'error'); }
+}
+</script>

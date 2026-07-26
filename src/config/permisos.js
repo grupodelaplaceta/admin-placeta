@@ -1,7 +1,7 @@
 /**
  * SISTEMA DE PERMISOS Y ROLES
  * 
- * Entidades: banco, tributos, junta, administracion
+ * Entidades: banco, tributos, junta, administracion, rsp
  * Roles globales: superadmin, admin, gestor, inspector, secretario, presidente, vicepresidente, funcionario, cargo_autorizado
  * 
  * Cada entidad define qué roles tienen acceso a qué secciones.
@@ -16,14 +16,17 @@ const ROLES_ENTIDADES = {
   'tributos_admin': ['tributos'],
   'tributos_inspector': ['tributos'],
   // Junta
-  'presidente': ['junta', 'administracion'],
-  'vicepresidente': ['junta', 'administracion'],
+  'presidente': ['junta', 'administracion', 'rsp'],
+  'vicepresidente': ['junta', 'administracion', 'rsp'],
   'secretario': ['junta'],
   'cargo_autorizado': ['junta'],
   // Administración
   'funcionario': ['administracion'],
+  // RSP
+  'rsp_admin': ['rsp'],
+  'rsp_operador': ['rsp'],
   // Superadmin (todo)
-  'superadmin': ['banco', 'tributos', 'junta', 'administracion'],
+  'superadmin': ['banco', 'tributos', 'junta', 'administracion', 'rsp'],
 };
 
 // Permisos específicos por entidad y rol
@@ -89,6 +92,17 @@ const PERMISOS_ENTIDAD = {
       'gestion_tramites', 'gestion_ciudadanos_basica',
       'gestion_actas', 'gestion_placetid_completa'
     ]
+  },
+  rsp: {
+    admin: [
+      'ver_dashboard', 'ver_conexiones', 'ver_facturas',
+      'ver_fondos', 'gestionar_facturas', 'pagar_sancion',
+      'ver_tarifas', 'exportar_datos', 'ver_estadisticas'
+    ],
+    operador: [
+      'ver_dashboard', 'ver_conexiones', 'ver_facturas',
+      'ver_fondos', 'ver_tarifas'
+    ]
   }
 };
 
@@ -103,7 +117,7 @@ export function getEntidadesPermitidas(roles = []) {
   }
   // Si tiene superadmin, todas
   if (roles.includes('superadmin')) {
-    return ['banco', 'tributos', 'junta', 'administracion'];
+    return ['banco', 'tributos', 'junta', 'administracion', 'rsp'];
   }
   return [...entidades];
 }
@@ -158,6 +172,7 @@ export function determinarRoles(cargos = [], permisosAlmacenados = [], dip = '')
     roles.add('presidente');
     roles.add('banco_admin');
     roles.add('tributos_admin');
+    roles.add('rsp_admin');
     return [...roles];
   }
 
@@ -191,6 +206,8 @@ export function determinarRoles(cargos = [], permisosAlmacenados = [], dip = '')
     if (tipo === 'tributos_admin') roles.add('tributos_admin');
     if (tipo === 'tributos_inspector') roles.add('tributos_inspector');
     if (tipo === 'funcionario') roles.add('funcionario');
+    if (tipo === 'rsp_admin') roles.add('rsp_admin');
+    if (tipo === 'rsp_operador') roles.add('rsp_operador');
   }
 
   return [...roles];
