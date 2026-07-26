@@ -28,6 +28,7 @@ import juniorApiRoutes from './src/routes/junior-api.js';
 import accionesDocumentoRoutes from './src/routes/acciones-documento.js';
 import rspRoutes from './src/routes/rsp.js';
 import { apiGatewayRoutes } from './src/routes/api-gateway.js';
+import firmasRoutes from './src/routes/firmas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -167,6 +168,25 @@ app.use('/tributos/apis', verificarSesion, verificarAccesoEntidad('tributos'), w
 app.use('/junta/apis', verificarSesion, verificarAccesoEntidad('junta'), workspaceAPIMiddleware('junta'), apiGatewayRoutes);
 app.use('/administracion/apis', verificarSesion, verificarAccesoEntidad('administracion'), workspaceAPIMiddleware('administracion'), apiGatewayRoutes);
 app.use('/rsp/apis', verificarSesion, verificarAccesoEntidad('rsp'), workspaceAPIMiddleware('rsp'), apiGatewayRoutes);
+
+// ═══ SISTEMA UNIFICADO DE DOCUMENTOS Y FIRMAS ════════════════════════
+// Rutas web: /{entidad}/documentos para cada workspace
+app.use('/banco/documentos', verificarSesion, verificarAccesoEntidad('banco'), (req, res, next) => { req.entidad = 'banco'; next(); }, firmasRoutes);
+app.use('/tributos/documentos', verificarSesion, verificarAccesoEntidad('tributos'), (req, res, next) => { req.entidad = 'tributos'; next(); }, firmasRoutes);
+app.use('/junta/documentos', verificarSesion, verificarAccesoEntidad('junta'), (req, res, next) => { req.entidad = 'junta'; next(); }, firmasRoutes);
+app.use('/administracion/documentos', verificarSesion, verificarAccesoEntidad('administracion'), (req, res, next) => { req.entidad = 'administracion'; next(); }, firmasRoutes);
+app.use('/rsp/documentos', verificarSesion, verificarAccesoEntidad('rsp'), (req, res, next) => { req.entidad = 'rsp'; next(); }, firmasRoutes);
+
+// API de firmas (webhook PlacetaID + consultas)
+app.use('/api/firmas', firmasRoutes);
+
+// ═══ GASTOS RSP POR ENTIDAD ═══════════════════════════════════════════
+// Cada entidad puede ver sus propios gastos de conexión RSP
+app.get('/banco/gastos-rsp', verificarSesion, verificarAccesoEntidad('banco'), (req, res) => res.redirect('/rsp/gastos/banco'));
+app.get('/tributos/gastos-rsp', verificarSesion, verificarAccesoEntidad('tributos'), (req, res) => res.redirect('/rsp/gastos/tributos'));
+app.get('/junta/gastos-rsp', verificarSesion, verificarAccesoEntidad('junta'), (req, res) => res.redirect('/rsp/gastos/junta'));
+app.get('/administracion/gastos-rsp', verificarSesion, verificarAccesoEntidad('administracion'), (req, res) => res.redirect('/rsp/gastos/administracion'));
+app.get('/rsp/gastos', verificarSesion, verificarAccesoEntidad('rsp'), (req, res) => res.redirect('/rsp/gastos/rsp'));
 
 // ── Landing / Login ────────────────────────────────────────────────────────
 app.get('/', (req, res) => {

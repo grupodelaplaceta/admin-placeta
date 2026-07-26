@@ -22,7 +22,12 @@
     <div class="sidebar-switcher">
       <button class="ws-switcher-btn" onclick="toggleWorkspaceSwitcher()" title="Cambiar de workspace">
         <% if (workspaceActivo) { %>
+        <% if (workspaceActivo.logo) { %>
+        <img src="<%= workspaceActivo.logo %>" alt="" class="ws-switcher-logo" onerror="this.style.display='none';this.nextElementSibling.style.display=''">
+        <span class="ws-switcher-icon" style="display:none"><%= workspaceActivo.icono %></span>
+        <% } else { %>
         <span class="ws-switcher-icon"><%= workspaceActivo.icono %></span>
+        <% } %>
         <span class="ws-switcher-info">
           <span class="ws-switcher-name"><%= workspaceActivo.nombre %></span>
           <span class="ws-switcher-hint">Cambiar workspace ▾</span>
@@ -49,7 +54,12 @@
         <a href="/<%= ws.id %>" class="ws-option <%= workspaceActivo && workspaceActivo.id === ws.id ? 'active' : '' %>"
            data-ws="<%= ws.id %>"
            style="--ws-opt-color: <%= ws.color %>">
+          <% if (ws.logo) { %>
+          <img src="<%= ws.logo %>" alt="" class="ws-option-img" onerror="this.style.display='none';this.nextElementSibling.style.display=''">
+          <span class="ws-option-icon" style="display:none"><%= ws.icono %></span>
+          <% } else { %>
           <span class="ws-option-icon"><%= ws.icono %></span>
+          <% } %>
           <span class="ws-option-info">
             <span class="ws-option-name"><%= ws.nombre %></span>
             <span class="ws-option-desc"><%= ws.descripcion %></span>
@@ -127,7 +137,15 @@
         <% if (workspaceActivo) { %>
         <a href="/dashboard" class="breadcrumb-link">Inicio</a>
         <span class="breadcrumb-sep">›</span>
-        <a href="/<%= workspaceActivo.id %>" class="breadcrumb-link active"><%= workspaceActivo.icono %> <%= workspaceActivo.nombre %></a>
+        <a href="/<%= workspaceActivo.id %>" class="breadcrumb-link active">
+          <% if (workspaceActivo.logo) { %>
+          <img src="<%= workspaceActivo.logo %>" alt="" class="breadcrumb-logo" onerror="this.style.display='none';this.nextElementSibling.style.display=''">
+          <span style="display:none"><%= workspaceActivo.icono %></span>
+          <% } else { %>
+          <span><%= workspaceActivo.icono %></span>
+          <% } %>
+          <%= workspaceActivo.nombre %>
+        </a>
         <% if (typeof seccionActual !== 'undefined' && seccionActual) { %>
         <span class="breadcrumb-sep">›</span>
         <span class="breadcrumb-current"><%= seccionActual %></span>

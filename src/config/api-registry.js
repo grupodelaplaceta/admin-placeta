@@ -57,7 +57,7 @@ const API_REGISTRY = {
 
   // ── BANCO DE LA PLACETA ─────────────────────────────────────────────
   banco: {
-    iban: 'PL26-0001-0001-0000000001',
+    iban: 'GDLP-AP98-605',
     nombre: 'Banco de La Placeta',
     descripcion: 'API del sistema bancario: cuentas, operaciones, tarjetas, nóminas',
     contacto: 'banco@laplaceta.org',
@@ -160,7 +160,7 @@ const API_REGISTRY = {
 
   // ── TRIBUTOS DE LA PLACETA ───────────────────────────────────────────
   tributos: {
-    iban: 'PL26-0002-0001-0000000001',
+    iban: 'GDLP-TRBX-001',
     nombre: 'Tributos de La Placeta',
     descripcion: 'API del sistema tributario: declaraciones, contribuyentes, inspección',
     contacto: 'tributos@laplaceta.org',
@@ -241,7 +241,7 @@ const API_REGISTRY = {
 
   // ── JUNTA DE LA PLACETA ──────────────────────────────────────────────
   junta: {
-    iban: 'PL26-0003-0001-0000000001',
+    iban: 'GDLP-AP00-001',
     nombre: 'Junta de La Placeta',
     descripcion: 'API de gobierno: ciudadanos, PlacetaID, votaciones, cargos',
     contacto: 'junta@laplaceta.org',
@@ -341,7 +341,7 @@ const API_REGISTRY = {
 
   // ── ADMINISTRACIÓN DE LA PLACETA ─────────────────────────────────────
   administracion: {
-    iban: 'PL26-0004-0001-0000000001',
+    iban: 'GDLP-AP00-002',
     nombre: 'Administración de La Placeta',
     descripcion: 'API de administración: trámites, actas, gestión ciudadana',
     contacto: 'admin@laplaceta.org',
@@ -392,7 +392,7 @@ const API_REGISTRY = {
 
   // ── RED DE SERVICIOS DE LA PLACETA (RSP) ─────────────────────────────
   rsp: {
-    iban: 'PL26-0005-0001-RSP-MAIN-001',
+    iban: 'GDLP-AP99-001',
     nombre: 'Red de Servicios de La Placeta',
     descripcion: 'API central de servicios: conexiones, facturación, estado',
     contacto: 'rsp@laplaceta.org',

@@ -74,6 +74,9 @@ details.demo-login summary{cursor:pointer;color:var(--tm);font-size:13px;text-al
   border-color: rgba(255,255,255,.15);
 }
 .ws-switcher-icon { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.ws-switcher-logo { width: 28px; height: 28px; border-radius: 8px; object-fit: contain; flex-shrink: 0; }
+.ws-option-img { width: 22px; height: 22px; border-radius: 6px; object-fit: contain; flex-shrink: 0; }
+.breadcrumb-logo { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; vertical-align: middle; margin-right: 4px; }
 .ws-switcher-info { flex: 1; min-width: 0; }
 .ws-switcher-name {
   display: block;

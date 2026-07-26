@@ -5,12 +5,14 @@
  * navegación y conjunto de módulos.
  * 
  * Estructura:
- *   - id: identificador único (coincide con la ruta /{id})
+ *   - id: identificificador único (coincide con la ruta /{id})
  *   - nombre: nombre para mostrar
  *   - icono: emoji o icono representativo
+ *   - logo: ruta de la imagen del logo
  *   - descripcion: texto breve
  *   - color: color primario del workspace
  *   - colorDark: color oscuro para sidebar
+ *   - iban: IBAN real de la entidad en Banco de La Placeta
  *   - secciones: array de secciones de navegación
  *     - titulo: nombre de la sección
  *     - enlaces: array de { texto, url, icono }
@@ -21,10 +23,11 @@ const WORKSPACES = {
     id: 'banco',
     nombre: 'Banco de La Placeta',
     icono: '🏦',
+    logo: '/img/logo-banco.png',
     descripcion: 'Gestión bancaria, cuentas, operaciones y cumplimiento normativo',
     color: '#3f00d8',
     colorDark: '#1c005f',
-    iban: 'PL26-0001-0001-0000000001',
+    iban: 'GDLP-AP98-605',
     background: 'linear-gradient(135deg, #1c005f 0%, #3f00d8 100%)',
     secciones: [
       {
@@ -44,6 +47,7 @@ const WORKSPACES = {
         titulo: '🔌 Desarrollo',
         enlaces: [
           { texto: 'APIs', url: '/banco/apis', icono: '🔌' },
+          { texto: 'Gastos RSP', url: '/banco/gastos-rsp', icono: '💰' },
         ]
       }
     ]
@@ -52,10 +56,11 @@ const WORKSPACES = {
     id: 'tributos',
     nombre: 'Tributos de La Placeta',
     icono: '📊',
+    logo: '/img/logo-tributos.png',
     descripcion: 'Declaraciones, inspección, regímenes y gestión de contribuyentes',
     color: '#22a06b',
     colorDark: '#0d6b3e',
-    iban: 'PL26-0002-0001-0000000001',
+    iban: 'GDLP-TRBX-001',
     background: 'linear-gradient(135deg, #0d6b3e 0%, #22a06b 100%)',
     secciones: [
       {
@@ -75,6 +80,7 @@ const WORKSPACES = {
         titulo: '🔌 Desarrollo',
         enlaces: [
           { texto: 'APIs', url: '/tributos/apis', icono: '🔌' },
+          { texto: 'Gastos RSP', url: '/tributos/gastos-rsp', icono: '💰' },
         ]
       }
     ]
@@ -83,10 +89,11 @@ const WORKSPACES = {
     id: 'junta',
     nombre: 'Junta de La Placeta',
     icono: '⚖️',
+    logo: '/img/logo-gdlp.svg',
     descripcion: 'Gobierno, votaciones, cargos, reclamaciones y recursos',
     color: '#555',
     colorDark: '#333',
-    iban: 'PL26-0003-0001-0000000001',
+    iban: 'GDLP-AP00-001',
     background: 'linear-gradient(135deg, #1a1a2e 0%, #555 100%)',
     secciones: [
       {
@@ -111,6 +118,7 @@ const WORKSPACES = {
         titulo: '🔌 Desarrollo',
         enlaces: [
           { texto: 'APIs', url: '/junta/apis', icono: '🔌' },
+          { texto: 'Gastos RSP', url: '/junta/gastos-rsp', icono: '💰' },
         ]
       }
     ]
@@ -119,10 +127,11 @@ const WORKSPACES = {
     id: 'administracion',
     nombre: 'Administración de La Placeta',
     icono: '📋',
+    logo: '/img/logo-web.png',
     descripcion: 'Trámites, actas, PlacetaID y gestión ciudadana',
     color: '#d7a02d',
     colorDark: '#92400e',
-    iban: 'PL26-0004-0001-0000000001',
+    iban: 'GDLP-AP00-002',
     background: 'linear-gradient(135deg, #92400e 0%, #d7a02d 100%)',
     secciones: [
       {
@@ -146,6 +155,7 @@ const WORKSPACES = {
         titulo: '🔌 Desarrollo',
         enlaces: [
           { texto: 'APIs', url: '/administracion/apis', icono: '🔌' },
+          { texto: 'Gastos RSP', url: '/administracion/gastos-rsp', icono: '💰' },
         ]
       }
     ]
@@ -154,10 +164,11 @@ const WORKSPACES = {
     id: 'rsp',
     nombre: 'Red de Servicios de La Placeta',
     icono: '🌐',
+    logo: '/img/logo-web.png',
     descripcion: 'Conexiones, facturación y fondos de la RSP',
     color: '#0891b2',
     colorDark: '#065f7a',
-    iban: 'PL26-0005-0001-RSP-MAIN-001',
+    iban: 'GDLP-AP99-001',
     background: 'linear-gradient(135deg, #065f7a 0%, #0891b2 100%)',
     secciones: [
       {
@@ -173,6 +184,7 @@ const WORKSPACES = {
         titulo: '🔌 Desarrollo',
         enlaces: [
           { texto: 'APIs', url: '/rsp/apis', icono: '🔌' },
+          { texto: 'Gastos RSP', url: '/rsp/gastos', icono: '💰' },
         ]
       }
     ]

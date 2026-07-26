@@ -1,0 +1,111 @@
+<%# Detalle de documento %>
+<div class="detalle-doc-page">
+  <div class="flex items-center justify-between mb-16">
+    <div>
+      <h3 style="font-size:16px;font-weight:700">📄 <%= documento.titulo %></h3>
+      <p style="font-size:12px;color:#888;margin-top:2px">
+        <%= documento.tipo %> · 
+        <%= documento.createdAt ? new Date(documento.createdAt).toLocaleDateString('es-ES') : '—' %>
+      </p>
+    </div>
+    <div class="flex gap-8">
+      <a href="/<%= entidad_actual %>/documentos" class="btn btn-secondary btn-sm">← Listado</a>
+      <a href="/<%= entidad_actual %>/documentos/<%= documento.id %>?pdf=1" target="_blank" class="btn btn-primary btn-sm">📥 PDF</a>
+    </div>
+  </div>
+
+  <div class="grid-2 gap-16 mb-16">
+    <!-- Estado -->
+    <div class="info-card">
+      <h4>📋 Estado</h4>
+      <div style="margin-top:8px">
+        <% if (documento.estado === 'firmado') { %>
+        <div style="padding:14px;background:#e6f7ed;border-radius:10px;text-align:center">
+          <span style="font-size:32px">✅</span>
+          <p style="font-weight:700;margin-top:6px;color:#1a7a4a">Documento Firmado</p>
+          <% if (documento.datos?.firmadoPor) { %>
+          <p style="font-size:12px;color:#666;margin-top:4px">Firmado por: <strong><%= documento.datos.firmadoPor %></strong></p>
+          <% } %>
+          <% if (documento.datos?.fechaFirma) { %>
+          <p style="font-size:12px;color:#666">
+            <%= new Date(documento.datos.fechaFirma).toLocaleString('es-ES') %>
+          </p>
+          <% } %>
+          <p style="font-size:11px;color:#888;margin-top:6px">Firma electrónica PlacetaID</p>
+        </div>
+        <% } else if (documento.estado === 'pendiente-firma' || documento.estado === 'final') { %>
+        <div style="padding:14px;background:#fff8e6;border-radius:10px;text-align:center">
+          <span style="font-size:32px">⏳</span>
+          <p style="font-weight:700;margin-top:6px;color:#92400e">Pendiente de Firma</p>
+          <p style="font-size:12px;color:#888;margin-top:4px">
+            Abre PlacetaID Móvil para firmar este documento
+          </p>
+          <button class="btn btn-warning btn-sm mt-8" onclick="reenviarFirma()">📨 Reenviar a PlacetaID</button>
+        </div>
+        <% } else { %>
+        <div style="padding:14px;background:#f0ecf8;border-radius:10px;text-align:center">
+          <span style="font-size:32px">📄</span>
+          <p style="font-weight:700;margin-top:6px;color:var(--p)"><%= documento.estado %></p>
+        </div>
+        <% } %>
+      </div>
+    </div>
+
+    <!-- Metadatos -->
+    <div class="info-card">
+      <h4>🔖 Metadatos</h4>
+      <div style="margin-top:8px">
+        <table style="width:100%">
+          <tr><td style="padding:4px 0;font-size:12px;color:#888">ID</td><td style="padding:4px 0;font-size:11px"><code><%= documento.id %></code></td></tr>
+          <tr><td style="padding:4px 0;font-size:12px;color:#888">Tipo</td><td style="padding:4px 0"><span class="badge badge-purple"><%= documento.tipo %></span></td></tr>
+          <tr><td style="padding:4px 0;font-size:12px;color:#888">Entidad</td><td style="padding:4px 0"><span class="badge badge-info"><%= entidad_actual %></span></td></tr>
+          <tr><td style="padding:4px 0;font-size:12px;color:#888">Creado por</td><td style="padding:4px 0;font-size:12px"><%= documento.createdBy || '—' %></td></tr>
+          <tr><td style="padding:4px 0;font-size:12px;color:#888">CSV</td><td style="padding:4px 0;font-size:10px"><code><%= documento.datos?.csv || '—' %></code></td></tr>
+          <tr><td style="padding:4px 0;font-size:12px;color:#888">Hash</td><td style="padding:4px 0;font-size:10px"><code><%= (documento.hash || '').slice(0,20) %>...</code></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Datos del documento -->
+  <% if (documento.datos && Object.keys(documento.datos).length > 0) { %>
+  <div class="info-card mb-16">
+    <h4>📊 Datos del Documento</h4>
+    <div style="margin-top:8px">
+      <table style="width:100%">
+        <% for (const [k, v] of Object.entries(documento.datos)) { 
+          if (k === 'firma_base64' || k === 'csv') continue;
+          if (typeof v === 'object' && v !== null) { %>
+          <tr><td style="padding:4px 0;font-size:12px;color:#888;vertical-align:top"><%= k %></td>
+              <td style="padding:4px 0;font-size:12px"><code><%= JSON.stringify(v) %></code></td></tr>
+        <% } else if (!Array.isArray(v)) { %>
+          <tr><td style="padding:4px 0;font-size:12px;color:#888"><%= k %></td>
+              <td style="padding:4px 0;font-size:12px"><%= v %></td></tr>
+        <% } } %>
+      </table>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Acciones -->
+  <div class="flex gap-8">
+    <a href="/<%= entidad_actual %>/documentos/<%= documento.id %>?pdf=1" target="_blank" class="btn btn-primary">📥 Descargar PDF</a>
+    <% if (documento.estado !== 'firmado') { %>
+    <button class="btn btn-warning" onclick="reenviarFirma()">📨 Reenviar a PlacetaID</button>
+    <% } %>
+    <a href="/<%= entidad_actual %>/documentos" class="btn btn-secondary">← Volver al listado</a>
+  </div>
+</div>
+
+<script>
+async function reenviarFirma() {
+  mostrarToast('📨 Reenviando a PlacetaID Móvil...', 'info');
+  try {
+    const r = await apiFetch('/api/firmas/<%= documento.id %>/reenviar', { method: 'POST' });
+    if (r.success) mostrarToast('✅ Enviado a PlacetaID Móvil', 'success');
+    else mostrarToast('⚠️ ' + (r.mensaje || 'No se pudo enviar'), 'warning');
+  } catch (e) {
+    mostrarToast('❌ ' + e.message, 'error');
+  }
+}
+</script>

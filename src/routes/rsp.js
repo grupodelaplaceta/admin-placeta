@@ -87,6 +87,44 @@ router.get('/facturacion', verificarSesion, verificarAccesoEntidad('rsp'), verif
   });
 });
 
+// ── GASTOS POR ENTIDAD (accesible desde cualquier workspace) ──────────
+router.get('/gastos/:entidad', verificarSesion, (req, res) => {
+  const { entidad } = req.params;
+  const conexiones = getConexiones({ entidad });
+  const consultas = conexiones.filter(c => c.tipo === TIPO_CONEXION.CONSULTA);
+  const modificaciones = conexiones.filter(c => c.tipo === TIPO_CONEXION.MODIFICACION);
+
+  // IBAN de la entidad
+  const ibans = {
+    banco: 'GDLP-AP98-605',
+    tributos: 'GDLP-TRBX-001',
+    junta: 'GDLP-AP00-001',
+    administracion: 'GDLP-AP00-002',
+    rsp: 'GDLP-AP99-001'
+  };
+  const noms = {
+    banco: 'Banco de La Placeta',
+    tributos: 'Tributos de La Placeta',
+    junta: 'Junta de La Placeta',
+    administracion: 'Administración de La Placeta',
+    rsp: 'Red de Servicios de La Placeta'
+  };
+
+  res.render('rsp/gastos-entidad', {
+    titulo: `Gastos RSP - ${noms[entidad] || entidad}`,
+    entidad_actual: 'rsp',
+    nomEntidad: noms[entidad] || entidad,
+    iban: ibans[entidad] || '—',
+    conexiones: [...conexiones].reverse(),
+    totalConexiones: conexiones.length,
+    totalConsultas: consultas.length,
+    totalModificaciones: modificaciones.length,
+    costeConsultas: consultas.reduce((s, c) => s + c.total, 0),
+    costeModificaciones: modificaciones.reduce((s, c) => s + c.total, 0),
+    totalGastado: conexiones.reduce((s, c) => s + c.total, 0)
+  });
+});
+
 // ── FONDOS ─────────────────────────────────────────────────────────────────
 router.get('/fondos', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_fondos'), (req, res) => {
   const fondos = getEstadoFondos();

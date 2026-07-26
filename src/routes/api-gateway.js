@@ -35,27 +35,27 @@ const router = Router();
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Mapa de API Keys → App (en producción: Supabase)
-// Formato: { key: { nombre, plataforma, entidadesPermitidas, activa } }
+// Formato: { key: { nombre, plataforma, entidadesPermitidas, activa, allowedOrigins } }
 const API_KEYS = new Map();
 
 // API Keys predefinidas para desarrollo
 function initAPIKeys() {
   const keys = {
-    'android-app-banco-key-2026':  { nombre: 'Banco App Android',  plataforma: 'android', entidadesPermitidas: ['banco'], activa: true },
-    'ios-app-banco-key-2026':      { nombre: 'Banco App iOS',      plataforma: 'ios',     entidadesPermitidas: ['banco'], activa: true },
-    'web-app-banco-key-2026':      { nombre: 'Banco App Web',      plataforma: 'web',     entidadesPermitidas: ['banco'], activa: true },
-    'android-tributos-key-2026':   { nombre: 'Tributos App Android', plataforma: 'android', entidadesPermitidas: ['tributos'], activa: true },
-    'ios-tributos-key-2026':       { nombre: 'Tributos App iOS',   plataforma: 'ios',     entidadesPermitidas: ['tributos'], activa: true },
-    'web-tributos-key-2026':       { nombre: 'Tributos App Web',   plataforma: 'web',     entidadesPermitidas: ['tributos'], activa: true },
-    'android-junta-key-2026':      { nombre: 'Junta App Android',  plataforma: 'android', entidadesPermitidas: ['junta'], activa: true },
-    'ios-junta-key-2026':          { nombre: 'Junta App iOS',      plataforma: 'ios',     entidadesPermitidas: ['junta'], activa: true },
-    'web-junta-key-2026':          { nombre: 'Junta App Web',      plataforma: 'web',     entidadesPermitidas: ['junta'], activa: true },
-    'web-admin-key-2026':          { nombre: 'Admin App Web',      plataforma: 'web',     entidadesPermitidas: ['administracion'], activa: true },
-    'android-rsp-key-2026':        { nombre: 'RSP App Android',    plataforma: 'android', entidadesPermitidas: ['rsp'], activa: true },
-    'ios-rsp-key-2026':            { nombre: 'RSP App iOS',        plataforma: 'ios',     entidadesPermitidas: ['rsp'], activa: true },
-    'web-rsp-key-2026':            { nombre: 'RSP App Web',        plataforma: 'web',     entidadesPermitidas: ['rsp'], activa: true },
+    'android-app-banco-key-2026':  { nombre: 'Banco App Android',  plataforma: 'android', entidadesPermitidas: ['banco'], activa: true, allowedOrigins: ['laplaceta.org', 'banco.laplaceta.org'] },
+    'ios-app-banco-key-2026':      { nombre: 'Banco App iOS',      plataforma: 'ios',     entidadesPermitidas: ['banco'], activa: true, allowedOrigins: ['laplaceta.org', 'banco.laplaceta.org'] },
+    'web-app-banco-key-2026':      { nombre: 'Banco App Web',      plataforma: 'web',     entidadesPermitidas: ['banco'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'banco.laplaceta.org'] },
+    'android-tributos-key-2026':   { nombre: 'Tributos App Android', plataforma: 'android', entidadesPermitidas: ['tributos'], activa: true, allowedOrigins: ['laplaceta.org', 'tributos.laplaceta.org'] },
+    'ios-tributos-key-2026':       { nombre: 'Tributos App iOS',   plataforma: 'ios',     entidadesPermitidas: ['tributos'], activa: true, allowedOrigins: ['laplaceta.org', 'tributos.laplaceta.org'] },
+    'web-tributos-key-2026':       { nombre: 'Tributos App Web',   plataforma: 'web',     entidadesPermitidas: ['tributos'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'tributos.laplaceta.org'] },
+    'android-junta-key-2026':      { nombre: 'Junta App Android',  plataforma: 'android', entidadesPermitidas: ['junta'], activa: true, allowedOrigins: ['laplaceta.org', 'junta.laplaceta.org'] },
+    'ios-junta-key-2026':          { nombre: 'Junta App iOS',      plataforma: 'ios',     entidadesPermitidas: ['junta'], activa: true, allowedOrigins: ['laplaceta.org', 'junta.laplaceta.org'] },
+    'web-junta-key-2026':          { nombre: 'Junta App Web',      plataforma: 'web',     entidadesPermitidas: ['junta'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'junta.laplaceta.org'] },
+    'web-admin-key-2026':          { nombre: 'Admin App Web',      plataforma: 'web',     entidadesPermitidas: ['administracion'], activa: true, allowedOrigins: ['admin.laplaceta.org'] },
+    'android-rsp-key-2026':        { nombre: 'RSP App Android',    plataforma: 'android', entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['laplaceta.org', 'rsp.laplaceta.org'] },
+    'ios-rsp-key-2026':            { nombre: 'RSP App iOS',        plataforma: 'ios',     entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['laplaceta.org', 'rsp.laplaceta.org'] },
+    'web-rsp-key-2026':            { nombre: 'RSP App Web',        plataforma: 'web',     entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'rsp.laplaceta.org'] },
     // Clave maestra (solo para administración interna)
-    'admin-master-key-2026':       { nombre: 'Admin Master',       plataforma: 'web',     entidadesPermitidas: ['banco','tributos','junta','administracion','rsp'], activa: true },
+    'admin-master-key-2026':       { nombre: 'Admin Master',       plataforma: 'web',     entidadesPermitidas: ['banco','tributos','junta','administracion','rsp'], activa: true, allowedOrigins: ['*'] },
   };
   for (const [key, value] of Object.entries(keys)) {
     API_KEYS.set(key, value);
@@ -65,14 +65,14 @@ initAPIKeys();
 
 // ── Almacén de apps registradas (para el panel de gestión) ─────────────
 const appsRegistradas = [
-  { id: 'app-banco-android', nombre: 'Banco de La Placeta', plataforma: 'android', apiKey: 'android-app-banco-key-2026', entidades: ['banco'], activa: true, createdAt: '2026-01-15' },
-  { id: 'app-banco-ios', nombre: 'Banco de La Placeta', plataforma: 'ios', apiKey: 'ios-app-banco-key-2026', entidades: ['banco'], activa: true, createdAt: '2026-01-15' },
-  { id: 'app-banco-web', nombre: 'Banco de La Placeta', plataforma: 'web', apiKey: 'web-app-banco-key-2026', entidades: ['banco'], activa: true, createdAt: '2026-01-15' },
-  { id: 'app-tributos-android', nombre: 'Tributos de La Placeta', plataforma: 'android', apiKey: 'android-tributos-key-2026', entidades: ['tributos'], activa: true, createdAt: '2026-02-01' },
-  { id: 'app-tributos-ios', nombre: 'Tributos de La Placeta', plataforma: 'ios', apiKey: 'ios-tributos-key-2026', entidades: ['tributos'], activa: true, createdAt: '2026-02-01' },
-  { id: 'app-junta-android', nombre: 'Junta de La Placeta', plataforma: 'android', apiKey: 'android-junta-key-2026', entidades: ['junta'], activa: true, createdAt: '2026-03-10' },
-  { id: 'app-junta-ios', nombre: 'Junta de La Placeta', plataforma: 'ios', apiKey: 'ios-junta-key-2026', entidades: ['junta'], activa: true, createdAt: '2026-03-10' },
-  { id: 'app-rsp-android', nombre: 'RSP Móvil', plataforma: 'android', apiKey: 'android-rsp-key-2026', entidades: ['rsp'], activa: true, createdAt: '2026-04-01' },
+  { id: 'app-banco-android', nombre: 'Banco de La Placeta', plataforma: 'android', apiKey: 'android-app-banco-key-2026', entidades: ['banco'], origen: 'laplaceta.org', activa: true, createdAt: '2026-01-15' },
+  { id: 'app-banco-ios', nombre: 'Banco de La Placeta', plataforma: 'ios', apiKey: 'ios-app-banco-key-2026', entidades: ['banco'], origen: 'laplaceta.org', activa: true, createdAt: '2026-01-15' },
+  { id: 'app-banco-web', nombre: 'Banco de La Placeta', plataforma: 'web', apiKey: 'web-app-banco-key-2026', entidades: ['banco'], origen: 'banco.laplaceta.org', activa: true, createdAt: '2026-01-15' },
+  { id: 'app-tributos-android', nombre: 'Tributos de La Placeta', plataforma: 'android', apiKey: 'android-tributos-key-2026', entidades: ['tributos'], origen: 'laplaceta.org', activa: true, createdAt: '2026-02-01' },
+  { id: 'app-tributos-ios', nombre: 'Tributos de La Placeta', plataforma: 'ios', apiKey: 'ios-tributos-key-2026', entidades: ['tributos'], origen: 'laplaceta.org', activa: true, createdAt: '2026-02-01' },
+  { id: 'app-junta-android', nombre: 'Junta de La Placeta', plataforma: 'android', apiKey: 'android-junta-key-2026', entidades: ['junta'], origen: 'laplaceta.org', activa: true, createdAt: '2026-03-10' },
+  { id: 'app-junta-ios', nombre: 'Junta de La Placeta', plataforma: 'ios', apiKey: 'ios-junta-key-2026', entidades: ['junta'], origen: 'laplaceta.org', activa: true, createdAt: '2026-03-10' },
+  { id: 'app-rsp-android', nombre: 'RSP Móvil', plataforma: 'android', apiKey: 'android-rsp-key-2026', entidades: ['rsp'], origen: 'laplaceta.org', activa: true, createdAt: '2026-04-01' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -116,6 +116,20 @@ function validateAPIRequest(req, res, next) {
       detalle: `La key ${apiKey.slice(0, 12)}... está asignada a ${app.plataforma}, no a ${platform}`,
       plataformaEsperada: app.plataforma
     });
+  }
+
+  // ── Validación CORS (Origin) ────────────────────────────────────────
+  if (app.allowedOrigins && !app.allowedOrigins.includes('*')) {
+    const origin = req.headers['origin'] || req.headers['referer'] || '';
+    const hostname = origin ? new URL(origin).hostname : '';
+    const permitido = app.allowedOrigins.some(o => hostname.endsWith(o) || hostname === o);
+    if (!permitido && hostname) {
+      return res.status(403).json({
+        error: 'Origen no autorizado (CORS)',
+        detalle: `El origen "${hostname}" no está en la lista de permitidos para esta key`,
+        origenesPermitidos: app.allowedOrigins
+      });
+    }
   }
 
   // Guardar contexto en request

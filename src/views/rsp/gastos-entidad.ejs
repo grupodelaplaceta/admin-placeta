@@ -1,0 +1,77 @@
+<%# Gastos RSP de una entidad específica %>
+<div class="rsp-costs-page">
+  <div class="info-card mb-16">
+    <div class="flex items-center justify-between">
+      <div>
+        <h4>💰 Gastos RSP — <%= nomEntidad %></h4>
+        <p style="font-size:12px;color:#888;margin-top:2px">
+          IBAN: <code><%= iban %></code> · 
+          Total conectado: <strong><%= totalConexiones %></strong> conexiones
+        </p>
+      </div>
+      <span class="badge badge-purple" style="font-size:13px"><%= totalGastado.toFixed(4) %> Pz</span>
+    </div>
+  </div>
+
+  <div class="stats-grid mb-16">
+    <div class="stat-card">
+      <span class="stat-value"><%= totalConsultas %></span>
+      <span class="stat-label">Consultas</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value"><%= totalModificaciones %></span>
+      <span class="stat-label">Modificaciones</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value"><%= costeConsultas.toFixed(4) %></span>
+      <span class="stat-label">Coste Consultas (Pz)</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value"><%= costeModificaciones.toFixed(3) %></span>
+      <span class="stat-label">Coste Modificaciones (Pz)</span>
+    </div>
+  </div>
+
+  <% if (conexiones.length === 0) { %>
+  <div class="empty-state">
+    <div class="empty-icon">📡</div>
+    <h3>Sin conexiones</h3>
+    <p>Esta entidad aún no ha realizado conexiones a través de RSP.</p>
+  </div>
+  <% } else { %>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Conexión</th>
+          <th>Tipo</th>
+          <th>Endpoint</th>
+          <th>Usuario</th>
+          <th>Coste</th>
+          <th>Fecha</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% conexiones.forEach(function(c) { %>
+        <tr>
+          <td class="id-cell"><%= c.id %></td>
+          <td>
+            <span class="badge <%= c.tipo === 'consulta' ? 'badge-info' : 'badge-warning' %>">
+              <%= c.tipo === 'consulta' ? '👁️ Consulta' : '✏️ Modificación' %>
+            </span>
+          </td>
+          <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis">
+            <code><%= c.endpoint %></code>
+          </td>
+          <td style="font-size:11px"><%= c.usuario || '—' %></td>
+          <td><strong><%= c.total.toFixed(5) %> Pz</strong></td>
+          <td style="font-size:11px;color:#888">
+            <%= c.timestamp ? new Date(c.timestamp).toLocaleString('es-ES') : '—' %>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</div>

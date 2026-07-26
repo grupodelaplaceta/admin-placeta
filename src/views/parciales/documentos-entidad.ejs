@@ -1,0 +1,87 @@
+<%# Listado de documentos de la entidad %>
+<div class="docs-entity-page">
+  <div class="flex items-center justify-between mb-16">
+    <div>
+      <h3 style="font-size:16px;font-weight:700">📄 Documentos de <%= entidad_actual %></h3>
+      <p style="font-size:12px;color:#888;margin-top:2px">
+        <%= total %> documentos · <%= pendientes %> pendientes · <%= firmados %> firmados
+      </p>
+    </div>
+    <a href="/<%= entidad_actual %>/documentos/nuevo" class="btn btn-primary">
+      ➕ Nuevo Documento
+    </a>
+  </div>
+
+  <% if (documentos.length === 0) { %>
+  <div class="empty-state">
+    <div class="empty-icon">📄</div>
+    <h3>Sin documentos</h3>
+    <p>No hay documentos registrados en esta entidad. Crea el primero.</p>
+    <a href="/<%= entidad_actual %>/documentos/nuevo" class="btn btn-primary mt-16">➕ Crear Documento</a>
+  </div>
+  <% } else { %>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Documento</th>
+          <th>Tipo</th>
+          <th>Fecha</th>
+          <th>Estado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% documentos.forEach(function(d) { %>
+        <tr>
+          <td>
+            <strong style="font-size:13px"><%= d.titulo || '—' %></strong>
+            <% if (d.datos?.csv) { %>
+            <br><span style="font-size:10px;color:#999">CSV: <code><%= d.datos.csv %></code></span>
+            <% } %>
+          </td>
+          <td><span class="badge badge-purple"><%= d.tipo %></span></td>
+          <td style="font-size:11px;color:#888">
+            <%= d.createdAt ? new Date(d.createdAt).toLocaleDateString('es-ES') : '—' %>
+          </td>
+          <td>
+            <% if (d.estado === 'firmado') { %>
+            <span class="badge badge-success">✅ Firmado</span>
+            <% } else if (d.estado === 'pendiente-firma' || d.estado === 'final') { %>
+            <span class="badge badge-warning">⏳ Pendiente</span>
+            <% } else if (d.estado === 'anulado') { %>
+            <span class="badge badge-danger">🚫 Anulado</span>
+            <% } else { %>
+            <span class="badge badge-outline"><%= d.estado %></span>
+            <% } %>
+          </td>
+          <td>
+            <div class="flex gap-8">
+              <a href="/<%= entidad_actual %>/documentos/<%= d.id %>" class="btn-icon btn-icon-sm" title="Ver">👁️</a>
+              <a href="/<%= entidad_actual %>/documentos/<%= d.id %>?pdf=1" target="_blank" class="btn-icon btn-icon-sm" title="Descargar PDF">📥</a>
+              <% if (d.estado !== 'firmado' && d.estado !== 'anulado') { %>
+              <button class="btn-icon btn-icon-sm" title="Enviar a PlacetaID Móvil"
+                      onclick="enviarAFirma('<%= d.id %>', '<%= entidad_actual %>')">✍️</button>
+              <% } %>
+            </div>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <% } %>
+</div>
+
+<script>
+async function enviarAFirma(docId, entidad) {
+  mostrarToast('📨 Enviando a PlacetaID Móvil...', 'info');
+  try {
+    const r = await apiFetch(`/api/firmas/${docId}/reenviar`, { method: 'POST' });
+    if (r.success) mostrarToast('✅ Enviado a PlacetaID Móvil', 'success');
+    else mostrarToast('❌ Error: ' + (r.error || 'Desconocido'), 'error');
+  } catch (e) {
+    mostrarToast('❌ ' + e.message, 'error');
+  }
+}
+</script>
