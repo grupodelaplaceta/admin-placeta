@@ -18,19 +18,19 @@ const BANCO_API = (process.env.BANCO_API_URL || 'https://api.banco.laplaceta.org
 // ── CUENTAS DEL SISTEMA ───────────────────────────────────────────────
 export const CUENTAS = {
   tributos_iva: { id: 'TGLP', iban: 'GDLP-AP98-605', nombre: 'Tesoro/Tributos' },
-  administracion: { id: 'AGLDP', iban: '', nombre: 'Administración GDLP' },
-  rsp: { id: null, iban: 'GDLP-AP99-001', nombre: 'Red de Servicios' },
+  administracion: { id: 'AGLDP', iban: 'GDLP-AP27-062', nombre: 'Administración GDLP' },
+  rsp: { id: null, iban: 'GDLP-AP64-583', nombre: 'Red de Servicios' },
   capitalia: { id: 'CAPITALIA_BANK', iban: 'GDLP-AP76-179', nombre: 'Capitalia (Junior)' },
   boveda: { id: 'VAULT_EMISION', iban: '', nombre: 'Bóveda de Emisión' }
 };
 
 // ── Config IBANs editables por entidad ─────────────────────────────────
 const CONFIG_IBAN = {
-  banco: { iban: 'GDLP-AP98-605', cuentaId: 'TGLP' },
-  tributos: { iban: 'GDLP-TRBX-001', cuentaId: null },
+  banco: { iban: 'GDLP-AP27-062', cuentaId: 'AGLDP' },
+  tributos: { iban: 'GDLP-AP98-605', cuentaId: 'TGLP' },
   junta: { iban: 'GDLP-AP00-001', cuentaId: null },
-  administracion: { iban: 'GDLP-AP00-002', cuentaId: 'AGLDP' },
-  rsp: { iban: 'GDLP-AP99-001', cuentaId: null },
+  administracion: { iban: 'GDLP-AP27-062', cuentaId: 'AGLDP' },
+  rsp: { iban: 'GDLP-AP64-583', cuentaId: null },
   junior: { iban: 'GDLP-AP76-179', cuentaId: 'CAPITALIA_BANK' }
 };
 
@@ -194,9 +194,8 @@ export async function pagarFacturaBanco({ entidad, base, iva, total, concepto, f
  * La sanción se cobra de la cuenta RSP y se envía a Administración (AGLDP)
  */
 export async function pagarSancionBanco(monto, concepto) {
-  const rspIBAN = 'GDLP-AP99-001';
-  const adminId = 'AGLDP';
-  const tributosId = 'TGLP';
+  const rspIBAN = 'GDLP-AP64-583';
+  const adminId = 'GDLP-AP27-062';
 
   const results = [];
 

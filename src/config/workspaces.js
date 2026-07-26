@@ -164,11 +164,11 @@ const WORKSPACES = {
     id: 'rsp',
     nombre: 'Red de Servicios de La Placeta',
     icono: '🌐',
-    logo: '/img/logo-web.png',
+    logo: '/img/logo-rsp.svg',
     descripcion: 'Conexiones, facturación y fondos de la RSP',
-    color: '#0891b2',
-    colorDark: '#065f7a',
-    iban: 'GDLP-AP99-001',
+    color: '#3702b3',
+    colorDark: '#1f0070',
+    iban: 'GDLP-AP64-583',
     background: 'linear-gradient(135deg, #065f7a 0%, #0891b2 100%)',
     secciones: [
       {

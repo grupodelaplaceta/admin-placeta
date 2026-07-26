@@ -21,6 +21,7 @@ const LOGOS = {
   tributos: 'logo-tributos.png',
   junta: 'logo-gdlp.svg',
   administracion: 'logo-web.png',
+  rsp: 'logo-rsp.svg',
   placetaid: 'img/logo-placetaid.jpg',
 };
 
@@ -963,13 +964,17 @@ function generarContenidoDocumento(tipo, datos = {}) {
   return L;
 }
 
-// ── GENERACIÓN DE PDF (estilo CRM GDLP) ──────────────────────────────────
-const A = '#1c005f', B = '#341087', C = '#5a2fc2'; // purple palette
+// ── GENERACIÓN DE PDF (estilo GDLP) ──────────────────────────────────────
+// Paleta: morado RSP #3702b3 como acento principal
+const A = '#3702b3', B = '#3702b3', C = '#6a2be0';
 
-// Registrar fuente Outfit
+// Registrar fuente Plus Jakarta Sans
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FONT_REG = path.join(__dirname, '..', 'fonts', 'outfit_regular.ttf');
-const FONT_BOLD = path.join(__dirname, '..', 'fonts', 'outfit_bold.ttf');
+const FONT_REG = path.join(__dirname, '..', 'fonts', 'PlusJakartaSans-Regular.ttf');
+const FONT_BOLD = path.join(__dirname, '..', 'fonts', 'PlusJakartaSans-Bold.ttf');
+// Fallback a Outfit si no existe Plus Jakarta Sans
+const FONT_REG_FALLBACK = path.join(__dirname, '..', 'fonts', 'outfit_regular.ttf');
+const FONT_BOLD_FALLBACK = path.join(__dirname, '..', 'fonts', 'outfit_bold.ttf');
 
 export async function generarPDF(entidad, documento) {
   return new Promise((resolve, reject) => {
@@ -981,19 +986,23 @@ export async function generarPDF(entidad, documento) {
       });
       const chunks = []; doc.on('data', c => chunks.push(c)); doc.on('end', () => resolve(Buffer.concat(chunks)));
 
-      // Registrar Outfit si existe
+      // Registrar Plus Jakarta Sans (fallback Outfit → Helvetica)
       let fontReg = 'Helvetica', fontBold = 'Helvetica-Bold';
       try {
         if (fs.existsSync(FONT_REG)) {
-          doc.registerFont('Outfit', FONT_REG);
-          doc.registerFont('Outfit-Bold', FONT_BOLD);
+          doc.registerFont('PJSans', FONT_REG);
+          doc.registerFont('PJSans-Bold', FONT_BOLD);
+          fontReg = 'PJSans'; fontBold = 'PJSans-Bold';
+        } else if (fs.existsSync(FONT_REG_FALLBACK)) {
+          doc.registerFont('Outfit', FONT_REG_FALLBACK);
+          doc.registerFont('Outfit-Bold', FONT_BOLD_FALLBACK);
           fontReg = 'Outfit'; fontBold = 'Outfit-Bold';
         }
       } catch {}
 
       const etiqueta = ETIQUETAS_DOC[documento.tipo] || documento.tipo;
-      const nomE = { banco:'Banco de La Placeta', tributos:'Tributos de La Placeta', junta:'Junta de La Placeta', administracion:'Administración de La Placeta' };
-      const logos = { banco:'logo-banco.png', tributos:'logo-tributos.png', junta:'logo-gdlp.svg', administracion:'logo-web.png' };
+      const nomE = { banco:'Banco de La Placeta', tributos:'Tributos de La Placeta', junta:'Junta de La Placeta', administracion:'Administración de La Placeta', rsp:'Red de Servicios de La Placeta' };
+      const logos = LOGOS;
       const entL = nomE[entidad] || entidad;
       const fecha = documento.createdAt ? new Date(documento.createdAt).toLocaleDateString('es-ES',{year:'numeric',month:'long',day:'numeric'}) : '—';
       const datos = documento.datos || {};

@@ -3,6 +3,7 @@
    Moderno · Compacto · Funcional
    ═══════════════════════════════════════════════ */
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
 :root {
   --p: #3f00d8; --pd: #1c005f;
@@ -349,6 +350,26 @@ label{font-size:12px;font-weight:600;color:var(--tm);margin-bottom:4px;display:b
 .text-mono{font-family:'Courier New',monospace;font-size:11px;color:#5a4a7a}
 .text-sm{font-size:12px;color:var(--tm)}
 code{font-family:'Courier New',monospace;font-size:11px;background:#f0eeff;padding:1px 6px;border-radius:4px;color:var(--p)}
+
+/* ── RSP Branding ──────────────────────────── */
+.rsp-brand-bg { background: linear-gradient(135deg, #3702b3, #6a2be0) !important; }
+.rsp-color { color: #3702b3 !important; }
+.rsp-border { border-color: #3702b3 !important; }
+.rsp-btn { background: #3702b3; color: #fff; border: none; }
+.rsp-btn:hover { background: #2a0190; }
+.font-jakarta { font-family: 'Plus Jakarta Sans', var(--font); }
+.badge-rsp { background: #f0ecff; color: #3702b3; border: 1px solid #d0c0f0; }
+
+/* ── RSP Fondos ────────────────────────────── */
+.rsp-header-card {
+  background: linear-gradient(135deg, #3702b3 0%, #6a2be0 100%);
+  color: #fff;
+  border-radius: 16px;
+  padding: 24px 28px;
+}
+.rsp-header-card h4 { color: #fff; font-family: 'Plus Jakarta Sans', var(--font); }
+.rsp-header-card p { color: rgba(255,255,255,.7); }
+.rsp-header-card .stat-value { color: #fff; }
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 
 /* ── Empty state ──────────────────────────────── */

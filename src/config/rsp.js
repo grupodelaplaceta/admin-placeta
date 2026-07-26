@@ -27,8 +27,8 @@ const TARIFA_CONSULTA = 0.001;   // Pz por conexión de consulta
 const TARIFA_MODIFICACION = 0.1;  // Pz por conexión de modificación
 const FONDOS_INICIALES = 18309.83;
 const SANCION_IVA = 2461.77;
-const CUENTA_RSP = 'GDLP-AP99-001';
-const CUENTA_ADMINISTRACION = 'GDLP-AP98-605';
+const CUENTA_RSP = 'GDLP-AP64-583';
+const CUENTA_ADMINISTRACION = 'GDLP-AP27-062';
 
 // ── ESTADO EN MEMORIA ─────────────────────────────────────────────────────
 const memConexiones = [];
