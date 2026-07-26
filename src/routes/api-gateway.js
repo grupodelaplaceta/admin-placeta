@@ -498,10 +498,10 @@ async function handleRSPAPI(path, method, req) {
 /**
  * Handler genérico que enruta según entidad y path
  */
-router.all('/v1/:entidad/*', validateAPIRequest, validateEntityAccess, (req, res, next) => {
-  const { entidad } = req.params;
+router.all('/v1/:entidad/*path', validateAPIRequest, validateEntityAccess, (req, res, next) => {
+  const { entidad, path: wildPath } = req.params;
   // Extraer subpath (todo después de /api/v1/:entidad/)
-  const subpath = '/' + req.params[0];
+  const subpath = '/' + (wildPath || '');
 
   // Validar plataforma para el endpoint
   const endpointDef = getEntityEndpoint(entidad, subpath);

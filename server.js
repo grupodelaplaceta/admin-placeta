@@ -82,8 +82,7 @@ app.get('/favicon.ico', (req, res) => {
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, max: 300,
   standardHeaders: true, legacyHeaders: false,
-  validate: { xForwardedForHeader: false },
-  keyGenerator: (req) => req.ip || req.connection?.remoteAddress || 'unknown'
+  validate: { xForwardedForHeader: false }
 });
 app.use('/api/', limiter);
 
