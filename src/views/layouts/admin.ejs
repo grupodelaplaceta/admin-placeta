@@ -128,7 +128,7 @@
         <a href="/dashboard" class="breadcrumb-link">Inicio</a>
         <span class="breadcrumb-sep">›</span>
         <a href="/<%= workspaceActivo.id %>" class="breadcrumb-link active"><%= workspaceActivo.icono %> <%= workspaceActivo.nombre %></a>
-        <% if (seccionActual) { %>
+        <% if (typeof seccionActual !== 'undefined' && seccionActual) { %>
         <span class="breadcrumb-sep">›</span>
         <span class="breadcrumb-current"><%= seccionActual %></span>
         <% } %>
