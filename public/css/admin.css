@@ -1,15 +1,14 @@
 /* ═══════════════════════════════════════════════
-   ADMIN PLACETA — Estilo GDLP v3
-   Moderno · Compacto · Funcional
+   ADMIN PLACETA — Estilo GDLP v4
+   Plus Jakarta Sans · Acento #3702b3
    ═══════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
 
 :root {
-  --p: #3f00d8; --pd: #1c005f;
+  --p: #3702b3; --pd: #1f0070;
   --bg: #f5f3f7; --s: #fff; --t: #111; --tm: #555;
   --l: #d8d0e8; --g: #22a06b; --r: #d03131; --go: #d7a02d;
-  --radius: 10px; --font: 'Outfit', sans-serif;
+  --radius: 10px; --font: 'Plus Jakarta Sans', 'Outfit', sans-serif;
   --shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
@@ -17,9 +16,9 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:15px}
 body{font-family:var(--font);background:var(--bg);color:var(--t);line-height:1.5;min-height:100vh}
-a{color:var(--p);text-decoration:none}
-a:hover{color:var(--pd)}
-::selection{background:rgba(63,0,216,0.12)}
+a{color:#3702b3;text-decoration:none}
+a:hover{color:#1f0070}
+::selection{background:rgba(55,2,179,0.15)}
 
 /* ── Login ────────────────────────────────────── */
 .login-page{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)}
@@ -45,7 +44,7 @@ details.demo-login summary{cursor:pointer;color:var(--tm);font-size:13px;text-al
 .sidebar {
   position: fixed; top: 0; left: 0; bottom: 0;
   width: 250px;
-  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%);
+  background: linear-gradient(180deg, #1f0070 0%, #2a0190 40%, #3702b3 100%);
   display: flex; flex-direction: column;
   z-index: 100;
   transition: transform .3s cubic-bezier(.4,0,.2,1), background .4s ease;
@@ -94,7 +93,7 @@ details.demo-login summary{cursor:pointer;color:var(--tm);font-size:13px;text-al
 .ws-dropdown {
   display: none;
   position: absolute; top: 100%; left: 10px; right: 10px; z-index: 200;
-  background: #1e1e3a;
+  background: #1f0070;
   border: 1px solid rgba(255,255,255,.1);
   border-radius: 14px;
   box-shadow: 0 12px 40px rgba(0,0,0,.5);
@@ -239,7 +238,7 @@ details.demo-login summary{cursor:pointer;color:var(--tm);font-size:13px;text-al
 .content-header h1{font-size:17px;font-weight:700;flex:1}
 .hamburger{display:none;background:none;border:none;font-size:20px;cursor:pointer;color:var(--t);padding:4px 8px;border-radius:6px}
 .hamburger:hover{background:#f0ecf8}
-.badge-entidad{padding:3px 12px;border-radius:50px;font-size:9px;font-weight:700;background:#f0eeff;color:var(--p);text-transform:uppercase}
+.badge-entidad{padding:3px 12px;border-radius:50px;font-size:9px;font-weight:700;background:#f0ecff;color:#3702b3;text-transform:uppercase}
 .content-body{padding:24px 28px;flex:1}
 
 /* ── Cards ────────────────────────────────────── */
@@ -260,7 +259,7 @@ details.demo-login summary{cursor:pointer;color:var(--tm);font-size:13px;text-al
 .entidad-card.tributos::after{background:var(--g)}
 .entidad-card.junta::after{background:var(--tm)}
 .entidad-card.administracion::after{background:var(--go)}
-.entidad-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(63,0,216,.08)}
+.entidad-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(55,2,179,.10)}
 .entidad-icon{font-size:36px;flex-shrink:0}
 .entidad-info h3{font-size:15px;font-weight:700}
 .entidad-info p{font-size:12px;color:#888;margin-top:2px}
@@ -270,7 +269,7 @@ details.demo-login summary{cursor:pointer;color:var(--tm);font-size:13px;text-al
 /* ── Tables ───────────────────────────────────── */
 .table-container{overflow-x:auto;border-radius:14px;border:1px solid #e8e4f0;background:var(--s)}
 table{width:100%;border-collapse:collapse}
-th{padding:11px 16px;text-align:left;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#5a4a7a;background:#f6f3ff;border-bottom:1px solid #e0daf0}
+th{padding:11px 16px;text-align:left;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#5a4a7a;background:#f4f0ff;border-bottom:1px solid #e0daf0}
 td{padding:11px 16px;border-bottom:1px solid #f0ecf8;font-size:13px;vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#faf8ff}
@@ -283,7 +282,7 @@ td.id-cell{font-family:'Courier New',monospace;font-size:11px;color:#5a4a7a;max-
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
 .stat-card{background:var(--s);border:1px solid #e8e4f0;border-radius:10px;padding:12px 10px;text-align:center;transition:all .2s}
 .stat-card:hover{transform:translateY(-1px);box-shadow:0 3px 12px rgba(63,0,216,.06)}
-.stat-card .stat-value{font-size:20px;font-weight:800;display:block;color:var(--p)}
+.stat-card .stat-value{font-size:20px;font-weight:800;display:block;color:#3702b3}
 .stat-card .stat-label{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:.3px;margin-top:3px;font-weight:600}
 .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -294,8 +293,8 @@ td.id-cell{font-family:'Courier New',monospace;font-size:11px;color:#5a4a7a;max-
 /* ── Buttons ──────────────────────────────────── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border-radius:var(--radius);font:600 13px var(--font);border:1px solid transparent;cursor:pointer;text-decoration:none;white-space:nowrap;min-height:38px;transition:all .12s}
 .btn:active{transform:scale(.97)}
-.btn-primary{background:var(--p);color:#fff;border-color:var(--p)}
-.btn-primary:hover{background:#3500b8}
+.btn-primary{background:#3702b3;color:#fff;border-color:#3702b3}
+.btn-primary:hover{background:#2a0190}
 .btn-secondary{background:var(--s);color:var(--t);border-color:var(--l)}
 .btn-secondary:hover{background:#f6f3ff;border-color:#c8bde8}
 .btn-success{background:var(--g);color:#fff}
@@ -333,7 +332,7 @@ td .btn-sm{margin:1px}
 
 /* ── Forms ────────────────────────────────────── */
 .form-input{width:100%;padding:11px 14px;border:1.5px solid var(--l);border-radius:var(--radius);font:14px var(--font);background:var(--s);color:var(--t);outline:none;transition:all .15s}
-.form-input:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(63,0,216,.08)}
+.form-input:focus{border-color:#3702b3;box-shadow:0 0 0 3px rgba(55,2,179,.10)}
 .form-input::placeholder{color:#b0a8c0}
 select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 11 11'%3E%3Cpath fill='%23555' d='M5.5 7.5L1 3h9z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px}
 textarea.form-input{min-height:70px;resize:vertical}
@@ -349,27 +348,19 @@ label{font-size:12px;font-weight:600;color:var(--tm);margin-bottom:4px;display:b
 .text-center{text-align:center}
 .text-mono{font-family:'Courier New',monospace;font-size:11px;color:#5a4a7a}
 .text-sm{font-size:12px;color:var(--tm)}
-code{font-family:'Courier New',monospace;font-size:11px;background:#f0eeff;padding:1px 6px;border-radius:4px;color:var(--p)}
+code{font-family:'Courier New',monospace;font-size:11px;background:#f0ecff;padding:1px 6px;border-radius:4px;color:#3702b3}
 
-/* ── RSP Branding ──────────────────────────── */
-.rsp-brand-bg { background: linear-gradient(135deg, #3702b3, #6a2be0) !important; }
-.rsp-color { color: #3702b3 !important; }
-.rsp-border { border-color: #3702b3 !important; }
-.rsp-btn { background: #3702b3; color: #fff; border: none; }
-.rsp-btn:hover { background: #2a0190; }
-.font-jakarta { font-family: 'Plus Jakarta Sans', var(--font); }
-.badge-rsp { background: #f0ecff; color: #3702b3; border: 1px solid #d0c0f0; }
-
-/* ── RSP Fondos ────────────────────────────── */
+/* ── Header Cards (gradiente morado) ────────── */
 .rsp-header-card {
   background: linear-gradient(135deg, #3702b3 0%, #6a2be0 100%);
   color: #fff;
   border-radius: 16px;
   padding: 24px 28px;
 }
-.rsp-header-card h4 { color: #fff; font-family: 'Plus Jakarta Sans', var(--font); }
+.rsp-header-card h4 { color: #fff; }
 .rsp-header-card p { color: rgba(255,255,255,.7); }
 .rsp-header-card .stat-value { color: #fff; }
+.font-jakarta { font-family: 'Plus Jakarta Sans', var(--font); }
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 
 /* ── Empty state ──────────────────────────────── */
