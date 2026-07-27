@@ -70,43 +70,12 @@
 
     <div class="info-card" style="flex:1;min-width:280px">
       <h4>📱 Apps Conectadas</h4>
-      <% if (apps && apps.length > 0) { %>
-      <div style="margin-top:8px">
-        <% apps.forEach(function(app) { %>
-        <div class="flex items-center justify-between" style="padding:8px 0;border-bottom:1px solid #f0ecf8">
-          <div>
-            <span style="font-weight:600;font-size:13px">
-              <% if (app.plataforma === 'android') { %>🤖<% } else if (app.plataforma === 'ios') { %>🍎<% } else { %>🌐<% } %>
-              <%= app.nombre %>
-            </span>
-            <span class="badge <%= app.activa ? 'badge-success' : 'badge-danger' %>" style="margin-left:6px">
-              <%= app.activa ? 'Activa' : 'Inactiva' %>
-            </span>
-          </div>
-          <span class="badge badge-outline"><%= app.plataforma %></span>
-        </div>
-        <% }); %>
+      <div id="apps-list-container" style="margin-top:8px">
+        <!-- Se carga dinámicamente via JS -->
+        <div style="text-align:center;padding:20px;color:#999;font-size:13px">Cargando apps...</div>
       </div>
-      <% } else { %>
-      <div class="empty-state" style="padding:20px">
-        <div class="empty-icon" style="font-size:32px">📱</div>
-        <p style="font-size:13px">No hay apps registradas</p>
-      </div>
-      <% } %>
       <div style="margin-top:12px">
-        <button class="btn btn-sm btn-primary" onclick="mostrarModal('Registrar App', `
-          <form id="form-registrar-app" onsubmit="return registrarApp(event)">
-            <label>Nombre de la App</label>
-            <input class="form-input mb-8" name="nombre" placeholder="Mi App" required>
-            <label>Plataforma</label>
-            <select class="form-input mb-8" name="plataforma" required>
-              <option value="android">🤖 Android</option>
-              <option value="ios">🍎 iOS</option>
-              <option value="web">🌐 Web</option>
-            </select>
-            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">🔑 Generar API Key</button>
-          </form>
-        `)">➕ Nueva App</button>
+        <button class="btn btn-sm btn-primary" onclick="mostrarModalRegistrarApp()">➕ Nueva App</button>
       </div>
     </div>
   </div>
@@ -240,37 +209,126 @@
 </div>
 
 <script>
-// ── Registrar nueva app ────────────────────────────────────────────────
-async function registrarApp(event) {
+// ── Cargar apps registradas (desde el servidor real) ──────────────────
+async function cargarApps() {
+  const container = document.getElementById('apps-list-container');
+  if (!container) return;
+  try {
+    const r = await apiFetch('/api/v1/apps/listar?entidad=<%= entidad_actual %>');
+    if (!r.success || !r.apps?.length) {
+      container.innerHTML = `<div class="empty-state" style="padding:16px">
+        <div class="empty-icon" style="font-size:28px">📱</div>
+        <p style="font-size:13px">No hay apps registradas para esta entidad</p>
+      </div>`;
+      return;
+    }
+    container.innerHTML = r.apps.map(a => `
+      <div class="flex items-center justify-between" style="padding:8px 0;border-bottom:1px solid #f0ecf8">
+        <div>
+          <span style="font-weight:600;font-size:13px">
+            ${a.plataforma === 'android' ? '🤖' : a.plataforma === 'ios' ? '🍎' : '🌐'}
+            ${a.nombre}
+          </span>
+          <span class="badge ${a.activa ? 'badge-success' : 'badge-danger'}" style="margin-left:6px">
+            ${a.activa ? 'Activa' : 'Inactiva'}
+          </span>
+        </div>
+        <div class="flex gap-8 items-center">
+          <span class="badge badge-outline">${a.plataforma}</span>
+          <button class="btn-icon btn-icon-sm" onclick="toggleApp('${a.id}')" title="${a.activa ? 'Desactivar' : 'Activar'}">${a.activa ? '🔴' : '🟢'}</button>
+          <button class="btn-icon btn-icon-sm" onclick="eliminarApp('${a.id}')" title="Eliminar">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state" style="padding:16px">
+      <p style="font-size:12px;color:#d03131">Error cargando apps: ${e.message}</p>
+    </div>`;
+  }
+}
+
+// ── Registrar app REAL (vía API) ─────────────────────────────────────
+function mostrarModalRegistrarApp() {
+  mostrarModal('📱 Registrar App', `
+    <form id="form-registrar-app" onsubmit="return registrarAppReal(event)">
+      <label>Nombre de la App</label>
+      <input class="form-input mb-8" name="nombre" placeholder="Mi App" required>
+      <label>Plataforma</label>
+      <select class="form-input mb-8" name="plataforma" required>
+        <option value="android">🤖 Android</option>
+        <option value="ios">🍎 iOS</option>
+        <option value="web">🌐 Web</option>
+      </select>
+      <input type="hidden" name="entidad" value="<%= entidad_actual %>">
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:8px">🔑 Generar API Key Real</button>
+    </form>
+  `);
+}
+
+async function registrarAppReal(event) {
   event.preventDefault();
   const form = event.target;
   const data = Object.fromEntries(new FormData(form));
-  
-  // Generar API Key (simulada)
-  const key = `${data.plataforma}-${data.nombre.toLowerCase().replace(/[^a-z0-9]/g,'-')}-key-${new Date().getFullYear()}`;
-  
-  mostrarToast(`✅ API Key generada para "${data.nombre}" (${data.plataforma})`, 'success');
-  
-  // Mostrar la key en un modal
-  mostrarModal('🔑 API Key Generada', `
-    <div style="text-align:center">
-      <p style="font-size:14px;margin-bottom:12px">App: <strong>${data.nombre}</strong></p>
-      <p style="font-size:14px;margin-bottom:12px">Plataforma: <strong>${data.plataforma}</strong></p>
-      <div style="background:#1c005f;color:#fff;padding:14px;border-radius:10px;margin:12px 0;word-break:break-all">
-        <code style="font-size:12px;color:#7cffb2;background:transparent">${key}</code>
-      </div>
-      <p style="font-size:12px;color:#888">⚠️ Guarda esta clave. No podrás verla de nuevo.</p>
-      <button class="btn btn-primary mt-8" onclick="navigator.clipboard.writeText('${key}');mostrarToast('Copiado al portapapeles','success')">
-        📋 Copiar API Key
-      </button>
-    </div>
-  `);
-  
+
+  try {
+    const r = await apiFetch('/api/v1/apps/registrar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+
+    if (r.success) {
+      mostrarToast(`✅ API Key real generada para "${data.nombre}"`, 'success');
+      mostrarModal('🔑 API Key Generada', `
+        <div style="text-align:center">
+          <p style="font-size:14px;margin-bottom:6px">App: <strong>${r.app.nombre}</strong></p>
+          <p style="font-size:13px;color:#888;margin-bottom:12px">Plataforma: <strong>${r.app.plataforma}</strong></p>
+          <div style="background:#3702b3;color:#fff;padding:16px;border-radius:10px;margin:12px 0;word-break:break-all">
+            <code style="font-size:11px;color:#b0f0b0;background:transparent">${r.apiKey}</code>
+          </div>
+          <p style="font-size:12px;color:#d03131">⚠️ Guarda esta clave. No podrás verla de nuevo.</p>
+          <button class="btn btn-primary mt-8" onclick="navigator.clipboard.writeText('${r.apiKey}');mostrarToast('✅ Copiado al portapapeles','success')">
+            📋 Copiar API Key
+          </button>
+        </div>
+      `);
+      cargarApps(); // Recargar lista
+    } else {
+      mostrarToast('❌ ' + (r.error || 'Error al registrar'), 'error');
+    }
+  } catch (e) {
+    mostrarToast('❌ ' + e.message, 'error');
+  }
   return false;
 }
 
-// ── Inicializar acordeones ─────────────────────────────────────────────
+// ── Activar/Desactivar app ────────────────────────────────────────────
+async function toggleApp(id) {
+  try {
+    const r = await apiFetch(`/api/v1/apps/${id}/toggle`, { method: 'PUT' });
+    if (r.success) {
+      mostrarToast(r.activa ? '🟢 App activada' : '🔴 App desactivada', 'info');
+      cargarApps();
+    }
+  } catch (e) { mostrarToast('❌ ' + e.message, 'error'); }
+}
+
+// ── Eliminar app ──────────────────────────────────────────────────────
+async function eliminarApp(id) {
+  if (!confirm('¿Eliminar esta app definitivamente?')) return;
+  try {
+    const r = await apiFetch(`/api/v1/apps/${id}`, { method: 'DELETE' });
+    if (r.success) {
+      mostrarToast('🗑️ App eliminada', 'info');
+      cargarApps();
+    }
+  } catch (e) { mostrarToast('❌ ' + e.message, 'error'); }
+}
+
+// ── Inicializar ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
+  cargarApps();
+
   document.querySelectorAll('.api-endpoint-header').forEach(header => {
     header.addEventListener('click', function() {
       const body = this.nextElementSibling;
@@ -278,7 +336,6 @@ document.addEventListener('DOMContentLoaded', function() {
       const isOpen = body.style.display === 'block';
       body.style.display = isOpen ? 'none' : 'block';
       icon.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
-      // Cerrar otros
       if (!isOpen) {
         document.querySelectorAll('.api-endpoint-body').forEach(b => {
           if (b !== body) b.style.display = 'none';

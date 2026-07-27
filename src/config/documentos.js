@@ -1074,9 +1074,10 @@ export async function generarPDF(entidad, documento) {
       for (const item of lineas) {
 
         if (item.seccion) {
-          doc.moveDown(0.3);
-          doc.font(fontBold).fontSize(11).fillColor(B).text(item.seccion.toUpperCase());
-          doc.moveDown(0.15);
+          if (doc.y > doc.page.height - 80) nuevaPagina();
+          doc.moveDown(0.2);
+          doc.font(fontBold).fontSize(11).fillColor('#3702b3').text(item.seccion.toUpperCase(), 50, doc.y, {width:500});
+          doc.moveDown(0.2);
         } else if (item.linea) {
           doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(0.5).strokeColor('#e0daf0').stroke();
           doc.moveDown(0.3);
@@ -1123,13 +1124,10 @@ export async function generarPDF(entidad, documento) {
         if (firmaImg) {
           try {
             const imgData = firmaImg.includes('base64,') ? firmaImg : `data:image/png;base64,${firmaImg}`;
-            // NUNCA especificar height + width juntos → pdfkit distorsiona.
-            // Usar SOLO width (300) y dejar que pdfkit calcule height proporcional.
-            doc.image(imgData, 150, doc.y, { width: 300 });
-            doc.y += 4; // dejar un pequeño margen después de la imagen
-          } catch {
-            // si falla la imagen, seguir sin error
-          }
+            // fit: [anchoMax, altoMax] — NUNCA distorsiona, máximo 360x60
+            doc.image(imgData, 120, doc.y, { fit: [360, 60], align: 'center', valign: 'center' });
+            doc.y += 4;
+          } catch {}
         }
         doc.moveDown(0.2);
         // Salto de página si hace falta

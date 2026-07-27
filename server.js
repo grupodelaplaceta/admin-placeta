@@ -29,6 +29,7 @@ import accionesDocumentoRoutes from './src/routes/acciones-documento.js';
 import rspRoutes from './src/routes/rsp.js';
 import { apiGatewayRoutes } from './src/routes/api-gateway.js';
 import firmasRoutes from './src/routes/firmas.js';
+import juniorRoutes from './src/routes/junior.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -148,6 +149,9 @@ app.use('/banco', empresasRoutes);
 
 // Red de Servicios de La Placeta (RSP)
 app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspRoutes);
+
+// Placeta Junior
+app.use('/junior', verificarSesion, verificarAccesoEntidad('junior'), juniorRoutes);
 
 // ═══ API GATEWAY v1 — APIs externas por entidad ═══════════════════════
 // Las rutas /api/v1/:entidad/* son públicas (con API Key) para apps externas

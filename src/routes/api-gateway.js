@@ -76,6 +76,10 @@ const appsRegistradas = [
   { id: 'app-junta-android', nombre: 'Junta de La Placeta', plataforma: 'android', apiKey: 'android-junta-key-2026', entidades: ['junta'], origen: 'laplaceta.org', activa: true, createdAt: '2026-03-10' },
   { id: 'app-junta-ios', nombre: 'Junta de La Placeta', plataforma: 'ios', apiKey: 'ios-junta-key-2026', entidades: ['junta'], origen: 'laplaceta.org', activa: true, createdAt: '2026-03-10' },
   { id: 'app-rsp-android', nombre: 'RSP Móvil', plataforma: 'android', apiKey: 'android-rsp-key-2026', entidades: ['rsp'], origen: 'laplaceta.org', activa: true, createdAt: '2026-04-01' },
+  { id: 'app-rsp-ios', nombre: 'RSP Móvil', plataforma: 'ios', apiKey: 'ios-rsp-key-2026', entidades: ['rsp'], origen: 'laplaceta.org', activa: true, createdAt: '2026-04-01' },
+  { id: 'app-junior-android', nombre: 'Placeta Junior', plataforma: 'android', apiKey: 'android-junior-key-2026', entidades: ['junior'], origen: 'laplaceta.org', activa: true, createdAt: '2026-06-01' },
+  { id: 'app-junior-ios', nombre: 'Placeta Junior', plataforma: 'ios', apiKey: 'ios-junior-key-2026', entidades: ['junior'], origen: 'laplaceta.org', activa: true, createdAt: '2026-06-01' },
+  { id: 'app-junior-web', nombre: 'Placeta Junior', plataforma: 'web', apiKey: 'web-junior-key-2026', entidades: ['junior'], origen: 'junior.laplaceta.org', activa: true, createdAt: '2026-06-01' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -725,6 +729,126 @@ router.get('/v1/apps', validateAPIRequest, (req, res) => {
     entidades: val.entidadesPermitidas,
     activa: val.activa
   }))});
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API — GESTIÓN DE APPS Y API KEYS (CRUD real)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/v1/apps/registrar — Registrar nueva app y generar API Key real
+ * Crea la key en API_KEYS y la añade a appsRegistradas
+ */
+router.post('/v1/apps/registrar', verificarSesion, (req, res) => {
+  const { nombre, plataforma, entidad } = req.body;
+  if (!nombre || !plataforma || !entidad) {
+    return res.status(400).json({ error: 'nombre, plataforma y entidad son requeridos' });
+  }
+  if (!['android', 'ios', 'web'].includes(plataforma)) {
+    return res.status(400).json({ error: 'plataforma debe ser android, ios o web' });
+  }
+
+  // Generar API Key única real
+  const keyRaw = crypto.randomBytes(24).toString('hex');
+  const key = `${plataforma}-${nombre.toLowerCase().replace(/[^a-z0-9]/g,'')}-${keyRaw.slice(0, 12)}`;
+
+  // Orígenes permitidos según plataforma
+  const origins = {
+    android: ['laplaceta.org', `${entidad}.laplaceta.org`],
+    ios: ['laplaceta.org', `${entidad}.laplaceta.org`],
+    web: ['admin.laplaceta.org', `${entidad}.laplaceta.org`]
+  };
+
+  const nuevaApp = {
+    nombre,
+    plataforma,
+    entidadesPermitidas: [entidad],
+    activa: true,
+    allowedOrigins: origins[plataforma] || ['*'],
+    createdAt: new Date().toISOString()
+  };
+
+  API_KEYS.set(key, nuevaApp);
+
+  const appReg = {
+    id: `app-${entidad}-${plataforma}-${Date.now()}`,
+    nombre,
+    plataforma,
+    apiKey: key,
+    entidades: [entidad],
+    origen: origins[plataforma]?.[0] || '*',
+    activa: true,
+    createdAt: new Date().toISOString().slice(0, 10)
+  };
+  appsRegistradas.push(appReg);
+
+  res.json({
+    success: true,
+    apiKey: key,
+    app: appReg,
+    mensaje: `🔑 API Key generada para "${nombre}" (${plataforma})`
+  });
+});
+
+/**
+ * GET /api/v1/apps/listar — Listar apps registradas de una entidad
+ */
+router.get('/v1/apps/listar', verificarSesion, (req, res) => {
+  const entidad = req.query.entidad || '';
+  let apps = appsRegistradas;
+  if (entidad) apps = apps.filter(a => a.entidades.includes(entidad));
+  res.json({
+    success: true,
+    total: apps.length,
+    apps: apps.map(a => ({
+      id: a.id,
+      nombre: a.nombre,
+      plataforma: a.plataforma,
+      apiKeyPreview: a.apiKey.slice(0, 16) + '...',
+      entidades: a.entidades,
+      origen: a.origen,
+      activa: a.activa,
+      createdAt: a.createdAt
+    }))
+  });
+});
+
+/**
+ * PUT /api/v1/apps/:id/toggle — Activar/desactivar app
+ */
+router.put('/v1/apps/:id/toggle', verificarSesion, (req, res) => {
+  const app = appsRegistradas.find(a => a.id === req.params.id);
+  if (!app) return res.status(404).json({ error: 'App no encontrada' });
+
+  app.activa = !app.activa;
+
+  // También actualizar en API_KEYS
+  for (const [key, val] of API_KEYS) {
+    if (val.nombre === app.nombre && val.plataforma === app.plataforma) {
+      val.activa = app.activa;
+    }
+  }
+
+  res.json({ success: true, activa: app.activa });
+});
+
+/**
+ * DELETE /api/v1/apps/:id — Eliminar app
+ */
+router.delete('/v1/apps/:id', verificarSesion, (req, res) => {
+  const idx = appsRegistradas.findIndex(a => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'App no encontrada' });
+
+  const [app] = appsRegistradas.splice(idx, 1);
+
+  // Eliminar también de API_KEYS
+  for (const [key, val] of API_KEYS) {
+    if (val.nombre === app.nombre && val.plataforma === app.plataforma) {
+      API_KEYS.delete(key);
+    }
+  }
+
+  res.json({ success: true, eliminado: app.id });
 });
 
 export { router as apiGatewayRoutes, validateAPIRequest, API_KEYS, appsRegistradas };
