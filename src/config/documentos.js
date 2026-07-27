@@ -967,14 +967,8 @@ function generarContenidoDocumento(tipo, datos = {}) {
 // ── GENERACIÓN DE PDF (estilo GDLP) ──────────────────────────────────────
 // Paleta: morado RSP #3702b3 como acento principal
 const A = '#3702b3', B = '#3702b3', C = '#6a2be0';
-
-// Registrar fuente Plus Jakarta Sans
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FONT_REG = path.join(__dirname, '..', 'fonts', 'PlusJakartaSans-Regular.ttf');
-const FONT_BOLD = path.join(__dirname, '..', 'fonts', 'PlusJakartaSans-Bold.ttf');
-// Fallback a Outfit si no existe Plus Jakarta Sans
-const FONT_REG_FALLBACK = path.join(__dirname, '..', 'fonts', 'outfit_regular.ttf');
-const FONT_BOLD_FALLBACK = path.join(__dirname, '..', 'fonts', 'outfit_bold.ttf');
+const PDF_DIR = path.dirname(fileURLToPath(import.meta.url));
+const FONT_DIR = path.join(PDF_DIR, '..', 'fonts');
 
 export async function generarPDF(entidad, documento) {
   return new Promise((resolve, reject) => {
@@ -986,19 +980,28 @@ export async function generarPDF(entidad, documento) {
       });
       const chunks = []; doc.on('data', c => chunks.push(c)); doc.on('end', () => resolve(Buffer.concat(chunks)));
 
-      // Registrar Plus Jakarta Sans (fallback Outfit → Helvetica)
+      // Intentar cargar fuente con búsqueda en múltiples ubicaciones
       let fontReg = 'Helvetica', fontBold = 'Helvetica-Bold';
-      try {
-        if (fs.existsSync(FONT_REG)) {
-          doc.registerFont('PJSans', FONT_REG);
-          doc.registerFont('PJSans-Bold', FONT_BOLD);
-          fontReg = 'PJSans'; fontBold = 'PJSans-Bold';
-        } else if (fs.existsSync(FONT_REG_FALLBACK)) {
-          doc.registerFont('Outfit', FONT_REG_FALLBACK);
-          doc.registerFont('Outfit-Bold', FONT_BOLD_FALLBACK);
-          fontReg = 'Outfit'; fontBold = 'Outfit-Bold';
+      const buscarFuente = (nombre) => {
+        const candidatos = [
+          path.join(FONT_DIR, nombre),
+          path.join(PDF_DIR, '..', '..', 'public', 'fonts', nombre),
+          path.join(PDF_DIR, 'fonts', nombre)
+        ];
+        for (const c of candidatos) {
+          try { if (fs.existsSync(c)) return c; } catch {}
         }
-      } catch {}
+        return null;
+      };
+      const regPath = buscarFuente('outfit_regular.ttf') || buscarFuente('PlusJakartaSans-Regular.ttf');
+      const boldPath = buscarFuente('outfit_bold.ttf') || buscarFuente('PlusJakartaSans-Bold.ttf');
+      if (regPath && boldPath) {
+        try {
+          doc.registerFont('DocFont', regPath);
+          doc.registerFont('DocFont-Bold', boldPath);
+          fontReg = 'DocFont'; fontBold = 'DocFont-Bold';
+        } catch {}
+      }
 
       const etiqueta = ETIQUETAS_DOC[documento.tipo] || documento.tipo;
       const nomE = { banco:'Banco de La Placeta', tributos:'Tributos de La Placeta', junta:'Junta de La Placeta', administracion:'Administración de La Placeta', rsp:'Red de Servicios de La Placeta' };
@@ -1012,34 +1015,36 @@ export async function generarPDF(entidad, documento) {
       // ── Función para dibujar cabecera en cualquier página ──
       function dibujarCabecera(esPrimera = false) {
         doc.save();
-        const alto = esPrimera ? 80 : 40;
-        const topY = esPrimera ? 16 : 10;
-        doc.rect(0, topY, doc.page.width, alto).fill('#341087');
-        doc.rect(0, 0, doc.page.width, 3.5).fill('#5a2fc2');
-        // Logo grande centrado verticalmente con el texto
+        const alto = esPrimera ? 85 : 42;
+        const topY = esPrimera ? 14 : 8;
+        // Barra principal morada #3702b3
+        doc.rect(0, topY, doc.page.width, alto).fill('#3702b3');
+        // Barra superior fina más clara
+        doc.rect(0, 0, doc.page.width, 4).fill('#6a2be0');
+        // Logo
         const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
-        const logoW = esPrimera ? 64 : 38;
-        const logoX = 45;
-        const logoY = esPrimera ? 34 : 16;
+        const logoW = esPrimera ? 68 : 40;
+        const logoX = 42;
+        const logoY = esPrimera ? 32 : 14;
         try {
-          if (!fs.existsSync(logoPath)) {
-            const p2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
-            if (fs.existsSync(p2)) doc.image(p2, logoX, logoY, { width: logoW });
-          } else { doc.image(logoPath, logoX, logoY, { width: logoW }); }
+          const p1 = logoPath;
+          const p2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
+          const fp = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
+          if (fp) doc.image(fp, logoX, logoY, { width: logoW });
         } catch {}
         if (esPrimera) {
-          const tx = logoX + logoW + 16;
-          doc.font(fontBold).fontSize(16).fillColor('#ffffff').text(documento.titulo||'Documento', tx, 30);
-          doc.font(fontReg).fontSize(8).fillColor('#d9cdfa').text(entL, tx, 54);
-          doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text(fecha, tx, 70);
-          doc.rect(50, 100, 500, 1.5).fill('#5a2fc2');
-          doc.y = 112;
+          const tx = logoX + logoW + 18;
+          doc.font(fontBold).fontSize(17).fillColor('#ffffff').text(documento.titulo||'Documento', tx, 28);
+          doc.font(fontReg).fontSize(8.5).fillColor('#d0c0f0').text(entL, tx, 54);
+          doc.font(fontReg).fontSize(7).fillColor('#b0a0d8').text(fecha, tx, 72);
+          doc.rect(50, 105, 500, 1.5).fill('#6a2be0');
+          doc.y = 115;
         } else {
-          const tx = logoX + logoW + 12;
-          doc.font(fontBold).fontSize(10).fillColor('#ffffff').text(entL, tx, 18);
-          doc.font(fontReg).fontSize(7).fillColor('#d9cdfa').text(documento.titulo||'Documento', tx, 34);
-          doc.rect(50, 52, 500, 1).fill('#5a2fc2');
-          doc.y = 60;
+          const tx = logoX + logoW + 14;
+          doc.font(fontBold).fontSize(11).fillColor('#ffffff').text(entL, tx, 16);
+          doc.font(fontReg).fontSize(7).fillColor('#d0c0f0').text(documento.titulo||'Documento', tx, 34);
+          doc.rect(50, 54, 500, 1).fill('#6a2be0');
+          doc.y = 62;
         }
         doc.restore();
       }
@@ -1095,68 +1100,57 @@ export async function generarPDF(entidad, documento) {
       }
 
       // ── FIRMA ──
-      // Verificar espacio suficiente (necesitamos ~180px libres)
-      const ESPACIO_FIRMA = 180;
-      if (doc.y > doc.page.height - ESPACIO_FIRMA - 45) nuevaPagina();
+      // Forzar nueva página si quedan menos de 200px
+      if (doc.y > doc.page.height - 200) nuevaPagina();
 
-      doc.moveDown(0.3);
-      doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(1).strokeColor(C).stroke();
-      doc.moveDown(0.6);
-      doc.font(fontBold).fontSize(10).fillColor(A).text('CÚMPLEASE Y NOTIFÍQUESE.', {width:500, align:'center'});
+      doc.moveDown(0.4);
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(1).strokeColor('#6a2be0').stroke();
       doc.moveDown(0.8);
+      doc.font(fontBold).fontSize(11).fillColor('#3702b3').text('CÚMPLEASE Y NOTIFÍQUESE.', {width:500, align:'center'});
+      doc.moveDown(0.6);
       doc.font(fontReg).fontSize(8).fillColor('#5c5566').text('Fdo.: La Administración del Grupo de La Placeta', {width:500, align:'center'});
-      doc.moveDown(0.15);
+      doc.moveDown(0.1);
       doc.font(fontReg).fontSize(7).fillColor('#5c5566').text(entL, {width:500, align:'center'});
 
       // ── FIRMA DEL TITULAR ──
-      doc.moveDown(0.4);
-      // Si no hay suficiente espacio, nueva página
-      if (doc.y > doc.page.height - 130) nuevaPagina();
-      doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#c0b8d8').stroke();
+      doc.moveDown(0.5);
+      doc.moveTo(100, doc.y).lineTo(500, doc.y).lineWidth(0.5).strokeColor('#c0b8d8').stroke();
       doc.moveDown(0.2);
-      doc.font(fontBold).fontSize(8).fillColor(A).text('FIRMA DEL TITULAR', {width:500, align:'center'});
+      doc.font(fontBold).fontSize(9).fillColor('#3702b3').text('FIRMA DEL TITULAR', {width:500, align:'center'});
 
       if (documento.firmado) {
-        // Firma manuscrita — escalado proporcional, NUNCA altura fija
         const firmaImg = documento.datos?.firma_base64 || documento.datos?.firmaImagen;
         if (firmaImg) {
           try {
             const imgData = firmaImg.includes('base64,') ? firmaImg : `data:image/png;base64,${firmaImg}`;
-            // Calcular espacio disponible para no salirse de la página
-            const espacioMax = doc.page.height - doc.y - 80;
-            const altoFirma = Math.min(80, espacioMax);
-            if (altoFirma > 20) {
-              // Escalar manteniendo proporción: ancho fijo 300, alto automático
-              doc.image(imgData, 150, doc.y, { width: 300, height: altoFirma });
-              doc.y += altoFirma + 6;
-            }
+            // NUNCA especificar height + width juntos → pdfkit distorsiona.
+            // Usar SOLO width (300) y dejar que pdfkit calcule height proporcional.
+            doc.image(imgData, 150, doc.y, { width: 300 });
+            doc.y += 4; // dejar un pequeño margen después de la imagen
           } catch {
-            doc.y += 6;
+            // si falla la imagen, seguir sin error
           }
-        } else {
-          doc.y += 6;
         }
-        // Asegurar espacio para textos de firma
-        if (doc.y > doc.page.height - 60) nuevaPagina();
-        doc.font(fontReg).fontSize(7.5).fillColor('#5c5566');
+        doc.moveDown(0.2);
+        // Salto de página si hace falta
+        if (doc.y > doc.page.height - 50) nuevaPagina();
+        doc.font(fontReg).fontSize(8).fillColor('#5c5566');
         doc.text(`Firmado digitalmente por: ${documento.datos?.firmadoPor || '—'}`, {width:500, align:'center'});
         if (documento.datos?.fechaFirma) {
-          doc.text(`Fecha: ${new Date(documento.datos.fechaFirma).toLocaleString('es-ES')}`, {width:500, align:'center'});
+          const fFecha = new Date(documento.datos.fechaFirma).toLocaleString('es-ES');
+          doc.text(`Fecha: ${fFecha}`, {width:500, align:'center'});
         }
         doc.text('Firma electrónica PlacetaID', {width:500, align:'center'});
       } else {
-        // Líneas de firma con altura dinámica (sin fijo)
+        doc.moveDown(0.5);
+        // Líneas guía para firma manuscrita
+        doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
+        doc.moveDown(1.2);
+        doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
         doc.moveDown(0.3);
-        const y1 = doc.y;
-        if (y1 > doc.page.height - 80) nuevaPagina();
-        doc.moveTo(130, doc.y).lineTo(470, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
-        doc.y += 35;
-        doc.moveTo(130, doc.y).lineTo(470, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
-        doc.y += 8;
         doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text('Firma pendiente — PlacetaID Móvil', {width:500, align:'center'});
         doc.font(fontReg).fontSize(6.5).fillColor('#d0c8e0');
         doc.text('Firme desde la app PlacetaID Móvil', {width:500, align:'center'});
-        doc.y += 6;
       }
 
       // ── CSV ──
