@@ -164,7 +164,7 @@ const WORKSPACES = {
     id: 'rsp',
     nombre: 'Red de Servicios de La Placeta',
     icono: '🌐',
-    logo: '/img/logo-rsp.svg',
+    logo: '/img/rsp-logo.png',
     descripcion: 'Conexiones, facturación y fondos de la RSP',
     color: '#3702b3',
     colorDark: '#1f0070',

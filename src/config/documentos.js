@@ -21,7 +21,7 @@ const LOGOS = {
   tributos: 'logo-tributos.png',
   junta: 'logo-gdlp.svg',
   administracion: 'logo-web.png',
-  rsp: 'logo-rsp.svg',
+  rsp: 'rsp-logo.png',
   placetaid: 'img/logo-placetaid.jpg',
 };
 
@@ -1095,36 +1095,49 @@ export async function generarPDF(entidad, documento) {
       }
 
       // ── FIRMA ──
-      if (doc.y > doc.page.height - 120) nuevaPagina();
-      doc.moveDown(0.5);
+      // Verificar espacio suficiente (necesitamos ~180px libres)
+      const ESPACIO_FIRMA = 180;
+      if (doc.y > doc.page.height - ESPACIO_FIRMA - 45) nuevaPagina();
+
+      doc.moveDown(0.3);
       doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(1).strokeColor(C).stroke();
+      doc.moveDown(0.6);
+      doc.font(fontBold).fontSize(10).fillColor(A).text('CÚMPLEASE Y NOTIFÍQUESE.', {width:500, align:'center'});
       doc.moveDown(0.8);
-      doc.font(fontBold).fontSize(10).fillColor(A).text('CÚMPLEASE Y NOTIFÍQUESE.', 50, doc.y, {width:500, align:'center'});
-      doc.moveDown(1.2);
-      doc.font(fontReg).fontSize(8).fillColor('#5c5566').text('Fdo.: La Administración del Grupo de La Placeta', 50, doc.y, {width:500, align:'center'});
-      doc.moveDown(0.2);
+      doc.font(fontReg).fontSize(8).fillColor('#5c5566').text('Fdo.: La Administración del Grupo de La Placeta', {width:500, align:'center'});
+      doc.moveDown(0.15);
       doc.font(fontReg).fontSize(7).fillColor('#5c5566').text(entL, {width:500, align:'center'});
 
       // ── FIRMA DEL TITULAR ──
-      doc.moveDown(0.5);
-      doc.moveTo(150, doc.y).lineTo(450, doc.y).lineWidth(0.3).strokeColor('#e0daf0').stroke();
-      doc.moveDown(0.3);
+      doc.moveDown(0.4);
+      // Si no hay suficiente espacio, nueva página
+      if (doc.y > doc.page.height - 130) nuevaPagina();
+      doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#c0b8d8').stroke();
+      doc.moveDown(0.2);
       doc.font(fontBold).fontSize(8).fillColor(A).text('FIRMA DEL TITULAR', {width:500, align:'center'});
 
       if (documento.firmado) {
-        // Firma manuscrita — sin altura fija para no aplastar
+        // Firma manuscrita — escalado proporcional, NUNCA altura fija
         const firmaImg = documento.datos?.firma_base64 || documento.datos?.firmaImagen;
-        if (firmaImg && doc.y < doc.page.height - 140) {
+        if (firmaImg) {
           try {
             const imgData = firmaImg.includes('base64,') ? firmaImg : `data:image/png;base64,${firmaImg}`;
-            doc.image(imgData, 150, doc.y, { width: 300, height: 80 });
-            doc.y += 90;
+            // Calcular espacio disponible para no salirse de la página
+            const espacioMax = doc.page.height - doc.y - 80;
+            const altoFirma = Math.min(80, espacioMax);
+            if (altoFirma > 20) {
+              // Escalar manteniendo proporción: ancho fijo 300, alto automático
+              doc.image(imgData, 150, doc.y, { width: 300, height: altoFirma });
+              doc.y += altoFirma + 6;
+            }
           } catch {
-            doc.y += 40;
+            doc.y += 6;
           }
         } else {
-          doc.y += 40;
+          doc.y += 6;
         }
+        // Asegurar espacio para textos de firma
+        if (doc.y > doc.page.height - 60) nuevaPagina();
         doc.font(fontReg).fontSize(7.5).fillColor('#5c5566');
         doc.text(`Firmado digitalmente por: ${documento.datos?.firmadoPor || '—'}`, {width:500, align:'center'});
         if (documento.datos?.fechaFirma) {
@@ -1132,18 +1145,18 @@ export async function generarPDF(entidad, documento) {
         }
         doc.text('Firma electrónica PlacetaID', {width:500, align:'center'});
       } else {
-        // Espacio generoso para firma pendiente (sin altura fija absurda)
-        doc.moveDown(0.5);
-        const fy = doc.y;
-        // Línea de firma con espacio amplio
-        doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
-        doc.y += 40;
-        doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
+        // Líneas de firma con altura dinámica (sin fijo)
+        doc.moveDown(0.3);
+        const y1 = doc.y;
+        if (y1 > doc.page.height - 80) nuevaPagina();
+        doc.moveTo(130, doc.y).lineTo(470, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
+        doc.y += 35;
+        doc.moveTo(130, doc.y).lineTo(470, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
         doc.y += 8;
         doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text('Firma pendiente — PlacetaID Móvil', {width:500, align:'center'});
         doc.font(fontReg).fontSize(6.5).fillColor('#d0c8e0');
-        doc.text('Firme desde la app PlacetaID Móvil escaneando el código QR', {width:500, align:'center'});
-        doc.y += 12;
+        doc.text('Firme desde la app PlacetaID Móvil', {width:500, align:'center'});
+        doc.y += 6;
       }
 
       // ── CSV ──
