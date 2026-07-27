@@ -993,8 +993,8 @@ export async function generarPDF(entidad, documento) {
         }
         return null;
       };
-      const regPath = buscarFuente('outfit_regular.ttf') || buscarFuente('PlusJakartaSans-Regular.ttf');
-      const boldPath = buscarFuente('outfit_bold.ttf') || buscarFuente('PlusJakartaSans-Bold.ttf');
+      const regPath = buscarFuente('PJSans-Regular.ttf') || buscarFuente('outfit_regular.ttf') || buscarFuente('PlusJakartaSans-Regular.ttf');
+      const boldPath = buscarFuente('PJSans-Bold.ttf') || buscarFuente('outfit_bold.ttf') || buscarFuente('PlusJakartaSans-Bold.ttf');
       if (regPath && boldPath) {
         try {
           doc.registerFont('DocFont', regPath);
@@ -1022,13 +1022,13 @@ export async function generarPDF(entidad, documento) {
         // Barra superior fina más clara
         doc.rect(0, 0, doc.page.width, 4).fill('#6a2be0');
         // Logo
-        const logoPath = path.join(__dirname, '..', 'img', logos[entidad] || 'logo-web.png');
+        const logoPath = path.join(PDF_DIR, '..', 'img', logos[entidad] || 'logo-web.png');
         const logoW = esPrimera ? 68 : 40;
         const logoX = 42;
         const logoY = esPrimera ? 32 : 14;
         try {
           const p1 = logoPath;
-          const p2 = path.join(__dirname, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
+          const p2 = path.join(PDF_DIR, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
           const fp = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
           if (fp) doc.image(fp, logoX, logoY, { width: logoW });
         } catch {}
