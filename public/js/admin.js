@@ -3,7 +3,7 @@ function toggleSidebar() {
   document.getElementById('sidebar').classList.toggle('open');
 }
 
-// ── apiFetch ──────────────────────────────────────────────────────────────
+// ── apiFetch con manejo de errores RSP ────────────────────────────────────
 async function apiFetch(url, opts = {}) {
   const r = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...opts.headers },
@@ -11,11 +11,106 @@ async function apiFetch(url, opts = {}) {
   });
   if (!r.ok) {
     let msg = `Error ${r.status}`;
-    try { const e = await r.json(); if (e.error) msg = e.error; } catch {}
+    let isRSPError = false;
+    let rspCode = '';
+    let slideup = false;
+    try {
+      const e = await r.json();
+      if (e.error) msg = e.error;
+      if (e.slideup) slideup = true;
+      if (e.error && e.error.startsWith('RSP-ERR')) {
+        isRSPError = true;
+        rspCode = e.error;
+        msg = e.mensaje || msg;
+      }
+      if (e.mantenimiento) {
+        // Error global de mantenimiento → recargar para ver pantalla completa
+        mostrarPantallaMantenimiento(e.mensaje || msg, rspCode);
+        throw new Error('MANTENIMIENTO');
+      }
+    } catch (e) {
+      if (e.message === 'MANTENIMIENTO') throw e;
+    }
+    if (slideup || isRSPError) {
+      mostrarSlideupError(rspCode || `ERR-${r.status}`, msg);
+    }
     throw new Error(msg);
   }
   return r.json();
 }
+
+// ── Slideup de error RSP ──────────────────────────────────────────────────
+function mostrarSlideupError(codigo, mensaje) {
+  const existing = document.querySelector('.rsp-slideup');
+  if (existing) existing.remove();
+
+  const slideup = document.createElement('div');
+  slideup.className = 'rsp-slideup';
+  slideup.style.cssText = `
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 99999;
+    background: #1f0070; color: #fff;
+    padding: 20px 24px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    animation: slideUpIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 -8px 40px rgba(0,0,0,0.2);
+    display: flex; align-items: center; gap: 16px;
+  `;
+  slideup.innerHTML = `
+    <div style="flex-shrink:0;width:44px;height:44px;background:#d03131;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">⚠️</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:11px;font-weight:700;color:#ff6b6b;text-transform:uppercase;letter-spacing:0.5px">${codigo || 'RSP-ERR'}</div>
+      <div style="font-size:13px;margin-top:2px">${mensaje}</div>
+    </div>
+    <button onclick="this.closest('.rsp-slideup').remove()" style="flex-shrink:0;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.1);border:none;color:#fff;font-size:16px;cursor:pointer">✕</button>
+  `;
+  document.body.appendChild(slideup);
+
+  // Auto-dismiss después de 8 segundos
+  setTimeout(() => {
+    if (slideup.parentNode) {
+      slideup.style.transform = 'translateY(100%)';
+      slideup.style.transition = 'transform 0.3s ease';
+      setTimeout(() => slideup.remove(), 300);
+    }
+  }, 8000);
+}
+
+// ── Pantalla completa de mantenimiento/error RSP ─────────────────────────
+function mostrarPantallaMantenimiento(mensaje, codigo) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100000;
+    background: #1f0070;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    padding: 20px;
+  `;
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:24px;padding:48px 40px;max-width:480px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="font-size:64px;margin-bottom:16px">🔧</div>
+      <div style="display:inline-block;padding:6px 16px;border-radius:50px;font-size:11px;font-weight:700;background:#fef2f2;color:#d03131;margin-bottom:16px">${codigo || 'RSP-ERR'}</div>
+      <div style="font-size:22px;font-weight:800;color:#111;margin-bottom:8px">Servicio no disponible</div>
+      <div style="font-size:14px;color:#888;line-height:1.6;margin-bottom:20px">${mensaje}</div>
+      <button onclick="location.reload()" style="padding:12px 32px;background:#3702b3;color:#fff;border:none;border-radius:12px;font:600 14px 'Plus Jakarta Sans';cursor:pointer">🔄 Reintentar</button>
+    </div>
+  `;
+  document.body.innerHTML = '';
+  document.body.appendChild(overlay);
+}
+
+// ── Workspace switcher toggle ─────────────────────────────────────────────
+function toggleWorkspaceSwitcher() {
+  const dd = document.getElementById('wsDropdown');
+  if (dd) dd.classList.toggle('open');
+}
+
+// Cerrar dropdown al hacer clic fuera
+document.addEventListener('click', function(e) {
+  const dd = document.getElementById('wsDropdown');
+  if (dd && !e.target.closest('.sidebar-switcher') && dd.classList.contains('open')) {
+    dd.classList.remove('open');
+  }
+});
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function mostrarToast(mensaje, tipo = 'info') {

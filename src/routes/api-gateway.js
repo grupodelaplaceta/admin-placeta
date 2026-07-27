@@ -27,6 +27,7 @@ import {
   apiBancoGetState, apiBancoPost, apiPlacetaidRegistros, apiPlacetaidStats,
   sbListSolicitantes, sbFindSolicitanteByDip, sbListDeclaraciones
 } from '../config/db.js';
+import { verificarSesion } from '../middleware/auth.js';
 
 const router = Router();
 

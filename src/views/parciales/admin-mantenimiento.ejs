@@ -1,0 +1,110 @@
+<%# Panel de gestión de mantenimiento %>
+<div class="mantenimiento-admin-page">
+  <div class="info-card mb-16">
+    <h4>🔧 Gestión de Mantenimiento</h4>
+    <p style="font-size:13px;color:#888">Controla el modo mantenimiento global o por entidad. Cuando está activo, los usuarios ven una pantalla bloqueante o slideup según el tipo de error.</p>
+  </div>
+
+  <!-- Mantenimiento Global -->
+  <div class="info-card mb-16" style="border-left:4px solid <%= estado.global.activo ? '#d03131' : '#22a06b' %>">
+    <div class="flex items-center justify-between flex-wrap gap-8">
+      <div>
+        <h4 style="font-size:15px">🌐 Mantenimiento Global</h4>
+        <p style="font-size:12px;color:#888">Activo actualmente: <strong><%= estado.global.activo ? 'SÍ' : 'NO' %></strong></p>
+      </div>
+      <div class="flex gap-8">
+        <button class="btn btn-sm <%= estado.global.activo ? 'btn-success' : 'btn-danger' %>"
+                onclick="toggleMantenimiento('global')">
+          <%= estado.global.activo ? '✅ Desactivar' : '🔴 Activar' %>
+        </button>
+      </div>
+    </div>
+    <% if (estado.global.activo) { %>
+    <div style="margin-top:10px;padding:10px;background:#fef2f2;border-radius:8px;font-size:13px">
+      📢 <%= estado.global.mensaje %>
+    </div>
+    <% } %>
+    <div style="margin-top:10px">
+      <label>Mensaje personalizado</label>
+      <input class="form-input" id="msg-global" value="<%= estado.global.mensaje || '🔧 Admin Placeta está en mantenimiento.' %>" placeholder="Mensaje de mantenimiento">
+    </div>
+  </div>
+
+  <!-- Mantenimiento por entidad -->
+  <div class="info-card mb-16">
+    <h4 style="font-size:15px">📋 Mantenimiento por Entidad</h4>
+    <div style="margin-top:10px">
+      <% ['banco','tributos','junta','administracion','rsp','junior'].forEach(function(e) { 
+        const entMnt = estado.entidades[e];
+        const activa = entMnt?.activo;
+      %>
+      <div class="flex items-center justify-between flex-wrap gap-8" style="padding:10px 0;border-bottom:1px solid #f0ecf8">
+        <div>
+          <strong style="font-size:13px"><%= e.charAt(0).toUpperCase() + e.slice(1) %></strong>
+          <% if (activa) { %>
+          <span class="badge badge-danger" style="margin-left:8px">🔧 En mantenimiento</span>
+          <% } %>
+        </div>
+        <div class="flex gap-8 items-center">
+          <input class="form-input" style="width:200px;padding:6px 10px;font-size:11px" id="msg-<%= e %>" placeholder="Mensaje para <%= e %>" value="<%= entMnt?.mensaje || '' %>">
+          <button class="btn btn-sm <%= activa ? 'btn-success' : 'btn-secondary' %>"
+                  onclick="toggleMantenimiento('entidad', '<%= e %>')">
+            <%= activa ? '✅ Desactivar' : '🔴 Activar' %>
+          </button>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+
+  <!-- Guía de códigos de error -->
+  <div class="info-card">
+    <h4 style="font-size:15px">📖 Códigos de Error RSP</h4>
+    <div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
+      <div style="padding:8px 12px;background:#fef2f2;border-radius:8px;font-size:11px"><strong style="color:#d03131">RSP-ERR-001</strong>: No se puede conectar con RSP</div>
+      <div style="padding:8px 12px;background:#fef2f2;border-radius:8px;font-size:11px"><strong style="color:#d03131">RSP-ERR-002</strong>: Entidad no disponible en RSP</div>
+      <div style="padding:8px 12px;background:#fef2f2;border-radius:8px;font-size:11px"><strong style="color:#d03131">RSP-ERR-003</strong>: Timeout de conexión RSP</div>
+      <div style="padding:8px 12px;background:#fef2f2;border-radius:8px;font-size:11px"><strong style="color:#d03131">RSP-ERR-004</strong>: Operación requiere RSP</div>
+      <div style="padding:8px 12px;background:#fff8e6;border-radius:8px;font-size:11px"><strong style="color:#92400e">RSP-ERR-005</strong>: API Key inválida</div>
+      <div style="padding:8px 12px;background:#fff8e6;border-radius:8px;font-size:11px"><strong style="color:#92400e">RSP-ERR-006</strong>: Límite de conexiones</div>
+      <div style="padding:8px 12px;background:#fff8e6;border-radius:8px;font-size:11px"><strong style="color:#92400e">RSP-ERR-007</strong>: Saldo insuficiente</div>
+      <div style="padding:8px 12px;background:#f0ecff;border-radius:8px;font-size:11px"><strong style="color:#3702b3">RSP-ERR-008</strong>: Servicio en mantenimiento</div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function toggleMantenimiento(tipo, entidad) {
+  const url = tipo === 'global' ? '/api/mantenimiento/global' : '/api/mantenimiento/entidad';
+  const estadoActual = '<%= estado.global.activo %>';
+  const activo = tipo === 'global' ? (estadoActual !== 'true') : null;
+
+  let data = {};
+  if (tipo === 'global') {
+    const msg = document.getElementById('msg-global').value;
+    data = { activo: !(<%= estado.global.activo %>), mensaje: msg };
+  } else {
+    const msg = document.getElementById('msg-' + entidad).value;
+    data = { entidad, activo: true, mensaje: msg };
+    // Si ya está activo, desactivar
+    const btn = event.target;
+    if (btn.textContent.includes('Desactivar')) data.activo = false;
+  }
+
+  try {
+    const r = await apiFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (r.success) {
+      mostrarToast(`✅ Mantenimiento ${data.activo ? 'activado' : 'desactivado'}`, 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      mostrarToast('❌ ' + (r.error || 'Error'), 'error');
+    }
+  } catch (e) {
+    mostrarToast('❌ ' + e.message, 'error');
+  }
+}
+</script>

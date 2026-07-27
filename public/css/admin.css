@@ -361,6 +361,12 @@ code{font-family:'Courier New',monospace;font-size:11px;background:#f0ecff;paddi
 .rsp-header-card p { color: rgba(255,255,255,.7); }
 .rsp-header-card .stat-value { color: #fff; }
 .font-jakarta { font-family: 'Plus Jakarta Sans', var(--font); }
+
+/* ── RSP Slideup ───────────────────────────── */
+@keyframes slideUpIn {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 
 /* ── Empty state ──────────────────────────────── */

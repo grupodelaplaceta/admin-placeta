@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= titulo || 'Mantenimiento' %> - Admin Placeta</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/admin.css">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #1f0070; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 20px; }
+    .mt-card { background: #fff; border-radius: 24px; padding: 48px 40px; max-width: 520px; width: 100%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+    .mt-icon { font-size: 64px; margin-bottom: 16px; }
+    .mt-title { font-size: 24px; font-weight: 800; color: #111; margin-bottom: 8px; }
+    .mt-desc { font-size: 14px; color: #666; line-height: 1.6; margin-bottom: 20px; }
+    .mt-badge { display: inline-block; padding: 6px 16px; border-radius: 50px; font-size: 11px; font-weight: 700; background: #f0ecff; color: #3702b3; margin-bottom: 16px; }
+    .mt-footer { font-size: 12px; color: #999; margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee; }
+    .mt-spinner { width: 40px; height: 40px; border: 3px solid #f0ecff; border-top-color: #3702b3; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="mt-card">
+    <div class="mt-icon">🔧</div>
+    <% if (esGlobal) { %>
+    <div class="mt-badge">🌐 Todos los servicios</div>
+    <% } else { %>
+    <div class="mt-badge">📋 <%= entidad || 'Servicio' %></div>
+    <% } %>
+    <div class="mt-title"><%= titulo || 'Servicio en mantenimiento' %></div>
+    <div class="mt-desc"><%= mensaje || 'Estamos realizando tareas de mantenimiento. Vuelve a intentarlo en unos minutos.' %></div>
+    <% if (codigo) { %>
+    <div class="mt-badge" style="background:#fef2f2;color:#d03131"><%= codigo %></div>
+    <% } %>
+    <div class="mt-spinner"></div>
+    <div class="mt-footer">
+      Admin Placeta · <a href="mailto:soporte@laplaceta.org" style="color:#3702b3">soporte@laplaceta.org</a>
+    </div>
+  </div>
+</body>
+</html>
