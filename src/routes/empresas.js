@@ -41,7 +41,7 @@ function initEjemplos() {
     { nombre: 'Capitalia Bank', eip: 'EIP-CAP001', dip: 'CAPITALIA_BANK', representantes: [{ dip: 'ADMIN-GDLP', nombre: 'Admin GDLP', cargo: 'CEO' }] },
     { nombre: 'Tributos GDLP', eip: 'EIP-TRIB01', dip: 'TGLP', representantes: [] },
   ];
-  ejemplos.forEach(e => { const id = nextId(); memEmpresas.set(id, { id, ...e, creada: new Date().toISOString(), activa: true }); });
+  ejemplos.forEach(e => { const id = nextId(); const emp = { id, ...e, creada: new Date().toISOString(), activa: true }; memEmpresas.set(id, emp); setTimeout(() => persistirEmpresa(emp), 100); });
 }
 initEjemplos();
 

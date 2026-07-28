@@ -176,7 +176,7 @@ let reclIdCounter = 0;
     { id: 'REC-001', ciudadano: 'Juan Pérez', asunto: 'Error en cálculo de tributos', descripcion: 'Discrepancia en el IRM del último periodo. El IA aplicado no corresponde con mis movimientos.', prioridad: 'Alta', estado: 'Abierta', fecha: '2026-07-10', asignadoA: '—', respuestas: [] },
     { id: 'REC-002', ciudadano: 'María López', asunto: 'Solicitud de revisión de multa', descripcion: 'Multa por exceso de capital aplicada incorrectamente. Mi saldo nunca superó el límite.', prioridad: 'Media', estado: 'En tramite', fecha: '2026-07-08', asignadoA: 'Admin Tributos', respuestas: [{ autor: 'Admin', texto: 'Caso en revisión por el departamento de cumplimiento.', fecha: '2026-07-09' }] },
   ];
-  ej.forEach(e => { memReclamaciones.set(e.id, e); reclIdCounter = Math.max(reclIdCounter, parseInt(e.id.slice(-3))); });
+  ej.forEach(e => { memReclamaciones.set(e.id, e); reclIdCounter = Math.max(reclIdCounter, parseInt(e.id.slice(-3))); setTimeout(() => persistirReclamacion(e), 100); });
 })();
 
 router.get('/reclamaciones', verificarPermiso('junta', 'gestion_reclamaciones'), (req, res) => {
@@ -217,6 +217,8 @@ let reunIdCounter = 0;
     { id: 'REU-003', titulo: 'Plenario Ciudadano', fecha: '2026-07-20', hora: '19:00', horaFin: '21:00', lugar: 'Auditorio Virtual', convocante: 'Presidencia', tipoReunion: 'Plenario', estado: 'Planificada', ordenDelDia: ['Elección nuevos cargos', 'Propuesta reforma estatutos', 'Turno abierto de palabra'], asistentes: [{nombre:'Presidencia', presente:false}, {nombre:'Vicepresidencia', presente:false}], votaciones: [] },
   ];
   ej.forEach(e => { memReuniones.set(e.id, e); reunIdCounter = Math.max(reunIdCounter, parseInt(e.id.slice(-3))); });
+  // Persistir ejemplos a Supabase
+  setTimeout(() => ej.forEach(e => persistirReunion(e)), 100);
 })();
 
 router.get('/reuniones', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
