@@ -229,10 +229,12 @@ let votIdCounter = 0;
 
 router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
   let votaciones = [...memVotaciones.values()];
+  // 1) Intentar desde memoria
+  // 2) Si vacío, desde Supabase
   if (votaciones.length === 0 && supabase) {
     try {
       const { data } = await supabase.from('rsp_votaciones').select('*').order('created_at', { ascending: false });
-      if (data) votaciones = data.map(v => ({
+      if (data && data.length > 0) votaciones = data.map(v => ({
         id: v.id, titulo: v.titulo, descripcion: v.descripcion, categoria: v.categoria,
         grupo: v.grupo || 'Junta', quorum: v.quorum,
         aFavor: v.a_favor || 0, enContra: v.en_contra || 0, abstenciones: v.abstenciones || 0,
@@ -242,6 +244,31 @@ router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (
       }));
     } catch (e) {}
   }
+  // 3) Si aún vacío, desde PlacetaID (plid26-main)
+  if (votaciones.length === 0) {
+    try {
+      const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+      const r = await fetch(`${PLACETAID_API}/admin/votaciones`, {
+        headers: { 'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb' },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data)) {
+          votaciones = data;
+          // Guardar en memoria para próximas cargas
+          data.forEach(v => {
+            if (!memVotaciones.has(v.id)) {
+              memVotaciones.set(v.id, v);
+              if (++votIdCounter < parseInt(v.id.replace('VOT-',''), 10)) {
+                votIdCounter = parseInt(v.id.replace('VOT-',''), 10);
+              }
+            }
+          });
+        }
+      }
+    } catch (e) { /* placetaid no disponible */ }
+  }
   res.render('junta/votaciones', {
     titulo: 'Gestión de Votaciones',
     entidad_actual: 'junta',
@@ -250,13 +277,23 @@ router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (
   });
 });
 
-// API: Listar votaciones (desde Supabase si memoria vacía)
+// API: Listar votaciones (Supabase → PlacetaID fallback)
 router.get('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
   let votaciones = [...memVotaciones.values()];
   if (votaciones.length === 0 && supabase) {
     try {
       const { data } = await supabase.from('rsp_votaciones').select('*');
-      if (data) votaciones = data;
+      if (data && data.length > 0) votaciones = data;
+    } catch (e) {}
+  }
+  if (votaciones.length === 0) {
+    try {
+      const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+      const r = await fetch(`${PLACETAID_API}/admin/votaciones`, {
+        headers: { 'X-API-Key': process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb' },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (r.ok) { const data = await r.json(); if (Array.isArray(data)) votaciones = data; }
     } catch (e) {}
   }
   res.json(votaciones);
