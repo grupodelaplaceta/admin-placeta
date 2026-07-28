@@ -24,6 +24,23 @@ const router = Router();
 // Votaciones activas e históricas
 const memVotaciones = new Map();
 let votIdCounter = 0;
+let votIdInited = false;
+
+async function initVotIdCounter() {
+  if (votIdInited || !supabase) return;
+  try {
+    const { data } = await supabase.from('rsp_votaciones')
+      .select('id').order('id', { ascending: false }).limit(1);
+    if (data && data.length > 0) {
+      const match = data[0].id.match(/VOT-(\d+)/);
+      if (match) votIdCounter = parseInt(match[1], 10);
+    }
+  } catch (_) { /* usar default */ }
+  votIdInited = true;
+}
+
+// Inicializar contador desde Supabase al arrancar
+initVotIdCounter();
 
 // Registro oficial de votos emitidos (para auditoría y anti-fraude)
 // Cada entrada: { id, votacionId, dip, nombre, voto (a_favor/en_contra/abstencion), timestamp, hash, categoria }
@@ -297,6 +314,7 @@ router.post('/votaciones', async (req, res) => {
   if (!categoria) return res.status(400).json({ error: 'Categoría de destinatario requerida' });
   if (!CATEGORIAS_VOTO[categoria]) return res.status(400).json({ error: `Categoría no válida. Usar: ${Object.keys(CATEGORIAS_VOTO).join(', ')}` });
 
+  await initVotIdCounter();
   const id = 'VOT-' + String(++votIdCounter).padStart(3, '0');
   const total = (aFavor || 0) + (enContra || 0) + (abstenciones || 0);
   const cerrada = cerrar === true;
