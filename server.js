@@ -182,6 +182,20 @@ app.post('/api/mobil/votaciones/:id/ejercer', async (req, res) => {
   const result = await mobilEmitirVoto(req.params.id, dip, nombre, voto);
   res.status(result.success ? 200 : 400).json(result);
 });
+app.post('/api/mobil/multi/votaciones', async (req, res) => {
+  const { dips } = req.body;
+  if (!dips || !Array.isArray(dips)) return res.json([]);
+  try {
+    const results = [];
+    for (const dip of dips) {
+      const pendientes = await mobilGetPendientes(dip);
+      pendientes.forEach(v => {
+        results.push({ ...v, identidad: dip, identidadNombre: dip });
+      });
+    }
+    res.json(results);
+  } catch (e) { res.json([]); }
+});
 
 app.use(documentosRoutes); // /api/:entidad/documentos...
 app.use(accionesDocumentoRoutes); // /api/acciones/*
