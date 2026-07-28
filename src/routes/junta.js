@@ -216,6 +216,20 @@ router.get('/api/reuniones/:id/pdf', verificarPermiso('junta', 'gestion_reunione
 // ═════════════════════════════════════════════════════════════════════════
 const memVotaciones = new Map();
 let votIdCounter = 0;
+let votIdInited = false;
+
+async function initVotIdCounter() {
+  if (votIdInited || !supabase) return;
+  try {
+    const { data } = await supabase.from('rsp_votaciones')
+      .select('id').order('id', { ascending: false }).limit(1);
+    if (data && data.length > 0) {
+      const match = data[0].id.match(/VOT-(\d+)/);
+      if (match) votIdCounter = parseInt(match[1], 10);
+    }
+  } catch (_) { /* usar default */ }
+  votIdInited = true;
+}
 
 // Sin datos de ejemplo — solo Supabase
 (function initVot() { if (memVotaciones.size > 0) return; })();
@@ -259,6 +273,7 @@ router.get('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), asy
 router.post('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
   const { titulo, grupo, quorum, aFavor, enContra, abstenciones, reunionId, cerrar, descripcion, categoria, fechaLimite } = req.body;
   if (!titulo) return res.status(400).json({ error: 'Título requerido' });
+  await initVotIdCounter();
   const id = 'VOT-' + String(++votIdCounter).padStart(3, '0');
   const total = (aFavor||0) + (enContra||0) + (abstenciones||0);
   const cerrada = cerrar === true;
@@ -280,8 +295,8 @@ router.post('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), as
       await supabase.from('rsp_votaciones').upsert({
         id, titulo, descripcion: descripcion || '', categoria: categoria || grupo || 'General',
         grupo: grupo || 'Junta', quorum: quorum || 50,
-        a_favor: 0, en_contra: 0, abstenciones: 0,
-        total_votos: 0, total_emitidos: 0,
+        a_favor: aFavor || 0, en_contra: enContra || 0, abstenciones: abstenciones || 0,
+        total_votos: total, total_emitidos: 0,
         estado: cerrada ? 'Cerrada' : 'Activa',
         resultado: cerrada ? ((aFavor||0) > (enContra||0) ? 'Aprobada' : 'Rechazada') : null,
         reunion_id: reunionId || null, fecha_limite: fechaLimite || null
