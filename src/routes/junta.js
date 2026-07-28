@@ -249,13 +249,6 @@ router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (
     esPresidente: req.session.roles?.includes('presidente')
   });
 });
-  res.render('junta/votaciones', {
-    titulo: 'Gestión de Votaciones',
-    entidad_actual: 'junta',
-    votaciones: votaciones.sort((a,b) => (b.created_at||'').localeCompare(a.created_at||'')),
-    esPresidente: req.session.roles?.includes('presidente')
-  });
-});
 
 // API: Listar votaciones (solo Supabase)
 router.get('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
