@@ -10,6 +10,7 @@
 
 import { Router } from 'express';
 import { verificarSesion, verificarAccesoEntidad, verificarPermiso } from '../middleware/auth.js';
+import { supabase } from '../config/supabase.js';
 import {
   getConexiones, getConexionesFromSupabase, getFacturas, getEstadoFondos, getTarifas, getEstadisticas,
   generarFactura, generarFacturaPorIds, eliminarConexionesPorIds,
@@ -25,23 +26,19 @@ router.get('/', verificarSesion, verificarAccesoEntidad('rsp'), async (req, res)
   const conexionesRecientes = getConexiones({ limit: 10 }).reverse();
   const facturasPendientes = getFacturas({ estado: 'pendiente' });
 
-  // Cargar votaciones REALES desde PlacetaID (plid26-main)
-  let votacionesData = { activas: 0, cerradas: 0, totalVotos: 0, votosHistorial: [] };
+  // Cargar votaciones desde Supabase (ya están persistidas)
+  let votacionesData = { activas: 0, cerradas: 0, totalVotos: 0, total: 0 };
   try {
-    const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
-    const API_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
-    const resp = await fetch(`${PLACETAID_API}/admin/votaciones`, {
-      headers: { 'X-API-Key': API_KEY },
-      signal: AbortSignal.timeout(5000)
-    });
-    if (resp.ok) {
-      const votaciones = await resp.json();
-      if (Array.isArray(votaciones)) {
+    if (supabase) {
+      const { data, error } = await supabase.from('rsp_votaciones')
+        .select('id,estado,titulo,a_favor,en_contra,abstenciones,total_votos,total_emitidos,fecha_limite')
+        .order('created_at', { ascending: false });
+      if (!error && data) {
         votacionesData = {
-          activas: votaciones.filter(v => v.estado === 'Activa').length,
-          cerradas: votaciones.filter(v => v.estado === 'Cerrada').length,
-          totalVotos: votaciones.reduce((s, v) => s + (v.totalVotos || 0), 0),
-          total: votaciones.length
+          activas: data.filter(v => v.estado === 'Activa').length,
+          cerradas: data.filter(v => v.estado === 'Cerrada').length,
+          totalVotos: data.reduce((s, v) => s + (v.total_votos || 0), 0),
+          total: data.length
         };
       }
     }
