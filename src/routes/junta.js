@@ -5,6 +5,114 @@ import { supabase } from '../config/supabase.js';
 
 const router = Router();
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PERSISTENCIA SUPABASE — Reuniones
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function persistirReunion(r) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from('rsp_reuniones').upsert({
+      id: r.id, titulo: r.titulo, fecha: r.fecha, hora: r.hora,
+      hora_fin: r.horaFin, lugar: r.lugar, convocante: r.convocante,
+      tipo_reunion: r.tipoReunion, estado: r.estado,
+      orden_del_dia: JSON.stringify(r.ordenDelDia || []),
+      asistentes: JSON.stringify(r.asistentes || []),
+      votaciones: JSON.stringify(r.votaciones || []),
+      acta: r.acta ? JSON.stringify(r.acta) : null,
+      fecha_firma: r.fechaFirma, hash_acta: r.hashActa,
+      firma_presidente: r.firmaPresidente, firma_secretario: r.firmaSecretario,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (error && error.code === '42P01') {
+      console.warn('[Junta] Tabla rsp_reuniones no existe, creando...');
+      try {
+        await supabase.rpc('exec_sql', {
+          sql: `CREATE TABLE IF NOT EXISTS rsp_reuniones (
+            id TEXT PRIMARY KEY, titulo TEXT NOT NULL, fecha TEXT, hora TEXT,
+            hora_fin TEXT, lugar TEXT, convocante TEXT, tipo_reunion TEXT DEFAULT 'Ordinaria',
+            estado TEXT DEFAULT 'Planificada', orden_del_dia JSONB DEFAULT '[]',
+            asistentes JSONB DEFAULT '[]', votaciones JSONB DEFAULT '[]',
+            acta JSONB, fecha_firma TEXT, hash_acta TEXT,
+            firma_presidente TEXT, firma_secretario TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+          );`
+        });
+      } catch (_) {}
+    } else if (error) {
+      console.warn('[Junta] Error persistir reunion:', error.message);
+    }
+  } catch (e) { console.warn('[Junta] Error persistir reunion:', e.message); }
+}
+
+async function cargarReunionesDesdeSupabase() {
+  if (!supabase || memReuniones.size > 0) return;
+  try {
+    const { data } = await supabase.from('rsp_reuniones').select('*').order('fecha', { ascending: false });
+    if (data) {
+      data.forEach(r => {
+        memReuniones.set(r.id, {
+          id: r.id, titulo: r.titulo, fecha: r.fecha, hora: r.hora,
+          horaFin: r.hora_fin, lugar: r.lugar, convocante: r.convocante,
+          tipoReunion: r.tipo_reunion, estado: r.estado,
+          ordenDelDia: typeof r.orden_del_dia === 'string' ? JSON.parse(r.orden_del_dia) : (r.orden_del_dia || []),
+          asistentes: typeof r.asistentes === 'string' ? JSON.parse(r.asistentes) : (r.asistentes || []),
+          votaciones: typeof r.votaciones === 'string' ? JSON.parse(r.votaciones) : (r.votaciones || []),
+          acta: r.acta ? (typeof r.acta === 'string' ? JSON.parse(r.acta) : r.acta) : null,
+          fechaFirma: r.fecha_firma, hashActa: r.hash_acta,
+          firmaPresidente: r.firma_presidente, firmaSecretario: r.firma_secretario
+        });
+        const num = parseInt(r.id.slice(-3), 10);
+        if (num > reunIdCounter) reunIdCounter = num;
+      });
+    }
+  } catch (e) { console.warn('[Junta] Error cargar reuniones:', e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PERSISTENCIA SUPABASE — Reclamaciones
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function persistirReclamacion(r) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from('rsp_reclamaciones').upsert({
+      id: r.id, ciudadano: r.ciudadano, asunto: r.asunto,
+      descripcion: r.descripcion, prioridad: r.prioridad,
+      estado: r.estado, fecha: r.fecha, asignado_a: r.asignadoA,
+      respuestas: JSON.stringify(r.respuestas || []),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (error && error.code === '42P01') {
+      try { await supabase.rpc('exec_sql', { sql: `CREATE TABLE IF NOT EXISTS rsp_reclamaciones (
+        id TEXT PRIMARY KEY, ciudadano TEXT, asunto TEXT NOT NULL,
+        descripcion TEXT, prioridad TEXT DEFAULT 'normal', estado TEXT DEFAULT 'abierta',
+        fecha TEXT, asignado_a TEXT, respuestas JSONB DEFAULT '[]',
+        created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+      );`}); } catch (_) {}
+    } else if (error) { console.warn('[Junta] Error persistir reclamacion:', error.message); }
+  } catch (e) { console.warn('[Junta] Error persistir reclamacion:', e.message); }
+}
+
+async function cargarReclamacionesDesdeSupabase() {
+  if (!supabase || memReclamaciones.size > 0) return;
+  try {
+    const { data } = await supabase.from('rsp_reclamaciones').select('*').order('fecha', { ascending: false });
+    if (data) {
+      data.forEach(r => {
+        memReclamaciones.set(r.id, {
+          id: r.id, ciudadano: r.ciudadano, asunto: r.asunto,
+          descripcion: r.descripcion, prioridad: r.prioridad,
+          estado: r.estado, fecha: r.fecha, asignadoA: r.asignado_a,
+          respuestas: typeof r.respuestas === 'string' ? JSON.parse(r.respuestas) : (r.respuestas || [])
+        });
+        const num = parseInt(r.id.slice(-3), 10);
+        if (num > reclIdCounter) reclIdCounter = num;
+      });
+    }
+  } catch (e) { console.warn('[Junta] Error cargar reclamaciones:', e.message); }
+}
+
 // ── Dashboard Junta ────────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   const ciudadanos = await sbListSolicitantes({ limit: 100 });
@@ -84,11 +192,12 @@ router.get('/api/reclamaciones', verificarPermiso('junta', 'gestion_reclamacione
   res.json([...memReclamaciones.values()]);
 });
 
-router.post('/api/reclamaciones', verificarPermiso('junta', 'gestion_reclamaciones'), (req, res) => {
+router.post('/api/reclamaciones', verificarPermiso('junta', 'gestion_reclamaciones'), async (req, res) => {
   const { ciudadano, asunto, descripcion, prioridad, asignadoA } = req.body;
   const id = 'REC-' + String(++reclIdCounter).padStart(3, '0');
   const recl = { id, ciudadano: ciudadano || 'Anónimo', asunto, descripcion, prioridad: prioridad || 'Media', estado: 'Abierta', fecha: new Date().toISOString().slice(0,10), asignadoA: asignadoA || '—', respuestas: [] };
   memReclamaciones.set(id, recl);
+  await persistirReclamacion(recl);
   res.json({ success: true, reclamacion: recl });
 });
 
@@ -110,7 +219,8 @@ let reunIdCounter = 0;
   ej.forEach(e => { memReuniones.set(e.id, e); reunIdCounter = Math.max(reunIdCounter, parseInt(e.id.slice(-3))); });
 })();
 
-router.get('/reuniones', verificarPermiso('junta', 'gestion_reuniones'), (req, res) => {
+router.get('/reuniones', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
+  await cargarReunionesDesdeSupabase();
   res.render('junta/reuniones', {
     titulo: 'Gestión de Reuniones y Actas',
     entidad_actual: 'junta',
@@ -119,12 +229,13 @@ router.get('/reuniones', verificarPermiso('junta', 'gestion_reuniones'), (req, r
 });
 
 // API: Listar reuniones
-router.get('/api/reuniones', verificarPermiso('junta', 'gestion_reuniones'), (req, res) => {
+router.get('/api/reuniones', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
+  await cargarReunionesDesdeSupabase();
   res.json([...memReuniones.values()].sort((a,b) => (b.fecha||'').localeCompare(a.fecha||'')));
 });
 
 // API: Crear reunión
-router.post('/api/reuniones', verificarPermiso('junta', 'gestion_reuniones'), (req, res) => {
+router.post('/api/reuniones', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
   const { titulo, fecha, hora, horaFin, lugar, tipoReunion, ordenDelDia, asistentes } = req.body;
   if (!titulo) return res.status(400).json({ error: 'Título requerido' });
   const id = 'REU-' + String(++reunIdCounter).padStart(3, '0');
@@ -135,19 +246,28 @@ router.post('/api/reuniones', verificarPermiso('junta', 'gestion_reuniones'), (r
     asistentes: asistentes || [], votaciones: [], acta: null, created_at: new Date().toISOString()
   };
   memReuniones.set(id, reunion);
+  await persistirReunion(reunion);
   res.json({ success: true, reunion });
 });
 
 // API: Obtener reunión
-router.get('/api/reuniones/:id', verificarPermiso('junta', 'gestion_reuniones'), (req, res) => {
-  const r = memReuniones.get(req.params.id);
+router.get('/api/reuniones/:id', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
+  let r = memReuniones.get(req.params.id);
+  if (!r && supabase) {
+    const { data } = await supabase.from('rsp_reuniones').select('*').eq('id', req.params.id).single();
+    if (data) { r = data; memReuniones.set(req.params.id, data); }
+  }
   if (!r) return res.status(404).json({ error: 'No encontrada' });
   res.json(r);
 });
 
 // API: Actualizar reunión (datos generales o asistentes)
-router.put('/api/reuniones/:id', verificarPermiso('junta', 'gestion_reuniones'), (req, res) => {
-  const r = memReuniones.get(req.params.id);
+router.put('/api/reuniones/:id', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
+  let r = memReuniones.get(req.params.id);
+  if (!r && supabase) {
+    const { data } = await supabase.from('rsp_reuniones').select('*').eq('id', req.params.id).single();
+    if (data) { r = data; memReuniones.set(req.params.id, data); }
+  }
   if (!r) return res.status(404).json({ error: 'No encontrada' });
   const { titulo, fecha, hora, horaFin, lugar, tipoReunion, ordenDelDia, asistentes } = req.body;
   if (titulo !== undefined) r.titulo = titulo;
@@ -158,22 +278,33 @@ router.put('/api/reuniones/:id', verificarPermiso('junta', 'gestion_reuniones'),
   if (tipoReunion !== undefined) r.tipoReunion = tipoReunion;
   if (ordenDelDia !== undefined) r.ordenDelDia = ordenDelDia;
   if (asistentes !== undefined) r.asistentes = asistentes;
+  await persistirReunion(r);
   res.json({ success: true, reunion: r });
 });
 
 // API: Guardar acta (pasa a Acta_Pendiente)
-router.put('/api/reuniones/:id/acta', verificarPermiso('junta', 'gestion_reuniones'), (req, res) => {
-  const r = memReuniones.get(req.params.id);
+router.put('/api/reuniones/:id/acta', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
+  let r = memReuniones.get(req.params.id);
+  if (!r && supabase) {
+    const { data } = await supabase.from('rsp_reuniones').select('*').eq('id', req.params.id).single();
+    if (data) r = data;
+  }
   if (!r) return res.status(404).json({ error: 'No encontrada' });
   const { horaInicio, horaFin, desarrollo, puntosTratados, proximosPasos } = req.body;
   r.acta = { horaInicio: horaInicio || r.hora, horaFin: horaFin || r.horaFin, desarrollo, puntosTratados: puntosTratados || [], proximosPasos };
   if (r.estado === 'Planificada') r.estado = 'Acta_Pendiente';
+  memReuniones.set(req.params.id, r);
+  await persistirReunion(r);
   res.json({ success: true, acta: r.acta });
 });
 
 // API: Firmar acta (pasa a Acta_Firmada)
-router.put('/api/reuniones/:id/firmar', verificarPermiso('junta', 'gestion_reuniones'), (req, res) => {
-  const r = memReuniones.get(req.params.id);
+router.put('/api/reuniones/:id/firmar', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
+  let r = memReuniones.get(req.params.id);
+  if (!r && supabase) {
+    const { data } = await supabase.from('rsp_reuniones').select('*').eq('id', req.params.id).single();
+    if (data) r = data;
+  }
   if (!r) return res.status(404).json({ error: 'No encontrada' });
   if (r.estado !== 'Acta_Pendiente') return res.status(400).json({ error: 'El acta debe estar en estado pendiente para firmarla' });
   r.estado = 'Acta_Firmada';
@@ -181,13 +312,19 @@ router.put('/api/reuniones/:id/firmar', verificarPermiso('junta', 'gestion_reuni
   r.hashActa = require('crypto').createHash('sha256').update(r.id + JSON.stringify(r.acta) + Date.now()).digest('hex').slice(0, 16);
   r.firmaPresidente = req.session.usuario?.nombre || 'Admin';
   r.firmaSecretario = req.session.usuario?.nombre || 'Admin';
+  memReuniones.set(req.params.id, r);
+  await persistirReunion(r);
   res.json({ success: true, hash: r.hashActa, estado: r.estado });
 });
 
 // API: PDF del acta
 router.get('/api/reuniones/:id/pdf', verificarPermiso('junta', 'gestion_reuniones'), async (req, res) => {
   try {
-    const r = memReuniones.get(req.params.id);
+    let r = memReuniones.get(req.params.id);
+    if (!r && supabase) {
+      const { data } = await supabase.from('rsp_reuniones').select('*').eq('id', req.params.id).single();
+      if (data) r = data;
+    }
     if (!r) return res.status(404).json({ error: 'No encontrada' });
     const { generarPDF } = await import('../config/documentos.js');
     const buffer = await generarPDF('junta', {

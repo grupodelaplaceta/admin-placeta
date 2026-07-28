@@ -5,6 +5,7 @@
  */
 import { Router } from 'express';
 import { verificarPermiso } from '../middleware/auth.js';
+import { supabase } from '../config/supabase.js';
 
 const router = Router();
 
@@ -13,6 +14,25 @@ const memEmpresas = new Map();
 let idCounter = 0;
 
 function nextId() { return 'EMP-' + String(++idCounter).padStart(4, '0'); }
+
+async function persistirEmpresa(e) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from('rsp_empresas').upsert({
+      id: e.id, nombre: e.nombre, eip: e.eip, dip: e.dip,
+      representantes: JSON.stringify(e.representantes || []),
+      activa: e.activa !== false, creada: e.creada,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (error && error.code === '42P01') {
+      try { await supabase.rpc('exec_sql', { sql: `CREATE TABLE IF NOT EXISTS rsp_empresas (
+        id TEXT PRIMARY KEY, nombre TEXT NOT NULL, eip TEXT, dip TEXT,
+        representantes JSONB DEFAULT '[]', activa BOOLEAN DEFAULT true, creada TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+      );`}); } catch (_) {}
+    } else if (error) { console.warn('[Empresas] Error persistir:', error.message); }
+  } catch (err) { console.warn('[Empresas] Error persistir:', err.message); }
+}
 
 // Inicializar con datos de ejemplo
 function initEjemplos() {
@@ -58,6 +78,7 @@ router.post('/api/empresas/crear', async (req, res) => {
   const id = nextId();
   const empresa = { id, nombre, eip: eipFinal, dip: dipFinal, representantes, activa: true, creada: new Date().toISOString() };
   memEmpresas.set(id, empresa);
+  await persistirEmpresa(empresa);
   res.json({ success: true, empresa });
 });
 
@@ -75,6 +96,7 @@ router.put('/api/empresas/:id', async (req, res) => {
   const { nombre, eip, dipEmpresa } = req.body;
   Object.assign(emp, { ...(nombre && { nombre }), ...(eip && { eip }), ...(dipEmpresa && { dip: dipEmpresa }) });
   memEmpresas.set(req.params.id, emp);
+  await persistirEmpresa(emp);
   res.json({ success: true, empresa: emp });
 });
 
@@ -88,6 +110,7 @@ router.post('/api/empresas/:id/representante', async (req, res) => {
   if (!emp.representantes.find(r => r.dip === dip)) {
     emp.representantes.push({ dip, nombre: nombre || dip, cargo: cargo || 'Representante' });
   }
+  await persistirEmpresa(emp);
   res.json({ success: true, representantes: emp.representantes });
 });
 
@@ -96,6 +119,7 @@ router.delete('/api/empresas/:id/representante/:dip', async (req, res) => {
   const emp = memEmpresas.get(req.params.id);
   if (!emp) return res.status(404).json({ error: 'No encontrada' });
   emp.representantes = emp.representantes.filter(r => r.dip !== req.params.dip);
+  await persistirEmpresa(emp);
   res.json({ success: true, representantes: emp.representantes });
 });
 
@@ -104,6 +128,7 @@ router.delete('/api/empresas/:id', async (req, res) => {
   const emp = memEmpresas.get(req.params.id);
   if (!emp) return res.status(404).json({ error: 'No encontrada' });
   emp.activa = false;
+  await persistirEmpresa(emp);
   res.json({ success: true, message: 'Empresa dada de baja' });
 });
 
@@ -112,6 +137,7 @@ router.post('/api/empresas/:id/reactivar', async (req, res) => {
   const emp = memEmpresas.get(req.params.id);
   if (!emp) return res.status(404).json({ error: 'No encontrada' });
   emp.activa = true;
+  await persistirEmpresa(emp);
   res.json({ success: true });
 });
 
