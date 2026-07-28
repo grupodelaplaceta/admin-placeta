@@ -287,15 +287,4 @@ export function registrarConexionPublica(req, res) {
   res.json({ success: true, conexion });
 }
 
-// ── API: Diagnosticar conexiones RSP ────────────────────────────────────
-router.get('/api/debug/conexiones', async (req, res) => {
-  const desdeMemoria = getConexiones();
-  const desdeDB = await getConexionesFromSupabase();
-  res.json({
-    memoria: { total: desdeMemoria.length, conexiones: desdeMemoria },
-    supabase: { total: desdeDB?.length || 0, conexiones: desdeDB || [] },
-    supabaseDisponible: !!desdeDB
-  });
-});
-
 export default router;

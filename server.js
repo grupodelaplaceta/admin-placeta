@@ -33,6 +33,7 @@ import juniorRoutes from './src/routes/junior.js';
 import mantenimientoRoutes from './src/routes/mantenimiento.js';
 import votacionesApiRoutes from './src/routes/votaciones-api.js';
 import { registrarConexionPublica } from './src/routes/rsp.js';
+import { getConexiones, getConexionesFromSupabase } from './src/config/rsp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -172,8 +173,17 @@ app.use('/administracion', empresasRoutes);
 // También accesible desde banco
 app.use('/banco', empresasRoutes);
 
-// ═══ RSP: Endpoint público para plid26-main (sin sesión) ═════════════
+// ═══ RSP: Endpoints públicos (sin sesión) ════════════════════════════
 app.post('/rsp/api/conexiones/registrar', registrarConexionPublica);
+app.get('/rsp/api/debug/conexiones', async (req, res) => {
+  const desdeMemoria = getConexiones();
+  const desdeDB = await getConexionesFromSupabase();
+  res.json({
+    memoria: { total: desdeMemoria.length, conexiones: desdeMemoria },
+    supabase: { total: desdeDB?.length || 0, conexiones: desdeDB || [] },
+    supabaseActivo: !!desdeDB
+  });
+});
 
 // Red de Servicios de La Placeta (RSP) — protegido con sesión
 app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), rspRoutes);
