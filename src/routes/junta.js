@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { sbListSolicitantes, apiPlacetaidRegistros, apiPlacetaidStats } from '../config/db.js';
 import { verificarPermiso } from '../middleware/auth.js';
+import { supabase } from '../config/supabase.js';
 
 const router = Router();
 
@@ -226,35 +227,74 @@ let votIdCounter = 0;
   ej.forEach(e => { memVotaciones.set(e.id, e); votIdCounter = Math.max(votIdCounter, parseInt(e.id.slice(-3))); });
 })();
 
-router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), (req, res) => {
+router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
+  let votaciones = [...memVotaciones.values()];
+  if (votaciones.length === 0 && supabase) {
+    try {
+      const { data } = await supabase.from('rsp_votaciones').select('*').order('created_at', { ascending: false });
+      if (data) votaciones = data.map(v => ({
+        id: v.id, titulo: v.titulo, descripcion: v.descripcion, categoria: v.categoria,
+        grupo: v.grupo || 'Junta', quorum: v.quorum,
+        aFavor: v.a_favor || 0, enContra: v.en_contra || 0, abstenciones: v.abstenciones || 0,
+        totalVotos: v.total_votos || 0, totalEmitidos: v.total_emitidos || 0,
+        estado: v.estado || 'Activa', resultado: v.resultado,
+        reunionId: v.reunion_id, created_at: v.created_at
+      }));
+    } catch (e) {}
+  }
   res.render('junta/votaciones', {
     titulo: 'Gestión de Votaciones',
     entidad_actual: 'junta',
-    votaciones: [...memVotaciones.values()].sort((a,b) => (b.created_at||'').localeCompare(a.created_at||'')),
+    votaciones: votaciones.sort((a,b) => (b.created_at||'').localeCompare(a.created_at||'')),
     esPresidente: req.session.roles?.includes('presidente')
   });
 });
 
-// API: Listar votaciones
-router.get('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), (req, res) => {
-  res.json([...memVotaciones.values()]);
+// API: Listar votaciones (desde Supabase si memoria vacía)
+router.get('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
+  let votaciones = [...memVotaciones.values()];
+  if (votaciones.length === 0 && supabase) {
+    try {
+      const { data } = await supabase.from('rsp_votaciones').select('*');
+      if (data) votaciones = data;
+    } catch (e) {}
+  }
+  res.json(votaciones);
 });
 
-// API: Crear votación
-router.post('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), (req, res) => {
-  const { titulo, grupo, quorum, aFavor, enContra, abstenciones, reunionId, cerrar } = req.body;
+// API: Crear votación (persiste en Supabase)
+router.post('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
+  const { titulo, grupo, quorum, aFavor, enContra, abstenciones, reunionId, cerrar, descripcion, categoria, fechaLimite } = req.body;
   if (!titulo) return res.status(400).json({ error: 'Título requerido' });
   const id = 'VOT-' + String(++votIdCounter).padStart(3, '0');
   const total = (aFavor||0) + (enContra||0) + (abstenciones||0);
   const cerrada = cerrar === true;
   const votacion = {
-    id, titulo, grupo: grupo || 'Junta', quorum: quorum || 50,
+    id, titulo, descripcion: descripcion || '', categoria: categoria || grupo || 'General',
+    grupo: grupo || 'Junta', quorum: quorum || 50,
     aFavor: aFavor || 0, enContra: enContra || 0, abstenciones: abstenciones || 0,
-    totalVotos: total, estado: cerrada ? 'Cerrada' : 'Activa',
+    totalVotos: total, totalEmitidos: 0,
+    estado: cerrada ? 'Cerrada' : 'Activa',
     resultado: cerrada ? ((aFavor||0) > (enContra||0) ? 'Aprobada' : 'Rechazada') : null,
-    reunionId: reunionId || null, created_at: new Date().toISOString()
+    reunionId: reunionId || null, fechaCreacion: new Date().toISOString(),
+    fechaLimite: fechaLimite || null, created_at: new Date().toISOString()
   };
   memVotaciones.set(id, votacion);
+
+  // Persistir en Supabase
+  if (supabase) {
+    try {
+      await supabase.from('rsp_votaciones').upsert({
+        id, titulo, descripcion: descripcion || '', categoria: categoria || grupo || 'General',
+        grupo: grupo || 'Junta', quorum: quorum || 50,
+        a_favor: 0, en_contra: 0, abstenciones: 0,
+        total_votos: 0, total_emitidos: 0,
+        estado: cerrada ? 'Cerrada' : 'Activa',
+        resultado: cerrada ? ((aFavor||0) > (enContra||0) ? 'Aprobada' : 'Rechazada') : null,
+        reunion_id: reunionId || null, fecha_limite: fechaLimite || null
+      }, { onConflict: 'id' });
+    } catch (e) { console.warn('[Junta] No se pudo persistir votación:', e.message); }
+  }
 
   // Enviar a PlacetaID para notificar al grupo correspondiente
   try {
@@ -266,7 +306,6 @@ router.post('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), (r
     }).catch(() => {});
   } catch {}
 
-  // Si tiene reunionId, vincular a la reunión
   if (reunionId) {
     const r = memReuniones.get(reunionId);
     if (r) {
@@ -296,12 +335,17 @@ router.put('/api/votaciones/:id', verificarPermiso('junta', 'crear_votaciones'),
   res.json({ success: true, votacion: v });
 });
 
-// API: Cerrar votación
-router.put('/api/votaciones/:id/cerrar', verificarPermiso('junta', 'crear_votaciones'), (req, res) => {
+// API: Cerrar votación (persiste en Supabase)
+router.put('/api/votaciones/:id/cerrar', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
   const v = memVotaciones.get(req.params.id);
   if (!v) return res.status(404).json({ error: 'No encontrada' });
   v.estado = 'Cerrada';
   v.resultado = (v.aFavor||0) > (v.enContra||0) ? 'Aprobada' : 'Rechazada';
+  // Persistir en Supabase
+  if (supabase) {
+    try { await supabase.from('rsp_votaciones').update({ estado: 'Cerrada', resultado: v.resultado }).eq('id', v.id); }
+    catch (e) { console.warn('[Junta] Error persistente cierre:', e.message); }
+  }
   // Notificar cierre a PlacetaID
   try {
     const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
