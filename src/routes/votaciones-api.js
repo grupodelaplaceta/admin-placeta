@@ -286,7 +286,7 @@ router.get('/votaciones/categorias', (req, res) => {
  * POST /api/votaciones
  * Crear una nueva votación
  */
-router.post('/votaciones', (req, res) => {
+router.post('/votaciones', async (req, res) => {
   const {
     titulo, descripcion, categoria, grupo, quorum,
     aFavor, enContra, abstenciones, reunionId,
@@ -325,7 +325,7 @@ router.post('/votaciones', (req, res) => {
   };
 
   memVotaciones.set(id, votacion);
-  persistirVotacion(votacion);
+  await persistirVotacion(votacion);
 
   // Vincular a reunión si aplica
   if (reunionId) {
@@ -345,7 +345,7 @@ router.post('/votaciones', (req, res) => {
   }
 
   // Notificar push
-  notificarVotacion(votacion, 'nueva');
+  await notificarVotacion(votacion, 'nueva');
 
   res.json({ success: true, votacion });
 });
@@ -404,7 +404,7 @@ router.put('/votaciones/:id', (req, res) => {
  * Ejercer voto (emitir voto como ciudadano)
  * Body: { dip, nombre, voto: "a_favor"|"en_contra"|"abstencion", perfil?: {} }
  */
-router.post('/votaciones/:id/ejercer', (req, res) => {
+router.post('/votaciones/:id/ejercer', async (req, res) => {
   const { dip, nombre, voto, perfil } = req.body;
   const v = memVotaciones.get(req.params.id);
 
@@ -456,8 +456,8 @@ router.post('/votaciones/:id/ejercer', (req, res) => {
   };
 
   memRegistroVotos.set(regId, registro);
-  persistirRegistroVoto(registro);
-  persistirVotacion(v); // Actualizar conteo en Supabase
+  await persistirRegistroVoto(registro);
+  await persistirVotacion(v); // Actualizar conteo en Supabase
 
   // Actualizar conteo
   if (voto === 'a_favor') v.aFavor = (v.aFavor || 0) + 1;
@@ -489,7 +489,7 @@ router.post('/votaciones/:id/ejercer', (req, res) => {
  * POST /api/votaciones/:id/cerrar
  * Cerrar votación manualmente
  */
-router.post('/votaciones/:id/cerrar', (req, res) => {
+router.post('/votaciones/:id/cerrar', async (req, res) => {
   const v = memVotaciones.get(req.params.id);
   if (!v) return res.status(404).json({ error: 'No encontrada' });
   if (v.estado === 'Cerrada') return res.status(400).json({ error: 'Ya está cerrada' });
@@ -497,8 +497,9 @@ router.post('/votaciones/:id/cerrar', (req, res) => {
   v.estado = 'Cerrada';
   v.resultado = (v.aFavor || 0) > (v.enContra || 0) ? 'Aprobada' : 'Rechazada';
 
+  await persistirVotacion(v);
   // Notificar cierre
-  notificarVotacion(v, 'cerrada');
+  await notificarVotacion(v, 'cerrada');
 
   res.json({ success: true, resultado: v.resultado, aFavor: v.aFavor, enContra: v.enContra, abstenciones: v.abstenciones });
 });
@@ -507,11 +508,12 @@ router.post('/votaciones/:id/cerrar', (req, res) => {
  * POST /api/votaciones/:id/reabrir
  * Reabrir votación
  */
-router.post('/votaciones/:id/reabrir', (req, res) => {
+router.post('/votaciones/:id/reabrir', async (req, res) => {
   const v = memVotaciones.get(req.params.id);
   if (!v) return res.status(404).json({ error: 'No encontrada' });
   v.estado = 'Activa';
   v.resultado = null;
+  await persistirVotacion(v);
   res.json({ success: true });
 });
 
