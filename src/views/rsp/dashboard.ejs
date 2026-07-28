@@ -1,103 +1,143 @@
-<div class="rsp-header-card mb-16 font-jakarta">
-  <div style="display:flex;align-items:center;gap:20px">
-    <img src="/img/rsp-logo.png" alt="RSP" style="width:72px;height:72px;border-radius:14px;background:rgba(255,255,255,.12);padding:6px;object-fit:contain">
-    <div style="flex:1">
-      <h4 style="font-size:20px;font-weight:800;letter-spacing:-0.3px">Red de Servicios de La Placeta</h4>
-      <p style="font-size:13px;opacity:.8;margin-top:4px">Plataforma centralizada de datos · <strong>GDLP-AP64-583</strong></p>
-      <p style="font-size:12px;opacity:.6;margin-top:8px">
-        <strong>Fondos iniciales:</strong> 18,309.83 Pz ·
-        <strong>Sanción pendiente:</strong> 2,461.77 Pz (IVA no abonado)
-      </p>
+<!-- ═══ HEADER RSP ═══ -->
+<div class="rsp-hero">
+  <div class="rsp-hero-content">
+    <img src="/img/rsp-logo.png" alt="RSP" class="rsp-hero-logo">
+    <div>
+      <h1 class="rsp-hero-title">Red de Servicios de La Placeta</h1>
+      <p class="rsp-hero-sub">Plataforma centralizada de datos · <strong>GDLP-AP64-583</strong></p>
+      <div class="rsp-hero-stats">
+        <span>💰 Fondos: <strong><%= stats.saldoActual.toFixed(2) %> Pz</strong></span>
+        <span>⚡ Conexiones: <strong><%= stats.totalConexiones %></strong></span>
+        <span>📊 Facturas: <strong><%= stats.facturasEmitidas %></strong></span>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- KPIs principales -->
-<div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
-  <div class="stat-card">
-    <div class="stat-value"><%= stats.totalConexiones.toLocaleString() %></div>
-    <div class="stat-label">Total Conexiones</div>
+<!-- ═══ KPIs ═══ -->
+<div class="rsp-kpis">
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">📡</div>
+    <div>
+      <div class="rsp-kpi-value"><%= stats.totalConexiones.toLocaleString() %></div>
+      <div class="rsp-kpi-label">Total Conexiones</div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value"><%= stats.conexionesHoy %></div>
-    <div class="stat-label">Hoy</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">⚡</div>
+    <div>
+      <div class="rsp-kpi-value"><%= stats.conexionesHoy %></div>
+      <div class="rsp-kpi-label">Hoy</div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value"><%= stats.saldoActual.toFixed(2) %></div>
-    <div class="stat-label">Saldo (Pz)</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">💰</div>
+    <div>
+      <div class="rsp-kpi-value"><%= stats.saldoActual.toFixed(2) %></div>
+      <div class="rsp-kpi-label">Saldo (Pz)</div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value"><%= stats.ingresosEsteMes.toFixed(3) %></div>
-    <div class="stat-label">Ingresos Mes (Pz)</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(255,109,0,.12)">📈</div>
+    <div>
+      <div class="rsp-kpi-value"><%= stats.ingresosEsteMes.toFixed(3) %></div>
+      <div class="rsp-kpi-label">Ingresos del Mes</div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value"><%= stats.facturasEmitidas %></div>
-    <div class="stat-label">Facturas</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(41,121,255,.12)">📄</div>
+    <div>
+      <div class="rsp-kpi-value"><%= stats.facturasEmitidas %></div>
+      <div class="rsp-kpi-label">Facturas</div>
+    </div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:<%= stats.facturasPendientes > 0 ? '#d7a02d' : '#22a06b' %>"><%= stats.facturasPendientes %></div>
-    <div class="stat-label">Pendientes</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:<%= stats.facturasPendientes > 0 ? 'rgba(255,214,0,.18)' : 'rgba(0,200,83,.12)' %>">
+      <%= stats.facturasPendientes > 0 ? '⏳' : '✅' %>
+    </div>
+    <div>
+      <div class="rsp-kpi-value" style="color:<%= stats.facturasPendientes > 0 ? '#e65100' : '#00c853' %>"><%= stats.facturasPendientes %></div>
+      <div class="rsp-kpi-label">Pendientes</div>
+    </div>
   </div>
 </div>
 
-<!-- Tarifas vigentes -->
-<div class="card-grid card-grid-2 mb-16" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-  <div class="info-card">
-    <h4>📖 Consulta de Datos</h4>
-    <p><strong style="font-size:24px;color:var(--p)"><%= tarifas.consulta.total.toFixed(4) %></strong> Pz/conexión</p>
-    <p style="font-size:12px;color:#888">
-      Base: <%= tarifas.consulta.precio %> Pz · IVA <%= tarifas.iva %>: <%= tarifas.consulta.iva.toFixed(4) %> Pz
-    </p>
-    <p style="font-size:11px;color:#999;margin-top:4px"><%= tarifas.consulta.descripcion %></p>
+<!-- ═══ TARIFAS ═══ -->
+<div class="rsp-section-title">💰 Tarifas Vigentes</div>
+<div class="rsp-tarifas">
+  <div class="rsp-tarifa-card rsp-tarifa-consulta">
+    <div class="rsp-tarifa-header">
+      <span class="rsp-tarifa-badge">CONSULTA</span>
+      <span class="rsp-tarifa-precio"><%= tarifas.consulta.total.toFixed(4) %></span>
+      <span class="rsp-tarifa-moneda">Pz/conexión</span>
+    </div>
+    <div class="rsp-tarifa-body">
+      <div class="rsp-tarifa-detalle">
+        <span>Base</span><span><%= tarifas.consulta.precio %> Pz</span>
+      </div>
+      <div class="rsp-tarifa-detalle">
+        <span>IVA 12%</span><span><%= tarifas.consulta.iva.toFixed(4) %> Pz</span>
+      </div>
+      <p class="rsp-tarifa-desc"><%= tarifas.consulta.descripcion %></p>
+    </div>
   </div>
-  <div class="info-card">
-    <h4>✏️ Modificación de Datos</h4>
-    <p><strong style="font-size:24px;color:var(--p)"><%= tarifas.modificacion.total.toFixed(3) %></strong> Pz/conexión</p>
-    <p style="font-size:12px;color:#888">
-      Base: <%= tarifas.modificacion.precio %> Pz · IVA <%= tarifas.iva %>: <%= tarifas.modificacion.iva.toFixed(3) %> Pz
-    </p>
-    <p style="font-size:11px;color:#999;margin-top:4px"><%= tarifas.modificacion.descripcion %></p>
+  <div class="rsp-tarifa-card rsp-tarifa-mod">
+    <div class="rsp-tarifa-header">
+      <span class="rsp-tarifa-badge">MODIFICACIÓN</span>
+      <span class="rsp-tarifa-precio"><%= tarifas.modificacion.total.toFixed(3) %></span>
+      <span class="rsp-tarifa-moneda">Pz/conexión</span>
+    </div>
+    <div class="rsp-tarifa-body">
+      <div class="rsp-tarifa-detalle">
+        <span>Base</span><span><%= tarifas.modificacion.precio %> Pz</span>
+      </div>
+      <div class="rsp-tarifa-detalle">
+        <span>IVA 12%</span><span><%= tarifas.modificacion.iva.toFixed(3) %> Pz</span>
+      </div>
+      <p class="rsp-tarifa-desc"><%= tarifas.modificacion.descripcion %></p>
+    </div>
   </div>
 </div>
 
-<!-- Acceso rápido -->
-<div class="flex gap-8 mb-16 flex-wrap">
-  <a href="/rsp/conexiones" class="btn btn-primary">📡 Ver Conexiones</a>
-  <a href="/rsp/facturacion" class="btn btn-secondary">📄 Facturación</a>
-  <a href="/rsp/fondos" class="btn btn-secondary">💰 Fondos</a>
+<!-- ═══ ACCIONES RÁPIDAS ═══ -->
+<div class="rsp-section-title">⚡ Acceso Rápido</div>
+<div class="rsp-acciones">
+  <a href="/rsp/conexiones" class="rsp-btn rsp-btn-primary">
+    <span class="rsp-btn-icon">📡</span>
+    <span class="rsp-btn-text">Ver Conexiones</span>
+    <span class="rsp-btn-arrow">→</span>
+  </a>
+  <a href="/rsp/facturacion" class="rsp-btn rsp-btn-secondary">
+    <span class="rsp-btn-icon">📄</span>
+    <span class="rsp-btn-text">Facturación</span>
+    <span class="rsp-btn-arrow">→</span>
+  </a>
+  <a href="/rsp/fondos" class="rsp-btn rsp-btn-secondary">
+    <span class="rsp-btn-icon">💰</span>
+    <span class="rsp-btn-text">Fondos</span>
+    <span class="rsp-btn-arrow">→</span>
+  </a>
+  <a href="/rsp/apis" class="rsp-btn rsp-btn-outline">
+    <span class="rsp-btn-icon">🔌</span>
+    <span class="rsp-btn-text">APIs</span>
+    <span class="rsp-btn-arrow">→</span>
+  </a>
 </div>
 
-<!-- Últimas conexiones -->
-<div class="info-card">
-  <div class="section-header">
-    <h4>📡 Últimas Conexiones</h4>
-    <a href="/rsp/conexiones" class="btn-link">Ver todas →</a>
+<!-- ═══ ÚLTIMAS CONEXIONES ═══ -->
+<div class="rsp-section-title">📡 Últimas Conexiones</div>
+<div class="rsp-card">
+  <div class="rsp-card-header">
+    <span>Registro de actividad reciente</span>
+    <a href="/rsp/conexiones" class="rsp-link">Ver todas →</a>
   </div>
-
   <% if (conexionesRecientes.length === 0) { %>
-  <div class="empty-state" style="padding:24px">
-    <div class="empty-icon" style="font-size:32px">📡</div>
-    <h3 style="font-size:15px">Sin conexiones registradas</h3>
-    <p style="font-size:12px">Las conexiones se registrarán automáticamente al usar las APIs.</p>
+  <div class="rsp-empty">
+    <div class="rsp-empty-icon">📡</div>
+    <h3>Sin conexiones registradas</h3>
+    <p>Las conexiones aparecerán automáticamente al usar las APIs.</p>
   </div>
   <% } else { %>
-  <div class="table-container" style="border:none;border-radius:0">
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Entidad</th>
-          <th>Tipo</th>
-          <th>Endpoint</th>
-          <th>Importe</th>
-          <th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% conexionesRecientes.forEach(c => { %>
-        <tr>
-          <td class="id-cell"><%= c.id %></td>
-          <td><span class="badge badge-purple"><%= c.entidad %></span></td>
           <td>
             <span class="badge <%= c.tipo === 'modificacion' ? 'badge-warning' : 'badge-info' %>">
               <%= c.tipo === 'modificacion' ? '✏️ MOD' : '👁️ CON' %>

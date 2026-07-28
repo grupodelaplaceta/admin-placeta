@@ -1,98 +1,107 @@
-<div class="rsp-header-card mb-16 font-jakarta">
-  <div style="display:flex;align-items:center;gap:14px">
-    <img src="/img/rsp-logo.png" alt="RSP" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,.12);padding:4px;object-fit:contain">
+<div class="rsp-hero" style="padding:20px 24px">
+  <div class="rsp-hero-content" style="gap:14px">
+    <img src="/img/rsp-logo.png" alt="RSP" class="rsp-hero-logo" style="width:52px;height:52px;padding:5px">
     <div>
-      <h4 style="font-size:16px;font-weight:700">📄 Facturación RSP</h4>
-      <p style="font-size:12px;opacity:.7">Facturas por uso de servicios · GDLP-AP64-583</p>
+      <h1 class="rsp-hero-title" style="font-size:18px">📄 Facturación RSP</h1>
+      <p class="rsp-hero-sub">Facturas por uso de servicios · <strong>GDLP-AP64-583</strong></p>
     </div>
   </div>
 </div>
 
 <!-- KPIs -->
-<div class="stats-grid">
-  <div class="stat-card"><div class="stat-value"><%= total %></div><div class="stat-label">Total Facturas</div></div>
-  <div class="stat-card"><div class="stat-value"><%= pendientes %></div><div class="stat-label">Pendientes</div></div>
-  <div class="stat-card"><div class="stat-value"><%= pagadas %></div><div class="stat-label">Pagadas</div></div>
-  <div class="stat-card"><div class="stat-value"><%= totalFacturado.toFixed(2) %></div><div class="stat-label">Total Facturado (Pz)</div></div>
+<div class="rsp-kpis">
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">📄</div>
+    <div><div class="rsp-kpi-value"><%= total %></div><div class="rsp-kpi-label">Total</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(255,109,0,.12)">⏳</div>
+    <div><div class="rsp-kpi-value" style="color:<%= pendientes > 0 ? '#e65100' : '#00c853' %>"><%= pendientes %></div><div class="rsp-kpi-label">Pendientes</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">✅</div>
+    <div><div class="rsp-kpi-value"><%= pagadas %></div><div class="rsp-kpi-label">Pagadas</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">💰</div>
+    <div><div class="rsp-kpi-value"><%= totalFacturado.toFixed(2) %></div><div class="rsp-kpi-label">Total Facturado (Pz)</div></div>
+  </div>
 </div>
 
 <!-- Acciones -->
 <% if (esAdmin) { %>
-<div class="flex gap-8 mb-16 flex-wrap">
-  <button class="btn btn-primary" onclick="generarFactura()">📄 Generar Factura</button>
+<div class="rsp-acciones" style="grid-template-columns:1fr">
+  <button class="rsp-btn rsp-btn-primary" onclick="generarFactura()" style="justify-content:center">
+    <span style="font-size:16px">📄</span> Generar Nueva Factura
+  </button>
 </div>
 <% } %>
 
 <!-- Filtros -->
-<div class="flex gap-8 mb-16 flex-wrap items-center">
-  <form method="GET" action="/rsp/facturacion" class="flex gap-8 flex-wrap items-center">
-    <select name="entidad" class="form-input" style="width:160px" onchange="this.form.submit()">
+<div class="rsp-filtros">
+  <form method="GET" action="/rsp/facturacion" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select name="entidad" onchange="this.form.submit()">
       <option value="">Todas las entidades</option>
       <option value="banco" <%= filtroEntidad === 'banco' ? 'selected' : '' %>>🏦 Banco</option>
       <option value="tributos" <%= filtroEntidad === 'tributos' ? 'selected' : '' %>>📊 Tributos</option>
       <option value="junta" <%= filtroEntidad === 'junta' ? 'selected' : '' %>>⚖️ Junta</option>
-      <option value="administracion" <%= filtroEntidad === 'administracion' ? 'selected' : '' %>>📋 Administración</option>
+      <option value="administracion" <%= filtroEntidad === 'administracion' ? 'selected' : '' %>>📋 Admin</option>
     </select>
-    <select name="estado" class="form-input" style="width:140px" onchange="this.form.submit()">
-      <option value="">Todos los estados</option>
+    <select name="estado" onchange="this.form.submit()">
+      <option value="">Todos</option>
       <option value="pendiente" <%= filtroEstado === 'pendiente' ? 'selected' : '' %>>⏳ Pendiente</option>
       <option value="pagada" <%= filtroEstado === 'pagada' ? 'selected' : '' %>>✅ Pagada</option>
     </select>
     <% if (filtroEntidad || filtroEstado) { %>
-    <a href="/rsp/facturacion" class="btn btn-ghost btn-sm">✕ Limpiar filtros</a>
+    <a href="/rsp/facturacion" class="rsp-link">✕ Limpiar</a>
     <% } %>
   </form>
 </div>
 
 <% if (facturas.length === 0) { %>
-<div class="empty-state">
-  <div class="empty-icon">📄</div>
+<div class="rsp-empty">
+  <div class="rsp-empty-icon">📄</div>
   <h3>Sin facturas</h3>
-  <p>No hay facturas que coincidan con los filtros. Genera una nueva factura desde el botón superior.</p>
+  <p>Genera una nueva factura desde el botón superior.</p>
 </div>
 <% } else { %>
-<div class="table-container">
-  <table>
+<div class="rsp-card">
+  <div class="rsp-table-wrap">
+  <table class="rsp-table">
     <thead>
       <tr>
         <th>Factura</th>
         <th>Entidad</th>
         <th>Periodo</th>
-        <th>Conexiones</th>
+        <th>Uso</th>
         <th>Base</th>
         <th>IVA</th>
         <th>Total</th>
         <th>Estado</th>
-        <th>Acciones</th>
+        <th>Acción</th>
       </tr>
     </thead>
     <tbody>
       <% facturas.forEach(f => { %>
       <tr>
-        <td class="id-cell"><%= f.id %></td>
-        <td><span class="badge badge-purple"><%= f.entidad %></span></td>
+        <td style="font-family:monospace;font-size:10px;color:#888"><%= f.id %></td>
+        <td><span class="rsp-badge rsp-badge-purple"><%= f.entidad %></span></td>
         <td style="font-size:10px;white-space:nowrap">
-          <%= new Date(f.periodoInicio).toLocaleDateString('es-ES') %>
-          —
-          <%= new Date(f.periodoFin).toLocaleDateString('es-ES') %>
+          <%= new Date(f.periodoInicio).toLocaleDateString('es-ES') %> — <%= new Date(f.periodoFin).toLocaleDateString('es-ES') %>
         </td>
-        <td style="text-align:center">
+        <td style="text-align:center;font-size:11px">
           <strong><%= f.detalle.conexiones %></strong>
-          <span style="font-size:10px;color:#888">(<%= f.detalle.consultas %>C + <%= f.detalle.modificaciones %>M)</span>
+          <span style="color:#999">(<%= f.detalle.consultas %>C + <%= f.detalle.modificaciones %>M)</span>
         </td>
-        <td><%= f.detalle.baseTotal.toFixed(2) %> Pz</td>
-        <td><%= f.detalle.iva.toFixed(2) %> Pz</td>
-        <td><strong style="font-size:14px"><%= f.detalle.total.toFixed(2) %></strong> Pz</td>
-        <td>
-          <span class="badge <%= f.estado === 'pagada' ? 'badge-success' : 'badge-warning' %>">
-            <%= f.estado === 'pagada' ? '✅ Pagada' : '⏳ Pendiente' %>
-          </span>
-        </td>
+        <td style="font-size:12px"><%= f.detalle.baseTotal.toFixed(2) %> Pz</td>
+        <td style="font-size:12px"><%= f.detalle.iva.toFixed(2) %> Pz</td>
+        <td><strong style="font-size:15px;color:#3702b3"><%= f.detalle.total.toFixed(2) %> Pz</strong></td>
+        <td><span class="rsp-badge <%= f.estado === 'pagada' ? 'rsp-badge-green' : 'rsp-badge-orange' %>"><%= f.estado === 'pagada' ? '✅ Pagada' : '⏳ Pendiente' %></span></td>
         <td>
           <% if (f.estado === 'pendiente' && esAdmin) { %>
-          <button class="btn-sm btn-success" onclick="pagarFactura('<%= f.id %>')">💳 Pagar</button>
+          <button class="rsp-action-btn rsp-action-pagar" onclick="pagarFactura('<%= f.id %>')">💳 Pagar</button>
           <% } else { %>
-          <button class="btn-sm btn-secondary" onclick="verFactura('<%= f.id %>')">👁️ Ver</button>
+          <button class="rsp-action-btn rsp-action-ver" onclick="verFactura('<%= f.id %>')">👁️ Ver</button>
           <% } %>
         </td>
       </tr>

@@ -350,17 +350,162 @@ label{font-size:12px;font-weight:600;color:var(--tm);margin-bottom:4px;display:b
 .text-sm{font-size:12px;color:var(--tm)}
 code{font-family:'Courier New',monospace;font-size:11px;background:#f0ecff;padding:1px 6px;border-radius:4px;color:#3702b3}
 
-/* ── Header Cards (gradiente morado) ────────── */
-.rsp-header-card {
-  background: linear-gradient(135deg, #3702b3 0%, #6a2be0 100%);
-  color: #fff;
-  border-radius: 16px;
-  padding: 24px 28px;
-}
-.rsp-header-card h4 { color: #fff; }
-.rsp-header-card p { color: rgba(255,255,255,.7); }
-.rsp-header-card .stat-value { color: #fff; }
+/* ═══════════════════════════════════════════════
+   RSP — Red de Servicios de La Placeta
+   ═══════════════════════════════════════════════ */
 .font-jakarta { font-family: 'Plus Jakarta Sans', var(--font); }
+
+/* ── Hero ──────────────────────────────────── */
+.rsp-hero {
+  background: linear-gradient(135deg, #3702b3 0%, #6a2be0 100%);
+  color: #fff; border-radius: 20px; padding: 28px 32px; margin-bottom: 20px;
+}
+.rsp-hero-content { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.rsp-hero-logo { width: 80px; height: 80px; border-radius: 16px; background: rgba(255,255,255,.13); padding: 8px; object-fit: contain; }
+.rsp-hero-title { font-size: 22px; font-weight: 800; letter-spacing: -.3px; margin: 0; }
+.rsp-hero-sub { font-size: 14px; opacity: .75; margin-top: 4px; }
+.rsp-hero-stats { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
+.rsp-hero-stats span { font-size: 12px; opacity: .65; background: rgba(255,255,255,.08); padding: 4px 12px; border-radius: 20px; }
+.rsp-hero-stats strong { opacity: 1; color: #fff; }
+
+/* ── KPIs modernos ─────────────────────────── */
+.rsp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; margin-bottom: 20px; }
+.rsp-kpi {
+  display: flex; align-items: center; gap: 12px;
+  background: #fff; border: 1px solid #e8e4f0; border-radius: 14px;
+  padding: 14px 16px; transition: all .2s;
+}
+.rsp-kpi:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(55,2,179,.08); }
+.rsp-kpi-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.rsp-kpi-value { font-size: 20px; font-weight: 800; color: #111; line-height: 1.1; }
+.rsp-kpi-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .3px; font-weight: 600; margin-top: 2px; }
+
+/* ── Secciones ─────────────────────────────── */
+.rsp-section-title { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+
+/* ── Tarifas ───────────────────────────────── */
+.rsp-tarifas { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+@media(max-width:600px){.rsp-tarifas{grid-template-columns:1fr}}
+.rsp-tarifa-card {
+  background: #fff; border-radius: 16px; overflow: hidden;
+  border: 1px solid #e8e4f0; transition: all .2s;
+}
+.rsp-tarifa-card:hover { box-shadow: 0 4px 16px rgba(55,2,179,.08); transform: translateY(-1px); }
+.rsp-tarifa-consulta .rsp-tarifa-header { background: linear-gradient(135deg, #3702b3, #6a2be0); }
+.rsp-tarifa-mod .rsp-tarifa-header { background: linear-gradient(135deg, #e65100, #ff6d00); }
+.rsp-tarifa-header { color: #fff; padding: 16px 20px; text-align: center; }
+.rsp-tarifa-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: .8; }
+.rsp-tarifa-precio { display: block; font-size: 28px; font-weight: 800; margin: 4px 0; }
+.rsp-tarifa-moneda { font-size: 11px; opacity: .7; }
+.rsp-tarifa-body { padding: 14px 20px; }
+.rsp-tarifa-detalle { display: flex; justify-content: space-between; font-size: 12px; color: #666; padding: 3px 0; }
+.rsp-tarifa-desc { font-size: 11px; color: #999; margin-top: 8px; padding-top: 8px; border-top: 1px solid #f0ecf8; }
+
+/* ── Botones RSP ───────────────────────────── */
+.rsp-acciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr)); gap: 10px; margin-bottom: 20px; }
+.rsp-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px; border-radius: 14px;
+  font: 600 13px 'Plus Jakarta Sans', sans-serif;
+  text-decoration: none; cursor: pointer;
+  transition: all .18s; border: 1.5px solid transparent;
+}
+.rsp-btn:active { transform: scale(.97); }
+.rsp-btn-primary { background: #3702b3; color: #fff; border-color: #3702b3; }
+.rsp-btn-primary:hover { background: #2a0190; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(55,2,179,.25); }
+.rsp-btn-secondary { background: #fff; color: #111; border-color: #e0d8f0; }
+.rsp-btn-secondary:hover { background: #f6f3ff; border-color: #c8bde8; transform: translateY(-1px); }
+.rsp-btn-outline { background: transparent; color: #3702b3; border-color: #3702b3; }
+.rsp-btn-outline:hover { background: #3702b3; color: #fff; }
+.rsp-btn-icon { font-size: 18px; width: 24px; text-align: center; }
+.rsp-btn-text { flex: 1; }
+.rsp-btn-arrow { font-size: 14px; opacity: .4; transition: all .2s; }
+.rsp-btn:hover .rsp-btn-arrow { opacity: 1; transform: translateX(3px); }
+
+/* ── Cards RSP ─────────────────────────────── */
+.rsp-card { background: #fff; border: 1px solid #e8e4f0; border-radius: 16px; margin-bottom: 16px; overflow: hidden; }
+.rsp-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid #f0ecf8;
+  font-size: 12px; font-weight: 600; color: #666;
+}
+.rsp-link { color: #3702b3; font-weight: 600; font-size: 12px; text-decoration: none; }
+.rsp-link:hover { text-decoration: underline; }
+
+/* ── Empty state ───────────────────────────── */
+.rsp-empty { text-align: center; padding: 40px 20px; }
+.rsp-empty-icon { font-size: 40px; margin-bottom: 10px; opacity: .4; }
+.rsp-empty h3 { font-size: 16px; font-weight: 700; color: #333; margin-bottom: 4px; }
+.rsp-empty p { font-size: 13px; color: #999; }
+
+/* ── Tabla RSP ─────────────────────────────── */
+.rsp-table-wrap { overflow-x: auto; }
+.rsp-table { width: 100%; border-collapse: collapse; }
+.rsp-table th {
+  padding: 10px 16px; text-align: left; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .4px; color: #888;
+  background: #faf8ff; border-bottom: 1px solid #e8e4f0;
+}
+.rsp-table td { padding: 10px 16px; border-bottom: 1px solid #f5f2fa; font-size: 13px; vertical-align: middle; }
+.rsp-table tr:last-child td { border-bottom: none; }
+.rsp-table tr:hover td { background: #faf8ff; }
+
+/* ── Badges RSP ────────────────────────────── */
+.rsp-badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 50px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; gap: 4px; }
+.rsp-badge-purple { background: #f0ecff; color: #3702b3; }
+.rsp-badge-green { background: #e6f7ed; color: #00c853; }
+.rsp-badge-orange { background: #fff3e0; color: #e65100; }
+.rsp-badge-red { background: #ffebee; color: #d03131; }
+.rsp-badge-blue { background: #e3f2fd; color: #2979ff; }
+
+/* ── Filtros RSP ───────────────────────────── */
+.rsp-filtros { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.rsp-filtros select { padding: 8px 12px; border: 1.5px solid #e0d8f0; border-radius: 10px; font: 500 12px 'Plus Jakarta Sans', sans-serif; background: #fff; color: #333; outline: none; cursor: pointer; }
+.rsp-filtros select:focus { border-color: #3702b3; box-shadow: 0 0 0 3px rgba(55,2,179,.08); }
+.rsp-filtros .rsp-link { font-size: 11px; }
+
+/* ── Acciones tabla ────────────────────────── */
+.rsp-action-btn {
+  padding: 6px 14px; border-radius: 8px; font: 600 11px 'Plus Jakarta Sans', sans-serif;
+  border: 1px solid transparent; cursor: pointer; transition: all .12s; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
+}
+.rsp-action-btn:hover { transform: translateY(-1px); }
+.rsp-action-pagar { background: #00c853; color: #fff; }
+.rsp-action-pagar:hover { background: #00a844; }
+.rsp-action-ver { background: #f0ecff; color: #3702b3; }
+.rsp-action-ver:hover { background: #e0d8f8; }
+.rsp-action-generar { background: #3702b3; color: #fff; padding: 10px 20px; font-size: 12px; border-radius: 12px; }
+.rsp-action-generar:hover { background: #2a0190; }
+
+/* ── Alerta RSP ────────────────────────────── */
+.rsp-alert {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  padding: 14px 18px; border-radius: 12px; font-size: 13px; margin-bottom: 16px;
+}
+.rsp-alert-warning { background: #fff8e6; color: #92400e; border: 1px solid #fcd34d; }
+.rsp-alert-success { background: #e6f7ed; color: #1a7a4a; border: 1px solid #bbf7d0; }
+.rsp-alert-error { background: #fef2f2; color: #b82929; border: 1px solid #fecaca; }
+
+/* ── Grid info RSP ─────────────────────────── */
+.rsp-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 12px; margin: 10px 0; }
+.rsp-info-card { padding: 14px; background: #fff; border-radius: 12px; border: 1px solid #e8e4f0; }
+.rsp-info-card strong { font-size: 12px; display: block; }
+.rsp-info-card p { font-size: 11px; color: #666; margin-top: 2px; }
+
+/* ── Responsive ────────────────────────────── */
+@media(max-width:768px){
+  .rsp-hero { padding: 20px; }
+  .rsp-hero-logo { width: 56px; height: 56px; }
+  .rsp-hero-title { font-size: 17px; }
+  .rsp-kpis { grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .rsp-kpi { padding: 10px 12px; }
+  .rsp-kpi-value { font-size: 16px; }
+  .rsp-acciones { grid-template-columns: 1fr 1fr; }
+}
 
 /* ── RSP Slideup ───────────────────────────── */
 @keyframes slideUpIn {

@@ -1,11 +1,11 @@
 <%# Gastos RSP de una entidad específica %>
 <div class="rsp-costs-page">
-  <div class="rsp-header-card mb-16 font-jakarta">
-    <div style="display:flex;align-items:center;gap:14px">
-      <img src="/img/rsp-logo.png" alt="RSP" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,.12);padding:4px;object-fit:contain">
-      <div style="flex:1">
-        <h4 style="font-size:16px;font-weight:700">💰 Gastos RSP — <%= nomEntidad %></h4>
-        <p style="font-size:12px;opacity:.7">
+  <div class="rsp-hero" style="padding:20px 24px">
+    <div class="rsp-hero-content" style="gap:14px">
+      <img src="/img/rsp-logo.png" alt="RSP" class="rsp-hero-logo" style="width:48px;height:48px;padding:5px">
+      <div>
+        <h1 class="rsp-hero-title" style="font-size:18px">💰 Gastos RSP — <%= nomEntidad %></h1>
+        <p class="rsp-hero-sub">
           IBAN: <strong><%= iban %></strong> · 
           <strong><%= totalConexiones %></strong> conexiones · 
           Total: <strong><%= totalGastado.toFixed(4) %> Pz</strong>

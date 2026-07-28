@@ -1,56 +1,65 @@
-<div class="rsp-header-card mb-16 font-jakarta">
-  <div style="display:flex;align-items:center;gap:14px">
-    <img src="/img/rsp-logo.png" alt="RSP" style="width:44px;height:44px;border-radius:10px;background:rgba(255,255,255,.12);padding:4px;object-fit:contain">
+<div class="rsp-hero" style="padding:20px 24px">
+  <div class="rsp-hero-content" style="gap:14px">
+    <img src="/img/rsp-logo.png" alt="RSP" class="rsp-hero-logo" style="width:52px;height:52px;padding:5px">
     <div>
-      <h4 style="font-size:16px;font-weight:700">📡 Registro de Conexiones RSP</h4>
-      <p style="font-size:12px;opacity:.7">Todas las conexiones · GDLP-AP64-583</p>
+      <h1 class="rsp-hero-title" style="font-size:18px">📡 Registro de Conexiones</h1>
+      <p class="rsp-hero-sub">Todas las conexiones · <strong>GDLP-AP64-583</strong></p>
     </div>
   </div>
 </div>
 
 <!-- KPIs -->
-<div class="stats-grid">
-  <div class="stat-card"><div class="stat-value"><%= total %></div><div class="stat-label">Total Conexiones</div></div>
-  <div class="stat-card"><div class="stat-value"><%= totalConsultas %></div><div class="stat-label">Consultas</div></div>
-  <div class="stat-card"><div class="stat-value"><%= totalModificaciones %></div><div class="stat-label">Modificaciones</div></div>
-  <div class="stat-card"><div class="stat-value"><%= ingresosConsultas.toFixed(4) %></div><div class="stat-label">Ing. Consultas (Pz)</div></div>
-  <div class="stat-card"><div class="stat-value"><%= ingresosModificaciones.toFixed(3) %></div><div class="stat-label">Ing. Modificaciones (Pz)</div></div>
-  <div class="stat-card"><div class="stat-value"><%= (ingresosConsultas + ingresosModificaciones).toFixed(3) %></div><div class="stat-label">Total Ingresos (Pz)</div></div>
+<div class="rsp-kpis">
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">📊</div>
+    <div><div class="rsp-kpi-value"><%= total %></div><div class="rsp-kpi-label">Total</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(41,121,255,.12)">👁️</div>
+    <div><div class="rsp-kpi-value"><%= totalConsultas %></div><div class="rsp-kpi-label">Consultas</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(255,109,0,.12)">✏️</div>
+    <div><div class="rsp-kpi-value"><%= totalModificaciones %></div><div class="rsp-kpi-label">Modificaciones</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">💰</div>
+    <div><div class="rsp-kpi-value"><%= (ingresosConsultas + ingresosModificaciones).toFixed(3) %></div><div class="rsp-kpi-label">Total Ingresos (Pz)</div></div>
+  </div>
 </div>
 
 <!-- Filtros -->
-<div class="flex gap-8 mb-16 flex-wrap items-center">
-  <form method="GET" action="/rsp/conexiones" class="flex gap-8 flex-wrap items-center">
-    <select name="entidad" class="form-input" style="width:140px" onchange="this.form.submit()">
+<div class="rsp-filtros">
+  <form method="GET" action="/rsp/conexiones" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select name="entidad" onchange="this.form.submit()">
       <option value="">Todas las entidades</option>
       <option value="banco" <%= filtroEntidad === 'banco' ? 'selected' : '' %>>🏦 Banco</option>
       <option value="tributos" <%= filtroEntidad === 'tributos' ? 'selected' : '' %>>📊 Tributos</option>
       <option value="junta" <%= filtroEntidad === 'junta' ? 'selected' : '' %>>⚖️ Junta</option>
-      <option value="administracion" <%= filtroEntidad === 'administracion' ? 'selected' : '' %>>📋 Administración</option>
-      <option value="placetaid" <%= filtroEntidad === 'placetaid' ? 'selected' : '' %>>🔑 PlacetaID</option>
-      <option value="crm" <%= filtroEntidad === 'crm' ? 'selected' : '' %>>📇 CRM</option>
+      <option value="administracion" <%= filtroEntidad === 'administracion' ? 'selected' : '' %>>📋 Admin</option>
       <option value="general" <%= filtroEntidad === 'general' ? 'selected' : '' %>>🌐 General</option>
     </select>
-    <select name="tipo" class="form-input" style="width:140px" onchange="this.form.submit()">
+    <select name="tipo" onchange="this.form.submit()">
       <option value="">Todos los tipos</option>
       <option value="consulta" <%= filtroTipo === 'consulta' ? 'selected' : '' %>>👁️ Consulta</option>
       <option value="modificacion" <%= filtroTipo === 'modificacion' ? 'selected' : '' %>>✏️ Modificación</option>
     </select>
     <% if (filtroEntidad || filtroTipo) { %>
-    <a href="/rsp/conexiones" class="btn btn-ghost btn-sm">✕ Limpiar filtros</a>
+    <a href="/rsp/conexiones" class="rsp-link">✕ Limpiar filtros</a>
     <% } %>
   </form>
 </div>
 
 <% if (conexiones.length === 0) { %>
-<div class="empty-state">
-  <div class="empty-icon">📡</div>
-  <h3>Sin conexiones registradas</h3>
-  <p>No hay conexiones que coincidan con los filtros seleccionados.</p>
+<div class="rsp-empty">
+  <div class="rsp-empty-icon">📡</div>
+  <h3>Sin conexiones</h3>
+  <p>No hay conexiones con los filtros seleccionados.</p>
 </div>
 <% } else { %>
-<div class="table-container">
-  <table>
+<div class="rsp-card">
+  <div class="rsp-table-wrap">
+  <table class="rsp-table">
     <thead>
       <tr>
         <th>ID</th>
@@ -58,8 +67,6 @@
         <th>Tipo</th>
         <th>Endpoint</th>
         <th>Usuario</th>
-        <th>Tarifa Base</th>
-        <th>IVA</th>
         <th>Total</th>
         <th>Fecha</th>
       </tr>
@@ -67,17 +74,11 @@
     <tbody>
       <% conexiones.forEach(c => { %>
       <tr>
-        <td class="id-cell"><%= c.id %></td>
-        <td><span class="badge badge-purple"><%= c.entidad %></span></td>
-        <td>
-          <span class="badge <%= c.tipo === 'modificacion' ? 'badge-warning' : 'badge-info' %>">
-            <%= c.tipo === 'modificacion' ? '✏️ MOD' : '👁️ CON' %>
-          </span>
-        </td>
-        <td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<%= c.endpoint %>">
-          <%= c.endpoint %>
-        </td>
-        <td style="font-size:11px"><%= c.usuario %><% if (c.dip) { %><br><span class="text-mono"><%= c.dip %></span><% } %></td>
+        <td style="font-family:monospace;font-size:10px;color:#888"><%= c.id %></td>
+        <td><span class="rsp-badge rsp-badge-purple"><%= c.entidad %></span></td>
+        <td><span class="rsp-badge <%= c.tipo === 'modificacion' ? 'rsp-badge-orange' : 'rsp-badge-blue' %>"><%= c.tipo === 'modificacion' ? '✏️ MOD' : '👁️ CON' %></span></td>
+        <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<%= c.endpoint %>"><%= c.endpoint %></td>
+        <td style="font-size:11px"><%= c.usuario %><% if (c.dip) { %><br><span style="font-size:9px;color:#999"><%= c.dip %></span><% } %></td>
         <td><%= c.tarifa.toFixed(4) %> Pz</td>
         <td><%= c.iva.toFixed(4) %> Pz</td>
         <td><strong><%= c.total.toFixed(4) %></strong> Pz</td>

@@ -1,103 +1,100 @@
-<div class="rsp-header-card mb-16 font-jakarta">
-  <div style="display:flex;align-items:center;gap:16px">
-    <img src="/img/rsp-logo.png" alt="RSP" style="width:56px;height:56px;border-radius:12px;background:rgba(255,255,255,.15);padding:5px;object-fit:contain">
+<div class="rsp-hero" style="padding:20px 24px">
+  <div class="rsp-hero-content" style="gap:14px">
+    <img src="/img/rsp-logo.png" alt="RSP" class="rsp-hero-logo" style="width:56px;height:56px;padding:6px">
     <div>
-      <h4 style="font-size:18px;font-weight:700">💰 Gestión de Fondos RSP</h4>
-      <p style="font-size:13px;opacity:.8">Red de Servicios de La Placeta · <strong>GDLP-AP64-583</strong></p>
-      <p style="font-size:12px;opacity:.6;margin-top:2px">Administración de fondos, sanciones y pagos vía Banco de La Placeta</p>
+      <h1 class="rsp-hero-title" style="font-size:20px">💰 Gestión de Fondos RSP</h1>
+      <p class="rsp-hero-sub"><strong>GDLP-AP64-583</strong> · Fondos, sanciones y pagos vía Banco de La Placeta</p>
     </div>
   </div>
 </div>
 
 <!-- KPIs -->
-<div class="stats-grid">
-  <div class="stat-card">
-    <div class="stat-value" style="font-size:22px"><%= fondos.saldo.toFixed(2) %></div>
-    <div class="stat-label">Saldo Actual (Pz)</div>
+<div class="rsp-kpis">
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">💰</div>
+    <div><div class="rsp-kpi-value" style="font-size:22px"><%= fondos.saldo.toFixed(2) %></div><div class="rsp-kpi-label">Saldo Actual (Pz)</div></div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value"><%= fondos.totalIngresos.toFixed(2) %></div>
-    <div class="stat-label">Total Ingresos (Pz)</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">📈</div>
+    <div><div class="rsp-kpi-value"><%= fondos.totalIngresos.toFixed(2) %></div><div class="rsp-kpi-label">Total Ingresos</div></div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value"><%= fondos.totalEgresos.toFixed(2) %></div>
-    <div class="stat-label">Total Egresos (Pz)</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(255,23,68,.12)">📉</div>
+    <div><div class="rsp-kpi-value"><%= fondos.totalEgresos.toFixed(2) %></div><div class="rsp-kpi-label">Total Egresos</div></div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value"><%= stats.conexionesEsteMes %></div>
-    <div class="stat-label">Conexiones este mes</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(41,121,255,.12)">⚡</div>
+    <div><div class="rsp-kpi-value"><%= stats.conexionesEsteMes %></div><div class="rsp-kpi-label">Conexiones del Mes</div></div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value"><%= stats.ingresosEsteMes.toFixed(3) %></div>
-    <div class="stat-label">Ingresos este mes (Pz)</div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">💰</div>
+    <div><div class="rsp-kpi-value"><%= stats.ingresosEsteMes.toFixed(3) %></div><div class="rsp-kpi-label">Ingresos del Mes</div></div>
   </div>
-  <div class="stat-card">
-    <div class="stat-value" style="color:<%= fondos.sancionPagada ? '#22a06b' : '#d03131' %>">
-      <%= fondos.sancionPagada ? '✅ Pagada' : fondos.sancionPendiente.toFixed(2) %>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:<%= fondos.sancionPagada ? 'rgba(0,200,83,.12)' : 'rgba(255,23,68,.12)' %>">
+      <%= fondos.sancionPagada ? '✅' : '⚠️' %>
     </div>
-    <div class="stat-label">Sanción IVA</div>
+    <div>
+      <div class="rsp-kpi-value" style="color:<%= fondos.sancionPagada ? '#00c853' : '#d03131' %>">
+        <%= fondos.sancionPagada ? 'Pagada' : fondos.sancionPendiente.toFixed(2) %>
+      </div>
+      <div class="rsp-kpi-label">Sanción IVA</div>
+    </div>
   </div>
 </div>
 
 <!-- Info Bancaria -->
-<div class="info-card mb-16" style="background:#f0fdf4;border-color:#bbf7d0">
-  <h4>🏦 Pagos vía Banco de La Placeta</h4>
-  <p style="font-size:12px">
-    Todos los cobros y pagos se procesan a través del Banco de La Placeta real:
-  </p>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:10px">
-    <div style="padding:10px;background:#fff;border-radius:8px;border:1px solid #e8e4f0">
-      <strong style="font-size:12px">💰 Base servicios</strong>
-      <p style="font-size:11px;color:#666;margin-top:2px">→ RSP (GDLP-AP99-001)</p>
-    </div>
-    <div style="padding:10px;background:#fff;border-radius:8px;border:1px solid #e8e4f0">
-      <strong style="font-size:12px">📊 IVA (12%)</strong>
-      <p style="font-size:11px;color:#666;margin-top:2px">→ Tributos TGLP (GDLP-AP98-605)</p>
-    </div>
-    <div style="padding:10px;background:#fff;border-radius:8px;border:1px solid #e8e4f0">
-      <strong style="font-size:12px">⚖️ Sanciones</strong>
-      <p style="font-size:11px;color:#666;margin-top:2px">→ Administración (AGLDP)</p>
+<div class="rsp-card">
+  <div class="rsp-card-header">🏦 Pagos vía Banco de La Placeta</div>
+  <div style="padding:16px 20px">
+    <p style="font-size:12px;color:#888;margin-bottom:12px">Todos los cobros se procesan a través del Banco real:</p>
+    <div class="rsp-info-grid">
+      <div class="rsp-info-card"><strong>💰 Base servicios</strong><p>→ RSP (GDLP-AP64-583)</p></div>
+      <div class="rsp-info-card"><strong>📊 IVA (12%)</strong><p>→ Tributos TGLP (GDLP-AP98-605)</p></div>
+      <div class="rsp-info-card"><strong>⚖️ Sanciones</strong><p>→ Administración (GDLP-AP27-062)</p></div>
     </div>
   </div>
 </div>
 
 <!-- Sanción IVA -->
 <% if (!fondos.sancionPagada) { %>
-<div class="alert <%= fondos.saldo >= fondos.sancionPendiente ? 'alert-success' : 'alert-error' %>" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+<div class="rsp-alert <%= fondos.saldo >= fondos.sancionPendiente ? 'rsp-alert-warning' : 'rsp-alert-error' %>">
   <span>
-    <strong>⚠️ Sanción por IVA no abonado:</strong> <strong style="color:var(--r)"><%= fondos.sancionPendiente.toFixed(2) %> Pz</strong>
-    — IVA de "Red del Grupo de La Placeta" no transferido a la administración (contravención constitucional).
-    <%= fondos.saldo >= fondos.sancionPendiente ? '✅ Fondos suficientes para pagar.' : '❌ Fondos insuficientes.' %>
+    <strong>⚠️ Sanción por IVA no abonado:</strong> <strong style="color:#d03131"><%= fondos.sancionPendiente.toFixed(2) %> Pz</strong>
+    — IVA no transferido a la administración.
+    <%= fondos.saldo >= fondos.sancionPendiente ? '✅ Fondos suficientes.' : '❌ Fondos insuficientes.' %>
   </span>
   <% if (esAdmin && fondos.saldo >= fondos.sancionPendiente) { %>
-  <button class="btn btn-warning btn-sm" onclick="pagarSancion()">💸 Pagar Sanción</button>
+  <button class="rsp-action-btn rsp-action-pagar" onclick="pagarSancion()" style="padding:8px 18px;font-size:12px">💸 Pagar Sanción</button>
   <% } %>
 </div>
 <% } else { %>
-<div class="alert alert-success">
-  <strong>✅ Sanción de IVA pagada.</strong> La deuda de 2,461.77 Pz por IVA no abonado ha sido saldada.
-</div>
+<div class="rsp-alert rsp-alert-success">✅ Sanción de IVA pagada. 2,461.77 Pz saldados.</div>
 <% } %>
 
-<!-- Info fondos iniciales -->
-<div class="info-card mb-16">
-  <h4>📋 Resumen de Fondos</h4>
-  <div class="grid-2" style="gap:12px">
-    <div style="padding:12px;background:#f0eeff;border-radius:10px">
-      <p style="font-size:11px;color:#888">Fondos Iniciales</p>
-      <p style="font-size:18px;font-weight:700;color:var(--p)"><%= fondos.fondosIniciales.toFixed(2) %> Pz</p>
-      <p style="font-size:10px;color:#999">Transferidos desde "Red del Grupo de La Placeta"</p>
+<!-- Resumen -->
+<div class="rsp-card">
+  <div class="rsp-card-header">📋 Resumen de Fondos</div>
+  <div style="padding:16px 20px">
+    <div class="rsp-info-grid">
+      <div class="rsp-info-card" style="background:#f0ecff">
+        <strong>💰 Fondos Iniciales</strong>
+        <p style="font-size:16px;font-weight:800;color:#3702b3;margin-top:4px"><%= fondos.fondosIniciales.toFixed(2) %> Pz</p>
+        <p style="font-size:10px;color:#999">Transferidos desde "Red del Grupo de La Placeta"</p>
+      </div>
+      <div class="rsp-info-card" style="background:#e6f7ed">
+        <strong>📈 Ingresos por Conexiones</strong>
+        <p style="font-size:16px;font-weight:800;color:#00c853;margin-top:4px"><%= (fondos.totalIngresos - fondos.fondosIniciales).toFixed(2) %> Pz</p>
+        <p style="font-size:10px;color:#999">Acumulado de conexiones de entidades</p>
+      </div>
+      <div class="rsp-info-card" style="background:#ffebee">
+        <strong>📉 Total Egresos</strong>
+        <p style="font-size:16px;font-weight:800;color:#d03131;margin-top:4px"><%= fondos.totalEgresos.toFixed(2) %> Pz</p>
+        <p style="font-size:10px;color:#999">Facturas pagadas y sanciones</p>
+      </div>
     </div>
-    <div style="padding:12px;background:#f0fdf4;border-radius:10px">
-      <p style="font-size:11px;color:#888">Total Ingresos por Conexiones</p>
-      <p style="font-size:18px;font-weight:700;color:var(--g)"><%= (fondos.totalIngresos - fondos.fondosIniciales).toFixed(2) %> Pz</p>
-      <p style="font-size:10px;color:#999">Acumulado desde conexiones de entidades</p>
-    </div>
-    <div style="padding:12px;background:#fef2f2;border-radius:10px">
-      <p style="font-size:11px;color:#888">Total Egresos</p>
-      <p style="font-size:18px;font-weight:700;color:var(--r)"><%= fondos.totalEgresos.toFixed(2) %> Pz</p>
-      <p style="font-size:10px;color:#999">Incluye facturas pagadas y sanciones</p>
-    </div>
+  </div>
+</div>
     <div style="padding:12px;background:linear-gradient(135deg,#f0eeff,#f0fdf4);border-radius:10px">
       <p style="font-size:11px;color:#888">Saldo Neto</p>
       <p style="font-size:22px;font-weight:800;color:var(--p)"><%= fondos.saldo.toFixed(2) %> Pz</p>
