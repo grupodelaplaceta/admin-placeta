@@ -41,104 +41,10 @@ const CATEGORIAS_VOTO = {
   todos: { nombre: 'Todos', descripcion: 'Todos los grupos y departamentos' }
 };
 
-// Inicializar con ejemplos
+// Inicializar con ejemplos (ELIMINADO — solo datos reales de Supabase)
 (function initVotaciones() {
   if (memVotaciones.size > 0) return;
-
-  const now = new Date();
-  const manana = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  const semana = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-  const ej = [
-    {
-      id: 'VOT-001', titulo: 'Aprobación Presupuestos 2026',
-      descripcion: 'Votación para aprobar los presupuestos generales del ejercicio 2026',
-      categoria: 'junta',
-      grupo: 'Junta',
-      quorum: 60,
-      aFavor: 4, enContra: 1, abstenciones: 0,
-      totalVotos: 5, totalEmitidos: 5,
-      estado: 'Cerrada',
-      resultado: 'Aprobada',
-      fechaCreacion: '2026-07-10T10:00:00Z',
-      fechaLimite: '2026-07-17T23:59:00Z',
-      reunionId: 'REU-001',
-      requiereQuorum: true,
-      created_at: '2026-07-10'
-    },
-    {
-      id: 'VOT-002', titulo: 'Reforma Tributaria — Tipo IRM',
-      descripcion: 'Propuesta de modificación del tipo impositivo del IRM para el próximo periodo fiscal',
-      categoria: 'mayores_18',
-      grupo: '+18',
-      quorum: 50,
-      aFavor: 28, enContra: 12, abstenciones: 5,
-      totalVotos: 45, totalEmitidos: 45,
-      estado: 'Cerrada',
-      resultado: 'Aprobada',
-      fechaCreacion: '2026-07-01T09:00:00Z',
-      fechaLimite: '2026-07-08T23:59:00Z',
-      reunionId: null,
-      requiereQuorum: true,
-      created_at: '2026-07-01'
-    },
-    {
-      id: 'VOT-003', titulo: 'Nuevo Cargo Directivo — Dir. Comunicación',
-      descripcion: 'Elección del nuevo Director/a de Comunicación del Grupo de La Placeta',
-      categoria: 'junta',
-      grupo: 'Junta',
-      quorum: 50,
-      aFavor: 0, enContra: 0, abstenciones: 0,
-      totalVotos: 0, totalEmitidos: 0,
-      estado: 'Activa',
-      resultado: null,
-      fechaCreacion: '2026-07-15T12:00:00Z',
-      fechaLimite: semana.toISOString(),
-      reunionId: null,
-      requiereQuorum: true,
-      created_at: '2026-07-15'
-    },
-    {
-      id: 'VOT-004', titulo: '¿Debe la Placeta organizar un evento anual?',
-      descripcion: 'Consulta ciudadana sobre la organización de un evento anual abierto a todos los ciudadanos',
-      categoria: 'ciudadanos',
-      grupo: 'Ciudadanos',
-      quorum: 30,
-      aFavor: 0, enContra: 0, abstenciones: 0,
-      totalVotos: 0, totalEmitidos: 0,
-      estado: 'Activa',
-      resultado: null,
-      fechaCreacion: '2026-07-20T08:00:00Z',
-      fechaLimite: manana.toISOString(),
-      reunionId: 'REU-003',
-      requiereQuorum: false,
-      created_at: '2026-07-20'
-    }
-  ];
-
-  ej.forEach(e => {
-    memVotaciones.set(e.id, e);
-    votIdCounter = Math.max(votIdCounter, parseInt(e.id.slice(-3)));
-  });
-})();
-
-// Inicializar con algunos votos de ejemplo para el registro
-(function initRegistro() {
-  if (memRegistroVotos.size > 0) return;
-
-  const votosExistentes = [
-    { votacionId: 'VOT-001', dip: 'GDLP-AP00-001', nombre: 'Presidencia', voto: 'a_favor', categoria: 'junta' },
-    { votacionId: 'VOT-001', dip: 'GDLP-AP00-002', nombre: 'Vicepresidencia', voto: 'a_favor', categoria: 'junta' },
-    { votacionId: 'VOT-001', dip: 'GDLP-TRBX-001', nombre: 'Admin Tributos', voto: 'en_contra', categoria: 'junta' },
-    { votacionId: 'VOT-002', dip: 'GDLP-AP76-179', nombre: 'Ciudadano Ejemplo', voto: 'a_favor', categoria: 'mayores_18' },
-  ];
-
-  votosExistentes.forEach(v => {
-    const id = 'REG-' + String(++regVotoCounter).padStart(5, '0');
-    const timestamp = new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString();
-    const hash = crypto.createHash('sha256').update(`${id}:${v.votacionId}:${v.dip}:${v.voto}:${timestamp}`).digest('hex');
-    memRegistroVotos.set(id, { ...v, id, timestamp, hash, oficial: true });
-  });
+  // Sin datos de ejemplo — las votaciones solo vienen de Supabase
 })();
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -217,15 +217,8 @@ router.get('/api/reuniones/:id/pdf', verificarPermiso('junta', 'gestion_reunione
 const memVotaciones = new Map();
 let votIdCounter = 0;
 
-(function initVot() {
-  if (memVotaciones.size > 0) return;
-  const ej = [
-    { id: 'VOT-001', titulo: 'Aprobación Presupuestos 2026', grupo: 'Junta', quorum: 60, aFavor: 4, enContra: 1, abstenciones: 0, totalVotos: 5, estado: 'Cerrada', resultado: 'Aprobada', reunionId: 'REU-001', created_at: '2026-07-10' },
-    { id: 'VOT-002', titulo: 'Reforma Tributaria — Tipo IRM', grupo: '+18', quorum: 50, aFavor: 28, enContra: 12, abstenciones: 5, totalVotos: 45, estado: 'Cerrada', resultado: 'Aprobada', reunionId: null, created_at: '2026-07-01' },
-    { id: 'VOT-003', titulo: 'Nuevo Cargo Directivo — Dir. Comunicación', grupo: 'Junta', quorum: 50, aFavor: 0, enContra: 0, abstenciones: 0, totalVotos: 0, estado: 'Activa', resultado: null, reunionId: null, created_at: '2026-07-15' },
-  ];
-  ej.forEach(e => { memVotaciones.set(e.id, e); votIdCounter = Math.max(votIdCounter, parseInt(e.id.slice(-3))); });
-})();
+// Sin datos de ejemplo — solo Supabase
+(function initVot() { if (memVotaciones.size > 0) return; })();
 
 router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
   let votaciones = [];
