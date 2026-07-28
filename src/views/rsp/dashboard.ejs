@@ -9,6 +9,7 @@
         <span>💰 Fondos: <strong><%= stats.saldoActual.toFixed(2) %> Pz</strong></span>
         <span>⚡ Conexiones: <strong><%= stats.totalConexiones %></strong></span>
         <span>📊 Facturas: <strong><%= stats.facturasEmitidas %></strong></span>
+        <span>🗳️ Votaciones: <strong><%= votaciones ? votaciones.total : 0 %></strong></span>
       </div>
     </div>
   </div>
@@ -141,17 +142,17 @@
 </div>
 
 <!-- ═══ VOTACIONES ═══ -->
-<% if (votaciones && votaciones.activas > 0) { %>
-<div class="rsp-section-title">🗳️ Votaciones Activas (Supabase)</div>
+<% if (votaciones) { %>
+<div class="rsp-section-title">🗳️ Votaciones (PlacetaID — datos reales)</div>
 <div class="rsp-card">
   <div class="rsp-card-header">
-    <span><%= votaciones.activas %> votación<%= votaciones.activas !== 1 ? 'es' : '' %> activa<%= votaciones.activas !== 1 ? 's' : '' %></span>
+    <span><%= votaciones.total %> votación<%= votaciones.total !== 1 ? 'es' : '' %> · <%= votaciones.activas %> activa<%= votaciones.activas !== 1 ? 's' : '' %></span>
     <a href="/junta/votaciones" class="rsp-link">Gestionar →</a>
   </div>
-  <div style="padding:12px;font-size:13px;display:flex;gap:16px;flex-wrap:wrap">
-    <span>🗳️ Activas: <strong><%= votaciones.activas %></strong></span>
+  <div style="padding:12px;font-size:13px;display:flex;gap:20px;flex-wrap:wrap">
+    <span>🟢 Activas: <strong><%= votaciones.activas %></strong></span>
     <span>✅ Cerradas: <strong><%= votaciones.cerradas %></strong></span>
-    <span>📊 Votos totales: <strong><%= votaciones.totalVotos %></strong></span>
+    <span>📊 Votos emitidos: <strong><%= votaciones.totalVotos %></strong></span>
   </div>
 </div>
 <% } %>

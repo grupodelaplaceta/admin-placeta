@@ -25,17 +25,25 @@ router.get('/', verificarSesion, verificarAccesoEntidad('rsp'), async (req, res)
   const conexionesRecientes = getConexiones({ limit: 10 }).reverse();
   const facturasPendientes = getFacturas({ estado: 'pendiente' });
 
-  // Cargar votaciones desde Supabase si hay
-  let votacionesData = { activas: 0, cerradas: 0, totalVotos: 0 };
+  // Cargar votaciones REALES desde PlacetaID (plid26-main)
+  let votacionesData = { activas: 0, cerradas: 0, totalVotos: 0, votosHistorial: [] };
   try {
-    const { getVotacionesFromSupabase } = await import('./votaciones-api.js');
-    const votaciones = await getVotacionesFromSupabase();
-    if (votaciones.length > 0) {
-      votacionesData = {
-        activas: votaciones.filter(v => v.estado === 'Activa').length,
-        cerradas: votaciones.filter(v => v.estado === 'Cerrada').length,
-        totalVotos: votaciones.reduce((s, v) => s + (v.totalVotos || 0), 0)
-      };
+    const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+    const API_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
+    const resp = await fetch(`${PLACETAID_API}/admin/votaciones`, {
+      headers: { 'X-API-Key': API_KEY },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (resp.ok) {
+      const votaciones = await resp.json();
+      if (Array.isArray(votaciones)) {
+        votacionesData = {
+          activas: votaciones.filter(v => v.estado === 'Activa').length,
+          cerradas: votaciones.filter(v => v.estado === 'Cerrada').length,
+          totalVotos: votaciones.reduce((s, v) => s + (v.totalVotos || 0), 0),
+          total: votaciones.length
+        };
+      }
     }
   } catch (e) { /* votaciones no disponibles */ }
 
