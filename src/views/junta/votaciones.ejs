@@ -44,13 +44,14 @@
         <th style="width:80px">❌ En contra</th>
         <th style="width:60px">⬜ Abs.</th>
         <th style="width:100px">📊 Estado</th>
+        <th style="width:130px">📅 Cierre</th>
         <th style="width:140px">⚡ Acciones</th>
       </tr>
     </thead>
     <tbody>
       <% const vots = votaciones || []; %>
       <% if (vots.length === 0) { %>
-      <tr><td colspan="9" class="text-center text-muted">No hay votaciones registradas. Crea una nueva votación.</td></tr>
+      <tr><td colspan="10" class="text-center text-muted">No hay votaciones registradas. Crea una nueva votación.</td></tr>
       <% } %>
       <% vots.forEach(v => { %>
       <tr class="fila-vot" data-estado="<%= v.estado %>" data-grupo="<%= v.grupo %>">
@@ -74,6 +75,11 @@
             <%= est === 'Activa' ? 'badge-success' : est === 'Cerrada' && v.resultado === 'Aprobada' ? 'badge-success' : est === 'Cerrada' ? 'badge-info' : 'badge-warning' %>">
             <%= est === 'Activa' ? '🔓 Activa' : est === 'Cerrada' ? (v.resultado === 'Aprobada' ? '✅ Aprobada' : '❌ Rechazada') : '📅 Programada' %>
           </span>
+        </td>
+        <td style="font-size:10px;color:#888;text-align:center">
+          <% if (v.fechaLimite) { %>
+            <%= new Date(v.fechaLimite).toLocaleDateString('es-ES', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) %>
+          <% } else { %>—<% } %>
         </td>
         <td>
           <div class="flex gap-4" style="flex-wrap:nowrap">
@@ -131,6 +137,7 @@ function nuevaVotacion() {
       <div><label>❌ En contra</label><input type="number" id="votContra" class="form-input" value="0" min="0"></div>
     </div>
     <div style="margin-top:8px"><label>⬜ Abstenciones</label><input type="number" id="votAbsten" class="form-input" value="0" min="0"></div>
+    <div style="margin-top:8px"><label>📅 Fecha límite (opcional)</label><input type="datetime-local" id="votFechaLimite" class="form-input"></div>
     <div class="flex gap-8 mt-16">
       <button class="btn btn-primary" onclick='crearVotacion()'>🗳️ Crear votación</button>
       <button class="btn btn-success" onclick='crearVotacionCerrada()'>🔒 Crear y cerrar</button>
@@ -141,6 +148,7 @@ function nuevaVotacion() {
 async function crearVotacion() {
   const t = document.getElementById('votTitulo')?.value;
   if (!t) return mostrarToast('La propuesta es obligatoria', 'error');
+  const fl = document.getElementById('votFechaLimite')?.value;
   try {
     const r = await apiFetch('/junta/api/votaciones', {
       method:'POST', body: JSON.stringify({
@@ -149,7 +157,8 @@ async function crearVotacion() {
         aFavor: parseInt(document.getElementById('votFavor')?.value) || 0,
         enContra: parseInt(document.getElementById('votContra')?.value) || 0,
         abstenciones: parseInt(document.getElementById('votAbsten')?.value) || 0,
-        cerrar: false
+        cerrar: false,
+        fechaLimite: fl ? new Date(fl).toISOString() : null
       })
     });
     if (r.success) { mostrarToast('✅ Votación creada', 'success'); setTimeout(() => location.reload(), 800); }
@@ -160,6 +169,7 @@ async function crearVotacionCerrada() {
   document.getElementById('votQuorum').value = parseInt(document.getElementById('votQuorum')?.value) || 50;
   const t = document.getElementById('votTitulo')?.value;
   if (!t) return mostrarToast('La propuesta es obligatoria', 'error');
+  const fl = document.getElementById('votFechaLimite')?.value;
   try {
     const r = await apiFetch('/junta/api/votaciones', {
       method:'POST', body: JSON.stringify({
@@ -168,7 +178,8 @@ async function crearVotacionCerrada() {
         aFavor: parseInt(document.getElementById('votFavor')?.value) || 0,
         enContra: parseInt(document.getElementById('votContra')?.value) || 0,
         abstenciones: parseInt(document.getElementById('votAbsten')?.value) || 0,
-        cerrar: true
+        cerrar: true,
+        fechaLimite: fl ? new Date(fl).toISOString() : null
       })
     });
     if (r.success) { mostrarToast('✅ Votación creada y cerrada', 'success'); setTimeout(() => location.reload(), 800); }
@@ -193,6 +204,7 @@ function verVotacion(id) {
       <p><strong>Total votos:</strong> ${total}</p>
       <p><strong>Estado:</strong> <span class="badge ${v.estado==='Cerrada'?'badge-info':'badge-success'}">${v.estado||'Programada'}</span></p>
       <p><strong>Resultado:</strong> <span class="badge ${v.aFavor > v.enContra ? 'badge-success' : 'badge-danger'}">${resultado}</span></p>
+      ${v.fechaLimite ? `<p><strong>📅 Cierre:</strong> ${new Date(v.fechaLimite).toLocaleString('es-ES')}</p>` : ''}
     </div>
     <hr style="margin:8px 0">
     <p style="font-weight:600;font-size:12px;margin-bottom:8px">📊 Resultados</p>

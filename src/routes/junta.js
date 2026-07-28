@@ -345,32 +345,44 @@ router.put('/api/votaciones/:id', verificarPermiso('junta', 'crear_votaciones'),
 
 // API: Cerrar votación (persiste en Supabase)
 router.put('/api/votaciones/:id/cerrar', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
-  const v = memVotaciones.get(req.params.id);
-  if (!v) return res.status(404).json({ error: 'No encontrada' });
-  v.estado = 'Cerrada';
-  v.resultado = (v.aFavor||0) > (v.enContra||0) ? 'Aprobada' : 'Rechazada';
-  // Persistir en Supabase
-  if (supabase) {
-    try { await supabase.from('rsp_votaciones').update({ estado: 'Cerrada', resultado: v.resultado }).eq('id', v.id); }
-    catch (e) { console.warn('[Junta] Error persistente cierre:', e.message); }
+  const id = req.params.id;
+  // Primero buscar en memoria, si no, leer de Supabase
+  let v = memVotaciones.get(id);
+  if (!v && supabase) {
+    try {
+      const { data } = await supabase.from('rsp_votaciones').select('*').eq('id', id).single();
+      if (data) v = { aFavor: data.a_favor, enContra: data.en_contra };
+    } catch (_) {}
   }
+  const aFavor = v?.aFavor || 0;
+  const enContra = v?.enContra || 0;
+  const resultado = aFavor > enContra ? 'Aprobada' : 'Rechazada';
+  if (supabase) {
+    try {
+      await supabase.from('rsp_votaciones').update({ estado: 'Cerrada', resultado }).eq('id', id);
+    } catch (e) { console.warn('[Junta] Error persistente cierre:', e.message); }
+  }
+  if (v) { v.estado = 'Cerrada'; v.resultado = resultado; }
   // Notificar cierre a PlacetaID
   try {
     const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
     const API_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
-    fetch(`${PLACETAID_API}/admin/votaciones/${v.id}/cerrar`, {
+    fetch(`${PLACETAID_API}/admin/votaciones/${id}/cerrar`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY }
     }).catch(() => {});
   } catch {}
-  res.json({ success: true, resultado: v.resultado });
+  res.json({ success: true, resultado });
 });
 
 // API: Reabrir votación
-router.put('/api/votaciones/:id/reabrir', verificarPermiso('junta', 'crear_votaciones'), (req, res) => {
-  const v = memVotaciones.get(req.params.id);
-  if (!v) return res.status(404).json({ error: 'No encontrada' });
-  v.estado = 'Activa';
-  v.resultado = null;
+router.put('/api/votaciones/:id/reabrir', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
+  const id = req.params.id;
+  if (supabase) {
+    try { await supabase.from('rsp_votaciones').update({ estado: 'Activa', resultado: null }).eq('id', id); }
+    catch (e) { console.warn('[Junta] Error persistente reapertura:', e.message); }
+  }
+  const v = memVotaciones.get(id);
+  if (v) { v.estado = 'Activa'; v.resultado = null; }
   res.json({ success: true });
 });
 
