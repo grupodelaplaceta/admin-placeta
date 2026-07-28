@@ -19,19 +19,32 @@ import {
 const router = Router();
 
 // ── DASHBOARD ──────────────────────────────────────────────────────────────
-router.get('/', verificarSesion, verificarAccesoEntidad('rsp'), (req, res) => {
+router.get('/', verificarSesion, verificarAccesoEntidad('rsp'), async (req, res) => {
   const stats = getEstadisticas();
   const tarifas = getTarifas();
   const conexionesRecientes = getConexiones({ limit: 10 }).reverse();
   const facturasPendientes = getFacturas({ estado: 'pendiente' });
 
+  // Cargar votaciones desde Supabase si hay
+  let votacionesData = { activas: 0, cerradas: 0, totalVotos: 0 };
+  try {
+    const { getVotacionesFromSupabase } = await import('./votaciones-api.js');
+    const votaciones = await getVotacionesFromSupabase();
+    if (votaciones.length > 0) {
+      votacionesData = {
+        activas: votaciones.filter(v => v.estado === 'Activa').length,
+        cerradas: votaciones.filter(v => v.estado === 'Cerrada').length,
+        totalVotos: votaciones.reduce((s, v) => s + (v.totalVotos || 0), 0)
+      };
+    }
+  } catch (e) { /* votaciones no disponibles */ }
+
   res.render('rsp/dashboard', {
     titulo: 'Red de Servicios de La Placeta (RSP)',
     entidad_actual: 'rsp',
-    stats,
-    tarifas,
-    conexionesRecientes,
-    facturasPendientes,
+    stats, tarifas,
+    conexionesRecientes, facturasPendientes,
+    votaciones: votacionesData,
     esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
   });
 });

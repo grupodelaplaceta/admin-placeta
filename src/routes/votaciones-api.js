@@ -186,9 +186,48 @@ async function persistirRegistroVoto(registro) {
   } catch (e) { /* silencioso */ }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// FUNCIONES DE AYUDA
-// ═══════════════════════════════════════════════════════════════════════════
+// ── LEER VOTACIONES DESDE SUPABASE ──────────────────────────────────────
+async function getVotacionesFromSupabase() {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase.from('rsp_votaciones')
+      .select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(v => ({
+      id: v.id, titulo: v.titulo, descripcion: v.descripcion || '',
+      categoria: v.categoria || 'General', grupo: v.grupo || 'Publico_General',
+      quorum: v.quorum, aFavor: v.a_favor || 0, enContra: v.en_contra || 0,
+      abstenciones: v.abstenciones || 0,
+      totalVotos: v.total_votos || 0, totalEmitidos: v.total_emitidos || 0,
+      estado: v.estado || 'Activa', resultado: v.resultado || null,
+      fechaCreacion: v.fecha_creacion, fechaLimite: v.fecha_limite,
+      reunionId: v.reunion_id, requiereQuorum: v.requiere_quorum,
+      created_at: v.created_at
+    }));
+  } catch (e) {
+    console.warn('[Votos] Error leyendo de Supabase:', e.message);
+    return [];
+  }
+}
+
+async function getRegistroVotosFromSupabase(votacionId = null) {
+  if (!supabase) return [];
+  try {
+    let query = supabase.from('rsp_registro_votos').select('*').order('timestamp', { ascending: false });
+    if (votacionId) query = query.eq('votacion_id', votacionId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map(r => ({
+      id: r.id, votacionId: r.votacion_id,
+      dip: r.dip, nombre: r.nombre || '',
+      categoria: r.categoria || 'General', voto: r.voto,
+      hash: r.hash, oficial: r.oficial, timestamp: r.timestamp
+    }));
+  } catch (e) {
+    console.warn('[Votos] Error leyendo registro:', e.message);
+    return [];
+  }
+}
 
 /**
  * Obtiene la fecha límite como objeto Date
@@ -302,28 +341,31 @@ async function notificarVotacion(votacion, tipo = 'nueva') {
  * GET /api/votaciones
  * Lista todas las votaciones
  */
-router.get('/votaciones', (req, res) => {
+router.get('/votaciones', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /api/votaciones');
-  const votaciones = [...memVotaciones.values()].map(v => ({
+  let votaciones = [...memVotaciones.values()];
+  if (votaciones.length === 0) {
+    const desdeDB = await getVotacionesFromSupabase();
+    if (desdeDB.length > 0) votaciones = desdeDB;
+  }
+  res.json(votaciones.map(v => ({
     ...v,
     tiempoRestante: calcularTiempoRestante(v),
     esAnonimo: debeSerAnonimo(v)
-  }));
-  res.json(votaciones.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')));
+  })).sort((a, b) => (b.created_at || b.fechaCreacion || '').localeCompare(a.created_at || a.fechaCreacion || '')));
 });
 
 /**
  * GET /api/votaciones/activas
  * Lista solo votaciones activas (no cerradas)
  */
-router.get('/votaciones/activas', (req, res) => {
-  const activas = [...memVotaciones.values()]
-    .filter(v => v.estado === 'Activa')
-    .map(v => ({
-      ...v,
-      tiempoRestante: calcularTiempoRestante(v)
-    }));
-  res.json(activas);
+router.get('/votaciones/activas', async (req, res) => {
+  let activas = [...memVotaciones.values()].filter(v => v.estado === 'Activa');
+  if (activas.length === 0) {
+    const desdeDB = await getVotacionesFromSupabase();
+    activas = desdeDB.filter(v => v.estado === 'Activa');
+  }
+  res.json(activas.map(v => ({ ...v, tiempoRestante: calcularTiempoRestante(v) })));
 });
 
 /**
