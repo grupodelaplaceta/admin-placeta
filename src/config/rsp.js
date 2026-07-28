@@ -319,11 +319,11 @@ export function getEstadisticas() {
   };
 }
 
-// ── PERSISTENCIA SUPABASE ─────────────────────────────────────────────────
+// ── PERSISTENCIA SUPABASE + FALLBACK A MEMORIA PERSISTENTE ────────────────
 async function persistirConexion(conexion) {
   if (!supabase) return;
   try {
-    await supabase.from('rsp_conexiones').insert({
+    const { error } = await supabase.from('rsp_conexiones').insert({
       id: conexion.id,
       entidad: conexion.entidad,
       tipo: conexion.tipo,
@@ -336,6 +336,34 @@ async function persistirConexion(conexion) {
       detalle: conexion.detalle,
       created_at: conexion.timestamp
     });
+    if (error && error.code === '42P01') {
+      console.warn('[RSP] Tabla rsp_conexiones no existe, intentando crearla...');
+      // Intentar crear la tabla via SQL directo
+      try {
+        await supabase.rpc('exec_sql', {
+          sql: `CREATE TABLE IF NOT EXISTS rsp_conexiones (
+            id TEXT PRIMARY KEY, entidad TEXT NOT NULL, tipo TEXT NOT NULL,
+            endpoint TEXT DEFAULT '', usuario TEXT DEFAULT '', dip TEXT DEFAULT '',
+            tarifa REAL DEFAULT 0, iva REAL DEFAULT 0, total REAL DEFAULT 0,
+            detalle TEXT DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW()
+          );`
+        });
+        // Reintentar insert
+        const { error: retryError } = await supabase.from('rsp_conexiones').insert({
+          id: conexion.id, entidad: conexion.entidad, tipo: conexion.tipo,
+          endpoint: conexion.endpoint, usuario: conexion.usuario, dip: conexion.dip,
+          tarifa: conexion.tarifa, iva: conexion.iva, total: conexion.total,
+          detalle: conexion.detalle, created_at: conexion.timestamp
+        });
+        if (retryError) throw retryError;
+        console.log('[RSP] ✅ Tabla creada y conexión persistida');
+      } catch (sqlErr) {
+        console.warn('[RSP] No se pudo crear tabla automáticamente:', sqlErr.message);
+        console.warn('[RSP] Ejecuta el script en docs/migrar-rsp-conexiones.sql en Supabase');
+      }
+    } else if (error) {
+      console.warn('[RSP] Error persistente:', error.message);
+    }
   } catch (err) {
     console.warn('[RSP] No se pudo persistir conexión:', err.message);
   }

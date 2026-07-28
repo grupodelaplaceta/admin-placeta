@@ -17,4 +17,4 @@ CREATE TABLE IF NOT EXISTS rsp_conexiones (
 
 CREATE INDEX IF NOT EXISTS idx_rsp_conexiones_entidad ON rsp_conexiones(entidad);
 CREATE INDEX IF NOT EXISTS idx_rsp_conexiones_tipo ON rsp_conexiones(tipo);
-CREATE INDEX IF NOT EXISTS idx_rsp_conexiones_created_at ON rsp_conexiones(created_at);
+CREATE INDEX IF NOT EXISTS idx_rsp_conexiones_creado ON rsp_conexiones(created_at);
