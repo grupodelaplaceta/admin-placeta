@@ -794,9 +794,12 @@ export async function mobilEmitirVoto(votacionId, dip, nombre, voto) {
 
     // Actualizar conteo
     const campo = voto === 'a_favor' ? 'a_favor' : voto === 'en_contra' ? 'en_contra' : 'abstenciones';
-    await supabase.rpc('exec_sql', {
-      sql: `UPDATE rsp_votaciones SET ${campo} = ${campo} + 1, total_votos = total_votos + 1, total_emitidos = total_emitidos + 1 WHERE id = '${votacionId}'`
-    }).catch(async () => {
+    try {
+      const { error: rpcError } = await supabase.rpc('exec_sql', {
+        sql: `UPDATE rsp_votaciones SET ${campo} = ${campo} + 1, total_votos = total_votos + 1, total_emitidos = total_emitidos + 1 WHERE id = '${votacionId}'`
+      });
+      if (rpcError) throw rpcError;
+    } catch (_) {
       // Fallback: leer y actualizar
       const { data: v } = await supabase.from('rsp_votaciones').select('*').eq('id', votacionId).single();
       if (v) {
@@ -806,7 +809,19 @@ export async function mobilEmitirVoto(votacionId, dip, nombre, voto) {
         else upd.abstenciones = (v.abstenciones || 0) + 1;
         await supabase.from('rsp_votaciones').update(upd).eq('id', votacionId);
       }
-    });
+    }
+
+    // Registrar RSP billing
+    try {
+      registrarConexion({
+        entidad: 'votaciones',
+        tipo: TIPO_CONEXION.MODIFICACION,
+        endpoint: `POST /mobil/votaciones/${votacionId}/ejercer`,
+        usuario: 'placetaid-server',
+        dip: dip || '',
+        detalle: 'Votación desde PlacetaID Móvil'
+      });
+    } catch (_) { /* silencioso */ }
 
     return {
       success: true, message: 'Voto registrado oficialmente',
