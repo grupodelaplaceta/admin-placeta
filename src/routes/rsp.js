@@ -26,7 +26,7 @@ router.get('/', verificarSesion, verificarAccesoEntidad('rsp'), async (req, res)
   const conexionesRecientes = getConexiones({ limit: 10 }).reverse();
   const facturasPendientes = getFacturas({ estado: 'pendiente' });
 
-  // Cargar votaciones desde Supabase (ya están persistidas)
+  // Cargar votaciones desde Supabase
   let votacionesData = { activas: 0, cerradas: 0, totalVotos: 0, total: 0 };
   try {
     if (supabase) {
