@@ -31,6 +31,8 @@ import { apiGatewayRoutes } from './src/routes/api-gateway.js';
 import firmasRoutes from './src/routes/firmas.js';
 import juniorRoutes from './src/routes/junior.js';
 import mantenimientoRoutes from './src/routes/mantenimiento.js';
+import votacionesApiRoutes from './src/routes/votaciones-api.js';
+import { registrarConexionPublica } from './src/routes/rsp.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -124,6 +126,27 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', version: '1.0.0', app: 'Admin Placeta', timestamp: new Date().toISOString() });
 });
 
+// ── Middleware RSP: registra conexiones en rutas de entidad ──────────────
+import { registrarConexion, TIPO_CONEXION } from './src/config/rsp.js';
+function rspBillingMiddleware(entidad) {
+  return (req, res, next) => {
+    // Solo rutas API (no páginas web) — las vistas web no se tarifican
+    if (req.path.startsWith('/api/') && req.path !== '/api/health') {
+      try {
+        registrarConexion({
+          entidad,
+          tipo: req.method === 'GET' ? TIPO_CONEXION.CONSULTA : TIPO_CONEXION.MODIFICACION,
+          endpoint: `${req.method} /${entidad}${req.path}`,
+          usuario: req.session?.usuario?.nombre || 'web',
+          dip: req.session?.usuario?.dip || '',
+          detalle: req.headers['user-agent']?.slice(0, 80) || ''
+        });
+      } catch (e) { /* silencioso */ }
+    }
+    next();
+  };
+}
+
 // ── Rutas Web ──────────────────────────────────────────────────────────────
 app.use('/', authRoutes);
 
@@ -132,15 +155,16 @@ app.get('/dashboard', verificarSesion, (req, res) => {
   res.render('dashboard', { titulo: 'Panel Principal - Admin Placeta' });
 });
 
-// Módulos protegidos por entidad
-app.use('/banco', verificarSesion, verificarAccesoEntidad('banco'), bancoRoutes);
-app.use('/tributos', verificarSesion, verificarAccesoEntidad('tributos'), tributosRoutes);
-app.use('/junta', verificarSesion, verificarAccesoEntidad('junta'), juntaRoutes);
-app.use('/administracion', verificarSesion, verificarAccesoEntidad('administracion'), administracionRoutes);
+// Módulos protegidos por entidad (con RSP billing)
+app.use('/banco', verificarSesion, verificarAccesoEntidad('banco'), rspBillingMiddleware('banco'), bancoRoutes);
+app.use('/tributos', verificarSesion, verificarAccesoEntidad('tributos'), rspBillingMiddleware('tributos'), tributosRoutes);
+app.use('/junta', verificarSesion, verificarAccesoEntidad('junta'), rspBillingMiddleware('junta'), juntaRoutes);
+app.use('/administracion', verificarSesion, verificarAccesoEntidad('administracion'), rspBillingMiddleware('administracion'), administracionRoutes);
 
 // API REST
 app.use('/api', apiRoutes);
 app.use('/api', juniorApiRoutes); // Proxy junior → CRM
+app.use('/api', votacionesApiRoutes); // Sistema de votaciones
 app.use(documentosRoutes); // /api/:entidad/documentos...
 app.use(accionesDocumentoRoutes); // /api/acciones/*
 app.use('/junta', empresasRoutes);
@@ -148,11 +172,14 @@ app.use('/administracion', empresasRoutes);
 // También accesible desde banco
 app.use('/banco', empresasRoutes);
 
-// Red de Servicios de La Placeta (RSP)
-app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspRoutes);
+// ═══ RSP: Endpoint público para plid26-main (sin sesión) ═════════════
+app.post('/rsp/api/conexiones/registrar', registrarConexionPublica);
+
+// Red de Servicios de La Placeta (RSP) — protegido con sesión
+app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), rspRoutes);
 
 // Placeta Junior
-app.use('/junior', verificarSesion, verificarAccesoEntidad('junior'), juniorRoutes);
+app.use('/junior', verificarSesion, verificarAccesoEntidad('junior'), rspBillingMiddleware('junior'), juniorRoutes);
 
 // Mantenimiento (montado en admin)
 app.use('/administracion', mantenimientoRoutes);
@@ -193,12 +220,13 @@ app.use('/api/firmas', firmasRoutes);
 
 // ═══ GASTOS RSP POR ENTIDAD ═══════════════════════════════════════════
 // Cada entidad puede ver sus propios gastos de conexión RSP
-app.get('/banco/gastos-rsp', verificarSesion, verificarAccesoEntidad('banco'), (req, res) => res.redirect('/rsp/gastos/banco'));
-app.get('/tributos/gastos-rsp', verificarSesion, verificarAccesoEntidad('tributos'), (req, res) => res.redirect('/rsp/gastos/tributos'));
-app.get('/junta/gastos-rsp', verificarSesion, verificarAccesoEntidad('junta'), (req, res) => res.redirect('/rsp/gastos/junta'));
-app.get('/administracion/gastos-rsp', verificarSesion, verificarAccesoEntidad('administracion'), (req, res) => res.redirect('/rsp/gastos/administracion'));
-app.get('/rsp/gastos', verificarSesion, verificarAccesoEntidad('rsp'), (req, res) => res.redirect('/rsp/gastos/rsp'));
-app.get('/junior/gastos-rsp', verificarSesion, verificarAccesoEntidad('junior'), (req, res) => res.redirect('/rsp/gastos/junior'));
+// El parámetro ?origen mantiene el workspace correcto en la navegación
+app.get('/banco/gastos-rsp', verificarSesion, verificarAccesoEntidad('banco'), (req, res) => res.redirect('/rsp/gastos/banco?origen=banco'));
+app.get('/tributos/gastos-rsp', verificarSesion, verificarAccesoEntidad('tributos'), (req, res) => res.redirect('/rsp/gastos/tributos?origen=tributos'));
+app.get('/junta/gastos-rsp', verificarSesion, verificarAccesoEntidad('junta'), (req, res) => res.redirect('/rsp/gastos/junta?origen=junta'));
+app.get('/administracion/gastos-rsp', verificarSesion, verificarAccesoEntidad('administracion'), (req, res) => res.redirect('/rsp/gastos/administracion?origen=administracion'));
+app.get('/rsp/gastos', verificarSesion, verificarAccesoEntidad('rsp'), (req, res) => res.redirect('/rsp/gastos/rsp?origen=rsp'));
+app.get('/junior/gastos-rsp', verificarSesion, verificarAccesoEntidad('junior'), (req, res) => res.redirect('/rsp/gastos/junior?origen=junior'));
 
 // ── Landing / Login ────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
@@ -208,20 +236,92 @@ app.get('/', (req, res) => {
 
 // ── 404 ────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
-  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Endpoint no encontrado' });
-  res.status(404).render('parciales/error', { titulo: '404', error: 'Página no encontrada' });
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Endpoint no encontrado', path: req.path, method: req.method });
+  }
+  res.status(404).render('parciales/error', {
+    titulo: '404 - Página no encontrada',
+    error: `La página "${req.path}" no existe.`,
+    enlace: '/dashboard'
+  });
 });
 
-// ── Global Error Handler ────────────────────────────────────────────────────
+// ── Global Error Handler (verbose) ──────────────────────────────────────────
 app.use((err, req, res, next) => {
-  console.error('❌ Error:', err.message);
-  if (req.path.startsWith('/api/')) return res.status(500).json({ error: 'Error interno', detalle: err.message });
-  res.status(500).render('parciales/error', { titulo: '500', error: 'Error interno del servidor' });
+  console.error('❌ Error:', err.message, '\n   Path:', req.path, '\n   Stack:', err.stack?.split('\n').slice(0,3).join(' | '));
+  if (req.path.startsWith('/api/')) {
+    return res.status(500).json({ error: 'Error interno', detalle: err.message, path: req.path });
+  }
+  res.status(500).render('parciales/error', {
+    titulo: '500 - Error interno',
+    error: `Error interno del servidor: ${err.message}`,
+    detalle: process.env.NODE_ENV !== 'production' ? err.stack?.split('\n').slice(0,5).join('<br>') : ''
+  });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SISTEMA DE DOCUMENTOS AUTOMÁTICOS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Generar documentos automáticos cada hora
+const AUTO_DOCS_INTERVAL = 60 * 60 * 1000; // 1 hora
+let autoDocsTimer = null;
+
+async function generarDocumentosAutomaticos() {
+  try {
+    const { getDocumentos, saveDocumentoAsync, DOCUMENTOS_AUTOMATICOS, ETIQUETAS_DOC } = await import('./src/config/documentos.js');
+    const { supabase } = await import('./src/config/supabase.js');
+    const ahora = new Date();
+
+    // Tipos de documentos a generar según el momento del día
+    const tiposAHoy = ['informe-diario-sistema'];
+    if (ahora.getDay() === 1) tiposAHoy.push('informe-semanal'); // Lunes
+    if (ahora.getDate() === 1) {
+      tiposAHoy.push('informe-mensual-sistema'); // 1º de cada mes
+      tiposAHoy.push('informe-estadistico');
+    }
+
+    for (const tipo of tiposAHoy) {
+      const entidades = ['banco', 'tributos', 'junta', 'administracion', 'rsp'];
+      for (const entidad of entidades) {
+        const id = `auto-${entidad}-${tipo}-${ahora.toISOString().slice(0,10)}`;
+        try {
+          await saveDocumentoAsync(entidad, {
+            id,
+            tipo,
+            titulo: `${ETIQUETAS_DOC[tipo] || tipo} — ${entidad} (${ahora.toISOString().slice(0,10)})`,
+            descripcion: `Documento generado automáticamente por el sistema`,
+            datos: {
+              entidad,
+              fecha: ahora.toISOString(),
+              periodo: ahora.toISOString().slice(0,7),
+              generadoPor: 'sistema',
+              notas: 'Documento automático del sistema — Grupo de La Placeta'
+            },
+            createdBy: 'sistema',
+            estado: 'Oficial',
+            csv: `AUTO-${Date.now().toString(36).toUpperCase()}`
+          });
+        } catch (e) {
+          console.warn(`[AutoDocs] Error generando ${id}:`, e.message);
+        }
+      }
+    }
+    console.log(`[AutoDocs] ✅ ${tiposAHoy.length * 5} documentos generados (${ahora.toISOString().slice(0,16)})`);
+  } catch (e) {
+    console.warn('[AutoDocs] Error en generación automática:', e.message);
+  }
+}
 
 // ── Iniciar ────────────────────────────────────────────────────────────────
 async function startServer() {
   await testConnection();
+
+  // Iniciar generación automática de documentos
+  autoDocsTimer = setInterval(generarDocumentosAutomaticos, AUTO_DOCS_INTERVAL);
+  // Primera generación a los 30 segundos de iniciar
+  setTimeout(generarDocumentosAutomaticos, 30000);
+
   app.listen(PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════════════════════════╗

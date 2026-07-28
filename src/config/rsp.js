@@ -88,7 +88,7 @@ export function registrarConexion({ entidad, tipo, endpoint, usuario, dip, detal
   });
 
   // Persistir en Supabase si está disponible
-  persistirConexion(conexion).catch(() => {});
+  persistirConexion(conexion).catch(e => console.warn('[RSP] Error persistente:', e.message));
 
   return conexion;
 }
@@ -245,7 +245,26 @@ export function getEstadoFondos() {
   };
 }
 
-// ── CONSULTAR CONEXIONES ──────────────────────────────────────────────────
+// ── CONSULTAR CONEXIONES (memoria + Supabase) ────────────────────────────
+export async function getConexionesFromSupabase(filtros = {}) {
+  if (!supabase) return null;
+  try {
+    let query = supabase.from('rsp_conexiones').select('*');
+    if (filtros.entidad) query = query.eq('entidad', filtros.entidad);
+    if (filtros.tipo) query = query.eq('tipo', filtros.tipo);
+    if (filtros.desde) query = query.gte('created_at', filtros.desde);
+    if (filtros.hasta) query = query.lte('created_at', filtros.hasta);
+    query = query.order('created_at', { ascending: false });
+    if (filtros.limit) query = query.limit(filtros.limit);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.warn('[RSP] Error leyendo de Supabase:', err.message);
+    return null;
+  }
+}
+
 export function getConexiones(filtros = {}) {
   let resultado = [...memConexiones];
   if (filtros.entidad) resultado = resultado.filter(c => c.entidad === filtros.entidad);
@@ -325,11 +344,36 @@ async function persistirConexion(conexion) {
 export async function initRSPTable() {
   if (!supabase) return false;
   try {
-    // Verificar si la tabla existe haciendo un select mínimo
     const { error } = await supabase.from('rsp_conexiones').select('id').limit(1);
     if (error && error.code === '42P01') {
-      console.warn('[RSP] Tabla rsp_conexiones no existe en Supabase. Usando solo memoria.');
-      return false;
+      console.warn('[RSP] Tabla rsp_conexiones no existe. Intentando crearla...');
+      try {
+        // Crear tabla via SQL directo (si hay permiso)
+        const { error: createError } = await supabase.rpc('exec_sql', {
+          sql: `CREATE TABLE IF NOT EXISTS rsp_conexiones (
+            id TEXT PRIMARY KEY,
+            entidad TEXT NOT NULL,
+            tipo TEXT NOT NULL,
+            endpoint TEXT DEFAULT '',
+            usuario TEXT DEFAULT '',
+            dip TEXT DEFAULT '',
+            tarifa REAL DEFAULT 0,
+            iva REAL DEFAULT 0,
+            total REAL DEFAULT 0,
+            detalle TEXT DEFAULT '',
+            created_at TIMESTAMPTZ DEFAULT NOW()
+          );
+          CREATE INDEX IF NOT EXISTS idx_rsp_conexiones_entidad ON rsp_conexiones(entidad);
+          CREATE INDEX IF NOT EXISTS idx_rsp_conexiones_creado ON rsp_conexiones(created_at);`
+        });
+        if (createError) throw createError;
+        console.log('[RSP] ✅ Tabla rsp_conexiones creada en Supabase');
+        return true;
+      } catch (sqlErr) {
+        console.warn('[RSP] No se pudo crear la tabla automáticamente.');
+        console.warn('[RSP] Ejecuta manualmente el script en docs/migrar-rsp-conexiones.sql');
+        return false;
+      }
     }
     return true;
   } catch {

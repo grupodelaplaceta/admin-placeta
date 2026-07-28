@@ -11,7 +11,7 @@
 import { Router } from 'express';
 import { verificarSesion, verificarAccesoEntidad, verificarPermiso } from '../middleware/auth.js';
 import {
-  getConexiones, getFacturas, getEstadoFondos, getTarifas, getEstadisticas,
+  getConexiones, getConexionesFromSupabase, getFacturas, getEstadoFondos, getTarifas, getEstadisticas,
   generarFactura, pagarFactura, pagarSancionIVA, registrarConexion, TIPO_CONEXION
 } from '../config/rsp.js';
 
@@ -36,12 +36,24 @@ router.get('/', verificarSesion, verificarAccesoEntidad('rsp'), (req, res) => {
 });
 
 // ── CONEXIONES ─────────────────────────────────────────────────────────────
-router.get('/conexiones', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_conexiones'), (req, res) => {
+router.get('/conexiones', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_conexiones'), async (req, res) => {
   const filtros = {};
   if (req.query.entidad) filtros.entidad = req.query.entidad;
   if (req.query.tipo) filtros.tipo = req.query.tipo;
 
-  const todas = getConexiones(filtros);
+  let todas = getConexiones(filtros);
+  // Si no hay datos en memoria, intentar cargar desde Supabase
+  if (todas.length === 0) {
+    const desdeDB = await getConexionesFromSupabase(filtros);
+    if (desdeDB && desdeDB.length > 0) {
+      todas = desdeDB.map(c => ({
+        id: c.id, entidad: c.entidad, tipo: c.tipo, endpoint: c.endpoint,
+        usuario: c.usuario || '', dip: c.dip || '',
+        tarifa: c.tarifa, iva: c.iva, total: c.total,
+        detalle: c.detalle || '', timestamp: c.created_at || c.timestamp
+      }));
+    }
+  }
   const conexiones = [...todas].reverse(); // Más recientes primero
 
   // Estadísticas para la vista
@@ -88,9 +100,22 @@ router.get('/facturacion', verificarSesion, verificarAccesoEntidad('rsp'), verif
 });
 
 // ── GASTOS POR ENTIDAD (accesible desde cualquier workspace) ──────────
-router.get('/gastos/:entidad', verificarSesion, (req, res) => {
+router.get('/gastos/:entidad', verificarSesion, async (req, res) => {
   const { entidad } = req.params;
-  const conexiones = getConexiones({ entidad });
+  const origen = req.query.origen || entidad; // Mantener workspace original
+  let conexiones = getConexiones({ entidad });
+  // Si memoria vacía, cargar desde Supabase
+  if (conexiones.length === 0) {
+    const desdeDB = await getConexionesFromSupabase({ entidad });
+    if (desdeDB && desdeDB.length > 0) {
+      conexiones = desdeDB.map(c => ({
+        id: c.id, entidad: c.entidad, tipo: c.tipo, endpoint: c.endpoint,
+        usuario: c.usuario || '', dip: c.dip || '',
+        tarifa: c.tarifa, iva: c.iva, total: c.total,
+        detalle: c.detalle || '', timestamp: c.created_at || c.timestamp
+      }));
+    }
+  }
   const consultas = conexiones.filter(c => c.tipo === TIPO_CONEXION.CONSULTA);
   const modificaciones = conexiones.filter(c => c.tipo === TIPO_CONEXION.MODIFICACION);
 
@@ -100,7 +125,7 @@ router.get('/gastos/:entidad', verificarSesion, (req, res) => {
     tributos: 'GDLP-TRBX-001',
     junta: 'GDLP-AP00-001',
     administracion: 'GDLP-AP00-002',
-    rsp: 'GDLP-AP99-001'
+    rsp: 'GDLP-AP64-583'
   };
   const noms = {
     banco: 'Banco de La Placeta',
@@ -112,7 +137,7 @@ router.get('/gastos/:entidad', verificarSesion, (req, res) => {
 
   res.render('rsp/gastos-entidad', {
     titulo: `Gastos RSP - ${noms[entidad] || entidad}`,
-    entidad_actual: 'rsp',
+    entidad_actual: origen, // ← Usa el workspace ORIGINAL, no 'rsp'
     nomEntidad: noms[entidad] || entidad,
     iban: ibans[entidad] || '—',
     conexiones: [...conexiones].reverse(),
@@ -215,7 +240,15 @@ router.post('/api/fondos/pagar-sancion', verificarSesion, verificarPermiso('rsp'
 });
 
 // ── API: Registrar conexión externa ───────────────────────────────────────
-router.post('/api/conexiones/registrar', verificarSesion, (req, res) => {
+router.post('/api/conexiones/registrar', (req, res) => {
+  // Permitir acceso público con api_key (para plid26-main y otras apps)
+  const apiKey = req.query.api_key || req.headers['x-api-key'];
+  const docsKey = process.env.DOCS_API_KEY || 'docs-shared-key-2026';
+  const tienePermiso = req.session?.usuario || apiKey === docsKey;
+  if (!tienePermiso) {
+    return res.status(401).json({ error: 'Se requiere autenticación' });
+  }
+
   const { entidad, tipo, endpoint, dip, detalle } = req.body;
   if (!entidad || !tipo) return res.status(400).json({ error: 'entidad y tipo son requeridos' });
   if (![TIPO_CONEXION.CONSULTA, TIPO_CONEXION.MODIFICACION].includes(tipo)) {
@@ -226,12 +259,32 @@ router.post('/api/conexiones/registrar', verificarSesion, (req, res) => {
     entidad,
     tipo,
     endpoint: endpoint || 'api-externa',
-    usuario: req.session.usuario?.nombre || 'api',
-    dip: dip || req.session.usuario?.dip || '',
+    usuario: req.session?.usuario?.nombre || 'sistema',
+    dip: dip || req.session?.usuario?.dip || '',
     detalle: detalle || ''
   });
 
   res.json({ success: true, conexion });
 });
+
+// Endpoint público para registrar conexiones desde plid26-main y otras apps
+// Se monta en server.js ANTES del middleware de sesión
+export function registrarConexionPublica(req, res) {
+  const apiKey = req.query.api_key || req.headers['x-api-key'];
+  const docsKey = process.env.DOCS_API_KEY || 'docs-shared-key-2026';
+  if (apiKey !== docsKey) {
+    return res.status(401).json({ error: 'API Key inválida' });
+  }
+  const { entidad, tipo, endpoint, usuario, dip, detalle } = req.body;
+  if (!entidad || !tipo) return res.status(400).json({ error: 'entidad y tipo son requeridos' });
+  if (![TIPO_CONEXION.CONSULTA, TIPO_CONEXION.MODIFICACION].includes(tipo)) {
+    return res.status(400).json({ error: 'tipo debe ser "consulta" o "modificacion"' });
+  }
+  const conexion = registrarConexion({
+    entidad, tipo, endpoint: endpoint || 'api-externa',
+    usuario: usuario || 'sistema', dip: dip || '', detalle: detalle || ''
+  });
+  res.json({ success: true, conexion });
+}
 
 export default router;

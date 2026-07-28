@@ -1021,16 +1021,23 @@ export async function generarPDF(entidad, documento) {
         doc.rect(0, topY, doc.page.width, alto).fill('#3702b3');
         // Barra superior fina más clara
         doc.rect(0, 0, doc.page.width, 4).fill('#6a2be0');
-        // Logo
+        // Logo (sobre fondo blanco para visibilidad en cabecera morada)
         const logoPath = path.join(PDF_DIR, '..', 'img', logos[entidad] || 'logo-web.png');
         const logoW = esPrimera ? 68 : 40;
+        const logoH = esPrimera ? 40 : 24;
         const logoX = 42;
         const logoY = esPrimera ? 32 : 14;
         try {
           const p1 = logoPath;
           const p2 = path.join(PDF_DIR, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
           const fp = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
-          if (fp) doc.image(fp, logoX, logoY, { width: logoW });
+          if (fp) {
+            // Rectángulo blanco detrás del logo para que no se mezcle con fondo morado
+            doc.save();
+            doc.rect(logoX - 4, logoY - 2, logoW + 8, logoH + 4).fill('#ffffff');
+            doc.image(fp, logoX, logoY, { width: logoW });
+            doc.restore();
+          }
         } catch {}
         if (esPrimera) {
           const tx = logoX + logoW + 18;

@@ -12,9 +12,9 @@
 
   <!-- Stats -->
   <div class="stats-grid mb-16">
-    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">Menores</div></div>
-    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">Tutores</div></div>
-    <div class="stat-card"><div class="stat-value">0</div><div class="stat-label">Autorizaciones</div></div>
+    <div class="stat-card"><div class="stat-value"><%= totalMenores || 0 %></div><div class="stat-label">Menores</div></div>
+    <div class="stat-card"><div class="stat-value"><%= membresiaActiva ? '✅' : '—' %></div><div class="stat-label">Membresía</div></div>
+    <div class="stat-card"><div class="stat-value"><%= documentosPendientes || 0 %></div><div class="stat-label">Documentos pendientes</div></div>
     <div class="stat-card"><div class="stat-value"><%= reto ? '🔥' : '—' %></div><div class="stat-label">Reto activo</div></div>
   </div>
 
