@@ -228,11 +228,11 @@ let votIdCounter = 0;
 })();
 
 router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
-  let votaciones = [...memVotaciones.values()];
-  if (votaciones.length === 0 && supabase) {
+  let votaciones = [];
+  if (supabase) {
     try {
       const { data } = await supabase.from('rsp_votaciones').select('*').order('created_at', { ascending: false });
-      if (data && data.length > 0) votaciones = data.map(v => ({
+      if (data) votaciones = data.map(v => ({
         id: v.id, titulo: v.titulo, descripcion: v.descripcion, categoria: v.categoria,
         grupo: v.grupo || 'Junta', quorum: v.quorum,
         aFavor: v.a_favor || 0, enContra: v.en_contra || 0, abstenciones: v.abstenciones || 0,
@@ -240,8 +240,15 @@ router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (
         estado: v.estado || 'Activa', resultado: v.resultado,
         reunionId: v.reunion_id, created_at: v.created_at
       }));
-    } catch (e) {}
+    } catch (e) { console.error('[Junta] Error Supabase:', e.message); }
   }
+  res.render('junta/votaciones', {
+    titulo: 'Gestión de Votaciones',
+    entidad_actual: 'junta',
+    votaciones,
+    esPresidente: req.session.roles?.includes('presidente')
+  });
+});
   res.render('junta/votaciones', {
     titulo: 'Gestión de Votaciones',
     entidad_actual: 'junta',
@@ -250,13 +257,13 @@ router.get('/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (
   });
 });
 
-// API: Listar votaciones (desde Supabase si memoria vacía)
+// API: Listar votaciones (solo Supabase)
 router.get('/api/votaciones', verificarPermiso('junta', 'crear_votaciones'), async (req, res) => {
-  let votaciones = [...memVotaciones.values()];
-  if (votaciones.length === 0 && supabase) {
+  let votaciones = [];
+  if (supabase) {
     try {
       const { data } = await supabase.from('rsp_votaciones').select('*');
-      if (data && data.length > 0) votaciones = data;
+      if (data) votaciones = data;
     } catch (e) {}
   }
   res.json(votaciones);

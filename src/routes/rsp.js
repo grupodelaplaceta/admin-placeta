@@ -26,12 +26,12 @@ router.get('/', verificarSesion, verificarAccesoEntidad('rsp'), async (req, res)
   const conexionesRecientes = getConexiones({ limit: 10 }).reverse();
   const facturasPendientes = getFacturas({ estado: 'pendiente' });
 
-  // Cargar votaciones desde Supabase
+  // Votaciones solo desde Supabase
   let votacionesData = { activas: 0, cerradas: 0, totalVotos: 0, total: 0 };
   try {
     if (supabase) {
       const { data, error } = await supabase.from('rsp_votaciones')
-        .select('id,estado,titulo,a_favor,en_contra,abstenciones,total_votos,total_emitidos,fecha_limite')
+        .select('id,estado,a_favor,en_contra,abstenciones,total_votos,total_emitidos')
         .order('created_at', { ascending: false });
       if (!error && data) {
         votacionesData = {
