@@ -13,6 +13,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { registrarConexion, TIPO_CONEXION } from '../config/rsp.js';
+import { supabase } from '../config/supabase.js';
 
 const router = Router();
 
@@ -139,6 +140,51 @@ const CATEGORIAS_VOTO = {
     memRegistroVotos.set(id, { ...v, id, timestamp, hash, oficial: true });
   });
 })();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PERSISTENCIA SUPABASE
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function persistirVotacion(votacion) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from('rsp_votaciones').upsert({
+      id: votacion.id, titulo: votacion.titulo, descripcion: votacion.descripcion || '',
+      categoria: votacion.categoria || 'General', grupo: votacion.grupo || 'Publico_General',
+      quorum: votacion.quorum || 50,
+      a_favor: votacion.aFavor || 0, en_contra: votacion.enContra || 0,
+      abstenciones: votacion.abstenciones || 0,
+      total_votos: votacion.totalVotos || 0, total_emitidos: votacion.totalEmitidos || 0,
+      estado: votacion.estado || 'Activa', resultado: votacion.resultado || null,
+      fecha_creacion: votacion.fechaCreacion || votacion.created_at,
+      fecha_limite: votacion.fechaLimite || null,
+      reunion_id: votacion.reunionId || null,
+      requiere_quorum: votacion.requiereQuorum !== undefined ? votacion.requiereQuorum : true,
+      created_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (error && error.code === '42P01') {
+      console.warn('[Votos] Tabla rsp_votaciones no existe');
+    } else if (error) {
+      console.warn('[Votos] Error persistente:', error.message);
+    }
+  } catch (e) { /* silencioso */ }
+}
+
+async function persistirRegistroVoto(registro) {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from('rsp_registro_votos').insert({
+      id: registro.id, votacion_id: registro.votacionId,
+      dip: registro.dip, nombre: registro.nombre || '',
+      categoria: registro.categoria || 'General', voto: registro.voto,
+      hash: registro.hash, oficial: registro.oficial !== false,
+      timestamp: registro.timestamp
+    });
+    if (error && error.code === '42P01') {
+      console.warn('[Votos] Tabla rsp_registro_votos no existe');
+    }
+  } catch (e) { /* silencioso */ }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // FUNCIONES DE AYUDA
@@ -331,6 +377,7 @@ router.post('/votaciones', (req, res) => {
   };
 
   memVotaciones.set(id, votacion);
+  persistirVotacion(votacion);
 
   // Vincular a reunión si aplica
   if (reunionId) {
@@ -461,6 +508,8 @@ router.post('/votaciones/:id/ejercer', (req, res) => {
   };
 
   memRegistroVotos.set(regId, registro);
+  persistirRegistroVoto(registro);
+  persistirVotacion(v); // Actualizar conteo en Supabase
 
   // Actualizar conteo
   if (voto === 'a_favor') v.aFavor = (v.aFavor || 0) + 1;
