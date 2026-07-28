@@ -794,3 +794,120 @@ router.post('/votaciones/:id/notificar', async (req, res) => {
 });
 
 export default router;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ENDPOINTS MÓVIL — leen/escriben directamente en Supabase
+// ═══════════════════════════════════════════════════════════════════════════
+
+// GET /api/mobil/votaciones/pendientes/:dip — Votaciones pendientes para un DIP
+export async function mobilGetPendientes(dip) {
+  if (!supabase) return [];
+  try {
+    const { data: votaciones } = await supabase.from('rsp_votaciones')
+      .select('*').eq('estado', 'Activa').order('created_at', { ascending: false });
+    if (!votaciones) return [];
+
+    const { data: misVotos } = await supabase.from('rsp_registro_votos')
+      .select('votacion_id').eq('dip', dip);
+    const yaVotadas = new Set((misVotos || []).map(r => r.votacion_id));
+
+    return votaciones.filter(v => !yaVotadas.has(v.id)).map(v => ({
+      id: v.id, titulo: v.titulo, descripcion: v.descripcion || '',
+      categoria: v.categoria || 'General', grupo: v.grupo || 'Publico_General',
+      quorum: v.quorum, aFavor: v.a_favor || 0, enContra: v.en_contra || 0,
+      abstenciones: v.abstenciones || 0, totalVotos: v.total_votos || 0,
+      totalEmitidos: v.total_emitidos || 0, estado: v.estado || 'Activa',
+      resultado: v.resultado, fechaCreacion: v.fecha_creacion,
+      fechaLimite: v.fecha_limite, reunionId: v.reunion_id,
+      requiereQuorum: v.requiere_quorum,
+      tiempoRestante: null, esAnonimo: false, yaVoto: false
+    }));
+  } catch (e) { return []; }
+}
+
+// GET /api/mobil/votaciones/historial/:dip — Historial de votos
+export async function mobilGetHistorial(dip) {
+  if (!supabase) return [];
+  try {
+    const { data: registros } = await supabase.from('rsp_registro_votos')
+      .select('*').eq('dip', dip).order('timestamp', { ascending: false });
+    if (!registros || registros.length === 0) return [];
+
+    const ids = [...new Set(registros.map(r => r.votacion_id))];
+    const { data: votaciones } = await supabase.from('rsp_votaciones')
+      .select('*').in('id', ids);
+    if (!votaciones) return [];
+
+    const vMap = new Map(votaciones.map(v => [v.id, v]));
+    return registros.map(r => {
+      const v = vMap.get(r.votacion_id) || {};
+      return {
+        id: r.votacion_id, titulo: v.titulo || 'Votación',
+        descripcion: v.descripcion, categoria: v.categoria || r.categoria,
+        grupo: v.grupo, estado: v.estado, resultado: v.resultado,
+        fechaCreacion: v.fecha_creacion, fechaLimite: v.fecha_limite,
+        reunionId: v.reunion_id, aFavor: v.a_favor || 0, enContra: v.en_contra || 0,
+        abstenciones: v.abstenciones || 0, totalVotos: v.total_votos || 0,
+        totalEmitidos: v.total_emitidos || 0,
+        miVoto: { voto: r.voto, timestamp: r.timestamp, hash: r.hash, oficial: r.oficial },
+        esAnonimo: false, votos: []
+      };
+    });
+  } catch (e) { return []; }
+}
+
+// POST /api/mobil/votaciones/:id/ejercer — Emitir voto
+export async function mobilEmitirVoto(votacionId, dip, nombre, voto) {
+  if (!supabase) return { success: false, error: 'Supabase no disponible' };
+  try {
+    // Verificar que la votación existe y está activa
+    const { data: votacion } = await supabase.from('rsp_votaciones')
+      .select('*').eq('id', votacionId).single();
+    if (!votacion) return { success: false, error: 'Votación no encontrada' };
+    if (votacion.estado !== 'Activa') return { success: false, error: 'Votación cerrada' };
+
+    // Verificar voto duplicado
+    const { data: existente } = await supabase.from('rsp_registro_votos')
+      .select('id').eq('votacion_id', votacionId).eq('dip', dip);
+    if (existente && existente.length > 0) return { success: false, error: 'Ya has votado' };
+
+    // Crear hash
+    const timestamp = new Date().toISOString();
+    const hash = crypto.createHash('sha256')
+      .update(`${votacionId}:${dip}:${voto}:${timestamp}:placetaid-vote-secret-2026`)
+      .digest('hex');
+
+    const regId = 'REG-' + Date.now().toString(36).toUpperCase();
+
+    // Insertar voto
+    const { error: insertError } = await supabase.from('rsp_registro_votos').insert({
+      id: regId, votacion_id: votacionId, dip, nombre: nombre || dip,
+      categoria: votacion.categoria || 'General', voto, hash, oficial: true, timestamp
+    });
+    if (insertError) return { success: false, error: insertError.message };
+
+    // Actualizar conteo
+    const campo = voto === 'a_favor' ? 'a_favor' : voto === 'en_contra' ? 'en_contra' : 'abstenciones';
+    await supabase.rpc('exec_sql', {
+      sql: `UPDATE rsp_votaciones SET ${campo} = ${campo} + 1, total_votos = total_votos + 1, total_emitidos = total_emitidos + 1 WHERE id = '${votacionId}'`
+    }).catch(async () => {
+      // Fallback: leer y actualizar
+      const { data: v } = await supabase.from('rsp_votaciones').select('*').eq('id', votacionId).single();
+      if (v) {
+        const upd = { total_votos: (v.total_votos || 0) + 1, total_emitidos: (v.total_emitidos || 0) + 1 };
+        if (voto === 'a_favor') upd.a_favor = (v.a_favor || 0) + 1;
+        else if (voto === 'en_contra') upd.en_contra = (v.en_contra || 0) + 1;
+        else upd.abstenciones = (v.abstenciones || 0) + 1;
+        await supabase.from('rsp_votaciones').update(upd).eq('id', votacionId);
+      }
+    });
+
+    return {
+      success: true, message: 'Voto registrado oficialmente',
+      registro: { id: regId, hash, timestamp, oficial: true },
+      votacion: { id: votacionId }
+    };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}

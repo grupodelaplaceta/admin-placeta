@@ -32,6 +32,7 @@ import firmasRoutes from './src/routes/firmas.js';
 import juniorRoutes from './src/routes/junior.js';
 import mantenimientoRoutes from './src/routes/mantenimiento.js';
 import votacionesApiRoutes from './src/routes/votaciones-api.js';
+import { mobilGetPendientes, mobilGetHistorial, mobilEmitirVoto } from './src/routes/votaciones-api.js';
 import { registrarConexionPublica } from './src/routes/rsp.js';
 import { getConexiones, getConexionesFromSupabase } from './src/config/rsp.js';
 
@@ -166,6 +167,22 @@ app.use('/administracion', verificarSesion, verificarAccesoEntidad('administraci
 app.use('/api', apiRoutes);
 app.use('/api', juniorApiRoutes); // Proxy junior → CRM
 app.use('/api', votacionesApiRoutes); // Sistema de votaciones
+
+// ═══ API MÓVIL — Votaciones desde Supabase ══════════════════════════
+app.get('/api/mobil/votaciones/pendientes/:dip', async (req, res) => {
+  const data = await mobilGetPendientes(req.params.dip);
+  res.json(data);
+});
+app.get('/api/mobil/votaciones/historial/:dip', async (req, res) => {
+  const data = await mobilGetHistorial(req.params.dip);
+  res.json(data);
+});
+app.post('/api/mobil/votaciones/:id/ejercer', async (req, res) => {
+  const { dip, nombre, voto } = req.body;
+  const result = await mobilEmitirVoto(req.params.id, dip, nombre, voto);
+  res.status(result.success ? 200 : 400).json(result);
+});
+
 app.use(documentosRoutes); // /api/:entidad/documentos...
 app.use(accionesDocumentoRoutes); // /api/acciones/*
 app.use('/junta', empresasRoutes);
