@@ -12,7 +12,8 @@ import { Router } from 'express';
 import { verificarSesion, verificarAccesoEntidad, verificarPermiso } from '../middleware/auth.js';
 import {
   getConexiones, getConexionesFromSupabase, getFacturas, getEstadoFondos, getTarifas, getEstadisticas,
-  generarFactura, pagarFactura, pagarSancionIVA, registrarConexion, TIPO_CONEXION
+  generarFactura, generarFacturaPorIds, eliminarConexionesPorIds,
+  pagarFactura, pagarSancionIVA, registrarConexion, TIPO_CONEXION
 } from '../config/rsp.js';
 
 const router = Router();
@@ -201,10 +202,14 @@ router.get('/api/facturas', verificarSesion, verificarPermiso('rsp', 'ver_factur
 
 // ── API: Generar factura ──────────────────────────────────────────────────
 router.post('/api/facturas/generar', verificarSesion, verificarPermiso('rsp', 'gestionar_facturas'), (req, res) => {
-  const { entidad, periodoInicio, periodoFin } = req.body;
+  const { entidad, periodoInicio, periodoFin, conexionIds } = req.body;
   if (!entidad) return res.status(400).json({ error: 'Entidad requerida' });
 
-  const factura = generarFactura({ entidad, periodoInicio, periodoFin });
+  // Si se especifican IDs de conexiones, facturar solo esas
+  const factura = conexionIds && conexionIds.length > 0
+    ? generarFacturaPorIds({ entidad, conexionIds })
+    : generarFactura({ entidad, periodoInicio, periodoFin });
+
   if (!factura) return res.status(400).json({ error: 'No hay conexiones para facturar en esta entidad' });
 
   res.json({
@@ -214,10 +219,18 @@ router.post('/api/facturas/generar', verificarSesion, verificarPermiso('rsp', 'g
   });
 });
 
-// ── API: Pagar factura (vía Banco real) ───────────────────────────────────
+// ── API: Pagar factura (vía Banco real y eliminar conexiones) ────────────
 router.post('/api/facturas/:id/pagar', verificarSesion, verificarPermiso('rsp', 'gestionar_facturas'), async (req, res) => {
   try {
     const result = await pagarFactura(req.params.id);
+    if (result.success) {
+      // Eliminar las conexiones facturadas si la factura tiene IDs
+      const factura = getFacturas().find(f => f.id === req.params.id);
+      if (factura && factura.conexionIds && factura.conexionIds.length > 0) {
+        const eliminadas = eliminarConexionesPorIds(factura.conexionIds);
+        result.conexionesEliminadas = eliminadas;
+      }
+    }
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

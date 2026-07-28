@@ -37,6 +37,7 @@
       <option value="tributos" <%= filtroEntidad === 'tributos' ? 'selected' : '' %>>📊 Tributos</option>
       <option value="junta" <%= filtroEntidad === 'junta' ? 'selected' : '' %>>⚖️ Junta</option>
       <option value="administracion" <%= filtroEntidad === 'administracion' ? 'selected' : '' %>>📋 Admin</option>
+      <option value="votaciones" <%= filtroEntidad === 'votaciones' ? 'selected' : '' %>>🗳️ Votaciones</option>
       <option value="general" <%= filtroEntidad === 'general' ? 'selected' : '' %>>🌐 General</option>
     </select>
     <select name="tipo" onchange="this.form.submit()">
@@ -48,6 +49,16 @@
     <a href="/rsp/conexiones" class="rsp-link">✕ Limpiar filtros</a>
     <% } %>
   </form>
+
+  <!-- Botón Facturar seleccionadas -->
+  <div style="margin-top:10px;display:none" id="facturar-actions">
+    <button class="rsp-btn rsp-btn-primary" onclick="facturarSeleccionadas()">
+      📄 Facturar <span id="selected-count">0</span> conexiones
+    </button>
+    <button class="rsp-btn" onclick="deseleccionarTodas()" style="background:#e0e0e0;color:#333;border:none;padding:8px 16px;border-radius:8px;cursor:pointer">
+      ✕ Deseleccionar
+    </button>
+  </div>
 </div>
 
 <% if (conexiones.length === 0) { %>
@@ -62,26 +73,26 @@
   <table class="rsp-table">
     <thead>
       <tr>
+        <th style="width:36px"><input type="checkbox" id="select-all" onchange="toggleAll(this)"></th>
         <th>ID</th>
         <th>Entidad</th>
         <th>Tipo</th>
         <th>Endpoint</th>
         <th>Usuario</th>
-        <th>Total</th>
+        <th>Coste</th>
         <th>Fecha</th>
       </tr>
     </thead>
     <tbody>
       <% conexiones.forEach(c => { %>
-      <tr>
+      <tr data-id="<%= c.id %>" data-entidad="<%= c.entidad %>">
+        <td><input type="checkbox" class="conexion-check" value="<%= c.id %>" data-entidad="<%= c.entidad %>" onchange="actualizarSeleccion()"></td>
         <td style="font-family:monospace;font-size:10px;color:#888"><%= c.id %></td>
         <td><span class="rsp-badge rsp-badge-purple"><%= c.entidad %></span></td>
         <td><span class="rsp-badge <%= c.tipo === 'modificacion' ? 'rsp-badge-orange' : 'rsp-badge-blue' %>"><%= c.tipo === 'modificacion' ? '✏️ MOD' : '👁️ CON' %></span></td>
         <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<%= c.endpoint %>"><%= c.endpoint %></td>
         <td style="font-size:11px"><%= c.usuario %><% if (c.dip) { %><br><span style="font-size:9px;color:#999"><%= c.dip %></span><% } %></td>
-        <td><%= c.tarifa.toFixed(4) %> Pz</td>
-        <td><%= c.iva.toFixed(4) %> Pz</td>
-        <td><strong><%= c.total.toFixed(4) %></strong> Pz</td>
+        <td><strong><%= c.total.toFixed(4) %></strong></td>
         <td style="font-size:10px;color:#888;white-space:nowrap"><%= new Date(c.timestamp).toLocaleString('es-ES') %></td>
       </tr>
       <% }) %>
@@ -90,6 +101,63 @@
 </div>
 <p style="font-size:12px;color:#999;margin-top:8px">Total: <strong><%= total %></strong> conexiones · Ingresos acumulados: <strong><%= (ingresosConsultas + ingresosModificaciones).toFixed(3) %> Pz</strong></p>
 <% } %>
+
+<script>
+let selectedConexiones = new Set();
+
+function toggleAll(chk) {
+  document.querySelectorAll('.conexion-check').forEach(cb => cb.checked = chk.checked);
+  actualizarSeleccion();
+}
+
+function actualizarSeleccion() {
+  selectedConexiones = new Set();
+  document.querySelectorAll('.conexion-check:checked').forEach(cb => selectedConexiones.add(cb.value));
+  const count = selectedConexiones.size;
+  const actions = document.getElementById('facturar-actions');
+  if (actions) {
+    actions.style.display = count > 0 ? 'block' : 'none';
+    document.getElementById('selected-count').textContent = count;
+  }
+}
+
+function deseleccionarTodas() {
+  document.querySelectorAll('.conexion-check').forEach(cb => cb.checked = false);
+  document.getElementById('select-all') && (document.getElementById('select-all').checked = false);
+  actualizarSeleccion();
+}
+
+async function facturarSeleccionadas() {
+  const ids = [...selectedConexiones];
+  if (ids.length === 0) return mostrarToast('Selecciona conexiones primero', 'error');
+
+  // Obtener entidad del primer elemento seleccionado
+  const primeraEntidad = document.querySelector('.conexion-check:checked')?.dataset?.entidad || '';
+  if (!primeraEntidad) return mostrarToast('Error al determinar entidad', 'error');
+
+  mostrarModal('📄 Facturar ' + ids.length + ' conexiones', `
+    <p style="margin-bottom:12px">Se van a facturar <strong>${ids.length}</strong> conexiones de <strong>${primeraEntidad}</strong>.</p>
+    <p style="margin-bottom:12px;font-size:13px;color:#666">Las conexiones facturadas se eliminarán del registro al pagar la factura.</p>
+    <button class="btn-primary" onclick="confirmarFacturar('${primeraEntidad}')">📄 Generar Factura</button>
+  `);
+}
+
+async function confirmarFacturar(entidad) {
+  const ids = [...selectedConexiones];
+  try {
+    const r = await apiFetch('/rsp/api/facturas/generar', {
+      method: 'POST',
+      body: JSON.stringify({ entidad, conexionIds: ids })
+    });
+    if (r.success) {
+      mostrarToast('✅ Factura ' + r.factura.id + ' generada: ' + r.factura.detalle.total.toFixed(2) + ' Pz', 'success');
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      mostrarToast(r.error || 'Error', 'error');
+    }
+  } catch (e) { mostrarToast('Error de red', 'error'); }
+}
+</script>
 
 <!-- Resumen de tarifas -->
 <div class="info-card mt-16">

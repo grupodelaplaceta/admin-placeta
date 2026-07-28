@@ -134,6 +134,73 @@ export function generarFactura({ entidad, periodoInicio, periodoFin, conexiones 
   return factura;
 }
 
+// ── GENERAR FACTURA POR IDs DE CONEXIÓN ──────────────────────────────────
+export function generarFacturaPorIds({ entidad, conexionIds = [] }) {
+  if (!entidad || conexionIds.length === 0) return null;
+
+  // Buscar conexiones por IDs (de memoria o Supabase)
+  const conexionesEntidad = memConexiones.filter(c =>
+    c.entidad === entidad && conexionIds.includes(c.id)
+  );
+
+  if (conexionesEntidad.length === 0) return null;
+
+  const consultas = conexionesEntidad.filter(c => c.tipo === TIPO_CONEXION.CONSULTA);
+  const modificaciones = conexionesEntidad.filter(c => c.tipo === TIPO_CONEXION.MODIFICACION);
+
+  const baseConsultas = consultas.reduce((s, c) => s + c.tarifa, 0);
+  const baseModificaciones = modificaciones.reduce((s, c) => s + c.tarifa, 0);
+  const baseTotal = baseConsultas + baseModificaciones;
+  const ivaTotal = baseTotal * IVA;
+  const totalFactura = baseTotal + ivaTotal;
+
+  const factura = {
+    id: nextFacturaId(),
+    entidad,
+    periodoInicio: conexionesEntidad[0]?.timestamp,
+    periodoFin: conexionesEntidad[conexionesEntidad.length - 1]?.timestamp,
+    emitida: new Date().toISOString(),
+    estado: 'pendiente',
+    conexiones: conexionesEntidad.length,
+    conexionIds: conexionIds, // IDs de las conexiones facturadas
+    detalle: {
+      consultas: consultas.length,
+      modificaciones: modificaciones.length,
+      baseConsultas,
+      baseModificaciones,
+      baseTotal,
+      iva: ivaTotal,
+      total: totalFactura
+    }
+  };
+
+  memFacturas.push(factura);
+
+  return factura;
+}
+
+// ── ELIMINAR CONEXIONES POR IDs (tras facturar) ──────────────────────────
+export function eliminarConexionesPorIds(ids = []) {
+  if (ids.length === 0) return 0;
+  const antes = memConexiones.length;
+  for (const id of ids) {
+    const idx = memConexiones.findIndex(c => c.id === id);
+    if (idx !== -1) memConexiones.splice(idx, 1);
+  }
+  const eliminadas = antes - memConexiones.length;
+
+  // También eliminar de Supabase si es posible
+  if (supabase && ids.length > 0) {
+    setImmediate(async () => {
+      try {
+        await supabase.from('rsp_conexiones').delete().in('id', ids);
+      } catch (e) { console.warn('[RSP] No se pudo eliminar de Supabase:', e.message); }
+    });
+  }
+
+  return eliminadas;
+}
+
 // ── PAGAR FACTURA (vía Banco de La Placeta real + IVA a Tributos) ────────
 export async function pagarFactura(facturaId) {
   const factura = memFacturas.find(f => f.id === facturaId);
