@@ -608,6 +608,147 @@ const API_REGISTRY = {
           { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
           { campo: 'transactionId', tipo: DATA_TYPE.STRING, descripcion: 'ID de la transacción bancaria' }
         ]
+      },
+      {
+        path: '/colaborador/solicitar',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Solicitar Acuerdo de Colaborador (mayor de 18, firma vía PlacetaID, documento oficial)',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del colaborador', requerido: true },
+          { campo: 'tipo_titular', tipo: DATA_TYPE.STRING, descripcion: 'profesor | entidad_eip | interno', requerido: false },
+          { campo: 'eip', tipo: DATA_TYPE.STRING, descripcion: 'EIP si es entidad', requerido: false }
+        ],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'documento', tipo: DATA_TYPE.OBJECT, descripcion: 'Documento oficial creado (pendiente de firma)' }
+        ]
+      },
+      {
+        path: '/colaborador/estado/:dip',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Estado del Acuerdo de Colaborador de un DIP',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'colaborador', tipo: DATA_TYPE.OBJECT, descripcion: 'Datos del colaborador' },
+          { campo: 'firmado', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Si el acuerdo está firmado' }
+        ]
+      },
+      {
+        path: '/actividades',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Listar actividades de la Academia (aprobadas/públicas por defecto)',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'total', tipo: DATA_TYPE.NUMBER, descripcion: 'Nº de actividades' },
+          { campo: 'actividades', tipo: DATA_TYPE.ARRAY, descripcion: 'Listado de actividades' }
+        ]
+      },
+      {
+        path: '/actividades',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Crear actividad (requiere Acuerdo de Colaborador firmado 18+)',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del colaborador', requerido: true },
+          { campo: 'titulo', tipo: DATA_TYPE.STRING, descripcion: 'Título', requerido: true },
+          { campo: 'descripcion', tipo: DATA_TYPE.STRING, descripcion: 'Descripción', requerido: true },
+          { campo: 'categoria', tipo: DATA_TYPE.STRING, descripcion: 'Categoría educativa', requerido: true },
+          { campo: 'tipo', tipo: DATA_TYPE.STRING, descripcion: 'Tipo de actividad', requerido: true }
+        ],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'actividad', tipo: DATA_TYPE.OBJECT, descripcion: 'Actividad creada (en_revision)' }
+        ]
+      },
+      {
+        path: '/actividades/:id',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Detalle de una actividad',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'actividad', tipo: DATA_TYPE.OBJECT, descripcion: 'Detalle de la actividad' }
+        ]
+      },
+      {
+        path: '/actividades/:id/revisar',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Filtro de Placeta Junior: aprobar/rechazar/solicitar modificaciones',
+        platforms: ['web'],
+        params: [
+          { campo: 'accion', tipo: DATA_TYPE.STRING, descripcion: 'aprobar | rechazar | modificaciones', requerido: true },
+          { campo: 'adminDip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del admin', requerido: true }
+        ],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'estado', tipo: DATA_TYPE.STRING, descripcion: 'Nuevo estado' }
+        ]
+      },
+      {
+        path: '/actividades/:id/realizar',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Realizar actividad: puntos verdes/rojos, placetas y diploma si es examen',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del junior', requerido: true },
+          { campo: 'respuestas', tipo: DATA_TYPE.ARRAY, descripcion: 'Array de respuestas {idx, correcta}', requerido: true }
+        ],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'porcentaje', tipo: DATA_TYPE.NUMBER, descripcion: 'Porcentaje' },
+          { campo: 'puntos', tipo: DATA_TYPE.OBJECT, descripcion: 'Puntos verdes/rojos' },
+          { campo: 'diploma', tipo: DATA_TYPE.OBJECT, descripcion: 'Diploma si examen aprobado' }
+        ]
+      },
+      {
+        path: '/puntos/:dip',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Puntos Verdes/Rojos del junior + tabla de canje',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'puntos', tipo: DATA_TYPE.OBJECT, descripcion: 'puntos_verdes, puntos_rojos' },
+          { campo: 'tabla_canje', tipo: DATA_TYPE.ARRAY, descripcion: 'Tabla de canje' }
+        ]
+      },
+      {
+        path: '/puntos/canjear',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Canjear Puntos Verdes por Placetas (100, 250, 500, 1000)',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'placetas_obtenidas', tipo: DATA_TYPE.AMOUNT, descripcion: 'Placetas obtenidas' }
+        ]
+      },
+      {
+        path: '/diplomas/:dip',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Diplomas del junior',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'diplomas', tipo: DATA_TYPE.ARRAY, descripcion: 'Listado de diplomas' }
+        ]
+      },
+      {
+        path: '/retos',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Retos de Candela (semanales, gratuitos, con diploma)',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'reto_activo', tipo: DATA_TYPE.OBJECT, descripcion: 'Reto de la semana' },
+          { campo: 'retos', tipo: DATA_TYPE.ARRAY, descripcion: 'Todos los retos' }
+        ]
       }
     ]
   },

@@ -1,0 +1,539 @@
+/**
+ * JUNIOR ACADEMIA API — Sistema completo de la Academia Placeta Junior
+ *
+ * Implementa el spec de la Academia:
+ * - Actividades individuales con catálogo (Studio → Filtro → Publicación)
+ * - Creadores: mayores de 18 con ACUERDO DE COLABORADOR firmado vía PlacetaID
+ *   (documento oficial del sistema de documentos de admin-placeta)
+ * - Titulares: EIP (reciben %), profesores, contenido interno (100% PJ)
+ * - Precios con IVA incluido (Capitalia lo abona) + recompensas
+ * - Exámenes (>10 preguntas) → diploma PDF oficial
+ * - Retos de Candela (semanales, gratuitos, siempre con diploma)
+ * - Puntos Verdes (progreso) y Puntos Rojos (errores) + canje por Placetas
+ *
+ * Montado en server.js bajo /api/junior (RSP billing automático)
+ */
+import { Router } from 'express';
+import { createHash, randomUUID } from 'crypto';
+import { supabase } from '../config/supabase.js';
+import {
+  sbFindJuniorByDip, sbUpdateJunior, sbFindSolicitanteByDip,
+  sbUpdatePlacetaBalance, sbCreatePlacetaTransaction, sbCreateJuniorLog
+} from '../config/db.js';
+import { apiBancoPost } from '../config/db.js';
+import { registrarConexion, TIPO_CONEXION } from '../config/rsp.js';
+import { getRetoActivo, getRetos } from '../config/junior-retos.js';
+import {
+  TIPOS_ACTIVIDAD, ESTADOS_ACTIVIDAD, TIPOS_TITULAR,
+  UMBRAL_EXAMEN, APROBADO_MIN,
+  sbCrearActividad, sbGetActividad, sbListActividades, sbUpdateActividad, sbIncrementActividadStats,
+  sbGetColaborador, sbCrearColaborador, sbUpdateColaborador,
+  sbGetPuntos, sbUpsertPuntos, sbCanjearPuntos,
+  sbCrearDiploma, sbListDiplomas
+} from '../config/junior-actividades.js';
+import { TABLA_CANJE_PUNTOS_VERDES, desglosarPrecioConIva } from '../config/junior-precios.js';
+import { saveDocumentoAsync, generarPDF, getDocumentoByIdAsync, ETIQUETAS_DOC } from '../config/documentos.js';
+
+const router = Router();
+const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+const PLACETAID_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
+const EDAD_MIN_PUBLICAR = 18;
+
+// ── Registro RSP ───────────────────────────────────────────────────────
+function rspRegistrar(tipo, endpoint, usuario = '', dip = '') {
+  setImmediate(() => {
+    try {
+      registrarConexion({ entidad: 'junior', tipo, endpoint: `[Academia] ${endpoint}`, usuario: usuario || 'junior-api', dip: dip || '', detalle: 'Academia Placeta Junior' });
+    } catch (e) { /* silencioso */ }
+  });
+}
+
+// ── Verificación de junior ─────────────────────────────────────────────
+async function verificarJunior(req, res, next) {
+  const dip = req.query.dip || req.body?.dip || req.headers['x-junior-dip'];
+  if (!dip) return res.status(401).json({ error: 'No autorizado. Debes iniciar sesión.' });
+  try {
+    const junior = await sbFindJuniorByDip(dip);
+    if (!junior) return res.status(401).json({ error: 'Perfil no encontrado.' });
+    req.juniorDip = dip;
+    req.juniorId = junior.id;
+    req.juniorData = junior;
+    next();
+  } catch (e) { res.status(500).json({ error: 'Error verificando identidad.' }); }
+}
+
+// ── Calcular edad a partir de fecha de nacimiento ──────────────────────
+function calcularEdad(fechaNacimiento) {
+  if (!fechaNacimiento) return null;
+  const nac = new Date(fechaNacimiento);
+  if (isNaN(nac.getTime())) return null;
+  const hoy = new Date();
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const m = hoy.getMonth() - nac.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+  return edad;
+}
+
+// ── Enviar documento a PlacetaID para firma (sistema de documentos oficiales) ──
+async function enviarAPlacetaID(docId, titulo, tipo, entidad, csv, dip, hash) {
+  try {
+    const resp = await fetch(`${PLACETAID_API}/admin/documentos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': PLACETAID_KEY },
+      body: JSON.stringify({
+        id: docId, titulo, tipo, entidad, csv,
+        destinatariosDIP: dip ? [dip] : [],
+        contenido: `Documento oficial de ${entidad}: ${titulo}. Firme desde PlacetaID Móvil.\n\nCSV: ${csv}\nHash: ${hash?.slice(0, 16)}`
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    return resp.ok;
+  } catch (err) { console.warn('[Academia] PlacetaID offline:', err.message); return false; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ACUERDO DE COLABORADOR — mayor de 18, firma vía PlacetaID
+//  Usa el SISTEMA DE DOCUMENTOS OFICIALES de admin-placeta (no uno específico)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /junior/colaborador/solicitar
+ * Body: { dip, tipo_titular?, eip?, nombre_entidad? }
+ * - Verifica que el solicitante es mayor de 18 (solicitantes)
+ * - Crea un documento oficial tipo "acuerdo-colaborador" (sistema de documentos)
+ * - Lo envía a PlacetaID Móvil para firma
+ */
+router.post('/junior/colaborador/solicitar', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/colaborador/solicitar', '', req.juniorDip);
+  try {
+    const { dip, tipo_titular = 'profesor', eip, nombre_entidad } = req.body;
+    const junior = req.juniorData;
+
+    // Verificar mayoría de edad: si es junior (<16) no puede. Buscar al solicitante adulto por DIP.
+    const solicitante = await sbFindSolicitanteByDip(dip);
+    const edad = solicitante?.fecha_nacimiento ? calcularEdad(solicitante.fecha_nacimiento)
+      : (junior?.fecha_nacimiento ? calcularEdad(junior.fecha_nacimiento) : null);
+
+    if (edad !== null && edad < EDAD_MIN_PUBLICAR) {
+      return res.status(403).json({
+        error: `Debes ser mayor de ${EDAD_MIN_PUBLICAR} años para publicar contenido en la Academia. Tu edad registrada: ${edad} años.`,
+        edad_registrada: edad, edad_minima: EDAD_MIN_PUBLICAR
+      });
+    }
+
+    // Verificar que no exista ya un acuerdo firmado
+    const existente = await sbGetColaborador(dip);
+    if (existente?.firmado) {
+      return res.json({ success: true, ya_firmado: true, colaborador: existente, mensaje: 'Ya eres colaborador verificado de Placeta Junior.' });
+    }
+
+    // Crear documento oficial (sistema de documentos)
+    const docId = `colab-${Date.now()}-${randomUUID().slice(0, 6)}`;
+    const hash = createHash('sha256').update(docId + Date.now()).digest('hex');
+    const csv = hash.slice(0, 20).toUpperCase();
+
+    const clausulas = [
+      '1. El colaborador declara ser mayor de 18 años y tener plena capacidad legal.',
+      '2. Las actividades creadas pasarán por el Filtro de Placeta Junior antes de publicarse.',
+      '3. Placeta Junior tiene la decisión final sobre aprobación, rechazo, modificaciones, precio y recompensa.',
+      '4. El colaborador recibirá un porcentaje de los ingresos según su tipo de titularidad.',
+      '5. Todo el contenido debe ser original y no infringir derechos de autor.',
+      '6. El contenido debe ser adecuado por edades y cumplir la normativa de La Placeta.',
+      '7. Placeta Junior puede retirar contenido que incumpla las condiciones.'
+    ];
+
+    const doc = await saveDocumentoAsync('junior', {
+      id: docId,
+      tipo: 'acuerdo-colaborador',
+      titulo: 'Acuerdo de Colaborador — Academia Placeta Junior',
+      descripcion: `Acuerdo legal para publicar contenido educativo. Colaborador: ${dip} (${junior.nombre || ''} ${junior.apellidos || ''})`,
+      datos: {
+        dip, csv, hash,
+        colaborador_nombre: `${junior.nombre || ''} ${junior.apellidos || ''}`.trim(),
+        tipo_titular, eip: eip || null, nombre_entidad: nombre_entidad || null,
+        clausulas,
+        creadoPor: dip, fechaCreacion: new Date().toISOString(),
+        estado: 'pendiente_firma_colaborador'
+      },
+      createdBy: dip, estado: 'pendiente-firma', firmado: false, hash, csv
+    });
+
+    // Enviar a PlacetaID para firma
+    const envioPlacetaID = await enviarAPlacetaID(docId, doc.titulo, 'acuerdo-colaborador', 'junior', csv, dip, hash);
+
+    // Registrar el colaborador pendiente de firma
+    await sbCrearColaborador({
+      dip, nombre: `${junior.nombre || ''} ${junior.apellidos || ''}`.trim(),
+      tipo_titular, eip: eip || null, nombre_entidad: nombre_entidad || null,
+      documento_id: docId, csv, firmado: false, estado: 'pendiente_firma',
+      creado_en: new Date().toISOString()
+    });
+
+    await sbCreateJuniorLog({
+      junior_id: junior.id, accion: 'acuerdo_colaborador_solicitado',
+      detalle: `Solicitud de acuerdo de colaborador (${tipo_titular}). Documento ${docId}. Edad: ${edad}`, ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
+    });
+
+    res.json({
+      success: true,
+      documento: { id: docId, titulo: doc.titulo, csv, estado: 'pendiente-firma' },
+      placetaid: envioPlacetaID,
+      mensaje: envioPlacetaID
+        ? '✅ Acuerdo de colaborador enviado a PlacetaID Móvil para tu firma (mayoría de edad verificada).'
+        : '⚠️ Acuerdo creado. Conéctate a PlacetaID Móvil para firmarlo.'
+    });
+  } catch (err) {
+    console.error('[Academia] Error acuerdo colaborador:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /junior/colaborador/estado/:dip — Estado del acuerdo de colaborador
+ */
+router.get('/junior/colaborador/estado/:dip', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/colaborador/estado/:dip');
+  try {
+    const colaborador = await sbGetColaborador(req.params.dip);
+    if (!colaborador) return res.json({ success: true, colaborador: null, firmado: false });
+
+    // Si el documento se firmó en PlacetaID, actualizar estado
+    if (!colaborador.firmado && colaborador.documento_id) {
+      const doc = await getDocumentoByIdAsync('junior', colaborador.documento_id).catch(() => null);
+      if (doc?.firmado || doc?.estado === 'firmado') {
+        await sbUpdateColaborador(req.params.dip, { firmado: true, estado: 'activo', fecha_firma: doc.datos?.fechaFirma || new Date().toISOString() });
+        colaborador.firmado = true;
+        colaborador.estado = 'activo';
+      }
+    }
+
+    res.json({ success: true, colaborador, firmado: colaborador.firmado === true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ACTIVIDADES — catálogo (Studio → Filtro → Publicación)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /junior/actividades — Crear actividad (requiere acuerdo firmado 18+)
+ * Body: { dip, titulo, descripcion, categoria, edad_recomendada, dificultad,
+ *         tiempo_estimado, tipo, contenido, num_preguntas, num_fases }
+ */
+router.post('/junior/actividades', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/actividades', '', req.juniorDip);
+  try {
+    const junior = req.juniorData;
+    const { dip, titulo, descripcion, categoria, edad_recomendada, dificultad, tiempo_estimado, tipo, contenido, num_preguntas, num_fases } = req.body;
+
+    if (!titulo || !descripcion || !categoria) {
+      return res.status(400).json({ error: 'Título, descripción y categoría son obligatorios' });
+    }
+    if (!TIPOS_ACTIVIDAD.includes(tipo)) {
+      return res.status(400).json({ error: `Tipo de actividad no válido. Válidos: ${TIPOS_ACTIVIDAD.join(', ')}` });
+    }
+
+    // Verificar acuerdo de colaborador firmado
+    const colaborador = await sbGetColaborador(dip);
+    if (!colaborador?.firmado) {
+      return res.status(403).json({
+        error: 'Debes firmar el Acuerdo de Colaborador (mayor de 18) antes de publicar contenido. Usa /junior/colaborador/solicitar',
+        necesita_acuerdo: true
+      });
+    }
+
+    // Comprobar mayoría de edad
+    const solicitante = await sbFindSolicitanteByDip(dip);
+    const edad = solicitante?.fecha_nacimiento ? calcularEdad(solicitante.fecha_nacimiento) : null;
+    if (edad !== null && edad < EDAD_MIN_PUBLICAR) {
+      return res.status(403).json({ error: `Debes ser mayor de ${EDAD_MIN_PUBLICAR} años para publicar.` });
+    }
+
+    // Tipo de titular
+    let tipo_titular = colaborador.tipo_titular || TIPOS_TITULAR.PROFESOR;
+    if (tipo_titular === TIPOS_TITULAR.INTERNO) tipo_titular = TIPOS_TITULAR.INTERNO;
+
+    const nPreguntas = Number(num_preguntas) || 0;
+    const nFases = Number(num_fases) || 1;
+    const esExamen = nPreguntas > UMBRAL_EXAMEN; // >10 preguntas = examen (spec §11)
+
+    const actividad = await sbCrearActividad({
+      id: `act-${Date.now()}-${randomUUID().slice(0, 6)}`,
+      titulo, descripcion, categoria, tipo,
+      edad_recomendada: edad_recomendada || '6-12',
+      dificultad: dificultad || 'media',
+      tiempo_estimado: tiempo_estimado || 10,
+      num_preguntas: nPreguntas, num_fases: nFases,
+      es_examen: esExamen,
+      contenido: contenido || {},
+      autor_dip: dip,
+      autor_nombre: colaborador.nombre || `${junior.nombre} ${junior.apellidos}`.trim(),
+      tipo_titular,
+      eip: colaborador.eip || null,
+      nombre_entidad: colaborador.nombre_entidad || null,
+      estado: 'en_revision',          // → Filtro de Placeta Junior
+      publica: false,
+      estadisticas: { veces_realizada: 0, aprobados: 0 },
+      creado_en: new Date().toISOString()
+    });
+
+    await sbCreateJuniorLog({
+      junior_id: junior.id, accion: 'actividad_creada',
+      detalle: `Actividad "${titulo}" (${tipo}) enviada a revisión. Examen: ${esExamen}`, ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
+    });
+
+    res.json({
+      success: true,
+      actividad,
+      mensaje: esExamen
+        ? '✅ Actividad creada. Por tener más de 10 preguntas se tratará como EXAMEN (genera diploma).'
+        : '✅ Actividad creada y enviada al Filtro de Placeta Junior para revisión.'
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * GET /junior/actividades — Listar actividades (aprobadas = públicas)
+ */
+router.get('/junior/actividades', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/actividades');
+  try {
+    const { estado, categoria, solo_publicas = '1' } = req.query;
+    const actividades = await sbListActividades({
+      estado: estado || (solo_publicas === '1' ? 'aprobada' : undefined),
+      categoria,
+      soloPublicas: solo_publicas === '1'
+    });
+    res.json({ success: true, total: actividades.length, actividades });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * GET /junior/actividades/:id — Detalle de una actividad
+ */
+router.get('/junior/actividades/:id', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, `GET /junior/actividades/:id`);
+  try {
+    const actividad = await sbGetActividad(req.params.id);
+    if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
+    res.json({ success: true, actividad });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * POST /junior/actividades/:id/revisar — FILTRO de Placeta Junior (admin)
+ * Body: { accion: 'aprobar'|'rechazar'|'modificaciones', adminDip, precio_licencia?, precio_intento?, recompensa?, motivo? }
+ */
+router.post('/junior/actividades/:id/revisar', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, `POST /junior/actividades/:id/revisar`);
+  try {
+    const { accion, adminDip, precio_licencia, precio_intento, recompensa, motivo } = req.body;
+    const actividad = await sbGetActividad(req.params.id);
+    if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
+
+    if (!['aprobar', 'rechazar', 'modificaciones'].includes(accion)) {
+      return res.status(400).json({ error: 'Acción no válida. Usa: aprobar, rechazar, modificaciones' });
+    }
+
+    const cambios = { revisado_por: adminDip || 'sistema', fecha_revision: new Date().toISOString(), motivo_revision: motivo || '' };
+
+    if (accion === 'aprobar') {
+      cambios.estado = 'aprobada';
+      cambios.publica = true;
+      // El Filtro fija precio definitivo y recompensa (spec §6)
+      if (precio_licencia != null) cambios.precio_licencia = Number(precio_licencia);
+      if (precio_intento != null) cambios.precio_intento = Number(precio_intento);
+      if (recompensa != null) cambios.recompensa = Number(recompensa);
+    } else if (accion === 'rechazar') {
+      cambios.estado = 'rechazada';
+      cambios.publica = false;
+    } else {
+      cambios.estado = 'modificaciones';
+      cambios.publica = false;
+    }
+
+    const ok = await sbUpdateActividad(req.params.id, cambios);
+    res.json({ success: ok, estado: cambios.estado, mensaje: `Actividad ${cambios.estado}` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  REALIZAR ACTIVIDAD — evaluación, puntos verdes/rojos, placetas, diploma
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /junior/actividades/:id/realizar
+ * Body: { dip, respuestas: [{ idx, correcta }], pago_licencia? }
+ */
+router.post('/junior/actividades/:id/realizar', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, `POST /junior/actividades/:id/realizar`, '', req.juniorDip);
+  try {
+    const junior = req.juniorData;
+    const actividad = await sbGetActividad(req.params.id);
+    if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
+    if (actividad.estado !== 'aprobada' && !actividad.publica) {
+      return res.status(403).json({ error: 'Actividad no publicada.' });
+    }
+
+    const { respuestas = [] } = req.body;
+    const contenido = actividad.contenido || {};
+    const preguntas = contenido.preguntas || [];
+    const totalPreguntas = preguntas.length || actividad.num_preguntas || respuestas.length;
+
+    let aciertos = 0;
+    let errores = 0;
+    for (const r of respuestas) {
+      if (r.correcta) aciertos++;
+      else errores++;
+    }
+    const respondidas = respuestas.length;
+    const porcentaje = totalPreguntas > 0 ? Math.round((aciertos / totalPreguntas) * 100) : 0;
+    const aprobado = porcentaje >= (actividad.es_examen ? APROBADO_MIN : 50);
+
+    // Recompensa (si está definida, en Placetas) — spec §10
+    const recompensaPz = actividad.recompensa || 0;
+    let nuevoSaldo = junior.placetas_saldo || 0;
+    if (aprobado && recompensaPz > 0) {
+      nuevoSaldo += recompensaPz;
+      await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
+      await sbCreatePlacetaTransaction({
+        junior_id: junior.id, tipo: 'ganar',
+        concepto: `Actividad: ${actividad.titulo}`,
+        cantidad: recompensaPz, saldo_resultante: nuevoSaldo,
+        ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
+      });
+    }
+
+    // Puntos Verdes / Rojos (spec §16, §17)
+    await sbUpsertPuntos(junior.id, { verdes: aciertos, rojos: errores });
+
+    // Estadísticas de la actividad
+    await sbIncrementActividadStats(req.params.id, { veces: 1, aprobados: aprobado ? 1 : 0 });
+
+    // Log
+    await sbCreateJuniorLog({
+      junior_id: junior.id, accion: 'actividad_realizada',
+      detalle: `Actividad "${actividad.titulo}": ${aciertos}/${totalPreguntas} (${porcentaje}%). ${aprobado ? 'Aprobada' : 'No aprobada'}. Placetas: +${aprobado ? recompensaPz : 0}`, ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
+    });
+
+    // ── DIPLOMA: si es examen y aprobado (spec §11) ──────────────
+    let diploma = null;
+    if (actividad.es_examen && aprobado) {
+      const reconocimiento = porcentaje === 100 ? 'Excelencia' : (porcentaje >= 90 ? 'Mención especial' : 'Diploma');
+      const dipId = `dip-${Date.now()}-${randomUUID().slice(0, 6)}`;
+      diploma = await sbCrearDiploma({
+        id: dipId,
+        junior_id: junior.id, junior_dip: junior.dip, junior_nombre: `${junior.nombre} ${junior.apellidos}`.trim(),
+        actividad_id: actividad.id, actividad_titulo: actividad.titulo,
+        resultado: porcentaje, reconocimiento, aprobado: true,
+        fecha: new Date().toISOString(), identificador: csvIdentificador(),
+        firma_digital: 'Placeta Junior — Firma digital oficial'
+      });
+    }
+
+    res.json({
+      success: true,
+      aciertos, errores, total: totalPreguntas, porcentaje, aprobado,
+      placetas_ganadas: aprobado ? recompensaPz : 0,
+      saldo_actual: nuevoSaldo,
+      puntos: await sbGetPuntos(junior.id),
+      es_examen: actividad.es_examen,
+      diploma: diploma ? { id: diploma.id, reconocimiento: diploma.reconocimiento } : null,
+      mensaje: diploma
+        ? `🎓 ¡Examen aprobado! Reconocimiento: ${diploma.reconocimiento}. Diploma generado.`
+        : (aprobado ? '🎉 ¡Actividad superada!' : '💪 Sigue practicando, los errores también enseñan.')
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Identificador único para diplomas (CSV oficial)
+function csvIdentificador() {
+  return createHash('sha256').update(Date.now() + randomUUID()).digest('hex').slice(0, 16).toUpperCase();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PUNTOS — consultar y canjear (spec §16)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /junior/puntos/:dip — Puntos Verdes/Rojos del junior
+ */
+router.get('/junior/puntos/:dip', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/puntos/:dip', '', req.juniorDip);
+  try {
+    const puntos = await sbGetPuntos(req.juniorId);
+    res.json({ success: true, puntos, tabla_canje: TABLA_CANJE_PUNTOS_VERDES });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * POST /junior/puntos/canjear — Canjear Puntos Verdes por Placetas
+ * Body: { dip, puntos_verdes } — usa la tabla de canje (spec §16)
+ */
+router.post('/junior/puntos/canjear', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/puntos/canjear', '', req.juniorDip);
+  try {
+    const junior = req.juniorData;
+    const { puntos_verdes } = req.body;
+    const puntos = await sbGetPuntos(junior.id);
+    if ((puntos.puntos_verdes || 0) < puntos_verdes) {
+      return res.status(400).json({ error: 'No tienes suficientes Puntos Verdes', puntos_verdes_actuales: puntos.puntos_verdes });
+    }
+
+    // Buscar la recompensa en la tabla de canje
+    const tramo = [...TABLA_CANJE_PUNTOS_VERDES].sort((a, b) => b.puntos_verdes - a.puntos_verdes)
+      .find(t => puntos_verdes >= t.puntos_verdes);
+    if (!tramo || tramo.puntos_verdes !== puntos_verdes) {
+      return res.status(400).json({
+        error: 'Cantidad no válida para canje. Usa una de la tabla: 100, 250, 500 o 1000',
+        tabla_canje: TABLA_CANJE_PUNTOS_VERDES
+      });
+    }
+
+    const ok = await sbCanjearPuntos(junior.id, puntos_verdes, tramo.placetas);
+    if (!ok) return res.status(400).json({ error: 'No se pudo canjear' });
+
+    // Abonar placetas
+    const nuevoSaldo = (junior.placetas_saldo || 0) + tramo.placetas;
+    await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
+    await sbCreatePlacetaTransaction({
+      junior_id: junior.id, tipo: 'ganar',
+      concepto: `Canje de ${puntos_verdes} Puntos Verdes`,
+      cantidad: tramo.placetas, saldo_resultante: nuevoSaldo,
+      ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
+    });
+
+    res.json({ success: true, puntos_canjeados: puntos_verdes, placetas_obtenidas: tramo.placetas, saldo_actual: nuevoSaldo });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  DIPLOMAS — listar y generar PDF (spec §11, §13)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /junior/diplomas/:dip — Diplomas del junior
+ */
+router.get('/junior/diplomas/:dip', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/diplomas/:dip', '', req.juniorDip);
+  try {
+    const diplomas = await sbListDiplomas(req.juniorId);
+    res.json({ success: true, total: diplomas.length, diplomas });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  RETOS DE CANDELA (spec §12, §13) — semanales, gratuitos, con diploma
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /junior/retos — Retos de Candela (activos y próximos)
+ */
+router.get('/junior/retos', (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/retos');
+  const reto = getRetoActivo();
+  const todos = getRetos();
+  res.json({ success: true, reto_activo: reto, retos: todos, siempre_diploma: true, gratuitos: true });
+});
+
+export default router;

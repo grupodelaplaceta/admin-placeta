@@ -26,6 +26,7 @@ import documentosRoutes from './src/routes/documentos.js';
 import empresasRoutes from './src/routes/empresas.js';
 import juniorApiRoutes from './src/routes/junior-api.js';
 import juniorOficialApiRoutes from './src/routes/junior-oficial-api.js';
+import juniorAcademiaApiRoutes from './src/routes/junior-academia-api.js';
 import accionesDocumentoRoutes from './src/routes/acciones-documento.js';
 import rspRoutes from './src/routes/rsp.js';
 import { apiGatewayRoutes } from './src/routes/api-gateway.js';
@@ -170,6 +171,7 @@ app.use('/api', apiRoutes);
 // Montado ANTES del router oficial junior para que pueda delegar por
 // reescritura de URL (evita fetch HTTP interno / timeouts en serverless).
 app.use('/api', apiGatewayRoutes);
+app.use('/api', juniorAcademiaApiRoutes); // Sistema completo Academia (actividades, colaboradores, diplomas, retos)
 app.use('/api', juniorOficialApiRoutes); // API oficial Academia Placeta Junior (RSP billing + IVA + Capitalia)
 app.use('/api', juniorApiRoutes); // Proxy junior → CRM
 app.use('/api', votacionesApiRoutes); // Sistema de votaciones

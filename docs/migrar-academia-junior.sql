@@ -1,0 +1,84 @@
+-- ═══════════════════════════════════════════════════════════════════════
+-- ACADEMIA PLACETA JUNIOR — Migración de tablas
+-- Sistema completo: actividades, colaboradores, puntos, diplomas
+-- Ejecutar en Supabase Dashboard (SQL Editor)
+-- ═══════════════════════════════════════════════════════════════════════
+
+-- ── ACTIVIDADES EDUCATIVAS ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS junior_actividades (
+  id TEXT PRIMARY KEY,
+  titulo TEXT NOT NULL,
+  descripcion TEXT,
+  categoria TEXT,
+  tipo TEXT,                          -- test, sopa_letras, relacionar_conceptos, etc.
+  edad_recomendada TEXT DEFAULT '6-12',
+  dificultad TEXT DEFAULT 'media',
+  tiempo_estimado INTEGER DEFAULT 10,
+  num_preguntas INTEGER DEFAULT 0,
+  num_fases INTEGER DEFAULT 1,
+  es_examen BOOLEAN DEFAULT false,    -- >10 preguntas = examen (spec §11)
+  contenido JSONB DEFAULT '{}',
+  autor_dip TEXT,
+  autor_nombre TEXT,
+  tipo_titular TEXT DEFAULT 'profesor', -- entidad_eip | profesor | interno
+  eip TEXT,
+  nombre_entidad TEXT,
+  precio_licencia INTEGER,            -- IVA incluido (lo abona Capitalia)
+  precio_intento INTEGER,
+  recompensa INTEGER,                 -- Placetas por superar (spec §10)
+  estado TEXT DEFAULT 'en_revision',  -- borrador | en_revision | aprobada | rechazada | modificaciones
+  publica BOOLEAN DEFAULT false,
+  estadisticas JSONB DEFAULT '{}',
+  revisado_por TEXT,
+  fecha_revision TEXT,
+  motivo_revision TEXT,
+  creado_en TEXT DEFAULT (now()::text),
+  UNIQUE (id)
+);
+
+-- ── COLABORADORES (acuerdo 18+ firmado vía PlacetaID) ────────────────
+CREATE TABLE IF NOT EXISTS junior_colaboradores (
+  dip TEXT PRIMARY KEY,
+  nombre TEXT,
+  tipo_titular TEXT DEFAULT 'profesor',
+  eip TEXT,
+  nombre_entidad TEXT,
+  documento_id TEXT,                  -- documento oficial (sistema de documentos)
+  csv TEXT,
+  firmado BOOLEAN DEFAULT false,
+  estado TEXT DEFAULT 'pendiente_firma', -- pendiente_firma | activo
+  fecha_firma TEXT,
+  creado_en TEXT DEFAULT (now()::text)
+);
+
+-- ── PUNTOS VERDES / ROJOS (spec §16) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS junior_puntos (
+  junior_id INTEGER PRIMARY KEY,
+  puntos_verdes INTEGER DEFAULT 0,
+  puntos_rojos INTEGER DEFAULT 0,
+  canjeado INTEGER DEFAULT 0,         -- placetas obtenidas por canje
+  actualizado_en TEXT DEFAULT (now()::text)
+);
+
+-- ── DIPLOMAS (spec §11, §13) ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS junior_diplomas (
+  id TEXT PRIMARY KEY,
+  junior_id INTEGER,
+  junior_dip TEXT,
+  junior_nombre TEXT,
+  actividad_id TEXT,
+  actividad_titulo TEXT,
+  resultado INTEGER,                  -- porcentaje
+  reconocimiento TEXT,                -- Diploma | Mención especial | Excelencia
+  aprobado BOOLEAN DEFAULT true,
+  fecha TEXT,
+  identificador TEXT,                 -- ID único verificable
+  firma_digital TEXT,
+  creado_en TEXT DEFAULT (now()::text)
+);
+
+-- Índices
+CREATE INDEX IF NOT EXISTS idx_actividades_estado ON junior_actividades(estado);
+CREATE INDEX IF NOT EXISTS idx_actividades_categoria ON junior_actividades(categoria);
+CREATE INDEX IF NOT EXISTS idx_actividades_autor ON junior_actividades(autor_dip);
+CREATE INDEX IF NOT EXISTS idx_diplomas_junior ON junior_diplomas(junior_id);

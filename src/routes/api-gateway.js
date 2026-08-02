@@ -28,8 +28,9 @@ import {
   sbListSolicitantes, sbFindSolicitanteByDip, sbListDeclaraciones
 } from '../config/db.js';
 import { verificarSesion } from '../middleware/auth.js';
-// Router oficial de la Academia Placeta Junior (delegación directa)
+// Routers oficiales de la Academia Placeta Junior (delegación directa)
 import juniorOficialApiRoutes from './junior-oficial-api.js';
+import juniorAcademiaApiRoutes from './junior-academia-api.js';
 
 const router = Router();
 
@@ -544,7 +545,8 @@ async function handleJuniorAPI(path, method, req) {
 
   // ── Academia Placeta Junior (API oficial, con IVA y pagos reales) ──
   // Los endpoints de la academia se delegan al router oficial (junior-oficial-api)
-  // para mantener una única fuente de verdad de la lógica económica.
+  // y al router de sistema completo (junior-academia-api) para mantener una
+  // única fuente de verdad de la lógica económica y educativa.
   const ACADEMIA_ENDPOINTS = [
     '/academy/precios',
     '/academy/cuestionarios',
@@ -552,17 +554,30 @@ async function handleJuniorAPI(path, method, req) {
     '/monedero',
     '/perfil',
     '/puntos/canje',
-    '/historial'
+    '/historial',
+    // Sistema completo de la Academia
+    '/actividades',
+    '/retos'
   ];
   if (method === 'GET' && ACADEMIA_ENDPOINTS.includes(path)) {
     return 'rewrite';
   }
 
-  if (method === 'POST' && ['/academy/evaluar', '/academy/desbloquear-nivel', '/academy/confirmar-pago', '/regalias'].includes(path)) {
+  if (method === 'POST' && ['/academy/evaluar', '/academy/desbloquear-nivel', '/academy/confirmar-pago', '/regalias',
+    '/actividades', '/colaborador/solicitar', '/puntos/canjear'
+  ].includes(path)) {
     return 'rewrite';
   }
 
   if (path.match(/^\/tutor-info\/([^/]+)$/) && method === 'GET') {
+    return 'rewrite';
+  }
+
+  // Rutas con parámetro que delegan al sistema academia
+  if (method === 'GET' && (path.match(/^\/actividades\//) || path.match(/^\/colaborador\/estado\//) || path.match(/^\/puntos\//) || path.match(/^\/diplomas\//))) {
+    return 'rewrite';
+  }
+  if (method === 'POST' && (path.match(/^\/actividades\/[^/]+\/(revisar|realizar)$/))) {
     return 'rewrite';
   }
 
@@ -662,12 +677,20 @@ router.all('/v1/:entidad/*path', validateAPIRequest, validateEntityAccess, (req,
       // Si el handler pide delegar a la API oficial junior, reenviamos
       // directamente al router oficial (sin fetch HTTP ni reescritura global)
       if (result === 'rewrite') {
-        // Reconstruir la URL relativa esperada por el router oficial:
-        // el router oficial está montado en /api y sus rutas son /junior/...
-        // La URL entrante es /api/v1/junior/... → relativa al router oficial: /junior/...
+        // Reconstruir la URL relativa esperada por el router oficial/academia:
+        // el router está montado en /api y sus rutas son /junior/...
+        // La URL entrante es /api/v1/junior/... → relativa al router: /junior/...
         const qs = req.originalUrl.includes('?') ? req.originalUrl.split('?')[1] : '';
         req.url = `/junior${subpath}${qs ? '?' + qs : ''}`;
         req.originalUrl = `/api/junior${subpath}${qs ? '?' + qs : ''}`;
+        // Delegar al router que corresponda: sistema academia vs academia clásica
+        // /puntos/canje es de la academia clásica; /puntos/:dip y /puntos/canjear son del sistema academia
+        const esSistemaAcademia = subpath.startsWith('/actividades') || subpath.startsWith('/colaborador') ||
+          subpath.startsWith('/diplomas') || subpath.startsWith('/retos') ||
+          subpath.startsWith('/puntos/') && subpath !== '/puntos/canje';
+        if (esSistemaAcademia) {
+          return juniorAcademiaApiRoutes(req, res, next);
+        }
         return juniorOficialApiRoutes(req, res, next);
       }
 
