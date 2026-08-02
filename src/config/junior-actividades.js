@@ -78,6 +78,26 @@ export async function sbUpdateActividad(id, data) {
   } catch { return false; }
 }
 
+export async function sbDeleteActividad(id) {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('junior_actividades').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch { return false; }
+}
+
+export async function sbListColaboradores({ firmado } = {}) {
+  if (!supabase) return [];
+  try {
+    let q = supabase.from('junior_colaboradores').select('*');
+    if (firmado != null) q = q.eq('firmado', firmado);
+    q = q.order('creado_en', { ascending: false }).limit(200);
+    const { data } = await q;
+    return data || [];
+  } catch { return []; }
+}
+
 export async function sbIncrementActividadStats(id, { veces = 0, aprobados = 0 }) {
   if (!supabase) return;
   try {

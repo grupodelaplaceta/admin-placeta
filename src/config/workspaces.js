@@ -212,6 +212,12 @@ const WORKSPACES = {
         ]
       },
       {
+        titulo: '🎓 Academia',
+        enlaces: [
+          { texto: 'Actividades (revisar/editar/publicar)', url: '/junior/academia', icono: '🧩' },
+        ]
+      },
+      {
         titulo: '🔌 Desarrollo',
         enlaces: [
           { texto: 'APIs', url: '/junior/apis', icono: '🔌' },

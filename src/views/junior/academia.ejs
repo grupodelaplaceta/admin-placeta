@@ -1,0 +1,189 @@
+<div class="info-card mb-16">
+  <h4>🎓 Academia Placeta Junior — Gestión completa</h4>
+  <p>Revisa (Filtro), edita, publica/retira y elimina las actividades. Todo va a <strong>junior</strong>. Precios con IVA incluido (lo abona Capitalia).</p>
+</div>
+
+<div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+  <div class="stat-card"><span class="stat-value"><%= (conteo['en_revision'] || 0) %></span><span class="stat-label">En revisión</span></div>
+  <div class="stat-card"><span class="stat-value"><%= (conteo['aprobada'] || 0) %></span><span class="stat-label">Aprobadas</span></div>
+  <div class="stat-card"><span class="stat-value"><%= (conteo['rechazada'] || 0) %></span><span class="stat-label">Rechazadas</span></div>
+  <div class="stat-card"><span class="stat-value"><%= (conteo['modificaciones'] || 0) %></span><span class="stat-label">Con cambios</span></div>
+  <div class="stat-card"><span class="stat-value"><%= colaboradores.length %></span><span class="stat-label">Colaboradores</span></div>
+</div>
+
+<h4 style="margin:22px 0 12px;">🧩 Actividades (<%= actividades.length %>)</h4>
+<% if (!actividades.length) { %>
+  <div class="info-card mb-16"><p>No hay actividades todavía.</p></div>
+<% } %>
+
+<div class="grid-2">
+<% actividades.forEach(function(a) { %>
+  <div class="info-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+      <div>
+        <strong><%= a.titulo %></strong>
+        <div class="meta" style="margin-top:4px;">
+          <span class="badge badge-primary"><%= a.categoria %></span>
+          <span class="badge"><%= a.tipo %></span>
+          <% if (a.es_examen) { %><span class="badge badge-warning">🎓 Examen</span><% } %>
+        </div>
+      </div>
+      <span class="badge <%= a.estado === 'aprobada' ? 'badge-success' : (a.estado === 'rechazada' ? 'badge-danger' : 'badge-warning') %>"><%= a.estado %></span>
+    </div>
+    <div style="margin-top:8px;font-size:13px;color:#555;">
+      👤 <%= a.autor_nombre || '—' %> · ⭐ <%= a.dificultad || 'media' %> · 👧 <%= a.edad_recomendada || '6-12' %> · ⏱ <%= a.tiempo_estimado || '?' %> min · 📊 <%= (a.estadisticas && a.estadisticas.veces_realizada) || 0 %> jugadas
+    </div>
+    <div style="margin-top:6px;font-size:13px;">
+      Precio licencia: <strong><%= a.precio_licencia || 0 %></strong> Pz · Intento: <strong><%= a.precio_intento || 0 %></strong> Pz · Recompensa: <strong><%= a.recompensa || 0 %></strong> Pz
+      <span class="badge <%= a.publica ? 'badge-success' : 'badge-danger' %>" style="margin-left:6px;"><%= a.publica ? 'Pública' : 'Oculta' %></span>
+      <% if (a.destacada) { %><span class="badge badge-primary">⭐ Destacada</span><% } %>
+      <% if (a.subvencionada) { %><span class="badge badge-success">🎁 Subvencionada</span><% } %>
+    </div>
+
+    <details class="academia-detalle" style="margin-top:12px;">
+      <summary class="btn btn-sm" style="display:inline-flex;cursor:pointer;">⚙️ Gestionar</summary>
+      <div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:12px;">
+        <!-- Revisar -->
+        <h5 style="margin-bottom:6px;">🔍 Revisar (Filtro)</h5>
+        <form onsubmit="return revisarActividad('<%= a.id %>', this)">
+          <div class="form-row-3">
+            <select name="accion" required>
+              <option value="aprobar">✅ Aprobar</option>
+              <option value="rechazar">❌ Rechazar</option>
+              <option value="modificaciones">✏️ Pedir cambios</option>
+            </select>
+            <input name="precio_licencia" type="number" min="0" placeholder="Precio licencia (Pz)" value="<%= a.precio_licencia || '' %>">
+            <input name="precio_intento" type="number" min="0" placeholder="Precio intento (Pz)" value="<%= a.precio_intento || '' %>">
+          </div>
+          <div class="form-row-3">
+            <input name="recompensa" type="number" min="0" placeholder="Recompensa (Pz)" value="<%= a.recompensa || '' %>">
+            <label class="check"><input type="checkbox" name="destacada" <%= a.destacada ? 'checked' : '' %>> ⭐ Destacada</label>
+            <label class="check"><input type="checkbox" name="subvencionada" <%= a.subvencionada ? 'checked' : '' %>> 🎁 Subvencionada</label>
+          </div>
+          <input name="motivo" type="text" placeholder="Motivo / nota de revisión" style="width:100%;margin-top:6px;">
+          <button class="btn btn-primary" style="margin-top:8px;">Aplicar revisión</button>
+        </form>
+
+        <!-- Editar -->
+        <h5 style="margin:14px 0 6px;">✏️ Editar</h5>
+        <form onsubmit="return editarActividad('<%= a.id %>', this)">
+          <input name="titulo" type="text" value="<%= a.titulo %>" style="width:100%;">
+          <textarea name="descripcion" rows="2" style="width:100%;margin-top:6px;"><%= a.descripcion || '' %></textarea>
+          <div class="form-row-3">
+            <input name="categoria" type="text" value="<%= a.categoria || '' %>" placeholder="Categoría">
+            <input name="edad_recomendada" type="text" value="<%= a.edad_recomendada || '' %>" placeholder="Edad">
+            <input name="dificultad" type="text" value="<%= a.dificultad || '' %>" placeholder="Dificultad">
+          </div>
+          <div class="form-row-3">
+            <input name="tiempo_estimado" type="number" value="<%= a.tiempo_estimado || 10 %>" placeholder="Tiempo (min)">
+            <input name="num_preguntas" type="number" value="<%= a.num_preguntas || 0 %>" placeholder="Nº preguntas">
+            <input name="portada_url" type="text" value="<%= a.portada_url || '' %>" placeholder="URL portada">
+          </div>
+          <label style="display:block;margin-top:6px;">Contenido (JSON de bloques)</label>
+          <textarea name="contenido" rows="4" style="width:100%;font-family:monospace;font-size:11px;"><%= JSON.stringify(a.contenido || {}) %></textarea>
+          <button class="btn btn-secondary" style="margin-top:8px;">Guardar cambios</button>
+        </form>
+
+        <!-- Publicar / Eliminar -->
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn <%= a.publica ? 'btn-warning' : 'btn-success' %>" onclick="publicarActividad('<%= a.id %>', <%= !a.publica %>)"><%= a.publica ? 'Retirar' : 'Publicar' %></button>
+          <button class="btn btn-danger" onclick="eliminarActividad('<%= a.id %>', '<%= a.titulo.replace(/'/g, "") %>')">🗑️ Eliminar</button>
+        </div>
+      </div>
+    </details>
+  </div>
+<% }); %>
+</div>
+
+<h4 style="margin:26px 0 12px;">🤝 Colaboradores (<%= colaboradores.length %>)</h4>
+<% if (colaboradores.length) { %>
+<div class="table-container">
+  <table>
+    <thead><tr><th>DIP</th><th>Nombre</th><th>Tipo</th><th>EIP</th><th>Estado</th></tr></thead>
+    <tbody>
+      <% colaboradores.forEach(function(c) { %>
+      <tr>
+        <td class="text-mono"><%= c.dip %></td>
+        <td><%= c.nombre || '—' %></td>
+        <td><%= c.tipo_titular || 'profesor' %></td>
+        <td class="text-mono"><%= c.eip || '—' %></td>
+        <td><span class="badge <%= c.firmado ? 'badge-success' : 'badge-warning' %>"><%= c.firmado ? 'Firmado' : (c.estado || 'pendiente') %></span></td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</div>
+<% } else { %>
+  <div class="info-card mb-16"><p>Sin colaboradores registrados.</p></div>
+<% } %>
+
+<style>
+  .grid-2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+  .form-row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:6px; }
+  .form-row-3 input, .form-row-3 select { padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px; width:100%; box-sizing:border-box; }
+  .check { display:flex; align-items:center; gap:4px; font-size:12px; }
+  .academia-detalle summary { list-style:none; }
+  .btn-sm { padding:4px 10px; font-size:12px; }
+</style>
+
+<script>
+  function postJSON(url, data) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(r => r.json()).catch(() => ({ success: false, error: 'Error de red' }));
+  }
+  function recargar() { setTimeout(() => window.location.reload(), 700); }
+
+  async function revisarActividad(id, form) {
+    const fd = new FormData(form);
+    const data = {
+      accion: fd.get('accion'),
+      motivo: fd.get('motivo') || ''
+    };
+    if (fd.get('precio_licencia')) data.precio_licencia = Number(fd.get('precio_licencia'));
+    if (fd.get('precio_intento')) data.precio_intento = Number(fd.get('precio_intento'));
+    if (fd.get('recompensa')) data.recompensa = Number(fd.get('recompensa'));
+    data.destacada = fd.get('destacada') === 'on';
+    data.subvencionada = fd.get('subvencionada') === 'on';
+    const r = await postJSON('/junior/academia/revisar/' + id, data);
+    alert(r.mensaje || (r.error || 'Listo'));
+    if (r.success) recargar();
+    return false;
+  }
+
+  async function editarActividad(id, form) {
+    const fd = new FormData(form);
+    let contenido = {};
+    try { contenido = JSON.parse(fd.get('contenido') || '{}'); } catch (e) { alert('⚠️ El JSON del contenido no es válido'); return false; }
+    const data = {
+      titulo: fd.get('titulo'),
+      descripcion: fd.get('descripcion'),
+      categoria: fd.get('categoria'),
+      edad_recomendada: fd.get('edad_recomendada'),
+      dificultad: fd.get('dificultad'),
+      tiempo_estimado: Number(fd.get('tiempo_estimado')) || 10,
+      num_preguntas: Number(fd.get('num_preguntas')) || 0,
+      portada_url: fd.get('portada_url') || null,
+      contenido
+    };
+    const r = await postJSON('/junior/academia/editar/' + id, data);
+    alert(r.mensaje || (r.error || 'Listo'));
+    if (r.success) recargar();
+    return false;
+  }
+
+  async function publicarActividad(id, publicar) {
+    const r = await postJSON('/junior/academia/publicar/' + id, { publicar });
+    alert(r.mensaje || (r.error || 'Listo'));
+    if (r.success) recargar();
+  }
+
+  async function eliminarActividad(id, titulo) {
+    if (!confirm('¿Eliminar la actividad "' + titulo + '"? Esta acción no se puede deshacer.')) return;
+    const r = await postJSON('/junior/academia/eliminar/' + id, {});
+    alert(r.mensaje || (r.error || 'Listo'));
+    if (r.success) recargar();
+  }
+</script>
