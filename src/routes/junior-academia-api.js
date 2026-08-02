@@ -216,15 +216,19 @@ router.get('/junior/colaborador/estado/:dip', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
- * POST /junior/actividades — Crear actividad (requiere acuerdo firmado 18+)
- * Body: { dip, titulo, descripcion, categoria, edad_recomendada, dificultad,
- *         tiempo_estimado, tipo, contenido, num_preguntas, num_fases }
+ * POST /junior/actividades — Crear actividad
+ * Titularidad (spec §7): entidad_eip (EIP) | profesor (18+ con acuerdo) | interno (anónimo, todo va a junior)
+ * Body: { tipo_titular, dip?, eip?, nombre_entidad?, titulo, descripcion, categoria,
+ *         edad_recomendada, dificultad, tiempo_estimado, tipo, contenido, num_preguntas, num_fases, portada_url }
  */
-router.post('/junior/actividades', verificarJunior, async (req, res) => {
-  rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/actividades', '', req.juniorDip);
+router.post('/junior/actividades', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/actividades', '', req.body?.dip || '');
   try {
-    const junior = req.juniorData;
-    const { dip, titulo, descripcion, categoria, edad_recomendada, dificultad, tiempo_estimado, tipo, contenido, num_preguntas, num_fases, portada_url } = req.body;
+    const {
+      tipo_titular = TIPOS_TITULAR.INTERNO, dip, eip, nombre_entidad,
+      titulo, descripcion, categoria, edad_recomendada, dificultad, tiempo_estimado,
+      tipo, contenido, num_preguntas, num_fases, portada_url
+    } = req.body;
 
     if (!titulo || !descripcion || !categoria) {
       return res.status(400).json({ error: 'Título, descripción y categoría son obligatorios' });
@@ -233,25 +237,41 @@ router.post('/junior/actividades', verificarJunior, async (req, res) => {
       return res.status(400).json({ error: `Tipo de actividad no válido. Válidos: ${TIPOS_ACTIVIDAD.join(', ')}` });
     }
 
-    // Verificar acuerdo de colaborador firmado
-    const colaborador = await sbGetColaborador(dip);
-    if (!colaborador?.firmado) {
-      return res.status(403).json({
-        error: 'Debes firmar el Acuerdo de Colaborador (mayor de 18) antes de publicar contenido. Usa /junior/colaborador/solicitar',
-        necesita_acuerdo: true
-      });
-    }
+    // ── Autor / titularidad ──────────────────────────────────────────
+    let autorDip = null;
+    let autorNombre = 'Placeta Junior';
+    let eipFinal = null;
+    let entidadNombre = null;
+    let titular = TIPOS_TITULAR.INTERNO; // anónimo → todo va a junior
 
-    // Comprobar mayoría de edad
-    const solicitante = await sbFindSolicitanteByDip(dip);
-    const edad = solicitante?.fecha_nacimiento ? calcularEdad(solicitante.fecha_nacimiento) : null;
-    if (edad !== null && edad < EDAD_MIN_PUBLICAR) {
-      return res.status(403).json({ error: `Debes ser mayor de ${EDAD_MIN_PUBLICAR} años para publicar.` });
+    if (tipo_titular === TIPOS_TITULAR.EIP) {
+      if (!eip) return res.status(400).json({ error: 'Indica el código EIP de la entidad.' });
+      titular = TIPOS_TITULAR.EIP;
+      eipFinal = eip;
+      entidadNombre = nombre_entidad || `EIP ${eip}`;
+      autorNombre = entidadNombre;
+      autorDip = dip || null; // opcional: quién sube el contenido
+    } else if (tipo_titular === TIPOS_TITULAR.PROFESOR) {
+      if (!dip) return res.status(400).json({ error: 'Indica tu DIP (profesor colaborador).' });
+      titular = TIPOS_TITULAR.PROFESOR;
+      const colaborador = await sbGetColaborador(dip);
+      if (!colaborador?.firmado) {
+        return res.status(403).json({
+          error: 'Debes firmar el Acuerdo de Colaborador (mayor de 18) antes de publicar como profesor. Usa /junior/colaborador/solicitar',
+          necesita_acuerdo: true
+        });
+      }
+      const solicitante = await sbFindSolicitanteByDip(dip);
+      const edad = solicitante?.fecha_nacimiento ? calcularEdad(solicitante.fecha_nacimiento) : null;
+      if (edad !== null && edad < EDAD_MIN_PUBLICAR) {
+        return res.status(403).json({ error: `Debes ser mayor de ${EDAD_MIN_PUBLICAR} años para publicar.` });
+      }
+      autorDip = dip;
+      autorNombre = colaborador.nombre || `Colaborador ${dip}`;
+      eipFinal = colaborador.eip || null;
+      entidadNombre = colaborador.nombre_entidad || null;
     }
-
-    // Tipo de titular
-    let tipo_titular = colaborador.tipo_titular || TIPOS_TITULAR.PROFESOR;
-    if (tipo_titular === TIPOS_TITULAR.INTERNO) tipo_titular = TIPOS_TITULAR.INTERNO;
+    // else → anónimo / interno (Placeta Junior)
 
     const nPreguntas = Number(num_preguntas) || 0;
     const nFases = Number(num_fases) || 1;
@@ -266,11 +286,11 @@ router.post('/junior/actividades', verificarJunior, async (req, res) => {
       num_preguntas: nPreguntas, num_fases: nFases,
       es_examen: esExamen,
       contenido: contenido || {},
-      autor_dip: dip,
-      autor_nombre: colaborador.nombre || `${junior.nombre} ${junior.apellidos}`.trim(),
-      tipo_titular,
-      eip: colaborador.eip || null,
-      nombre_entidad: colaborador.nombre_entidad || null,
+      autor_dip: autorDip,
+      autor_nombre: autorNombre,
+      tipo_titular: titular,
+      eip: eipFinal,
+      nombre_entidad: entidadNombre,
       estado: 'en_revision',          // → Filtro de Placeta Junior
       publica: false,
       portada_url: portada_url || null,
@@ -279,10 +299,16 @@ router.post('/junior/actividades', verificarJunior, async (req, res) => {
       creado_en: new Date().toISOString()
     });
 
-    await sbCreateJuniorLog({
-      junior_id: junior.id, accion: 'actividad_creada',
-      detalle: `Actividad "${titulo}" (${tipo}) enviada a revisión. Examen: ${esExamen}`, ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
-    });
+    // Log si hay junior identificado (opcional)
+    if (autorDip) {
+      const junior = await sbFindJuniorByDip(autorDip).catch(() => null);
+      if (junior?.id) {
+        await sbCreateJuniorLog({
+          junior_id: junior.id, accion: 'actividad_creada',
+          detalle: `Actividad "${titulo}" (${tipo}) enviada a revisión. Titular: ${titular}. Examen: ${esExamen}`, ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
+        });
+      }
+    }
 
     res.json({
       success: true,
