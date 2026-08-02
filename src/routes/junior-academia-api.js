@@ -225,7 +225,7 @@ router.post('/junior/actividades', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/actividades', '', req.body?.dip || '');
   try {
     const {
-      tipo_titular = TIPOS_TITULAR.INTERNO, dip, eip, nombre_entidad,
+      tipo_titular = TIPOS_TITULAR.INTERNO, dip, eip, nombre_entidad, nombre_autor,
       titulo, descripcion, categoria, edad_recomendada, dificultad, tiempo_estimado,
       tipo, contenido, num_preguntas, num_fases, portada_url
     } = req.body;
@@ -252,24 +252,19 @@ router.post('/junior/actividades', async (req, res) => {
       autorNombre = entidadNombre;
       autorDip = dip || null; // opcional: quién sube el contenido
     } else if (tipo_titular === TIPOS_TITULAR.PROFESOR) {
-      if (!dip) return res.status(400).json({ error: 'Indica tu DIP (profesor colaborador).' });
+      // Los profesores se registran con Google u otro proveedor (sin DIP)
       titular = TIPOS_TITULAR.PROFESOR;
-      const colaborador = await sbGetColaborador(dip);
-      if (!colaborador?.firmado) {
-        return res.status(403).json({
-          error: 'Debes firmar el Acuerdo de Colaborador (mayor de 18) antes de publicar como profesor. Usa /junior/colaborador/solicitar',
-          necesita_acuerdo: true
-        });
+      autorNombre = nombre_autor || 'Profesor de Placeta Junior';
+      if (dip) {
+        // Si se identifica con DIP y tiene acuerdo firmado, se usa su perfil
+        const colaborador = await sbGetColaborador(dip);
+        if (colaborador?.firmado) {
+          autorDip = dip;
+          autorNombre = colaborador.nombre || autorNombre;
+          eipFinal = colaborador.eip || null;
+          entidadNombre = colaborador.nombre_entidad || null;
+        }
       }
-      const solicitante = await sbFindSolicitanteByDip(dip);
-      const edad = solicitante?.fecha_nacimiento ? calcularEdad(solicitante.fecha_nacimiento) : null;
-      if (edad !== null && edad < EDAD_MIN_PUBLICAR) {
-        return res.status(403).json({ error: `Debes ser mayor de ${EDAD_MIN_PUBLICAR} años para publicar.` });
-      }
-      autorDip = dip;
-      autorNombre = colaborador.nombre || `Colaborador ${dip}`;
-      eipFinal = colaborador.eip || null;
-      entidadNombre = colaborador.nombre_entidad || null;
     }
     // else → anónimo / interno (Placeta Junior)
 
