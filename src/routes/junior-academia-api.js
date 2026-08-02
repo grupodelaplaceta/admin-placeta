@@ -484,11 +484,15 @@ function csvIdentificador() {
 
 /**
  * GET /junior/puntos/:dip — Puntos Verdes/Rojos del junior
+ * De solo lectura: no exige perfil completo; si el DIP no está registrado
+ * como junior devuelve el marcador a 0 y la tabla de canje (sin error).
  */
-router.get('/junior/puntos/:dip', verificarJunior, async (req, res) => {
-  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/puntos/:dip', '', req.juniorDip);
+router.get('/junior/puntos/:dip', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/puntos/:dip', '', req.params.dip);
   try {
-    const puntos = await sbGetPuntos(req.juniorId);
+    const junior = await sbFindJuniorByDip(req.params.dip).catch(() => null);
+    const juniorId = junior?.id || null;
+    const puntos = await sbGetPuntos(juniorId);
     res.json({ success: true, puntos, tabla_canje: TABLA_CANJE_PUNTOS_VERDES });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -540,11 +544,14 @@ router.post('/junior/puntos/canjear', verificarJunior, async (req, res) => {
 
 /**
  * GET /junior/diplomas/:dip — Diplomas del junior
+ * De solo lectura: si el DIP no está registrado devuelve lista vacía.
  */
-router.get('/junior/diplomas/:dip', verificarJunior, async (req, res) => {
-  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/diplomas/:dip', '', req.juniorDip);
+router.get('/junior/diplomas/:dip', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/diplomas/:dip', '', req.params.dip);
   try {
-    const diplomas = await sbListDiplomas(req.juniorId);
+    const junior = await sbFindJuniorByDip(req.params.dip).catch(() => null);
+    const juniorId = junior?.id || null;
+    const diplomas = juniorId ? await sbListDiplomas(juniorId) : [];
     res.json({ success: true, total: diplomas.length, diplomas });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
