@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS junior_actividades (
   publica BOOLEAN DEFAULT false,
   portada_url TEXT,                   -- imagen de portada (web/carrusel)
   destacada BOOLEAN DEFAULT false,    -- aparece en el carrusel de la web
+  subvencionada BOOLEAN DEFAULT false, -- de pago pero cubierta por el Fondo Público de Acceso
   estadisticas JSONB DEFAULT '{}',
   revisado_por TEXT,
   fecha_revision TEXT,

@@ -329,7 +329,7 @@ router.get('/junior/actividades/:id', async (req, res) => {
 router.post('/junior/actividades/:id/revisar', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.MODIFICACION, `POST /junior/actividades/:id/revisar`);
   try {
-    const { accion, adminDip, precio_licencia, precio_intento, recompensa, motivo, destacada } = req.body;
+    const { accion, adminDip, precio_licencia, precio_intento, recompensa, motivo, destacada, subvencionada } = req.body;
     const actividad = await sbGetActividad(req.params.id);
     if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
 
@@ -348,6 +348,8 @@ router.post('/junior/actividades/:id/revisar', async (req, res) => {
       if (recompensa != null) cambios.recompensa = Number(recompensa);
       // Destacada (carrusel de la web)
       if (destacada != null) cambios.destacada = Boolean(destacada);
+      // Subvencionada: de pago cubierta por el Fondo Público de Acceso
+      if (subvencionada != null) cambios.subvencionada = Boolean(subvencionada);
     } else if (accion === 'rechazar') {
       cambios.estado = 'rechazada';
       cambios.publica = false;
