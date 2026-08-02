@@ -466,6 +466,148 @@ const API_REGISTRY = {
           { campo: 'saldo', tipo: DATA_TYPE.AMOUNT, descripcion: 'Saldo en Placetas' },
           { campo: 'limiteEnvio', tipo: DATA_TYPE.AMOUNT, descripcion: 'Límite de envío diario' }
         ]
+      },
+      {
+        path: '/academy/precios',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Catálogo oficial de precios con IVA (Capitalia lo abona)',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'iva_porcentaje', tipo: DATA_TYPE.PERCENTAGE, descripcion: 'IVA aplicado (12%)' },
+          { campo: 'tabla_precios', tipo: DATA_TYPE.ARRAY, descripcion: 'Tabla de precios por complejidad (precio_licencia, precio_intento)' },
+          { campo: 'costos_desbloqueo_nivel', tipo: DATA_TYPE.OBJECT, descripcion: 'Costos de desbloqueo por nivel con desglose IVA' },
+          { campo: 'recompensas_por_complejidad', tipo: DATA_TYPE.OBJECT, descripcion: 'Recompensas en Placetas por complejidad' },
+          { campo: 'canje_puntos_verdes', tipo: DATA_TYPE.ARRAY, descripcion: 'Tabla de canje Puntos Verdes → Placetas' }
+        ]
+      },
+      {
+        path: '/puntos/canje',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Tabla de canje de Puntos Verdes por Placetas (spec §16)',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'canje', tipo: DATA_TYPE.ARRAY, descripcion: 'Tabla {puntos_verdes, placetas}' }
+        ]
+      },
+      {
+        path: '/academy/cuestionarios',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Obtener cuestionarios de la Academia Placeta Junior',
+        platforms: ['android', 'ios', 'web'],
+        params: [{ campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del junior', requerido: true }],
+        dataReturn: [
+          { campo: 'cuestionarios', tipo: DATA_TYPE.OBJECT, descripcion: 'Cuestionarios por materia y nivel' },
+          { campo: 'costos_desbloqueo', tipo: DATA_TYPE.OBJECT, descripcion: 'Costos de desbloqueo por nivel' },
+          { campo: 'placetas_saldo', tipo: DATA_TYPE.AMOUNT, descripcion: 'Saldo de placetas del junior' }
+        ]
+      },
+      {
+        path: '/academy/evaluar',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Evaluar respuestas de un cuestionario (puntos verdes/rojos + recompensa)',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'materia', tipo: DATA_TYPE.STRING, descripcion: 'Materia', requerido: true },
+          { campo: 'nivel', tipo: DATA_TYPE.NUMBER, descripcion: 'Nivel', requerido: true },
+          { campo: 'respuestas', tipo: DATA_TYPE.ARRAY, descripcion: 'Array de respuestas {idx, opcion}', requerido: true }
+        ],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'aciertos', tipo: DATA_TYPE.NUMBER, descripcion: 'Aciertos' },
+          { campo: 'errores', tipo: DATA_TYPE.NUMBER, descripcion: 'Errores (puntos rojos)' },
+          { campo: 'placetas_ganadas', tipo: DATA_TYPE.AMOUNT, descripcion: 'Placetas ganadas' }
+        ]
+      },
+      {
+        path: '/academy/desbloquear-nivel',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Desbloquear nivel con pago real (junior → Capitalia, IVA incluido)',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'saldo_actual', tipo: DATA_TYPE.AMOUNT, descripcion: 'Saldo tras el pago' },
+          { campo: 'costo', tipo: DATA_TYPE.AMOUNT, descripcion: 'Costo pagado (IVA incluido)' },
+          { campo: 'iva', tipo: DATA_TYPE.OBJECT, descripcion: 'Desglose de IVA' }
+        ]
+      },
+      {
+        path: '/academy/confirmar-pago',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Confirmar pago genérico (junior → Capitalia, IVA incluido)',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'nuevo_saldo', tipo: DATA_TYPE.AMOUNT, descripcion: 'Saldo tras el pago' }
+        ]
+      },
+      {
+        path: '/academy/rbu',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Reclamar Renta Básica Universal Junior (5 Pz/día)',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'cantidad', tipo: DATA_TYPE.AMOUNT, descripcion: 'Cantidad reclamada' }
+        ]
+      },
+      {
+        path: '/monedero',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Obtener saldo, límites, historial y cuenta bancaria del junior',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'saldo_actual', tipo: DATA_TYPE.AMOUNT, descripcion: 'Saldo actual' },
+          { campo: 'limites', tipo: DATA_TYPE.OBJECT, descripcion: 'Límites parentales' },
+          { campo: 'historial', tipo: DATA_TYPE.ARRAY, descripcion: 'Historial de transacciones' },
+          { campo: 'cuenta_bancaria', tipo: DATA_TYPE.OBJECT, descripcion: 'Cuenta bancaria real del junior' }
+        ]
+      },
+      {
+        path: '/perfil',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Obtener perfil del junior',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'junior', tipo: DATA_TYPE.OBJECT, descripcion: 'Datos del junior' },
+          { campo: 'limites_parentales', tipo: DATA_TYPE.OBJECT, descripcion: 'Límites parentales' }
+        ]
+      },
+      {
+        path: '/tutor-info/:dip',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Obtener información del tutor legal',
+        platforms: ['android', 'ios', 'web'],
+        dataReturn: [
+          { campo: 'dip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del tutor' },
+          { campo: 'nombre', tipo: DATA_TYPE.STRING, descripcion: 'Nombre del tutor' }
+        ]
+      },
+      {
+        path: '/regalias',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Admin paga regalías a un titular desde su cuenta (historial bancario)',
+        platforms: ['web'],
+        params: [
+          { campo: 'adminDip', tipo: DATA_TYPE.DIP, descripcion: 'DIP del admin', requerido: true },
+          { campo: 'fromAccountId', tipo: DATA_TYPE.STRING, descripcion: 'Cuenta admin (origen)', requerido: true },
+          { campo: 'toAccountId', tipo: DATA_TYPE.STRING, descripcion: 'Cuenta del titular (destino)', requerido: true },
+          { campo: 'cantidad', tipo: DATA_TYPE.AMOUNT, descripcion: 'Cantidad en Placetas', requerido: true }
+        ],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'transactionId', tipo: DATA_TYPE.STRING, descripcion: 'ID de la transacción bancaria' }
+        ]
       }
     ]
   },

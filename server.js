@@ -25,6 +25,7 @@ import apiRoutes from './src/routes/api.js';
 import documentosRoutes from './src/routes/documentos.js';
 import empresasRoutes from './src/routes/empresas.js';
 import juniorApiRoutes from './src/routes/junior-api.js';
+import juniorOficialApiRoutes from './src/routes/junior-oficial-api.js';
 import accionesDocumentoRoutes from './src/routes/acciones-documento.js';
 import rspRoutes from './src/routes/rsp.js';
 import { apiGatewayRoutes } from './src/routes/api-gateway.js';
@@ -165,6 +166,11 @@ app.use('/administracion', verificarSesion, verificarAccesoEntidad('administraci
 
 // API REST
 app.use('/api', apiRoutes);
+// ═══ API GATEWAY v1 — APIs externas por entidad ═══════════════════════
+// Montado ANTES del router oficial junior para que pueda delegar por
+// reescritura de URL (evita fetch HTTP interno / timeouts en serverless).
+app.use('/api', apiGatewayRoutes);
+app.use('/api', juniorOficialApiRoutes); // API oficial Academia Placeta Junior (RSP billing + IVA + Capitalia)
 app.use('/api', juniorApiRoutes); // Proxy junior → CRM
 app.use('/api', votacionesApiRoutes); // Sistema de votaciones
 
@@ -225,10 +231,6 @@ app.use('/junior', verificarSesion, verificarAccesoEntidad('junior'), rspBilling
 // Mantenimiento (montado en admin)
 app.use('/administracion', mantenimientoRoutes);
 app.use('/api', mantenimientoRoutes);
-
-// ═══ API GATEWAY v1 — APIs externas por entidad ═══════════════════════
-// Las rutas /api/v1/:entidad/* son públicas (con API Key) para apps externas
-app.use('/api', apiGatewayRoutes);
 
 // Panel de gestión de APIs para cada workspace
 // Middleware helper: pasa req.entidad al handler del gateway

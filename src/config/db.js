@@ -307,3 +307,93 @@ export async function sbClearOverrides() {
   if (!supabase) return;
   try { await supabase.from('banco_overrides').delete().eq('id', 'default'); } catch {}
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  PLACETA JUNIOR — Helpers oficiales (usados por la API oficial de la Academia)
+//  Lógica económica: precios con IVA incluido, compras reales con cuentas
+//  bancarias de los juniors (historial), fondos a Capitalia, regalías por admins.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export async function sbUpdateJunior(id, data) {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('junior_menores').update(data).eq('id', id);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch { return false; }
+}
+
+export async function sbGetParentalLimits(juniorId) {
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.from('junior_control_parental').select('*').eq('junior_id', juniorId).limit(1).maybeSingle();
+    return data;
+  } catch { return null; }
+}
+
+export async function sbGetAcademyProgress(juniorId) {
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.from('junior_academia').select('*').eq('junior_id', juniorId).limit(1).maybeSingle();
+    return data;
+  } catch { return null; }
+}
+
+export async function sbUpsertAcademyProgress(data) {
+  if (!supabase) return false;
+  try {
+    const existing = await sbGetAcademyProgress(data.junior_id);
+    if (existing) {
+      const { error } = await supabase.from('junior_academia').update(data).eq('junior_id', data.junior_id);
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await supabase.from('junior_academia').insert(data);
+      if (error) throw new Error(error.message);
+    }
+    return true;
+  } catch { return false; }
+}
+
+export async function sbCreatePlacetaTransaction(data) {
+  if (!supabase) return null;
+  try {
+    const { data: result, error } = await supabase.from('junior_transacciones').insert(data).select().single();
+    if (error) throw new Error(error.message);
+    return result;
+  } catch { return null; }
+}
+
+export async function sbUpdatePlacetaBalance(juniorId, newSaldo) {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('junior_menores').update({ placetas_saldo: newSaldo }).eq('id', juniorId);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch { return false; }
+}
+
+export async function sbCreateJuniorLog(data) {
+  if (!supabase) return;
+  try { await supabase.from('junior_logs').insert(data); } catch {}
+}
+
+export async function sbListJuniorTransactions(juniorId, limit = 50) {
+  if (!supabase) return [];
+  try {
+    const { data } = await supabase.from('junior_transacciones')
+      .select('*').eq('junior_id', juniorId)
+      .order('creado_en', { ascending: false }).limit(limit);
+    return data || [];
+  } catch { return []; }
+}
+
+export async function sbFindJuniorByTutor(tutorDip) {
+  if (!supabase) return [];
+  try {
+    const { data } = await supabase.from('junior_menores')
+      .select('*').eq('tutor_dip', tutorDip)
+      .order('creado_en', { ascending: false });
+    return data || [];
+  } catch { return []; }
+}
+

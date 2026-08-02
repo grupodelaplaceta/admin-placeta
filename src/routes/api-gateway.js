@@ -28,6 +28,8 @@ import {
   sbListSolicitantes, sbFindSolicitanteByDip, sbListDeclaraciones
 } from '../config/db.js';
 import { verificarSesion } from '../middleware/auth.js';
+// Router oficial de la Academia Placeta Junior (delegación directa)
+import juniorOficialApiRoutes from './junior-oficial-api.js';
 
 const router = Router();
 
@@ -147,19 +149,19 @@ function validateAPIRequest(req, res, next) {
 
 /**
  * Valida que la entidad solicitada esté permitida para esta API Key
+ * (lee la entidad de req.params, usable directamente como middleware)
  */
-function validateEntityAccess(entidad) {
-  return (req, res, next) => {
-    const { app } = req.apiContext;
-    if (!app.entidadesPermitidas.includes(entidad)) {
-      return res.status(403).json({
-        error: 'Acceso denegado a esta entidad',
-        detalle: `La app "${app.nombre}" no tiene permisos para acceder a "${entidad}"`,
-        entidadesPermitidas: app.entidadesPermitidas
-      });
-    }
-    next();
-  };
+function validateEntityAccess(req, res, next) {
+  const entidad = req.params?.entidad || req.entidad || '';
+  const { app } = req.apiContext;
+  if (!app.entidadesPermitidas.includes(entidad)) {
+    return res.status(403).json({
+      error: 'Acceso denegado a esta entidad',
+      detalle: `La app "${app.nombre}" no tiene permisos para acceder a "${entidad}"`,
+      entidadesPermitidas: app.entidadesPermitidas
+    });
+  }
+  next();
 }
 
 /**
@@ -476,7 +478,15 @@ async function handleAdminAPI(path, method, req) {
 
 // ── JUNIOR ─────────────────────────────────────────────────────────────
 async function handleJuniorAPI(path, method, req) {
-  const state = await apiBancoGetState();
+  // La consulta al banco se hace de forma perezosa: solo para los endpoints
+  // que la necesitan (menores, cuentas, tutores). Los endpoints de la academia
+  // se delegan al router oficial y no deben depender del estado del banco.
+  let state = null;
+  const necesitaBanco = ['/menores', '/cuentas'].some(p => path === p || path.startsWith(p + '/')) ||
+    /^\/tutores\//.test(path) || /^\/menores\//.test(path);
+  if (necesitaBanco) {
+    state = await apiBancoGetState();
+  }
 
   if (path === '/menores' && method === 'GET') {
     // Buscar cuentas Child en el estado del banco
@@ -530,6 +540,30 @@ async function handleJuniorAPI(path, method, req) {
         limiteEnvio: c.sendLimitPz || 0
       }))
     };
+  }
+
+  // ── Academia Placeta Junior (API oficial, con IVA y pagos reales) ──
+  // Los endpoints de la academia se delegan al router oficial (junior-oficial-api)
+  // para mantener una única fuente de verdad de la lógica económica.
+  const ACADEMIA_ENDPOINTS = [
+    '/academy/precios',
+    '/academy/cuestionarios',
+    '/academy/rbu',
+    '/monedero',
+    '/perfil',
+    '/puntos/canje',
+    '/historial'
+  ];
+  if (method === 'GET' && ACADEMIA_ENDPOINTS.includes(path)) {
+    return 'rewrite';
+  }
+
+  if (method === 'POST' && ['/academy/evaluar', '/academy/desbloquear-nivel', '/academy/confirmar-pago', '/regalias'].includes(path)) {
+    return 'rewrite';
+  }
+
+  if (path.match(/^\/tutor-info\/([^/]+)$/) && method === 'GET') {
+    return 'rewrite';
   }
 
   return null;
@@ -586,7 +620,9 @@ async function handleRSPAPI(path, method, req) {
 router.all('/v1/:entidad/*path', validateAPIRequest, validateEntityAccess, (req, res, next) => {
   const { entidad, path: wildPath } = req.params;
   // Extraer subpath (todo después de /api/v1/:entidad/)
-  const subpath = '/' + (wildPath || '');
+  // En Express 5 el wildcard puede venir como array de segmentos
+  const wildStr = Array.isArray(wildPath) ? wildPath.join('/') : (wildPath || '');
+  const subpath = '/' + wildStr;
 
   // Validar plataforma para el endpoint
   const endpointDef = getEntityEndpoint(entidad, subpath);
@@ -622,6 +658,18 @@ router.all('/v1/:entidad/*path', validateAPIRequest, validateEntityAccess, (req,
   rspCharge(endpointDef.tipo)(req, res, async () => {
     try {
       const result = await handleEntityRequest(entidad, subpath, req.method, req);
+
+      // Si el handler pide delegar a la API oficial junior, reenviamos
+      // directamente al router oficial (sin fetch HTTP ni reescritura global)
+      if (result === 'rewrite') {
+        // Reconstruir la URL relativa esperada por el router oficial:
+        // el router oficial está montado en /api y sus rutas son /junior/...
+        // La URL entrante es /api/v1/junior/... → relativa al router oficial: /junior/...
+        const qs = req.originalUrl.includes('?') ? req.originalUrl.split('?')[1] : '';
+        req.url = `/junior${subpath}${qs ? '?' + qs : ''}`;
+        req.originalUrl = `/api/junior${subpath}${qs ? '?' + qs : ''}`;
+        return juniorOficialApiRoutes(req, res, next);
+      }
 
       if (!result) {
         return res.status(501).json({
