@@ -224,7 +224,7 @@ router.post('/junior/actividades', verificarJunior, async (req, res) => {
   rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/actividades', '', req.juniorDip);
   try {
     const junior = req.juniorData;
-    const { dip, titulo, descripcion, categoria, edad_recomendada, dificultad, tiempo_estimado, tipo, contenido, num_preguntas, num_fases } = req.body;
+    const { dip, titulo, descripcion, categoria, edad_recomendada, dificultad, tiempo_estimado, tipo, contenido, num_preguntas, num_fases, portada_url } = req.body;
 
     if (!titulo || !descripcion || !categoria) {
       return res.status(400).json({ error: 'Título, descripción y categoría son obligatorios' });
@@ -273,6 +273,8 @@ router.post('/junior/actividades', verificarJunior, async (req, res) => {
       nombre_entidad: colaborador.nombre_entidad || null,
       estado: 'en_revision',          // → Filtro de Placeta Junior
       publica: false,
+      portada_url: portada_url || null,
+      destacada: false,
       estadisticas: { veces_realizada: 0, aprobados: 0 },
       creado_en: new Date().toISOString()
     });
@@ -327,7 +329,7 @@ router.get('/junior/actividades/:id', async (req, res) => {
 router.post('/junior/actividades/:id/revisar', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.MODIFICACION, `POST /junior/actividades/:id/revisar`);
   try {
-    const { accion, adminDip, precio_licencia, precio_intento, recompensa, motivo } = req.body;
+    const { accion, adminDip, precio_licencia, precio_intento, recompensa, motivo, destacada } = req.body;
     const actividad = await sbGetActividad(req.params.id);
     if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
 
@@ -344,6 +346,8 @@ router.post('/junior/actividades/:id/revisar', async (req, res) => {
       if (precio_licencia != null) cambios.precio_licencia = Number(precio_licencia);
       if (precio_intento != null) cambios.precio_intento = Number(precio_intento);
       if (recompensa != null) cambios.recompensa = Number(recompensa);
+      // Destacada (carrusel de la web)
+      if (destacada != null) cambios.destacada = Boolean(destacada);
     } else if (accion === 'rechazar') {
       cambios.estado = 'rechazada';
       cambios.publica = false;

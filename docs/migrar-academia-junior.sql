@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS junior_actividades (
   recompensa INTEGER,                 -- Placetas por superar (spec §10)
   estado TEXT DEFAULT 'en_revision',  -- borrador | en_revision | aprobada | rechazada | modificaciones
   publica BOOLEAN DEFAULT false,
+  portada_url TEXT,                   -- imagen de portada (web/carrusel)
+  destacada BOOLEAN DEFAULT false,    -- aparece en el carrusel de la web
   estadisticas JSONB DEFAULT '{}',
   revisado_por TEXT,
   fecha_revision TEXT,
