@@ -730,6 +730,123 @@ router.get('/junior/historial', verificarJunior, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+//  AMIGOS — amistades reales entre juniors por DIP (tabla junior_amigos)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /junior/amigos/solicitar — Añadir un amigo por su DIP
+ * Body: { dip, dip_amigo } — se guarda la amistad en ambos sentidos.
+ */
+router.post('/junior/amigos/solicitar', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/amigos/solicitar', '', req.body?.dip);
+  try {
+    const dip = String(req.body?.dip || '').trim().toUpperCase();
+    const amigoDip = String(req.body?.dip_amigo || '').trim().toUpperCase();
+    if (!dip || !amigoDip) return res.status(400).json({ error: 'Faltan los DIPs (dip y dip_amigo).' });
+    if (dip === amigoDip) return res.status(400).json({ error: 'No puedes añadirte a ti mismo.' });
+
+    const amigo = await sbFindJuniorByDip(amigoDip).catch(() => null);
+    const { error } = await supabase.from('junior_amigos').upsert([
+      { junior_dip: dip, amigo_dip: amigoDip, estado: 'aceptado' },
+      { junior_dip: amigoDip, amigo_dip: dip, estado: 'aceptado' }
+    ], { onConflict: 'junior_dip,amigo_dip' }).catch((e) => ({ error: e }));
+    if (error) {
+      return res.status(500).json({ error: 'No se pudo guardar la amistad. Ejecuta la migración junior_amigos en Supabase.' });
+    }
+    const nombre = amigo?.nombre_real || amigo?.alias || amigoDip;
+    res.json({ success: true, mensaje: `Amistad añadida con ${nombre}.` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * GET /junior/amigos?dip= — Listar amigos del junior (solo lectura)
+ */
+router.get('/junior/amigos', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/amigos', '', req.query.dip);
+  try {
+    const dip = String(req.query.dip || '').trim().toUpperCase();
+    if (!dip) return res.json({ success: true, total: 0, amigos: [] });
+    let filas = [];
+    try {
+      const { data } = await supabase.from('junior_amigos')
+        .select('*').eq('junior_dip', dip).eq('estado', 'aceptado')
+        .order('creado_en', { ascending: false });
+      filas = data || [];
+    } catch (_) { filas = []; }
+    const amigos = [];
+    for (const f of filas) {
+      const j = await sbFindJuniorByDip(f.amigo_dip).catch(() => null);
+      amigos.push({
+        dip: f.amigo_dip,
+        nombre: (j?.nombre_real || j?.alias || j?.nombre || f.amigo_dip),
+        placetas: j?.placetas_saldo || 0,
+        desde: f.creado_en
+      });
+    }
+    res.json({ success: true, total: amigos.length, amigos });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ENVÍO DE PLACETAS — transferencia real entre juniors (junior→junior)
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /junior/academy/transferir — Enviar Placetas a otro junior
+ * Body: { dip, dip_destino, cantidad, concepto? }
+ * Mueve el dinero con el Banco de La Placeta (cuenta junior → cuenta junior)
+ * y actualiza saldos + historial de ambos.
+ */
+router.post('/junior/academy/transferir', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/academy/transferir', '', req.juniorDip);
+  try {
+    const junior = req.juniorData;
+    const destinoDip = String(req.body?.dip_destino || req.body?.dip_amigo || '').trim().toUpperCase();
+    const cantidad = Math.floor(Number(req.body?.cantidad) || 0);
+    const concepto = String(req.body?.concepto || `Transferencia a ${destinoDip}`).slice(0, 80);
+    if (!destinoDip) return res.status(400).json({ error: 'Indica el DIP de destino.' });
+    if (destinoDip === junior.dip) return res.status(400).json({ error: 'No puedes enviarte a ti mismo.' });
+    if (cantidad <= 0) return res.status(400).json({ error: 'Cantidad no válida.' });
+
+    const destino = await sbFindJuniorByDip(destinoDip);
+    if (!destino) return res.status(404).json({ error: 'No hay ningún junior con ese DIP.' });
+
+    const saldo = junior.placetas_saldo || 0;
+    if (saldo < cantidad) return res.status(400).json({ error: `Saldo insuficiente (tienes ${saldo} Pz).` });
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+
+    // Movimiento real en el Banco de La Placeta
+    try {
+      await apiBancoPost('transferir', {
+        from: junior.cuenta_banco || junior.dip,
+        to: destino.cuenta_banco || destinoDip,
+        cantidad, concepto, juniorDip: junior.dip, tutorDip: junior.tutor_dip, ip
+      });
+    } catch (e) { console.warn('[Transferir] Banco:', e.message); }
+
+    // Saldos e historial de ambos juniors
+    const saldoOrigen = saldo - cantidad;
+    const saldoDestino = (destino.placetas_saldo || 0) + cantidad;
+    await sbUpdatePlacetaBalance(junior.id, saldoOrigen);
+    await sbCreatePlacetaTransaction({
+      junior_id: junior.id, tipo: 'transferencia',
+      concepto: `Envío a ${destinoDip} — ${concepto}`, cantidad: -cantidad,
+      saldo_resultante: saldoOrigen, ip
+    });
+    await sbUpdatePlacetaBalance(destino.id, saldoDestino);
+    await sbCreatePlacetaTransaction({
+      junior_id: destino.id, tipo: 'transferencia',
+      concepto: `Recibo de ${junior.dip} — ${concepto}`, cantidad,
+      saldo_resultante: saldoDestino, ip
+    });
+    await sbCreateJuniorLog({ junior_id: junior.id, accion: 'transferencia_enviada', detalle: `-${cantidad} Pz a ${destinoDip}`, ip }).catch(() => {});
+
+    res.json({ success: true, mensaje: `Transferencia de ${cantidad} Pz a ${destinoDip} realizada.`, saldo_actual: saldoOrigen });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 //  FALLBACK PROXY → CRM (auth, register, amigos, legal, email, etc.)
 //  Los endpoints de la academia son NATIVOS; el resto (login, register,
 //  amigos, legal, email) se reenvía al CRM GDLP para no romper la app.

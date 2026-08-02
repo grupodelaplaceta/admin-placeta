@@ -85,3 +85,13 @@ CREATE INDEX IF NOT EXISTS idx_actividades_estado ON junior_actividades(estado);
 CREATE INDEX IF NOT EXISTS idx_actividades_categoria ON junior_actividades(categoria);
 CREATE INDEX IF NOT EXISTS idx_actividades_autor ON junior_actividades(autor_dip);
 CREATE INDEX IF NOT EXISTS idx_diplomas_junior ON junior_diplomas(junior_id);
+
+-- ── AMISTADES ENTRE JUNIORS (real, por DIP) ──────────────────────────
+CREATE TABLE IF NOT EXISTS junior_amigos (
+  junior_dip TEXT NOT NULL,
+  amigo_dip TEXT NOT NULL,
+  estado TEXT DEFAULT 'aceptado',     -- aceptado | pendiente
+  creado_en TEXT DEFAULT (now()::text),
+  PRIMARY KEY (junior_dip, amigo_dip)
+);
+CREATE INDEX IF NOT EXISTS idx_amigos_junior ON junior_amigos(junior_dip);
