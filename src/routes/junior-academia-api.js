@@ -28,13 +28,14 @@ import {
   UMBRAL_EXAMEN, APROBADO_MIN,
   sbCrearActividad, sbGetActividad, sbListActividades, sbUpdateActividad, sbIncrementActividadStats,
   sbGetColaborador, sbCrearColaborador, sbUpdateColaborador,
-  sbGetPuntos, sbUpsertPuntos, sbCanjearPuntos,
+  sbGetPuntos, sbUpsertPuntos, sbCanjearPuntos, sbCanjearPuntosRojos,
   sbCrearDiploma, sbListDiplomas
 } from '../config/junior-actividades.js';
-import { TABLA_CANJE_PUNTOS_VERDES, desglosarPrecioConIva } from '../config/junior-precios.js';
+import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, desglosarPrecioConIva } from '../config/junior-precios.js';
 import { saveDocumentoAsync, generarPDF, getDocumentoByIdAsync, ETIQUETAS_DOC } from '../config/documentos.js';
 
 const router = Router();
+const CAPITALIA = 'CAPITALIA_BANK'; // cuenta empresarial que abona IVA y gestiona cobros
 const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
 const PLACETAID_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
 const EDAD_MIN_PUBLICAR = 18;
@@ -385,6 +386,120 @@ router.post('/junior/actividades/:id/revisar', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+//  ACCESO PREMIUM — pago por licencia o por intento (spec §6, §10)
+//  · Licencia: se paga una vez y la actividad queda desbloqueada (junior_licencias)
+//  · Intento: se paga cada intento antes de jugar
+//  El pago es real (Banco de La Placeta, junior → CAPITALIA) con IVA incluido.
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /junior/actividades/:id/acceso?dip= — Comprobar si el junior puede jugar
+ */
+router.get('/junior/actividades/:id/acceso', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, `GET /junior/actividades/:id/acceso`);
+  try {
+    const act = await sbGetActividad(req.params.id);
+    if (!act) return res.status(404).json({ error: 'Actividad no encontrada' });
+    const dip = String(req.query.dip || '').trim();
+    const esGratis = !((act.precio_licencia || 0) > 0 || (act.precio_intento || 0) > 0);
+    const subvencionada = !!act.subvencionada;
+    let licencia = false;
+    let juniorId = null;
+    if (dip) {
+      const j = await sbFindJuniorByDip(dip).catch(() => null);
+      juniorId = j?.id || null;
+    }
+    if (juniorId && !esGratis && !subvencionada) {
+      const { data } = await supabase.from('junior_licencias')
+        .select('id').eq('junior_id', juniorId).eq('actividad_id', act.id).maybeSingle().catch(() => ({ data: null }));
+      licencia = !!data;
+    }
+    res.json({
+      success: true,
+      desbloqueada: esGratis || subvencionada || licencia,
+      es_gratis: esGratis, subvencionada, licencia,
+      precio_licencia: act.precio_licencia || 0,
+      precio_intento: act.precio_intento || 0
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * POST /junior/actividades/:id/pagar — Pagar licencia o un intento
+ * Body: { dip, modo: 'licencia' | 'intento' }
+ */
+router.post('/junior/actividades/:id/pagar', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, `POST /junior/actividades/:id/pagar`, '', req.juniorDip);
+  try {
+    const junior = req.juniorData;
+    const act = await sbGetActividad(req.params.id);
+    if (!act) return res.status(404).json({ error: 'Actividad no encontrada' });
+    const modo = req.body?.modo === 'intento' ? 'intento' : 'licencia';
+
+    const esGratis = !((act.precio_licencia || 0) > 0 || (act.precio_intento || 0) > 0);
+    const subvencionada = !!act.subvencionada;
+    if (esGratis || subvencionada) {
+      return res.json({ success: true, desbloqueada: true, mensaje: 'Acceso gratuito o subvencionado. ¡A jugar!' });
+    }
+
+    // Licencia ya comprada → no volver a cobrar
+    if (modo === 'licencia') {
+      const ya = await supabase.from('junior_licencias')
+        .select('id').eq('junior_id', junior.id).eq('actividad_id', act.id).maybeSingle().catch(() => ({ data: null }));
+      if (ya?.data) return res.json({ success: true, desbloqueada: true, licencia: true, mensaje: 'Ya tienes la licencia de esta actividad.' });
+    }
+
+    const precio = modo === 'licencia' ? (act.precio_licencia || 0) : (act.precio_intento || 0);
+    if (precio <= 0) return res.json({ success: true, desbloqueada: true, mensaje: 'Sin coste.' });
+
+    const saldo = junior.placetas_saldo || 0;
+    if (saldo < precio) {
+      return res.status(400).json({ error: `Saldo insuficiente (tienes ${saldo} Pz) para pagar ${precio} Pz.` });
+    }
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    const desg = desglosarPrecioConIva(precio);
+
+    // Movimiento real: cuenta del junior → CAPITALIA (con IVA incluido)
+    try {
+      await apiBancoPost('transferir', {
+        from: junior.cuenta_banco || junior.dip,
+        to: CAPITALIA,
+        cantidad: precio,
+        concepto: `Pago ${modo} — ${act.titulo}`,
+        juniorDip: junior.dip, tutorDip: junior.tutor_dip, ip
+      });
+    } catch (e) { console.warn('[Pagar Premium] Banco:', e.message); }
+
+    const nuevoSaldo = saldo - precio;
+    await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
+    await sbCreatePlacetaTransaction({
+      junior_id: junior.id, tipo: 'gastar',
+      concepto: `Pago ${modo === 'licencia' ? 'licencia' : 'intento'} — ${act.titulo}`,
+      cantidad: -precio, saldo_resultante: nuevoSaldo, ip
+    });
+    await sbCreateJuniorLog({
+      junior_id: junior.id, accion: 'pago_premium',
+      detalle: `Pago ${modo} de ${precio} Pz (IVA ${desg.iva} Pz) — ${act.titulo}`, ip
+    }).catch(() => {});
+
+    if (modo === 'licencia') {
+      await supabase.from('junior_licencias')
+        .upsert({ junior_id: junior.id, actividad_id: act.id }, { onConflict: 'junior_id,actividad_id' })
+        .catch(() => {});
+    }
+
+    res.json({
+      success: true, modo, precio, desbloqueada: modo === 'licencia',
+      saldo_actual: nuevoSaldo,
+      mensaje: modo === 'licencia'
+        ? `Licencia comprada por ${precio} Pz (IVA incluido). ¡Ya puedes jugar!`
+        : `Pago realizado (${precio} Pz). ¡A jugar este intento!`
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 //  REALIZAR ACTIVIDAD — evaluación, puntos verdes/rojos, placetas, diploma
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -493,7 +608,7 @@ router.get('/junior/puntos/:dip', async (req, res) => {
     const junior = await sbFindJuniorByDip(req.params.dip).catch(() => null);
     const juniorId = junior?.id || null;
     const puntos = await sbGetPuntos(juniorId);
-    res.json({ success: true, puntos, tabla_canje: TABLA_CANJE_PUNTOS_VERDES });
+    res.json({ success: true, puntos, tabla_canje: TABLA_CANJE_PUNTOS_VERDES, tabla_canje_rojos: TABLA_CANJE_PUNTOS_ROJOS });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -505,36 +620,40 @@ router.post('/junior/puntos/canjear', verificarJunior, async (req, res) => {
   rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/puntos/canjear', '', req.juniorDip);
   try {
     const junior = req.juniorData;
-    const { puntos_verdes } = req.body;
+    const tipo = req.body?.tipo === 'rojos' ? 'rojos' : 'verdes';
+    const cantidad = Math.floor(Number(req.body?.puntos_verdes ?? req.body?.puntos_rojos) || 0);
     const puntos = await sbGetPuntos(junior.id);
-    if ((puntos.puntos_verdes || 0) < puntos_verdes) {
-      return res.status(400).json({ error: 'No tienes suficientes Puntos Verdes', puntos_verdes_actuales: puntos.puntos_verdes });
+
+    const disponible = tipo === 'rojos' ? (puntos.puntos_rojos || 0) : (puntos.puntos_verdes || 0);
+    if (disponible < cantidad) {
+      return res.status(400).json({ error: `No tienes suficientes Puntos ${tipo === 'rojos' ? 'Rojos' : 'Verdes'}`, disponibles: disponible });
     }
 
-    // Buscar la recompensa en la tabla de canje
-    const tramo = [...TABLA_CANJE_PUNTOS_VERDES].sort((a, b) => b.puntos_verdes - a.puntos_verdes)
-      .find(t => puntos_verdes >= t.puntos_verdes);
-    if (!tramo || tramo.puntos_verdes !== puntos_verdes) {
+    const tabla = tipo === 'rojos' ? TABLA_CANJE_PUNTOS_ROJOS : TABLA_CANJE_PUNTOS_VERDES;
+    const clave = tipo === 'rojos' ? 'puntos_rojos' : 'puntos_verdes';
+    const tramo = [...tabla].sort((a, b) => b[clave] - a[clave]).find(t => cantidad >= t[clave]);
+    if (!tramo || tramo[clave] !== cantidad) {
       return res.status(400).json({
-        error: 'Cantidad no válida para canje. Usa una de la tabla: 100, 250, 500 o 1000',
-        tabla_canje: TABLA_CANJE_PUNTOS_VERDES
+        error: `Cantidad no válida para canje. Usa una de la tabla: ${tabla.map(t => t[clave]).join(', ')}`,
+        tabla_canje: tabla
       });
     }
 
-    const ok = await sbCanjearPuntos(junior.id, puntos_verdes, tramo.placetas);
+    const ok = tipo === 'rojos'
+      ? await sbCanjearPuntosRojos(junior.id, cantidad, tramo.placetas)
+      : await sbCanjearPuntos(junior.id, cantidad, tramo.placetas);
     if (!ok) return res.status(400).json({ error: 'No se pudo canjear' });
 
-    // Abonar placetas
     const nuevoSaldo = (junior.placetas_saldo || 0) + tramo.placetas;
     await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
     await sbCreatePlacetaTransaction({
       junior_id: junior.id, tipo: 'ganar',
-      concepto: `Canje de ${puntos_verdes} Puntos Verdes`,
+      concepto: `Canje de ${cantidad} Puntos ${tipo === 'rojos' ? 'Rojos' : 'Verdes'}`,
       cantidad: tramo.placetas, saldo_resultante: nuevoSaldo,
       ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
     });
 
-    res.json({ success: true, puntos_canjeados: puntos_verdes, placetas_obtenidas: tramo.placetas, saldo_actual: nuevoSaldo });
+    res.json({ success: true, tipo, puntos_canjeados: cantidad, placetas_obtenidas: tramo.placetas, saldo_actual: nuevoSaldo });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

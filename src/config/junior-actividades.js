@@ -190,6 +190,24 @@ export async function sbCanjearPuntos(juniorId, puntosACanjear, placetas) {
   } catch { return false; }
 }
 
+export async function sbCanjearPuntosRojos(juniorId, puntosACanjear, placetas) {
+  if (!supabase) return false;
+  try {
+    const actual = await sbGetPuntos(juniorId);
+    if ((actual.puntos_rojos || 0) < puntosACanjear) return false;
+    const nuevo = {
+      junior_id: juniorId,
+      puntos_verdes: actual.puntos_verdes || 0,
+      puntos_rojos: (actual.puntos_rojos || 0) - puntosACanjear,
+      canjeado: (actual.canjeado || 0) + placetas,
+      actualizado_en: new Date().toISOString()
+    };
+    const { error } = await supabase.from('junior_puntos').upsert(nuevo);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch { return false; }
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 //  DIPLOMAS (tabla junior_diplomas)
 // ═══════════════════════════════════════════════════════════════════════

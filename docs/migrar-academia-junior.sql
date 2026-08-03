@@ -95,3 +95,12 @@ CREATE TABLE IF NOT EXISTS junior_amigos (
   PRIMARY KEY (junior_dip, amigo_dip)
 );
 CREATE INDEX IF NOT EXISTS idx_amigos_junior ON junior_amigos(junior_dip);
+
+-- ── LICENCIAS PREMIUM (pago por licencia) ────────────────────────────
+CREATE TABLE IF NOT EXISTS junior_licencias (
+  junior_id TEXT NOT NULL,
+  actividad_id TEXT NOT NULL,
+  creado_en TEXT DEFAULT (now()::text),
+  PRIMARY KEY (junior_id, actividad_id)
+);
+CREATE INDEX IF NOT EXISTS idx_licencias_junior ON junior_licencias(junior_id);

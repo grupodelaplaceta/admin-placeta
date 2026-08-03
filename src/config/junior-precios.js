@@ -57,6 +57,14 @@ export const TABLA_CANJE_PUNTOS_VERDES = [
   { puntos_verdes: 1000, placetas: 80 }
 ];
 
+// ── CANJE DE PUNTOS ROJOS → PLACETAS (por seguir practicando) ─────────
+export const TABLA_CANJE_PUNTOS_ROJOS = [
+  { puntos_rojos: 100,  placetas: 2 },
+  { puntos_rojos: 250,  placetas: 6 },
+  { puntos_rojos: 500,  placetas: 15 },
+  { puntos_rojos: 1000, placetas: 40 }
+];
+
 /**
  * Calcula el desglose con IVA para un precio total (IVA incluido).
  * Precio visible = total. Se calcula la base y el IVA que abona Capitalia.
