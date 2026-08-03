@@ -13,7 +13,7 @@ const CLIENT_ID = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc
 // ── Login - Iniciar sesión vía PlacetaID ──────────────────────────────────
 router.get('/login', (req, res) => {
   if (req.session?.usuario) return res.redirect('/dashboard');
-  res.render('auth/login', { titulo: 'Admin Placeta - Iniciar Sesión', layout: false });
+  res.render('auth/login', { titulo: 'RSP - Iniciar Sesión', layout: false });
 });
 
 // ── Login - Redirigir a PlacetaID OAuth ───────────────────────────────────
@@ -37,7 +37,7 @@ router.get('/login/callback', async (req, res) => {
     const { token, error } = req.query;
 
     if (error) {
-      return res.render('auth/login', { titulo: 'Admin Placeta - Error', layout: false, error: 'Autenticación cancelada o rechazada' });
+      return res.render('auth/login', { titulo: 'RSP - Error', layout: false, error: 'Autenticación cancelada o rechazada' });
     }
 
     // Extraer DIP del token JWT o de parámetros
@@ -74,7 +74,7 @@ router.get('/login/callback', async (req, res) => {
 
     if (!dip) {
       console.log('[Auth] Callback sin DIP. Query:', JSON.stringify(req.query));
-      return res.render('auth/login', { titulo: 'Admin Placeta - Error', layout: false, error: 'No se recibió el DIP. Usa el acceso directo o contacta con soporte.' });
+      return res.render('auth/login', { titulo: 'RSP - Error', layout: false, error: 'No se recibió el DIP. Usa el acceso directo o contacta con soporte.' });
     }
 
     // Buscar usuario en CRM (con timeout)
@@ -108,13 +108,13 @@ router.get('/login/callback', async (req, res) => {
     });
 
     if (entidades.length === 0) {
-      return res.render('auth/login', { titulo: 'Admin Placeta - Sin Acceso', layout: false, error: 'No tienes permisos. Contacta con la Junta.' });
+      return res.render('auth/login', { titulo: 'RSP - Sin Acceso', layout: false, error: 'No tienes permisos. Contacta con la Junta.' });
     }
 
     res.redirect('/dashboard');
   } catch (err) {
     console.error('[Auth] Error en callback:', err?.message || err);
-    try { res.render('auth/login', { titulo: 'Admin Placeta - Error', layout: false, error: 'Error: ' + (err?.message || 'desconocido') }); } catch {}
+    try { res.render('auth/login', { titulo: 'RSP - Error', layout: false, error: 'Error: ' + (err?.message || 'desconocido') }); } catch {}
   }
 });
 

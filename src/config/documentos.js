@@ -22,6 +22,7 @@ const LOGOS = {
   junta: 'logo-gdlp.svg',
   administracion: 'logo-web.png',
   rsp: 'rsp-logo.png',
+  junior: 'junior-logo.png',
   placetaid: 'img/logo-placetaid.jpg',
 };
 
@@ -128,7 +129,9 @@ export const TIPOS_DOCUMENTO = {
       'asignacion-licencia', 'revocacion-licencia'
     ],
     junior: [
-      'alta-junior', 'baja-junior', 'cambio-tutor', 'historial-junior'
+      'alta-junior', 'baja-junior', 'cambio-tutor', 'historial-junior',
+      'autorizacion-actividad', 'compromiso-colaborador', 'diploma-actividad',
+      'certificado-puntos', 'queja-reclamacion'
     ]
   },
   administracion: {
@@ -1131,9 +1134,15 @@ export async function generarPDF(entidad, documento) {
         if (firmaImg) {
           try {
             const imgData = firmaImg.includes('base64,') ? firmaImg : `data:image/png;base64,${firmaImg}`;
-            // fit: [anchoMax, altoMax] — NUNCA distorsiona, máximo 360x60
-            doc.image(imgData, 120, doc.y, { fit: [360, 60], align: 'center', valign: 'center' });
-            doc.y += 4;
+            // Firma SIN deformar ni cortar: escala manteniendo la proporción
+            // (se usa openImage para conocer el tamaño real y nunca se supera 320x90).
+            const img = doc.openImage(imgData);
+            const maxW = 320, maxH = 90;
+            const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
+            const w = img.width * ratio, h = img.height * ratio;
+            const x = Math.max(50, (doc.page.width - w) / 2);
+            doc.image(imgData, x, doc.y, { width: w, height: h });
+            doc.y += h + 4;
           } catch {}
         }
         doc.moveDown(0.2);

@@ -127,7 +127,7 @@ app.use((req, res, next) => {
 
 // ── Health Check ───────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', version: '1.0.0', app: 'Admin Placeta', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', version: '1.0.0', app: 'RSP', timestamp: new Date().toISOString() });
 });
 
 // ── Middleware RSP: registra conexiones en rutas de entidad ──────────────
@@ -156,7 +156,7 @@ app.use('/', authRoutes);
 
 // Dashboard principal
 app.get('/dashboard', verificarSesion, (req, res) => {
-  res.render('dashboard', { titulo: 'Panel Principal - Admin Placeta' });
+  res.render('dashboard', { titulo: 'Panel Principal - RSP' });
 });
 
 // Módulos protegidos por entidad (con RSP billing)
@@ -276,7 +276,7 @@ app.get('/junior/gastos-rsp', verificarSesion, verificarAccesoEntidad('junior'),
 // ── Landing / Login ────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   if (req.session?.usuario) return res.redirect('/dashboard');
-  res.render('auth/login', { titulo: 'Admin Placeta - Iniciar Sesión', layout: false });
+  res.render('auth/login', { titulo: 'RSP - Iniciar Sesión', layout: false });
 });
 
 // ── 404 ────────────────────────────────────────────────────────────────────
@@ -370,7 +370,7 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════════════════════════╗
-║    Admin Placeta - Plataforma Centralizada de APIs y Entidades ║
+║    RSP - Plataforma Centralizada de APIs y Entidades              ║
 ║    http://localhost:${PORT}                                      ║
 ║                                                                ║
 ║  Workspaces: Banco | Tributos | Junta | Admin | RSP            ║
