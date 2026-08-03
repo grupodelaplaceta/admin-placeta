@@ -541,7 +541,9 @@ router.get('/junior/academy/rbu', verificarJunior, async (req, res) => {
       cantidad, saldo_resultante: nuevoSaldo, ip
     });
     // Marcar el reclamo de hoy en el perfil (fuente fiable anti-doble-reclamo)
-    await supabase.from('junior_menores').update({ rbu_ultima: hoy }).eq('id', junior.id).catch(() => {});
+    try {
+      await supabase.from('junior_menores').update({ rbu_ultima: hoy }).eq('id', junior.id);
+    } catch (e) { /* columna aún sin crear → se guardará tras ejecutar la migración */ }
     await sbCreateJuniorLog({
       junior_id: junior.id, accion: 'rbu_reclamado',
       detalle: `RBU +${cantidad} Pz (día ${streak}). Saldo: ${nuevoSaldo} Pz${esDemo ? ' (Demo)' : ''}`, ip
@@ -768,10 +770,14 @@ router.post('/junior/amigos/solicitar', async (req, res) => {
     if (dip === amigoDip) return res.status(400).json({ error: 'No puedes añadirte a ti mismo.' });
 
     const amigo = await sbFindJuniorByDip(amigoDip).catch(() => null);
-    const { error } = await supabase.from('junior_amigos').upsert([
-      { junior_dip: dip, amigo_dip: amigoDip, estado: 'aceptado' },
-      { junior_dip: amigoDip, amigo_dip: dip, estado: 'aceptado' }
-    ], { onConflict: 'junior_dip,amigo_dip' }).catch((e) => ({ error: e }));
+    let error = null;
+    try {
+      const resUpsert = await supabase.from('junior_amigos').upsert([
+        { junior_dip: dip, amigo_dip: amigoDip, estado: 'aceptado' },
+        { junior_dip: amigoDip, amigo_dip: dip, estado: 'aceptado' }
+      ], { onConflict: 'junior_dip,amigo_dip' });
+      error = resUpsert?.error || null;
+    } catch (e) { error = e; }
     if (error) {
       return res.status(500).json({ error: 'No se pudo guardar la amistad. Ejecuta la migración junior_amigos en Supabase.' });
     }

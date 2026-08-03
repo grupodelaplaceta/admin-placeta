@@ -51,6 +51,11 @@ export const RECOMPENSAS_POR_COMPLEJIDAD = {
   'Máxima': 35
 };
 
+// ── PUNTOS ROJOS POR INTENTO (actividades de pago por intento) ────────
+// Cada intento PAGADO de una actividad de pago por intento otorga
+// puntos rojos canjeables por Placetas (espec: los rojos vienen de intentos).
+export const PUNTOS_ROJOS_POR_INTENTO = 1;
+
 // ── CANJE DE PUNTOS VERDES → PLACETAS (spec §16) ──────────────────────
 export const TABLA_CANJE_PUNTOS_VERDES = [
   { puntos_verdes: 100,  placetas: 5 },

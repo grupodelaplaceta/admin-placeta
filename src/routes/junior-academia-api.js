@@ -31,7 +31,7 @@ import {
   sbGetPuntos, sbUpsertPuntos, sbCanjearPuntos, sbCanjearPuntosRojos,
   sbCrearDiploma, sbListDiplomas
 } from '../config/junior-actividades.js';
-import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, desglosarPrecioConIva, getTablaCanje } from '../config/junior-precios.js';
+import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, desglosarPrecioConIva, getTablaCanje, PUNTOS_ROJOS_POR_INTENTO } from '../config/junior-precios.js';
 import { saveDocumentoAsync, generarPDF, getDocumentoByIdAsync, ETIQUETAS_DOC } from '../config/documentos.js';
 
 const router = Router();
@@ -410,8 +410,12 @@ router.get('/junior/actividades/:id/acceso', async (req, res) => {
       juniorId = j?.id || null;
     }
     if (juniorId && !esGratis && !subvencionada) {
-      const { data } = await supabase.from('junior_licencias')
-        .select('id').eq('junior_id', juniorId).eq('actividad_id', act.id).maybeSingle().catch(() => ({ data: null }));
+      let data = null;
+      try {
+        const r = await supabase.from('junior_licencias')
+          .select('id').eq('junior_id', juniorId).eq('actividad_id', act.id).maybeSingle();
+        data = r?.data || null;
+      } catch (e) { data = null; }
       licencia = !!data;
     }
     res.json({
@@ -444,8 +448,11 @@ router.post('/junior/actividades/:id/pagar', verificarJunior, async (req, res) =
 
     // Licencia ya comprada → no volver a cobrar
     if (modo === 'licencia') {
-      const ya = await supabase.from('junior_licencias')
-        .select('id').eq('junior_id', junior.id).eq('actividad_id', act.id).maybeSingle().catch(() => ({ data: null }));
+      let ya = null;
+      try {
+        ya = await supabase.from('junior_licencias')
+          .select('id').eq('junior_id', junior.id).eq('actividad_id', act.id).maybeSingle();
+      } catch (e) { ya = { data: null }; }
       if (ya?.data) return res.json({ success: true, desbloqueada: true, licencia: true, mensaje: 'Ya tienes la licencia de esta actividad.' });
     }
 
@@ -484,14 +491,23 @@ router.post('/junior/actividades/:id/pagar', verificarJunior, async (req, res) =
     }).catch(() => {});
 
     if (modo === 'licencia') {
-      await supabase.from('junior_licencias')
-        .upsert({ junior_id: junior.id, actividad_id: act.id }, { onConflict: 'junior_id,actividad_id' })
-        .catch(() => {});
+      try {
+        await supabase.from('junior_licencias')
+          .upsert({ junior_id: junior.id, actividad_id: act.id }, { onConflict: 'junior_id,actividad_id' });
+      } catch (e) { /* la licencia ya existe o la tabla aún no está creada */ }
+    }
+
+    // Puntos rojos por intento: cada intento PAGADO de una actividad de pago
+    // por intento otorga puntos rojos (canjeables por Placetas).
+    let puntosRojosGanados = 0;
+    if (modo === 'intento') {
+      puntosRojosGanados = PUNTOS_ROJOS_POR_INTENTO || 1;
+      await sbUpsertPuntos(junior.id, { rojos: puntosRojosGanados });
     }
 
     res.json({
       success: true, modo, precio, desbloqueada: modo === 'licencia',
-      saldo_actual: nuevoSaldo,
+      saldo_actual: nuevoSaldo, puntos_rojos_ganados: puntosRojosGanados,
       mensaje: modo === 'licencia'
         ? `Licencia comprada por ${precio} Pz (IVA incluido). ¡Ya puedes jugar!`
         : `Pago realizado (${precio} Pz). ¡A jugar este intento!`

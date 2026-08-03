@@ -230,7 +230,7 @@ router.get('/sistema', verificarSesion, verificarAccesoEntidad('rsp'), verificar
         supabase.from('junior_licencias').select('id', { count: 'exact', head: true }),
         supabase.from('junior_puntos').select('puntos_verdes,puntos_rojos,canjeado'),
         supabase.from('junior_menores').select('id', { count: 'exact', head: true }),
-        supabase.from('junior_retos').select('id', { count: 'exact', head: true }).catch(() => ({ count: 0 }))
+        (async () => { try { return await supabase.from('junior_retos').select('id', { count: 'exact', head: true }); } catch (e) { return { count: 0 }; } })()
       ]);
       const c = r => r?.count || 0;
       s.actividades = c(act); s.publicadas = c(pub); s.enRevision = c(rev); s.aprobadas = c(apr);
