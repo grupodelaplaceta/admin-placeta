@@ -492,12 +492,22 @@ router.get('/junior/academy/rbu', verificarJunior, async (req, res) => {
     const esDemo = junior.tutor_dip === '11111111D';
 
     const hoy = new Date().toISOString().slice(0, 10);
-    const { data: yaReclamado } = await supabase.from('junior_transacciones')
-      .select('id').eq('junior_id', junior.id).eq('tipo', 'rbu')
-      .gte('creado_en', hoy).limit(1);
-    if (yaReclamado && yaReclamado.length > 0) {
+
+    // Guarda 1 (fiable): campo rbu_ultima del propio perfil. Bloquea el
+    // doble reclamo aunque junior_transacciones no exista o falle.
+    if (junior.rbu_ultima === hoy) {
       return res.json({ success: false, message: 'Ya has reclamado tu RBU hoy. ¡Vuelve mañana! 🌅' });
     }
+
+    // Guarda 2: comprobar en junior_transacciones (movimientos registrados)
+    try {
+      const { data: yaReclamado } = await supabase.from('junior_transacciones')
+        .select('id').eq('junior_id', junior.id).eq('tipo', 'rbu')
+        .gte('creado_en', hoy).limit(1);
+      if (yaReclamado && yaReclamado.length > 0) {
+        return res.json({ success: false, message: 'Ya has reclamado tu RBU hoy. ¡Vuelve mañana! 🌅' });
+      }
+    } catch (e) { /* tabla ausente → seguimos con la guarda 1 */ }
 
     let streak = 1;
     for (let d = 1; d < 7; d++) {
@@ -530,6 +540,8 @@ router.get('/junior/academy/rbu', verificarJunior, async (req, res) => {
       concepto: `RBU día ${streak}${esDemo ? ' (Demo)' : ''}`,
       cantidad, saldo_resultante: nuevoSaldo, ip
     });
+    // Marcar el reclamo de hoy en el perfil (fuente fiable anti-doble-reclamo)
+    await supabase.from('junior_menores').update({ rbu_ultima: hoy }).eq('id', junior.id).catch(() => {});
     await sbCreateJuniorLog({
       junior_id: junior.id, accion: 'rbu_reclamado',
       detalle: `RBU +${cantidad} Pz (día ${streak}). Saldo: ${nuevoSaldo} Pz${esDemo ? ' (Demo)' : ''}`, ip

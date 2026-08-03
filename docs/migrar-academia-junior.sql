@@ -111,3 +111,37 @@ CREATE TABLE IF NOT EXISTS rsp_config (
   valor JSONB,
   actualizado_en TEXT DEFAULT (now()::text)
 );
+
+-- ── TRANSACCIONES / MOVIMIENTOS DEL MONEDERO JUNIOR ──────────────────
+-- (si ya existe del esquema CRM, se relaja su CHECK para permitir 'rbu',
+--  'transferencia', etc. y que todo salga en Movimientos)
+CREATE TABLE IF NOT EXISTS junior_transacciones (
+  id BIGSERIAL PRIMARY KEY,
+  junior_id BIGINT NOT NULL REFERENCES junior_menores(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,
+  concepto TEXT NOT NULL,
+  cantidad INTEGER NOT NULL,
+  saldo_resultante INTEGER NOT NULL,
+  ip TEXT,
+  creado_en TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_junior_transacciones_junior ON junior_transacciones(junior_id);
+
+-- Relajar el CHECK: la app usa tipos más allá de los del esquema original
+ALTER TABLE junior_transacciones DROP CONSTRAINT IF EXISTS junior_transacciones_tipo_check;
+ALTER TABLE junior_transacciones ADD CONSTRAINT junior_transacciones_tipo_check
+  CHECK (tipo IN ('ganar', 'gastar', 'bonus', 'ajuste', 'rbu', 'transferencia', 'canje', 'premium'));
+
+-- ── LOGS DEL JUNIOR ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS junior_logs (
+  id BIGSERIAL PRIMARY KEY,
+  junior_id BIGINT REFERENCES junior_menores(id),
+  accion TEXT NOT NULL,
+  detalle TEXT,
+  ip TEXT,
+  creado_en TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_junior_logs_junior ON junior_logs(junior_id);
+
+-- ── CONTROL DE RECLAMO DIARIO DE RBU (anti doble reclamo) ────────────
+ALTER TABLE junior_menores ADD COLUMN IF NOT EXISTS rbu_ultima TEXT;
