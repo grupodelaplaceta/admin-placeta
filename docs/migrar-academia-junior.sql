@@ -104,3 +104,10 @@ CREATE TABLE IF NOT EXISTS junior_licencias (
   PRIMARY KEY (junior_id, actividad_id)
 );
 CREATE INDEX IF NOT EXISTS idx_licencias_junior ON junior_licencias(junior_id);
+
+-- ── CONFIGURACIÓN ECONÓMICA (tablas de canje editables desde el panel RSP)
+CREATE TABLE IF NOT EXISTS rsp_config (
+  clave TEXT PRIMARY KEY,
+  valor JSONB,
+  actualizado_en TEXT DEFAULT (now()::text)
+);

@@ -16,6 +16,10 @@ import {
   generarFactura, generarFacturaPorIds, eliminarConexionesPorIds,
   pagarFactura, pagarSancionIVA, registrarConexion, TIPO_CONEXION
 } from '../config/rsp.js';
+import {
+  TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, IVA_PERCENT,
+  RECOMPENSAS_POR_COMPLEJIDAD, getConfigRsp, setConfigRsp
+} from '../config/junior-precios.js';
 
 const router = Router();
 
@@ -181,6 +185,217 @@ router.get('/fondos', verificarSesion, verificarAccesoEntidad('rsp'), verificarP
     fondos,
     tarifas,
     stats,
+    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CENTRO DE CONTROL DEL SISTEMA — administración global desde la RSP
+//  Gestión de: Academia Junior, economía (canje/IVA/precios), licencias
+//  premium, puntos, y acceso a todos los módulos del ecosistema.
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function conteoSupabase(tabla, filtros = {}) {
+  if (!supabase) return 0;
+  try {
+    let q = supabase.from(tabla).select('id', { count: 'exact', head: true });
+    for (const [k, v] of Object.entries(filtros)) q = q.eq(k, v);
+    const { count } = await q;
+    return count || 0;
+  } catch { return 0; }
+}
+
+// ── Dashboard global del sistema ──────────────────────────────────────────
+router.get('/sistema', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_dashboard'), async (req, res) => {
+  const stats = getEstadisticas();
+
+  // Academia Placeta Junior (Supabase)
+  const s = {
+    actividades: 0, publicadas: 0, enRevision: 0, aprobadas: 0, rechazadas: 0, premium: 0, subvencionadas: 0,
+    colaboradores: 0, diplomas: 0, licencias: 0, conPuntos: 0, juniors: 0, retos: 0,
+    totalVerdes: 0, totalRojos: 0, totalCanjeado: 0, ingresosPremium: 0
+  };
+  try {
+    if (supabase) {
+      const [act, pub, rev, apr, rej, prem, sub, col, dip, lic, puntos, jun, retos] = await Promise.all([
+        supabase.from('junior_actividades').select('id', { count: 'exact', head: true }),
+        supabase.from('junior_actividades').select('id', { count: 'exact', head: true }).eq('publica', true),
+        supabase.from('junior_actividades').select('id', { count: 'exact', head: true }).eq('estado', 'en_revision'),
+        supabase.from('junior_actividades').select('id', { count: 'exact', head: true }).eq('estado', 'aprobada'),
+        supabase.from('junior_actividades').select('id', { count: 'exact', head: true }).eq('estado', 'rechazada'),
+        supabase.from('junior_actividades').select('id', { count: 'exact', head: true }).or('precio_licencia.gt.0,precio_intento.gt.0'),
+        supabase.from('junior_actividades').select('id', { count: 'exact', head: true }).eq('subvencionada', true),
+        supabase.from('junior_colaboradores').select('id', { count: 'exact', head: true }),
+        supabase.from('junior_diplomas').select('id', { count: 'exact', head: true }),
+        supabase.from('junior_licencias').select('id', { count: 'exact', head: true }),
+        supabase.from('junior_puntos').select('puntos_verdes,puntos_rojos,canjeado'),
+        supabase.from('junior_menores').select('id', { count: 'exact', head: true }),
+        supabase.from('junior_retos').select('id', { count: 'exact', head: true }).catch(() => ({ count: 0 }))
+      ]);
+      const c = r => r?.count || 0;
+      s.actividades = c(act); s.publicadas = c(pub); s.enRevision = c(rev); s.aprobadas = c(apr);
+      s.rechazadas = c(rej); s.premium = c(prem); s.subvencionadas = c(sub);
+      s.colaboradores = c(col); s.diplomas = c(dip); s.licencias = c(lic); s.juniors = c(jun); s.retos = c(retos);
+      if (puntos?.data) {
+        s.conPuntos = puntos.data.length;
+        s.totalVerdes = puntos.data.reduce((a, p) => a + (p.puntos_verdes || 0), 0);
+        s.totalRojos = puntos.data.reduce((a, p) => a + (p.puntos_rojos || 0), 0);
+        s.totalCanjeado = puntos.data.reduce((a, p) => a + (p.canjeado || 0), 0);
+      }
+      // Ingresos premium aprox. (licencias vendidas)
+      const { data: licData } = await supabase.from('junior_licencias').select('actividad_id');
+      if (licData?.length) {
+        const { data: acts } = await supabase.from('junior_actividades').select('id,precio_licencia').in('id', [...new Set(licData.map(l => l.actividad_id))]);
+        const precios = Object.fromEntries((acts || []).map(a => [a.id, a.precio_licencia || 0]));
+        s.ingresosPremium = licData.reduce((a, l) => a + (precios[l.actividad_id] || 0), 0);
+      }
+    }
+  } catch (e) { /* estadísticas parciales */ }
+
+  // Votaciones
+  let votacionesData = { activas: 0, cerradas: 0, totalVotos: 0, total: 0 };
+  try {
+    if (supabase) {
+      const { data } = await supabase.from('rsp_votaciones').select('estado,total_votos');
+      if (data) {
+        votacionesData = {
+          activas: data.filter(v => v.estado === 'Activa').length,
+          cerradas: data.filter(v => v.estado === 'Cerrada').length,
+          totalVotos: data.reduce((x, v) => x + (v.total_votos || 0), 0),
+          total: data.length
+        };
+      }
+    }
+  } catch (e) { /* sin votaciones */ }
+
+  res.render('rsp/sistema', {
+    titulo: 'Centro de Control del Sistema — RSP',
+    entidad_actual: 'rsp',
+    stats, s, votaciones: votacionesData,
+    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
+  });
+});
+
+// ── Gestión premium: precios, subvención, destacadas, licencias ──────────
+router.get('/premium', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_facturas'), async (req, res) => {
+  let actividades = [];
+  try {
+    if (supabase) {
+      const { data } = await supabase.from('junior_actividades')
+        .select('*').order('creado_en', { ascending: false }).limit(200);
+      actividades = data || [];
+    }
+  } catch (e) { /* sin datos */ }
+
+  // Licencias por actividad
+  const licenciasPorActividad = {};
+  let totalLicencias = 0;
+  let ingresos = 0;
+  try {
+    if (supabase) {
+      const { data: lic } = await supabase.from('junior_licencias').select('actividad_id');
+      if (lic) {
+        for (const l of lic) licenciasPorActividad[l.actividad_id] = (licenciasPorActividad[l.actividad_id] || 0) + 1;
+        totalLicencias = lic.length;
+        const ids = [...new Set(lic.map(l => l.actividad_id))];
+        const { data: acts } = await supabase.from('junior_actividades').select('id,precio_licencia').in('id', ids);
+        const precios = Object.fromEntries((acts || []).map(a => [a.id, a.precio_licencia || 0]));
+        ingresos = lic.reduce((a, l) => a + (precios[l.actividad_id] || 0), 0);
+      }
+    }
+  } catch (e) { /* sin licencias */ }
+
+  res.render('rsp/premium', {
+    titulo: 'Gestión Premium — Academia Placeta Junior',
+    entidad_actual: 'rsp',
+    actividades, licenciasPorActividad, totalLicencias, ingresos,
+    ok: req.query.ok === '1',
+    error: req.query.error || '',
+    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
+  });
+});
+
+router.post('/premium', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_facturas'), async (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.redirect('/rsp/premium?error=ID requerido');
+  const campos = {};
+  for (const k of ['precio_licencia', 'precio_intento', 'recompensa']) {
+    const v = Number(req.body[k]);
+    if (!Number.isNaN(v)) campos[k] = v;
+  }
+  campos.subvencionada = req.body.subvencionada === 'on';
+  campos.destacada = req.body.destacada === 'on';
+  campos.publica = req.body.publica === 'on';
+  try {
+    if (supabase) {
+      const { error } = await supabase.from('junior_actividades').update(campos).eq('id', id);
+      if (error) return res.redirect(`/rsp/premium?error=${encodeURIComponent(error.message)}`);
+    }
+  } catch (e) {
+    return res.redirect(`/rsp/premium?error=${encodeURIComponent(e.message)}`);
+  }
+  res.redirect('/rsp/premium?ok=1');
+});
+
+// ── Configuración económica: tablas de canje ─────────────────────────────
+router.get('/config', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tarifas'), async (req, res) => {
+  const [canjeV, canjeR] = await Promise.all([getTablaCanje('verdes'), getTablaCanje('rojos')]);
+  res.render('rsp/config', {
+    titulo: 'Configuración Económica — RSP',
+    entidad_actual: 'rsp',
+    iva: IVA_PERCENT,
+    recompensas: RECOMPENSAS_POR_COMPLEJIDAD,
+    canjeV, canjeR,
+    ok: req.query.ok === '1',
+    error: req.query.error || '',
+    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
+  });
+});
+
+router.post('/config', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_facturas'), async (req, res) => {
+  try {
+    // Tabla de canje de verdes
+    const vArr = [];
+    for (const k of Object.keys(req.body).filter(k => k.startsWith('v_puntos_'))) {
+      const i = k.replace('v_puntos_', '');
+      const p = Number(req.body[k]);
+      const pz = Number(req.body[`v_placetas_${i}`]);
+      if (!Number.isNaN(p) && !Number.isNaN(pz) && p > 0) vArr.push({ puntos_verdes: p, placetas: pz });
+    }
+    // Tabla de canje de rojos
+    const rArr = [];
+    for (const k of Object.keys(req.body).filter(k => k.startsWith('r_puntos_'))) {
+      const i = k.replace('r_puntos_', '');
+      const p = Number(req.body[k]);
+      const pz = Number(req.body[`r_placetas_${i}`]);
+      if (!Number.isNaN(p) && !Number.isNaN(pz) && p > 0) rArr.push({ puntos_rojos: p, placetas: pz });
+    }
+    if (vArr.length) await setConfigRsp('tabla_canje_verdes', vArr);
+    if (rArr.length) await setConfigRsp('tabla_canje_rojos', rArr);
+    res.redirect('/rsp/config?ok=1');
+  } catch (e) {
+    res.redirect(`/rsp/config?error=${encodeURIComponent(e.message)}`);
+  }
+});
+
+// ── Puntos por junior (verdes / rojos / canjeado) ────────────────────────
+router.get('/puntos', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_dashboard'), async (req, res) => {
+  let puntosList = [];
+  let nombres = {};
+  try {
+    if (supabase) {
+      const { data } = await supabase.from('junior_puntos').select('*').order('puntos_verdes', { ascending: false }).limit(300);
+      puntosList = data || [];
+      if (puntosList.length) {
+        const { data: menores } = await supabase.from('junior_menores').select('id,nombre,dip');
+        nombres = Object.fromEntries((menores || []).map(m => [m.id, m]));
+      }
+    }
+  } catch (e) { /* sin datos */ }
+  res.render('rsp/puntos', {
+    titulo: 'Puntos Placeta Junior — RSP',
+    entidad_actual: 'rsp',
+    puntosList, nombres,
     esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
   });
 });

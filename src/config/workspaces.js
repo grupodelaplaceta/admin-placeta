@@ -181,7 +181,36 @@ const WORKSPACES = {
         ]
       },
       {
-        titulo: '🔌 Desarrollo',
+        titulo: '�️ Centro de Control',
+        enlaces: [
+          { texto: 'Sistema (todo)', url: '/rsp/sistema', icono: '🕹️' },
+          { texto: 'Premium (precios/licencias)', url: '/rsp/premium', icono: '💎' },
+          { texto: 'Config. Económica (canje)', url: '/rsp/config', icono: '⚙️' },
+          { texto: 'Puntos de los Juniors', url: '/rsp/puntos', icono: '🔴🟢' },
+        ]
+      },
+      {
+        titulo: '🎓 Academia Junior',
+        enlaces: [
+          { texto: 'Actividades (revisar/editar)', url: '/junior/academia', icono: '🧩' },
+          { texto: 'Retos de Candela', url: '/junior/retos', icono: '🏆' },
+        ]
+      },
+      {
+        titulo: '🏛️ Ecosistema',
+        enlaces: [
+          { texto: 'Placeta Junior', url: '/junior', icono: '🧒' },
+          { texto: 'Cuentas Junior', url: '/junior/cuentas', icono: '🏦' },
+          { texto: 'Menores', url: '/junior/menores', icono: '👶' },
+          { texto: 'Tutores', url: '/junior/tutores', icono: '👤' },
+          { texto: 'Banco', url: '/banco', icono: '🏦' },
+          { texto: 'Junta', url: '/junta', icono: '⚖️' },
+          { texto: 'Tributos', url: '/tributos', icono: '📊' },
+          { texto: 'Administración', url: '/administracion', icono: '📋' },
+        ]
+      },
+      {
+        titulo: '�🔌 Desarrollo',
         enlaces: [
           { texto: 'APIs', url: '/rsp/apis', icono: '🔌' },
           { texto: 'Gastos RSP', url: '/rsp/gastos', icono: '💰' },

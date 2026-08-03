@@ -1,0 +1,76 @@
+<div class="rsp-hero">
+  <div class="rsp-hero-content">
+    <img src="/img/rsp-logo.png" alt="RSP" class="rsp-hero-logo">
+    <div>
+      <h1 class="rsp-hero-title">🕹️ Centro de Control del Sistema</h1>
+      <p class="rsp-hero-sub">Administración global del ecosistema desde la RSP · <strong>GDLP-AP64-583</strong></p>
+      <div class="rsp-hero-stats">
+        <span>🌐 RSP: <strong><%= stats.totalConexiones %></strong> conexiones</span>
+        <span>🧒 Juniors: <strong><%= s.juniors %></strong></span>
+        <span>🧩 Actividades: <strong><%= s.actividades %></strong></span>
+        <span>💎 Licencias: <strong><%= s.licencias %></strong></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ACCESO RÁPIDO A MÓDULOS ═══ -->
+<div class="rsp-section-title">🧩 Administrar el Sistema</div>
+<div class="rsp-acciones">
+  <a href="/rsp/premium" class="rsp-btn rsp-btn-primary"><span class="rsp-btn-icon">💎</span><span class="rsp-btn-text">Premium (precios y licencias)</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/config" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">⚙️</span><span class="rsp-btn-text">Config. Económica (canje)</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/puntos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🔴🟢</span><span class="rsp-btn-text">Puntos de los Juniors</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/junior/academia" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🧩</span><span class="rsp-btn-text">Academia (revisar/editar)</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/junior/retos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🏆</span><span class="rsp-btn-text">Retos de Candela</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/facturacion" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📄</span><span class="rsp-btn-text">Facturación</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/conexiones" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📡</span><span class="rsp-btn-text">Conexiones</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/fondos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">💰</span><span class="rsp-btn-text">Fondos</span><span class="rsp-btn-arrow">→</span></a>
+</div>
+
+<!-- ═══ KPIs ACADEMIA ═══ -->
+<div class="rsp-section-title">🎓 Academia Placeta Junior</div>
+<div class="rsp-kpis">
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">🧩</div><div><div class="rsp-kpi-value"><%= s.actividades %></div><div class="rsp-kpi-label">Actividades</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">✅</div><div><div class="rsp-kpi-value"><%= s.publicadas %></div><div class="rsp-kpi-label">Publicadas</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(255,214,0,.18)">⏳</div><div><div class="rsp-kpi-value"><%= s.enRevision %></div><div class="rsp-kpi-label">En revisión</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(41,121,255,.12)">👍</div><div><div class="rsp-kpi-value"><%= s.aprobadas %></div><div class="rsp-kpi-label">Aprobadas</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(255,23,68,.12)">🚫</div><div><div class="rsp-kpi-value"><%= s.rechazadas %></div><div class="rsp-kpi-label">Rechazadas</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(124,58,237,.12)">💎</div><div><div class="rsp-kpi-value"><%= s.premium %></div><div class="rsp-kpi-label">De pago</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">🎁</div><div><div class="rsp-kpi-value"><%= s.subvencionadas %></div><div class="rsp-kpi-label">Subvencionadas</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">👥</div><div><div class="rsp-kpi-value"><%= s.colaboradores %></div><div class="rsp-kpi-label">Colaboradores</div></div></div>
+</div>
+
+<div class="rsp-kpis">
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(255,109,0,.12)">🏆</div><div><div class="rsp-kpi-value"><%= s.diplomas %></div><div class="rsp-kpi-label">Diplomas</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">💎</div><div><div class="rsp-kpi-value"><%= s.licencias %></div><div class="rsp-kpi-label">Licencias vendidas</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(124,58,237,.12)">🤑</div><div><div class="rsp-kpi-value"><%= s.ingresosPremium %></div><div class="rsp-kpi-label">Ingresos premium (Pz)</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">🟢</div><div><div class="rsp-kpi-value"><%= s.totalVerdes.toLocaleString() %></div><div class="rsp-kpi-label">Puntos verdes totales</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(255,23,68,.12)">🔴</div><div><div class="rsp-kpi-value"><%= s.totalRojos.toLocaleString() %></div><div class="rsp-kpi-label">Puntos rojos totales</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(255,109,0,.12)">🪙</div><div><div class="rsp-kpi-value"><%= s.totalCanjeado.toLocaleString() %></div><div class="rsp-kpi-label">Pz canjeados</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(41,121,255,.12)">🧒</div><div><div class="rsp-kpi-value"><%= s.juniors %></div><div class="rsp-kpi-label">Juniors</div></div></div>
+  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">🏆</div><div><div class="rsp-kpi-value"><%= s.retos %></div><div class="rsp-kpi-label">Retos</div></div></div>
+</div>
+
+<!-- ═══ ACCESO A INSTITUCIONES ═══ -->
+<div class="rsp-section-title">🏛️ Instituciones del Ecosistema</div>
+<div class="rsp-acciones">
+  <a href="/banco" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🏦</span><span class="rsp-btn-text">Banco de La Placeta</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/junta" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">⚖️</span><span class="rsp-btn-text">Junta de La Placeta</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/tributos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📊</span><span class="rsp-btn-text">Tributos</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/administracion" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📋</span><span class="rsp-btn-text">Administración</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/junior" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🧒</span><span class="rsp-btn-text">Placeta Junior</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/junior/cuentas" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🏦</span><span class="rsp-btn-text">Cuentas Junior</span><span class="rsp-btn-arrow">→</span></a>
+</div>
+
+<!-- ═══ VOTACIONES ═══ -->
+<% if (votaciones) { %>
+<div class="rsp-section-title">🗳️ Votaciones (PlacetaID)</div>
+<div class="rsp-card">
+  <div class="rsp-card-header"><span>Votaciones del ecosistema</span><a href="/junta/votaciones" class="rsp-link">Gestionar →</a></div>
+  <div style="padding:12px;font-size:13px;display:flex;gap:20px;flex-wrap:wrap">
+    <span>🟢 Activas: <strong><%= votaciones.activas %></strong></span>
+    <span>✅ Cerradas: <strong><%= votaciones.cerradas %></strong></span>
+    <span>📊 Votos: <strong><%= votaciones.totalVotos %></strong></span>
+  </div>
+</div>
+<% } %>

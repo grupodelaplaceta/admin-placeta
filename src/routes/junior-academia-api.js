@@ -31,7 +31,7 @@ import {
   sbGetPuntos, sbUpsertPuntos, sbCanjearPuntos, sbCanjearPuntosRojos,
   sbCrearDiploma, sbListDiplomas
 } from '../config/junior-actividades.js';
-import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, desglosarPrecioConIva } from '../config/junior-precios.js';
+import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, desglosarPrecioConIva, getTablaCanje } from '../config/junior-precios.js';
 import { saveDocumentoAsync, generarPDF, getDocumentoByIdAsync, ETIQUETAS_DOC } from '../config/documentos.js';
 
 const router = Router();
@@ -608,7 +608,8 @@ router.get('/junior/puntos/:dip', async (req, res) => {
     const junior = await sbFindJuniorByDip(req.params.dip).catch(() => null);
     const juniorId = junior?.id || null;
     const puntos = await sbGetPuntos(juniorId);
-    res.json({ success: true, puntos, tabla_canje: TABLA_CANJE_PUNTOS_VERDES, tabla_canje_rojos: TABLA_CANJE_PUNTOS_ROJOS });
+    const [tablaV, tablaR] = await Promise.all([getTablaCanje('verdes'), getTablaCanje('rojos')]);
+    res.json({ success: true, puntos, tabla_canje: tablaV, tabla_canje_rojos: tablaR });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -629,7 +630,7 @@ router.post('/junior/puntos/canjear', verificarJunior, async (req, res) => {
       return res.status(400).json({ error: `No tienes suficientes Puntos ${tipo === 'rojos' ? 'Rojos' : 'Verdes'}`, disponibles: disponible });
     }
 
-    const tabla = tipo === 'rojos' ? TABLA_CANJE_PUNTOS_ROJOS : TABLA_CANJE_PUNTOS_VERDES;
+    const tabla = await getTablaCanje(tipo);
     const clave = tipo === 'rojos' ? 'puntos_rojos' : 'puntos_verdes';
     const tramo = [...tabla].sort((a, b) => b[clave] - a[clave]).find(t => cantidad >= t[clave]);
     if (!tramo || tramo[clave] !== cantidad) {

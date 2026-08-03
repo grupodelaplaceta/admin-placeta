@@ -13,6 +13,8 @@
  *   iva = ceil(precio_base * 12 / 100)
  */
 
+import { supabase } from './supabase.js';
+
 // IVA estándar del ecosistema La Placeta
 export const IVA_PERCENT = 12;
 
@@ -64,6 +66,38 @@ export const TABLA_CANJE_PUNTOS_ROJOS = [
   { puntos_rojos: 500,  placetas: 15 },
   { puntos_rojos: 1000, placetas: 40 }
 ];
+
+// ═══════════════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN PERSISTENTE (tabla rsp_config en Supabase)
+//  Permite que el panel admin de la RSP ajuste la economía en caliente.
+// ═══════════════════════════════════════════════════════════════════════
+
+/** Lee una clave de configuración con valor por defecto. */
+export async function getConfigRsp(clave, valorDefecto) {
+  try {
+    if (supabase) {
+      const { data } = await supabase.from('rsp_config').select('valor').eq('clave', clave).maybeSingle();
+      if (data && data.valor !== undefined && data.valor !== null) return data.valor;
+    }
+  } catch (e) { /* sin conexión → valor por defecto */ }
+  return valorDefecto;
+}
+
+/** Guarda una clave de configuración (upsert). */
+export async function setConfigRsp(clave, valor) {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('rsp_config').upsert({ clave, valor }, { onConflict: 'clave' });
+    return !error;
+  } catch { return false; }
+}
+
+/** Devuelve la tabla de canje activa ('verdes' | 'rojos') con override si existe. */
+export async function getTablaCanje(tipo = 'verdes') {
+  const defecto = tipo === 'rojos' ? TABLA_CANJE_PUNTOS_ROJOS : TABLA_CANJE_PUNTOS_VERDES;
+  const guardada = await getConfigRsp(`tabla_canje_${tipo}`, null);
+  return (Array.isArray(guardada) && guardada.length > 0) ? guardada : defecto;
+}
 
 /**
  * Calcula el desglose con IVA para un precio total (IVA incluido).
