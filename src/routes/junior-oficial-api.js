@@ -548,11 +548,20 @@ router.get('/junior/academy/rbu', verificarJunior, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 //  MONEDERO — Saldo, límites, historial y cuenta bancaria REAL
 // ═══════════════════════════════════════════════════════════════════════
-router.get('/junior/monedero', verificarJunior, async (req, res) => {
-  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/monedero', '', req.juniorDip);
+router.get('/junior/monedero', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/monedero', '', req.query.dip);
   try {
-    const junior = req.juniorData;
-    if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
+    const dipMon = String(req.query.dip || '').trim();
+    const junior = dipMon ? await sbFindJuniorByDip(dipMon).catch(() => null) : null;
+    if (!junior) {
+      return res.json({
+        saldo_actual: 0, ingresos_totales: 0, gasto_hoy: 0, gasto_semana: 0,
+        limites: { gasto_diario: 10, gasto_semanal: 50, limite_aprobacion_tutor: 1000, tiempo_uso: 60, requiere_aprobacion: true, categorias_bloqueadas: [] },
+        saldo_disponible_hoy: 10, saldo_disponible_semana: 50,
+        historial: [], nivel_academia: 1, nombre_menor: '', tutor_nombre: '',
+        cuenta_bancaria: { id: `u-${(dipMon || 'anonimo').toLowerCase()}`, tipo: 'Child', iban: '', sendLimitPz: 10, saldo_real: 0 }
+      });
+    }
 
     const limites = await sbGetParentalLimits(junior.id);
     const limitesEfectivos = limites ? {
@@ -717,11 +726,12 @@ router.post('/junior/regalias', async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════
 //  HISTORIAL DE TRANSACCIONES
 // ═══════════════════════════════════════════════════════════════════════
-router.get('/junior/historial', verificarJunior, async (req, res) => {
-  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/historial', '', req.juniorDip);
+router.get('/junior/historial', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/historial', '', req.query.dip);
   try {
-    const junior = req.juniorData;
-    if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
+    const dip = String(req.query.dip || '').trim();
+    const junior = dip ? await sbFindJuniorByDip(dip).catch(() => null) : null;
+    if (!junior) return res.json([]);
     const historial = await sbListJuniorTransactions(junior.id, 50);
     res.json(historial || []);
   } catch (err) {
