@@ -1035,10 +1035,17 @@ export async function generarPDF(entidad, documento) {
           const p2 = path.join(PDF_DIR, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
           const fp = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
           if (fp) {
-            // Rectángulo blanco detrás del logo para que no se mezcle con fondo morado
+            // Recuadro blanco detrás del logo para que no se mezcle con fondo morado
             doc.save();
             doc.rect(logoX - 4, logoY - 2, logoW + 8, logoH + 4).fill('#ffffff');
-            doc.image(fp, logoX, logoY, { width: logoW });
+            // Logo centrado HORIZONTAL y VERTICALMENTE dentro del recuadro,
+            // manteniendo la proporción (sin deformar ni desbordar).
+            const imgLogo = doc.openImage(fp);
+            const esc = Math.min(logoW / imgLogo.width, logoH / imgLogo.height);
+            const lw = imgLogo.width * esc, lh = imgLogo.height * esc;
+            const lx = logoX + (logoW - lw) / 2;
+            const ly = logoY + (logoH - lh) / 2;
+            doc.image(fp, lx, ly, { width: lw, height: lh });
             doc.restore();
           }
         } catch {}

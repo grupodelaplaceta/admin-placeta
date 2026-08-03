@@ -210,6 +210,16 @@ const WORKSPACES = {
         ]
       },
       {
+        titulo: '🛡️ Supervisión',
+        enlaces: [
+          { texto: 'PlacetaID (identidades)', url: '/junta/placetaid', icono: '🔑' },
+          { texto: 'Votaciones', url: '/junta/votaciones', icono: '🗳️' },
+          { texto: 'Reclamaciones y quejas', url: '/junta/reclamaciones', icono: '📨' },
+          { texto: 'Documentos del ecosistema', url: '/rsp/documentos', icono: '📑' },
+          { texto: 'Empresas / Cumplimiento', url: '/junta/empresas/cumplimiento', icono: '🏢' },
+        ]
+      },
+      {
         titulo: '�🔌 Desarrollo',
         enlaces: [
           { texto: 'APIs', url: '/rsp/apis', icono: '🔌' },
