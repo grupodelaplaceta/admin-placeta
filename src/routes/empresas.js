@@ -46,7 +46,7 @@ async function initEmpresas() {
         for (const row of data) {
           if ((row.id === 'EMP-0001' || row.id === 'EMP-0002') &&
               (row.eip === 'EIP-CAP001' || row.eip === 'EIP-TRIB01')) {
-            await supabase.from('rsp_empresas').delete().eq('id', row.id).catch(() => {});
+            try { await supabase.from('rsp_empresas').delete().eq('id', row.id); } catch (_) {}
             continue;
           }
           let rep = row.representantes || [];
