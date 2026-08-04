@@ -18,9 +18,10 @@ function nextId() { return 'EMP-' + String(++idCounter).padStart(4, '0'); }
 async function persistirEmpresa(e) {
   if (!supabase) return;
   try {
+    // representantes se guarda como JSONB (array), NO como texto
     const { error } = await supabase.from('rsp_empresas').upsert({
       id: e.id, nombre: e.nombre, eip: e.eip, dip: e.dip,
-      representantes: JSON.stringify(e.representantes || []),
+      representantes: e.representantes || [],
       activa: e.activa !== false, creada: e.creada,
       updated_at: new Date().toISOString()
     }, { onConflict: 'id' });
@@ -34,19 +35,43 @@ async function persistirEmpresa(e) {
   } catch (err) { console.warn('[Empresas] Error persistir:', err.message); }
 }
 
-// Inicializar con datos de ejemplo
-function initEjemplos() {
-  if (memEmpresas.size > 0) return;
-  const ejemplos = [
-    { nombre: 'Capitalia Bank', eip: 'EIP-CAP001', dip: 'CAPITALIA_BANK', representantes: [{ dip: 'ADMIN-GDLP', nombre: 'Admin GDLP', cargo: 'CEO' }] },
-    { nombre: 'Tributos GDLP', eip: 'EIP-TRIB01', dip: 'TGLP', representantes: [] },
-  ];
-  ejemplos.forEach(e => { const id = nextId(); const emp = { id, ...e, creada: new Date().toISOString(), activa: true }; memEmpresas.set(id, emp); setTimeout(() => persistirEmpresa(emp), 100); });
+// Cargar empresas REALES desde Supabase (persistentes). Solo si la base
+// está vacía se siembran los ejemplos. Así no se pierden en cada cold start.
+async function initEmpresas() {
+  try {
+    if (supabase) {
+      const { data } = await supabase.from('rsp_empresas').select('*').limit(1000);
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          let rep = row.representantes || [];
+          if (typeof rep === 'string') { try { rep = JSON.parse(rep || '[]'); } catch (_) { rep = []; } }
+          memEmpresas.set(row.id, {
+            id: row.id, nombre: row.nombre, eip: row.eip, dip: row.dip,
+            representantes: rep, activa: row.activa !== false, creada: row.creada
+          });
+          const n = parseInt(String(row.id || '').replace(/\D/g, ''), 10);
+          if (!Number.isNaN(n)) idCounter = Math.max(idCounter, n);
+        });
+        return;
+      }
+    }
+  } catch (e) { console.warn('[Empresas] No se pudieron cargar de Supabase:', e.message); }
+
+  // Sin datos en la base → sembrar ejemplos
+  if (memEmpresas.size === 0) {
+    const ejemplos = [
+      { nombre: 'Capitalia Bank', eip: 'EIP-CAP001', dip: 'CAPITALIA_BANK', representantes: [{ dip: 'ADMIN-GDLP', nombre: 'Admin GDLP', cargo: 'CEO' }] },
+      { nombre: 'Tributos GDLP', eip: 'EIP-TRIB01', dip: 'TGLP', representantes: [] },
+    ];
+    ejemplos.forEach(e => { const id = nextId(); const emp = { id, ...e, creada: new Date().toISOString(), activa: true }; memEmpresas.set(id, emp); setTimeout(() => persistirEmpresa(emp), 100); });
+  }
 }
-initEjemplos();
+
+const empresasReady = initEmpresas();
 
 // ── Listado de Empresas (solo datos propios, sin IBAN/saldos) ──────────────
 router.get('/empresas', async (req, res) => {
+  await empresasReady;
   const empresas = [...memEmpresas.values()].filter(e => e.activa !== false);
   res.render('empresas/lista', {
     titulo: 'Gestión de Empresas y EIP',
@@ -57,6 +82,7 @@ router.get('/empresas', async (req, res) => {
 
 // ── API: Listar empresas ──────────────────────────────────────────────────
 router.get('/api/empresas', async (req, res) => {
+  await empresasReady;
   res.json([...memEmpresas.values()].filter(e => e.activa !== false));
 });
 
@@ -143,6 +169,7 @@ router.post('/api/empresas/:id/reactivar', async (req, res) => {
 
 // ── Vista de Cumplimiento Fiscal ──────────────────────────────────────────
 router.get('/empresas/cumplimiento', async (req, res) => {
+  await empresasReady;
   const empresas = [...memEmpresas.values()].filter(e => e.activa !== false);
   res.render('empresas/cumplimiento', {
     titulo: 'Cumplimiento Fiscal — Empresas',
