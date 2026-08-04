@@ -216,7 +216,8 @@ async function procesarAccionEnBanco(pendingAction) {
     'contrato-modificacion': { action: 'modificar-cuenta', data: { ...datos } },
     'apertura-deposito': { action: 'contratar-producto', data: { ...datos } },
     'bloqueo-cuenta': { action: 'bloquear-cuenta', data: { ...datos } },
-    'baja-cuenta': { action: 'cerrar-cuenta', data: { ...datos } }
+    'baja-cuenta': { action: 'cerrar-cuenta', data: { ...datos } },
+    'contrato-fondo': { action: 'registrar-fondo', data: { ...datos } }
   };
 
   const mapped = actionMap[tipo];

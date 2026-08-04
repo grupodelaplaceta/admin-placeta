@@ -124,4 +124,45 @@ router.post('/api/banco/revertir-transferencia', puedeBancoRsp('revertir_operaci
   }
 });
 
+// ── Soporte: listar y responder consultas/tickets del banco ────────────
+router.get('/supervision/soporte', puedeBancoRsp('ver_cuentas'), async (req, res) => {
+  const state = await apiBancoGetState();
+  const tickets = (state?.supportTickets || []).slice().sort((a, b) =>
+    (String(b.createdAt || '')).localeCompare(String(a.createdAt || ''))
+  ).map(t => ({
+    id: t.id,
+    category: t.category || 'General',
+    priority: t.priority || 'Media',
+    subject: t.subject || '—',
+    message: t.message || '',
+    dip: t.dip || '',
+    name: t.name || t.dip || '—',
+    accountId: t.accountId || '',
+    status: t.status || 'Abierto',
+    createdAt: t.createdAt || '',
+    responses: Array.isArray(t.responses) ? t.responses : []
+  }));
+
+  res.render('supervision/soporte', {
+    titulo: 'Soporte del Banco',
+    entidad_actual: 'rsp',
+    tickets,
+    sinConexion: !state
+  });
+});
+
+router.post('/api/banco/responder-soporte', puedeBancoRsp('ver_cuentas'), async (req, res) => {
+  try {
+    const { ticketId, respuesta } = req.body || {};
+    if (!ticketId || !respuesta?.trim()) return res.status(400).json({ error: 'ticketId y respuesta requeridos' });
+    const resultado = await apiBancoPost('responder-soporte', { ticketId, respuesta: respuesta.trim() });
+    if (!resultado?.success) {
+      return res.status(400).json({ error: resultado?.error || 'No se pudo responder el ticket' });
+    }
+    res.json({ success: true, message: resultado.message, ticket: resultado.ticket });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;

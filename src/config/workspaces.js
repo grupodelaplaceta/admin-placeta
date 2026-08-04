@@ -218,6 +218,7 @@ const WORKSPACES = {
           { texto: 'Documentos del ecosistema', url: '/rsp/documentos', icono: '📑' },
           { texto: 'Empresas / Cumplimiento', url: '/junta/empresas/cumplimiento', icono: '🏢' },
           { texto: 'Banco (config y reversiones)', url: '/rsp/supervision/banco', icono: '🏦' },
+          { texto: 'Soporte del banco', url: '/rsp/supervision/soporte', icono: '🎧' },
         ]
       },
       {
