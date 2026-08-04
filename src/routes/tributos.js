@@ -58,10 +58,38 @@ router.get('/', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, 
   });
 });
 
-// ── Listado de Contribuyentes ──────────────────────────────────────────────
+// ── Listado de Contribuyentes (Registro Tributario REAL del backend-banco) ─
 router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
-  const state = await apiBancoGetState();
-  const contribuyentes = state?.accounts?.filter(a => a.tributosCensusDate) || [];
+  let contribuyentes = [];
+
+  // Fuente de verdad: /api/v1/tributos/contribuyentes (tributos_contributors)
+  try {
+    const r = await fetch('https://api.banco.laplaceta.org/api/v1/tributos/contribuyentes?limit=1000', { signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const data = await r.json();
+      contribuyentes = (data.contribuyentes || []).map(c => ({
+        id: c.id || c.placeta_id || c.placetaId || '',
+        displayName: c.nombre || c.name || c.displayName || c.placeta_id || '—',
+        dip: c.dip || '',
+        type: c.tipo_sujeto || c.type || '—',
+        iban: c.iban || '—',
+        eip: c.eip || null,
+        tributosCensusDate: c.fecha_alta_tributos || c.fecha_alta || null,
+        _estadoFiscal: c.estado_fiscal || 'Al Dia',
+        _roles: c.roles_json || []
+      }));
+    }
+  } catch (e) { /* sin acceso al registro → fallback */ }
+
+  // Fallback: estado del Banco (cuentas con censo)
+  if (contribuyentes.length === 0) {
+    const state = await apiBancoGetState().catch(() => null);
+    contribuyentes = (state?.accounts?.filter(a => a.tributosCensusDate) || []).map(c => ({
+      id: c.id || '', displayName: c.displayName || c.id, dip: c.dip || '',
+      type: c.type || '—', iban: c.iban || '—', eip: c.eip || null,
+      tributosCensusDate: c.tributosCensusDate || null, _estadoFiscal: 'Al Dia', _roles: []
+    }));
+  }
 
   const { busqueda, regimen } = req.query;
   let filtrados = [...contribuyentes];
@@ -70,7 +98,8 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
     filtrados = filtrados.filter(c =>
       c.id?.toLowerCase().includes(q) ||
       c.displayName?.toLowerCase().includes(q) ||
-      c.placetaId?.toLowerCase().includes(q)
+      (c.eip || '').toLowerCase().includes(q) ||
+      (c.dip || '').toLowerCase().includes(q)
     );
   }
 
@@ -79,6 +108,33 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
     entidad_actual: 'tributos',
     contribuyentes: filtrados, total: filtrados.length
   });
+});
+
+// ── Alta de contribuyente (registro REAL en Tributos desde el RSP) ────────
+// Da de alta un contribuyente (personal o empresa con EIP) en el Registro
+// Tributario del backend-banco, igual que hace la app del Banco.
+router.post('/api/alta', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
+  const { dip, placeta_id, placetaId, nombre, tipo_sujeto, eip, iban } = req.body;
+  if (!dip || !nombre) return res.status(400).json({ error: 'Se requieren dip y nombre' });
+  try {
+    const payload = {
+      dip,
+      placeta_id: placeta_id || placetaId || `PL-${dip?.replace(/[^A-Z0-9]/gi, '').toUpperCase()}`,
+      nombre,
+      tipo_sujeto: tipo_sujeto === 'Empresa' ? 'Empresa' : 'Fisico',
+      eip: tipo_sujeto === 'Empresa' ? String(eip || '').trim().toUpperCase() : undefined,
+      iban: iban || ''
+    };
+    const r = await fetch('https://api.banco.laplaceta.org/api/v1/tributos/alta', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload), signal: AbortSignal.timeout(10000)
+    });
+    const data = await r.json();
+    if (!r.ok) return res.status(r.status).json({ error: data.error || 'No se pudo dar de alta' });
+    res.json({ success: true, ...data, eip: payload.eip });
+  } catch (e) {
+    res.status(502).json({ error: 'No se pudo contactar con el Registro Tributario: ' + e.message });
+  }
 });
 
 // ── Declaraciones (View) ──────────────────────────────────────────────────

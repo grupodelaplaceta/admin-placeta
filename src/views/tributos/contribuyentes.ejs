@@ -36,7 +36,60 @@ async function verificarEip() {
     res.innerHTML = '⚠️ Error al verificar: ' + (e.message||'');
   }
 }
+
+// Dar de alta un contribuyente (registro REAL en Tributos)
+async function altaContribuyente(form) {
+  const btn = form.querySelector('button[type=submit]');
+  const msg = document.getElementById('altaResult');
+  const fd = new FormData(form);
+  const tipo = fd.get('tipo_sujeto');
+  const payload = {
+    dip: (fd.get('dip')||'').trim(),
+    nombre: (fd.get('nombre')||'').trim(),
+    tipo_sujeto: tipo,
+    eip: tipo === 'Empresa' ? (fd.get('eip')||'').trim() : '',
+    iban: (fd.get('iban')||'').trim(),
+    placeta_id: (fd.get('placeta_id')||'').trim()
+  };
+  if (!payload.dip || !payload.nombre) { msg.textContent = '⚠️ DIP y nombre son obligatorios'; return; }
+  msg.textContent = '⏳ Dando de alta…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/tributos/api/alta', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const data = await r.json();
+    if (data.success) {
+      msg.textContent = '✅ ' + (data.message || 'Contribuyente dado de alta') + (data.eip ? ' · EIP ' + data.eip : '');
+      form.reset();
+    } else {
+      msg.textContent = '❌ ' + (data.error || 'Error al dar de alta');
+    }
+  } catch (e) { msg.textContent = '⚠️ ' + (e.message||''); }
+  btn.disabled = false;
+}
 </script>
+
+<!-- Dar de alta contribuyente -->
+<div class="info-card mb-16" style="background:#fff;border:1px solid #d8d0e8">
+  <h4>➕ Dar de alta contribuyente (Tributos)</h4>
+  <p style="font-size:12px;color:var(--text-light);margin:4px 0 8px">Registra un contribuyente en el censo real. Para empresas, el EIP queda vinculado a esa cuenta.</p>
+  <form onsubmit="event.preventDefault();altaContribuyente(this)">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
+      <input name="dip" placeholder="DIP" class="form-input">
+      <input name="nombre" placeholder="Nombre / Razón social" class="form-input">
+      <select name="tipo_sujeto" class="form-input">
+        <option value="Fisico">Persona Física</option>
+        <option value="Empresa">Empresa</option>
+      </select>
+      <input name="eip" placeholder="EIP (solo empresa)" class="form-input">
+      <input name="iban" placeholder="IBAN (opcional)" class="form-input">
+      <input name="placeta_id" placeholder="Placeta ID (opcional)" class="form-input">
+    </div>
+    <div style="margin-top:8px;display:flex;gap:10px;align-items:center">
+      <button type="submit" class="btn-primary">Dar de alta</button>
+      <span id="altaResult" style="font-size:13px"></span>
+    </div>
+  </form>
+</div>
 
 <div class="table-container">
   <table>
