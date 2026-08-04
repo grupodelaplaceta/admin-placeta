@@ -38,6 +38,7 @@
             <div style="font-size:11px;margin-bottom:2px;display:flex;align-items:center;gap:4px">
               <span><%= s.nombre||s.dip %></span>
               <span class="badge badge-info" style="font-size:8px"><%= s.cargo||'Representante' %></span>
+              <% if (s.ownershipPercent) { %><span class="badge badge-purple" style="font-size:8px"><%= s.ownershipPercent %>%</span><% } %>
             </div>
           <% }) %>
         </td>
@@ -46,6 +47,7 @@
             <button class="btn-icon" onclick="verEmpresa('<%= e.id %>')" title="Ver">👁️</button>
             <button class="btn-icon" onclick="editarEmpresa('<%= e.id %>')" title="Editar">✏️</button>
             <button class="btn-icon" onclick="anadirRepresentante('<%= e.id %>')" title="Añadir representante">👥</button>
+            <button class="btn-icon" onclick="importarTitulares('<%= e.id %>')" title="Importar titulares de la cuenta bancaria (con %)">🏦</button>
             <button class="btn-icon" onclick="verDocsDe('empresa','<%= e.id %>','<%= entidad_actual %>','<%= e.nombre.slice(0,20).replace(/'/g,"\\'") %>')" title="Documentos">📎</button>
             <button class="btn-icon" onclick="bajaEmpresa('<%= e.id %>')" title="Dar de baja">❌</button>
           </div>
@@ -199,6 +201,22 @@ async function guardarRepresentante(id) {
     });
     if (r.success) { mostrarToast('✅ Representante vinculado', 'success'); setTimeout(() => location.reload(), 800); }
   } catch(e) { mostrarToast('Error', 'error'); }
+}
+
+// ── Importar titulares de la cuenta bancaria (con %) ────────────────────
+async function importarTitulares(id) {
+  const e = empresas.find(x => x.id === id);
+  if (!e) return;
+  if (!confirm('🏦 ¿Importar los titulares de la cuenta bancaria de "' + (e.nombre||'') + '" como representantes?\nSe traerán los cotitulares registrados en el Banco con su % de participación.')) return;
+  try {
+    const r = await apiFetch('/<%= entidad_actual %>/api/empresas/'+id+'/importar-titulares', { method:'POST' });
+    if (r.success) {
+      mostrarToast('✅ Importados ' + r.importados + ' titulares', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      mostrarToast(r.error || 'No se pudieron importar', 'error');
+    }
+  } catch(e) { mostrarToast('Error de conexión', 'error'); }
 }
 
 // ── Baja de empresa ─────────────────────────────────────────────────────

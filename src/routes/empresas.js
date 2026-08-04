@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { verificarPermiso } from '../middleware/auth.js';
 import { supabase } from '../config/supabase.js';
+import { apiBancoGetState } from '../config/db.js';
 
 const router = Router();
 
@@ -143,6 +144,57 @@ router.delete('/api/empresas/:id/representante/:dip', async (req, res) => {
   emp.representantes = emp.representantes.filter(r => r.dip !== req.params.dip);
   await persistirEmpresa(emp);
   res.json({ success: true, representantes: emp.representantes });
+});
+
+// ── API: Importar titulares de la cuenta bancaria (con su %) ─────────────
+// Busca la cuenta de EMPRESA en el estado del Banco (por EIP o por nombre) y
+// trae sus cotitulares/titulares registrados (accountHolders) con el % de
+// participación, incorporándolos como representantes de la empresa.
+router.post('/api/empresas/:id/importar-titulares', async (req, res) => {
+  try {
+    const emp = memEmpresas.get(req.params.id);
+    if (!emp) return res.status(404).json({ error: 'No encontrada' });
+
+    const state = await apiBancoGetState();
+    if (!state) return res.status(502).json({ error: 'No se pudo leer el estado del Banco' });
+
+    const cuentas = Array.isArray(state.accounts) ? state.accounts : [];
+    const usuarios = Array.isArray(state.users) ? state.users : [];
+    const holders = Array.isArray(state.accountHolders) ? state.accountHolders : [];
+
+    // 1) Localizar la cuenta de empresa: por EIP o por nombre (displayName)
+    const eipNorm = String(emp.eip || '').trim().toUpperCase();
+    let cuenta = cuentas.find(a => a.type === 'Business' && eipNorm && String(a.eip || '').trim().toUpperCase() === eipNorm);
+    if (!cuenta) cuenta = cuentas.find(a => a.type === 'Business' && a.displayName && String(a.displayName).trim().toLowerCase() === String(emp.nombre || '').trim().toLowerCase());
+    if (!cuenta) return res.status(404).json({ error: 'No se encontró la cuenta de empresa en el Banco (revisa el EIP o el nombre)' });
+
+    // 2) Cotitulares/titulares registrados en esa cuenta
+    const deCuenta = holders.filter(h => h.accountId === cuenta.id);
+    if (deCuenta.length === 0) return res.status(404).json({ error: 'La cuenta bancaria no tiene titulares registrados (accountHolders)' });
+
+    const resolver = (placetaId) => {
+      const u = usuarios.find(us => String(us.placetaId || '').trim().toUpperCase() === String(placetaId || '').trim().toUpperCase());
+      return u ? { dip: u.dip, nombre: u.displayName || u.dip } : { dip: placetaId, nombre: placetaId };
+    };
+
+    let importados = 0;
+    for (const h of deCuenta) {
+      const persona = resolver(h.placetaId);
+      const pct = Number(h.ownershipPercent || h.ownership || 0);
+      if (emp.representantes.find(r => r.dip === persona.dip)) continue;
+      emp.representantes.push({
+        dip: persona.dip,
+        nombre: persona.nombre,
+        cargo: h.role === 'Primary' ? 'Titular principal' : (h.role || 'Titular'),
+        ownershipPercent: pct
+      });
+      importados++;
+    }
+    await persistirEmpresa(emp);
+    res.json({ success: true, importados, cuenta: cuenta.id, iban: cuenta.iban, representantes: emp.representantes });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── API: Dar de baja (borrado lógico) ─────────────────────────────────────
