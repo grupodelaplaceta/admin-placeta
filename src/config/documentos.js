@@ -472,9 +472,9 @@ export async function saveDocumentoAsync(entidad, data) {
   const doc = saveDocumento(entidad, data);
   const sbResult = await sbSaveDoc(doc);
   if (!sbResult) {
-    console.error('[Docs] CRÍTICO: sbSaveDoc falló - documento no persistido en Supabase:', doc.id, doc.titulo);
-    // Lanzar error para que el POST handler devuelva 500 y el usuario no vea falso éxito
-    throw new Error('No se pudo guardar el documento en la base de datos. Inténtalo de nuevo.');
+    // No bloquear el flujo: el documento YA existe en la tienda local y debe
+    // llegar a PlacetaID para la firma aunque la persistencia en Supabase falle.
+    console.error('[Docs] AVISO: sbSaveDoc falló - documento solo en memoria local:', doc.id, doc.titulo);
   }
   return doc;
 }

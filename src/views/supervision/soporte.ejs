@@ -7,67 +7,67 @@
 
 <div class="info-card mb-16" style="background:linear-gradient(135deg,#f3f0ff,#fbfaff);border:1px solid #ddd4f2">
   <h4 style="margin:0">🎧 Soporte del Banco</h4>
-  <p style="font-size:12px;color:var(--text-light);margin:4px 0 0">Consulta y responde los tickets que los usuarios abren desde la app. Las respuestas se sincronizan en la app del cliente.</p>
+  <p style="font-size:12px;color:var(--text-light);margin:4px 0 0">Responde las consultas que los usuarios abren desde la app. La respuesta se sincroniza al instante en la app del cliente.</p>
 </div>
 
 <% if (tickets.length === 0) { %>
-  <div class="info-card">
-    <p style="font-size:13px;color:var(--text-light);margin:0">No hay tickets de soporte.</p>
-  </div>
+  <div class="info-card"><p style="font-size:13px;color:var(--text-light);margin:0">No hay tickets de soporte.</p></div>
 <% } else { %>
-  <% tickets.forEach(function(t){ %>
-  <div class="info-card mb-16" data-ticket="<%= t.id %>" data-fecha="<%= t.createdAt %>" style="border-left:4px solid <%= t.status === 'Abierto' ? '#f59e0b' : (t.status === 'Respondido' ? '#3b82f6' : '#22c55e') %>">
-    <div class="flex justify-between" style="align-items:flex-start">
-      <div>
-        <h4 style="margin:0"><%= t.subject %></h4>
-        <p style="font-size:12px;color:var(--text-light);margin:4px 0">
-          <span class="badge" style="background:#eef2ff;color:#3b82f6"><%= t.category %></span>
-          <span class="badge" style="background:#fff8e6;color:#a16207"><%= t.priority %></span>
-          <span class="badge" style="background:<%= t.status === 'Abierto' ? '#fff8e6' : '#e6f7ed' %>;color:<%= t.status === 'Abierto' ? '#a16207' : '#1a7a4a' %>"><%= t.status %></span>
-        </p>
-        <p style="font-size:12px;color:var(--text-light);margin:2px 0">De <strong><%= t.name %></strong> (<%= t.dip %>) · <span id="fecha-<%= t.id %>"></span></p>
-      </div>
-    </div>
-    <div class="info-card" style="background:#faf8ff;margin-top:8px">
-      <p style="font-size:13px;margin:0;white-space:pre-wrap"><%= t.message %></p>
-    </div>
-    <% if (t.responses.length) { %>
-      <div style="margin-top:8px">
-        <% t.responses.forEach(function(r){ %>
-        <div style="font-size:12px;background:#eef2ff;border-radius:10px;padding:8px 12px;margin-top:6px">
-          <strong style="color:#3b82f6">RSP · <%= r.adminDip || 'Admin' %></strong>
-          <p style="margin:2px 0 0;white-space:pre-wrap"><%= r.text %></p>
-        </div>
+<div class="info-card" style="padding:0;overflow:hidden">
+  <div style="overflow-x:auto">
+    <table class="table" style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="text-align:left;color:var(--text-light);border-bottom:1px solid #e7e0f2">
+          <th style="padding:10px 12px">Ticket</th>
+          <th style="padding:10px 12px">Cliente</th>
+          <th style="padding:10px 12px">Categoría</th>
+          <th style="padding:10px 12px">Estado</th>
+          <th style="padding:10px 12px">Fecha</th>
+          <th style="padding:10px 12px"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% tickets.forEach(function(t){ %>
+        <tr style="border-bottom:1px solid #f0ebf7;cursor:pointer" onclick="toggle('<%= t.id %>')">
+          <td style="padding:10px 12px"><strong><%= t.subject %></strong><div style="color:var(--text-light);font-size:11px"><%= t.message ? t.message.slice(0,60) + (t.message.length>60?'…':'') : '' %></div></td>
+          <td style="padding:10px 12px"><%= t.name %><div style="color:var(--text-light);font-size:11px"><%= t.dip %></div></td>
+          <td style="padding:10px 12px"><span class="badge" style="background:#eef2ff;color:#3b82f6"><%= t.category %></span></td>
+          <td style="padding:10px 12px"><span class="badge" style="background:<%= t.status === 'Abierto' ? '#fff8e6' : '#e6f7ed' %>;color:<%= t.status === 'Abierto' ? '#a16207' : '#1a7a4a' %>"><%= t.status %></span></td>
+          <td style="padding:10px 12px;white-space:nowrap" data-fecha="<%= t.createdAt %>">—</td>
+          <td style="padding:10px 12px"><button class="btn-sm btn-secondary" onclick="event.stopPropagation();toggle('<%= t.id %>')">💬 <%= t.responses.length %></button></td>
+        </tr>
+        <tr id="det-<%= t.id %>" style="display:none;background:#faf8ff">
+          <td colspan="6" style="padding:14px 16px">
+            <div class="info-card" style="background:#fff;margin:0"><p style="margin:0;white-space:pre-wrap;font-size:13px"><%= t.message %></p></div>
+            <% t.responses.forEach(function(r){ %>
+            <div style="font-size:12px;background:#eef2ff;border-radius:10px;padding:8px 12px;margin-top:6px">
+              <strong style="color:#3b82f6">RSP · <%= r.adminDip || 'Admin' %></strong>
+              <p style="margin:2px 0 0;white-space:pre-wrap"><%= r.text %></p>
+            </div>
+            <% }); %>
+            <div class="flex gap-8" style="margin-top:10px;align-items:center">
+              <input type="text" id="resp-<%= t.id %>" class="form-input" placeholder="Escribe tu respuesta…" style="flex:1">
+              <button class="btn-primary" onclick="responder('<%= t.id %>')">Responder</button>
+            </div>
+            <span id="msg-<%= t.id %>" style="font-size:12px;font-weight:600"></span>
+          </td>
+        </tr>
         <% }); %>
-      </div>
-    <% } %>
-    <div class="flex gap-8" style="margin-top:10px;align-items:center">
-      <input type="text" id="resp-<%= t.id %>" class="form-input" placeholder="Escribe tu respuesta…" style="flex:1">
-      <button class="btn-primary" onclick="responder('<%= t.id %>')">💬 Responder</button>
-    </div>
-    <span id="msg-<%= t.id %>" style="font-size:12px;font-weight:600"></span>
+      </tbody>
+    </table>
   </div>
-  <% }); %>
+</div>
 <% } %>
 
 <script>
-  document.querySelectorAll('[data-ticket]').forEach(function(card){
-    var id = card.getAttribute('data-ticket');
-    var el = document.getElementById('fecha-' + id);
-    var iso = card.getAttribute('data-ticket');
-    // fecha desde el texto embebido
+  document.querySelectorAll('[data-fecha]').forEach(function(el){
+    var iso = el.getAttribute('data-fecha');
+    try { el.textContent = new Date(iso).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch(e){}
   });
-  function fmt(iso){
-    if(!iso) return '';
-    try { return new Date(iso).toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); } catch(e){ return iso; }
+  function toggle(id){
+    var det = document.getElementById('det-' + id);
+    det.style.display = det.style.display === 'none' ? 'table-row' : 'none';
   }
-  // Pintar fechas (guardadas en atributo data-fecha)
-  document.querySelectorAll('[data-ticket]').forEach(function(card){
-    var id = card.getAttribute('data-ticket');
-    var iso = card.getAttribute('data-fecha');
-    var el = document.getElementById('fecha-' + id);
-    if (el && iso) el.textContent = fmt(iso);
-  });
   async function responder(ticketId){
     const input = document.getElementById('resp-' + ticketId);
     const msg = document.getElementById('msg-' + ticketId);
@@ -79,7 +79,7 @@
       body: JSON.stringify({ ticketId, respuesta: texto })
     });
     const data = await res.json().catch(()=>({}));
-    if(res.ok && data.success){ msg.textContent='✅ '+(data.message||'Respondido'); msg.style.color='#1a7a4a'; setTimeout(()=>location.reload(),900); }
+    if(res.ok && data.success){ msg.textContent='✅ Respondido'; msg.style.color='#1a7a4a'; setTimeout(()=>location.reload(),900); }
     else { msg.textContent='❌ '+(data.error||'Error'); msg.style.color='#b82929'; }
   }
 </script>
