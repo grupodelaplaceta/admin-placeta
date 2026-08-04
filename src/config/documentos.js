@@ -956,13 +956,48 @@ function generarContenidoDocumento(tipo, datos = {}) {
       break;
     }
 
-    default:
-      sf('DATOS');
-      for (const [k,v] of Object.entries(datos)) {
-        if (typeof v==='object'&&v!==null) { for (const [sk,sv] of Object.entries(v)) cf(sk,sv); }
-        else if (!Array.isArray(v)) cf(k,v);
-      }
+    default: {
+      // Generador EXTENSO y bien redactado para cualquier tipo de documento del
+      // Banco de La Placeta no cubierto por una plantilla específica: estructura
+      // oficial con preámbulo, datos, expone, fundamentos, resuelve y aviso legal.
+      const etiqueta = ETIQUETAS_DOC[tipo] || tipo.split('-').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+      const titular = datos.titular || datos.nombre || datos.ordenante || '—';
+      const dip = datos.dip || datos.dipSolicitante || '—';
+      const iban = datos.iban || datos.cuenta || datos.cuentaId || '—';
+      sf('DATOS DEL INTERESADO');
+      cf('Nombre / Razón social', titular);
+      cf('DIP / Identificador', dip);
+      if (iban && iban !== '—') cf('Cuenta / Referencia', iban);
+      if (datos.tipoCuenta) cf('Tipo de cuenta', datos.tipoCuenta);
+      if (datos.periodo) cf('Período', datos.periodo);
+      if (datos.importe !== undefined) cf('Importe', typeof datos.importe === 'number' ? datos.importe.toLocaleString() + ' Pz' : datos.importe);
+      if (datos.motivo) cf('Motivo', datos.motivo);
+      if (datos.referencia) cf('Referencia', datos.referencia);
+      if (datos.fecha) cf('Fecha', new Date(datos.fecha).toLocaleDateString('es-ES', { year:'numeric', month:'long', day:'numeric' }));
+      ln();
+      sf('EXPONE');
+      tx('PRIMERO. — Que el interesado identificado en el presente documento, cuya identidad ha sido verificada mediante el sistema oficial de autenticación PlacetaID conforme al Artículo 5 del Código Normativo Interno del Grupo de La Placeta, ha presentado la solicitud que motiva este expediente («' + etiqueta + '»), quedando registrada en el sistema de gestión del Banco de La Placeta en la fecha indicada.');
+      tx('SEGUNDO. — Que el Banco de La Placeta, entidad integrada en el ecosistema de la ASOCIACIÓN GRUPO DE LA PLACETA, ha procedido al estudio de la solicitud, la comprobación de los datos identificativos del interesado, la revisión del estado administrativo de las cuentas o servicios afectados y la verificación del cumplimiento de los requisitos previstos en la normativa interna aplicable.');
+      tx('TERCERO. — Que, a la vista de la documentación y de las comprobaciones realizadas, procede emitir el presente documento con plena validez dentro del ecosistema GDLP, dejando constancia de las circunstancias, datos y efectos que en él se detallan.');
+      ln();
+      sf('FUNDAMENTOS JURÍDICOS');
+      tx('PRIMERO. — El Artículo 5 del Código Normativo Interno del Grupo de La Placeta otorga a PlacetaID la condición de sistema oficial de identificación y firma electrónica, equiparando la firma electrónica a la manuscrita a todos los efectos legales.');
+      tx('SEGUNDO. — El Artículo 6 regula el Documento de Identidad de La Placeta (DIP) como identificador único e intransferible de las personas en el ecosistema, y el Artículo 7 regula las cuentas y servicios bancarios del Banco de La Placeta, sus características y el régimen aplicable.');
+      tx('TERCERO. — El presente documento se emite conforme a las disposiciones del Código Normativo Interno, de los Estatutos de la ASOCIACIÓN GRUPO DE LA PLACETA y de la normativa que resulte de aplicación, en el ámbito de las competencias del Banco de La Placeta.');
+      ln();
+      sf('RESUELVE');
+      tx('Primero. — TENER por presentada y registrada la solicitud del interesado, con todos los efectos que le son propios dentro del ecosistema del Grupo de La Placeta.');
+      tx('Segundo. — EMITIR el presente documento oficial en los términos y con los datos que se detallan, quedando a disposición del interesado a través del sistema PlacetaID.');
+      tx('Tercero. — NOTIFICAR este documento al interesado mediante el sistema PlacetaID, entendiéndose notificado en el momento en que acceda a su contenido a través de PlacetaID Móvil y, en su caso, proceda a su firma electrónica.');
+      tx('Cuarto. — REGISTRAR la presente actuación en el historial de auditoría del Banco de La Placeta, dejando constancia de la fecha, hora y responsable de la gestión.');
+      ln();
+      sf('EFECTOS Y RECURSOS');
+      tx('Este documento produce los efectos que le son propios desde el momento de su emisión (o de su firma electrónica, si la naturaleza del acto así lo exige). Contra el mismo, el interesado podrá presentar las alegaciones o recursos que estime oportunos ante la Administración del Grupo de La Placeta en la forma y plazo previstos en el Código Normativo Interno.');
+      ln();
+      L.push({nota: 'Documento oficial emitido por el Banco de La Placeta, entidad integrada en el ecosistema de ASOCIACIÓN GRUPO DE LA PLACETA.'});
+      L.push({nota: 'AVISO LEGAL: Banco de La Placeta es una entidad dentro del ecosistema de ASOCIACIÓN GRUPO DE LA PLACETA que se rige por sus Estatutos y el Código Normativo Interno vigente. Al firmar digitalmente este documento vía PlacetaID Móvil se le otorga autenticidad y la misma validez que a una firma en papel, entendiendo que el contenido del mismo y la firma quieren representar conformidad.'});
       break;
+    }
   }
   return L;
 }
