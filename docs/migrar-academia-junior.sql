@@ -145,3 +145,18 @@ CREATE INDEX IF NOT EXISTS idx_junior_logs_junior ON junior_logs(junior_id);
 
 -- ── CONTROL DE RECLAMO DIARIO DE RBU (anti doble reclamo) ────────────
 ALTER TABLE junior_menores ADD COLUMN IF NOT EXISTS rbu_ultima TEXT;
+
+-- ── REGISTRO MERCANTIL — EMPRESAS Y EIP (persistente) ────────────────
+CREATE TABLE IF NOT EXISTS rsp_empresas (
+  id TEXT PRIMARY KEY,
+  nombre TEXT NOT NULL,
+  eip TEXT,
+  dip TEXT,
+  representantes JSONB DEFAULT '[]',
+  activa BOOLEAN DEFAULT true,
+  creada TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rsp_empresas_eip ON rsp_empresas(eip);
+CREATE INDEX IF NOT EXISTS idx_rsp_empresas_dip ON rsp_empresas(dip);
