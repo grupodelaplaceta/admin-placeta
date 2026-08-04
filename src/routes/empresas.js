@@ -35,14 +35,20 @@ async function persistirEmpresa(e) {
   } catch (err) { console.warn('[Empresas] Error persistir:', err.message); }
 }
 
-// Cargar empresas REALES desde Supabase (persistentes). Solo si la base
-// está vacía se siembran los ejemplos. Así no se pierden en cada cold start.
+// Cargar empresas REALES desde Supabase (persistentes).
+// NO se siembran ejemplos: si no hay datos reales, la tabla sale vacía.
 async function initEmpresas() {
   try {
     if (supabase) {
       const { data } = await supabase.from('rsp_empresas').select('*').limit(1000);
       if (data && data.length > 0) {
-        data.forEach(row => {
+        // Limpiar restos de los datos de ejemplo sembrados antes (datos falsos)
+        for (const row of data) {
+          if ((row.id === 'EMP-0001' || row.id === 'EMP-0002') &&
+              (row.eip === 'EIP-CAP001' || row.eip === 'EIP-TRIB01')) {
+            await supabase.from('rsp_empresas').delete().eq('id', row.id).catch(() => {});
+            continue;
+          }
           let rep = row.representantes || [];
           if (typeof rep === 'string') { try { rep = JSON.parse(rep || '[]'); } catch (_) { rep = []; } }
           memEmpresas.set(row.id, {
@@ -51,20 +57,10 @@ async function initEmpresas() {
           });
           const n = parseInt(String(row.id || '').replace(/\D/g, ''), 10);
           if (!Number.isNaN(n)) idCounter = Math.max(idCounter, n);
-        });
-        return;
+        }
       }
     }
   } catch (e) { console.warn('[Empresas] No se pudieron cargar de Supabase:', e.message); }
-
-  // Sin datos en la base → sembrar ejemplos
-  if (memEmpresas.size === 0) {
-    const ejemplos = [
-      { nombre: 'Capitalia Bank', eip: 'EIP-CAP001', dip: 'CAPITALIA_BANK', representantes: [{ dip: 'ADMIN-GDLP', nombre: 'Admin GDLP', cargo: 'CEO' }] },
-      { nombre: 'Tributos GDLP', eip: 'EIP-TRIB01', dip: 'TGLP', representantes: [] },
-    ];
-    ejemplos.forEach(e => { const id = nextId(); const emp = { id, ...e, creada: new Date().toISOString(), activa: true }; memEmpresas.set(id, emp); setTimeout(() => persistirEmpresa(emp), 100); });
-  }
 }
 
 const empresasReady = initEmpresas();
