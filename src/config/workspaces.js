@@ -217,6 +217,7 @@ const WORKSPACES = {
           { texto: 'Reclamaciones y quejas', url: '/junta/reclamaciones', icono: '📨' },
           { texto: 'Documentos del ecosistema', url: '/rsp/documentos', icono: '📑' },
           { texto: 'Empresas / Cumplimiento', url: '/junta/empresas/cumplimiento', icono: '🏢' },
+          { texto: 'Banco (config y reversiones)', url: '/rsp/supervision/banco', icono: '🏦' },
         ]
       },
       {

@@ -28,6 +28,7 @@ import juniorApiRoutes from './src/routes/junior-api.js';
 import juniorOficialApiRoutes from './src/routes/junior-oficial-api.js';
 import juniorAcademiaApiRoutes from './src/routes/junior-academia-api.js';
 import accionesDocumentoRoutes from './src/routes/acciones-documento.js';
+import supervisionBancoRoutes from './src/routes/supervision-banco.js';
 import rspRoutes from './src/routes/rsp.js';
 import { apiGatewayRoutes } from './src/routes/api-gateway.js';
 import firmasRoutes from './src/routes/firmas.js';
@@ -226,6 +227,7 @@ app.get('/rsp/api/debug/conexiones', async (req, res) => {
 
 // Red de Servicios de La Placeta (RSP) — protegido con sesión
 app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), rspRoutes);
+app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), supervisionBancoRoutes);
 
 // Placeta Junior
 app.use('/junior', verificarSesion, verificarAccesoEntidad('junior'), rspBillingMiddleware('junior'), juniorRoutes);
