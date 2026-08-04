@@ -195,6 +195,24 @@ const API_REGISTRY = {
         ]
       },
       {
+        path: '/declaraciones/reconciliar',
+        method: 'POST',
+        tipo: 'modificacion',
+        descripcion: 'Reconciliación automática: reconstruye saldos mensuales reales y genera la declaración con IRM/IGF según normativa',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'placeta_id', tipo: DATA_TYPE.STRING, descripcion: 'DIP / placeta_id del contribuyente', requerido: true },
+          { campo: 'mes_periodo', tipo: DATA_TYPE.STRING, descripcion: 'Periodo fiscal (YYYY-MM)', requerido: false }
+        ],
+        dataReturn: [
+          { campo: 'success', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Resultado' },
+          { campo: 'patrimonioMedio', tipo: DATA_TYPE.AMOUNT, descripcion: 'Patrimonio medio del mes' },
+          { campo: 'cuotaIRM', tipo: DATA_TYPE.AMOUNT, descripcion: 'Cuota IRM' },
+          { campo: 'cuotaIGF', tipo: DATA_TYPE.AMOUNT, descripcion: 'Cuota IGF' },
+          { campo: 'declaracion', tipo: DATA_TYPE.OBJECT, descripcion: 'Declaración generada' }
+        ]
+      },
+      {
         path: '/declaraciones',
         method: 'POST',
         tipo: 'modificacion',

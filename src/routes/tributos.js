@@ -381,41 +381,98 @@ router.post('/api/reconcile/:placetaId', verificarPermiso('tributos', 'crear_dec
 
     const state = await apiBancoGetState();
     const cuentas = state?.accounts?.filter(a => a.placetaId === placetaId || a.id === placetaId) || [];
+    const ids = new Set(cuentas.map(c => c.id));
+    const transacciones = (state?.transactions || []).filter(t => ids.has(t.fromAccountId) || ids.has(t.toAccountId));
 
     await sbClearDailyBalances(placetaId, mesPeriodo);
 
-    // Reconstruir saldos diarios desde las cuentas
-    const dias = 30;
+    // ── Reconstrucción REAL del saldo diario desde las transacciones ──
+    // Saldo actual = saldo base + Σ movimientos del mes  ⇒  saldo base = actual - Σ mov.
+    const [anio, mes] = String(mesPeriodo).split('-').map(Number);
+    const enMes = (t) => {
+      const d = new Date(t.createdAt || t.updatedAt);
+      return d.getFullYear() === anio && d.getMonth() + 1 === mes;
+    };
+    const movMes = transacciones.filter(enMes);
+    const deltaMes = movMes.reduce((s, t) => {
+      if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
+      if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
+      return s;
+    }, 0);
+    const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
+    const saldoBase = saldoActual - deltaMes;
+
+    const diasEnMes = new Date(anio, mes, 0).getDate();
     const balances = [];
-    for (let d = 1; d <= dias; d++) {
-      const saldo = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0) * (0.95 + Math.random() * 0.1);
-      await sbUpsertDailyBalance(placetaId, mesPeriodo, d, Math.round(saldo));
-      balances.push(Math.round(saldo));
+    for (let d = 1; d <= diasEnMes; d++) {
+      // Saldo acumulado del contribuyente al final del día d.
+      const hastaDia = transacciones.filter(t => {
+        const dt = new Date(t.createdAt || t.updatedAt);
+        return dt.getFullYear() === anio && dt.getMonth() + 1 === mes && dt.getDate() <= d;
+      });
+      const delta = hastaDia.reduce((s, t) => {
+        if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
+        if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
+        return s;
+      }, 0);
+      const saldoDia = Math.max(0, saldoBase + delta);
+      await sbUpsertDailyBalance(placetaId, mesPeriodo, d, Math.round(saldoDia));
+      balances.push(Math.round(saldoDia));
     }
 
-    // Calcular patrimonio medio
+    // Patrimonio medio del mes (Art. 4.8)
     const patrimonioMedio = calcularPatrimonioMedio(balances);
 
-    // Auto-crear declaración
-    const tipoSujeto = cuentas.some(c => c.type === 'Business') ? 'Empresa' : 'Personal';
-    const irmTipo = calcularIRM(0.02, tipoSujeto === 'Empresa' ? 'Business' : 'Personal');
+    // IA = (media ingresos - media pagos) / patrimonio medio (Art. 4.9)
+    const ingresosMes = movMes.filter(t => ids.has(t.toAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
+    const pagosMes = movMes.filter(t => ids.has(t.fromAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
+    const mediaIngresos = diasEnMes ? ingresosMes / diasEnMes : 0;
+    const mediaPagos = diasEnMes ? pagosMes / diasEnMes : 0;
+    const ia = calcularIA(mediaIngresos, mediaPagos, patrimonioMedio);
+
+    // Tipo de contribuyente: empresa si alguna cuenta es Business / State.
+    const tipoSujeto = cuentas.some(c => c.type === 'Business' || c.type === 'State') ? 'Empresa' : 'Personal';
+    const tipoCuenta = tipoSujeto === 'Empresa' ? 'Business' : 'Personal';
+    const esEmpresaPequeña = tipoCuenta === 'Business' && patrimonioMedio < 20000;
+
+    const irmTipo = calcularIRM(ia, tipoCuenta);
     const cuotaIRM = patrimonioMedio * irmTipo;
-    const igfResult = calcularIGF(patrimonioMedio, tipoSujeto === 'Empresa' ? 'Business' : 'Personal');
+    const igfResult = calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña);
+    const cuotaIGF = igfResult.exento ? 0 : igfResult.total;
+
+    // Excepción de IVA a empresas: si la empresa tiene EIP registrado no se le
+    // carga IVA en sus operaciones internas; el IVA lo liquida el emisor.
+    const eipVinculado = cuentas.some(c => c.eip);
 
     const decl = await sbCreateDeclaracion({
       placeta_id: placetaId, mes_periodo: mesPeriodo,
       patrimonio_medio: Math.round(patrimonioMedio * 100) / 100,
-      indice_acumulacion: 0.0200,
+      indice_acumulacion: Math.round(ia * 10000) / 10000,
       cuota_irm: Math.round(cuotaIRM * 100) / 100,
-      cuota_igf: igfResult.total,
+      cuota_igf: cuotaIGF,
       cuenta_id_blp: cuentas[0]?.id || placetaId,
       estado_pago: 'Borrador',
       exencion_aplicada: igfResult.exento || false,
-      dias_declarados_banco: dias,
-      dias_activos_mes: dias
+      dias_declarados_banco: diasEnMes,
+      dias_activos_mes: diasEnMes,
+      eip: eipVinculado ? cuentas.find(c => c.eip)?.eip : null,
+      iva_exento_empresa: esEmpresaPequeña || eipVinculado || false
     });
 
-    res.json({ success: true, balances, patrimonioMedio, declaracion: decl });
+    res.json({
+      success: true,
+      balances,
+      patrimonioMedio,
+      indice_acumulacion: ia,
+      tipoSujeto,
+      cuotaIRM: Math.round(cuotaIRM * 100) / 100,
+      cuotaIGF,
+      irmTipo,
+      igfResult,
+      exencionIGF: igfResult.exento,
+      iva_exento_empresa: esEmpresaPequeña || eipVinculado || false,
+      declaracion: decl
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
