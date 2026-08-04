@@ -3,6 +3,41 @@
   <button class="btn-secondary" data-search-btn>🔍</button>
 </div>
 
+<!-- Verificador de EIP (registro real) -->
+<div class="info-card mb-16" style="background:linear-gradient(135deg,#f6f3ff,#fbfaff);border:1px solid #e0d8f0">
+  <h4>🔎 Verificar EIP</h4>
+  <p style="font-size:12px;color:var(--text-light);margin:4px 0 8px">Comprueba contra el Registro Tributario real que un EIP existe y a qué cuenta pertenece (lo usa el Banco para validar).</p>
+  <div class="flex gap-8" style="align-items:center">
+    <input type="text" id="eipCheckInput" placeholder="EIP-XXXXXX" class="form-input" style="width:220px" onkeydown="if(event.key==='Enter')verificarEip()">
+    <button class="btn-primary" onclick="verificarEip()">Verificar</button>
+    <span id="eipCheckResult" style="font-size:13px"></span>
+  </div>
+</div>
+<script>
+async function verificarEip() {
+  const inp = document.getElementById('eipCheckInput');
+  const res = document.getElementById('eipCheckResult');
+  const eip = (inp.value||'').trim().toUpperCase();
+  if (!eip) { res.innerHTML = '⚠️ Introduce un EIP'; return; }
+  res.innerHTML = '⏳ Comprobando…';
+  try {
+    const r = await fetch('/tributos/api/validar-eip?eip=' + encodeURIComponent(eip));
+    const data = await r.json();
+    if (data.verificado) {
+      const e = data.entidad || {};
+      res.innerHTML = '✅ <strong>EIP válido</strong> — ' +
+        (e.nombre || e.displayName || e.titular || eip) +
+        (e.tipo ? ' · <em>'+e.tipo+'</em>' : '') +
+        (e.iban ? ' · <span class="text-mono">'+e.iban+'</span>' : '');
+    } else {
+      res.innerHTML = '❌ ' + (data.error || 'EIP no encontrado en el Registro Tributario');
+    }
+  } catch (e) {
+    res.innerHTML = '⚠️ Error al verificar: ' + (e.message||'');
+  }
+}
+</script>
+
 <div class="table-container">
   <table>
     <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>EIP</th><th>Estado Fiscal</th><th>Docs</th></tr></thead>

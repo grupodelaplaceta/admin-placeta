@@ -6,6 +6,39 @@ import { generarPDF } from '../config/documentos.js';
 
 const router = Router();
 
+// ── Verificación de EIP (Registro Tributario real) ────────────────────────
+// Busca en el estado del Banco (bank_accounts) y, si no, en el registro de
+// contribuyentes del backend-banco (/api/v1/tributos/validar-eip).
+// Así el RSP puede comprobar que un EIP es REAL antes de darlo por válido.
+router.get('/api/validar-eip', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
+  const eip = String(req.query.eip || '').trim().toUpperCase();
+  if (!eip) return res.status(400).json({ error: 'EIP requerido' });
+  try {
+    // 1) Estado del Banco (cuentas con EIP)
+    const state = await apiBancoGetState().catch(() => null);
+    const cuenta = state?.accounts?.find(a => String(a.eip || '').trim().toUpperCase() === eip);
+    if (cuenta) {
+      return res.json({
+        verificado: true, fuente: 'banco', eip,
+        entidad: { id: cuenta.id, nombre: cuenta.displayName || cuenta.id, tipo: cuenta.type || 'Desconocido',
+                   placetaId: cuenta.placetaId, iban: cuenta.iban, censo: cuenta.tributosCensusDate || null }
+      });
+    }
+    // 2) Registro de contribuyentes del backend-banco
+    try {
+      const r = await fetch(`https://api.banco.laplaceta.org/api/v1/tributos/validar-eip?eip=${encodeURIComponent(eip)}`, { signal: AbortSignal.timeout(8000) });
+      const data = await r.json();
+      if (r.ok && data && (data.contributor || data.eip || data.nombre)) {
+        return res.json({ verificado: true, fuente: 'contribuyentes', eip, entidad: data });
+      }
+    } catch (e) { /* sin acceso al registro de contribuyentes */ }
+
+    res.status(404).json({ verificado: false, eip, error: 'EIP no encontrado en el Registro Tributario' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Dashboard Tributos ─────────────────────────────────────────────────────
 router.get('/', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
   const state = await apiBancoGetState();
