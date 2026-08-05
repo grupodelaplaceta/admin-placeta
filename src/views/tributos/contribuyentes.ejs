@@ -123,14 +123,16 @@ async function altaContribuyente(form) {
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>EIP</th><th>Estado Fiscal</th><th>Declaraciones mensuales</th><th>Docs</th></tr></thead>
+    <thead><tr><th>Contribuyente</th><th>Ident.</th><th>Tipo</th><th>Cuentas</th><th>Saldo</th><th>IBAN</th><th>EIP</th><th>Estado Fiscal</th><th>Declaraciones mensuales</th><th>Docs</th></tr></thead>
     <tbody>
       <% (contribuyentes || []).forEach(c => { %>
       <% const decls = (declaraciones && declaraciones.get(c.placetaId)) || (declaraciones && declaraciones.get(c.id)) || []; %>
       <tr>
-        <td class="text-mono"><%= c.id %></td>
         <td><strong><%= c.displayName || '—' %></strong></td>
-        <td><span class="badge badge-info"><%= c.type || '—' %></span></td>
+        <td class="text-mono"><%= c.type === 'Empresa' ? (c.eip || c.id) : (c.dip || c.id) %></td>
+        <td><span class="badge <%= c.type === 'Empresa' ? 'badge-purple' : 'badge-info' %>"><%= c.type === 'Empresa' ? 'Empresa' : 'Persona' %></span></td>
+        <td><span class="badge badge-secondary"><%= c.numCuentas || 1 %></span></td>
+        <td><strong><%= (c.saldoTotal || 0).toLocaleString() %></strong> Pz</td>
         <td class="text-mono"><%= c.iban || '—' %></td>
         <td class="text-mono"><%= c.eip || '—' %></td>
         <td><span class="badge <%= c.tributosCensusDate ? 'badge-success' : 'badge-warning' %>"><%= c.tributosCensusDate ? 'Al Dia' : 'Pendiente' %></span></td>
@@ -157,4 +159,4 @@ async function altaContribuyente(form) {
     </tbody>
   </table>
 </div>
-<p style="font-size:12px;color:var(--text-light);margin-top:8px">Total: <strong><%= total %></strong> contribuyentes · <strong><%= totalDeclaraciones %></strong> declaraciones mensuales</p>
+<p style="font-size:12px;color:var(--text-light);margin-top:8px">Total: <strong><%= total %></strong> contribuyentes (personas por DIP · empresas por EIP) · <strong><%= totalDeclaraciones %></strong> declaraciones mensuales</p>

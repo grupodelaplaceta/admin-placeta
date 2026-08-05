@@ -42,16 +42,15 @@ router.get('/api/validar-eip', verificarPermiso('tributos', 'ver_contribuyentes'
 // ── Dashboard Tributos ─────────────────────────────────────────────────────
 router.get('/', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
   const state = await apiBancoGetState();
-  const SISTEMA = new Set(['sys-bank', 'sys-state', 'TGLP', 'AGLDP', 'VAULT_EMISION', 'CAPITALIA_BANK', 'DIP-ADMIN', 'DIP-DIGITAL']);
-  const contribuyentes = (state?.accounts || []).filter(a => a.placetaId && !SISTEMA.has(a.id) && !SISTEMA.has(a.placetaId) && a.kind !== 'OperationalFee');
-  const ingresos = contribuyentes.reduce((s, c) => s + (c.balancePz || 0), 0);
+  const mapa = agruparContribuyentes(state);
+  const ingresos = [...mapa.values()].reduce((s, c) => s + c.cuentas.reduce((x, a) => x + (a.balancePz || 0), 0), 0);
   const declaraciones = await sbListDeclaraciones(5);
   const pendientes = declaraciones.filter(d => (d.estado_pago||'Borrador') === 'Borrador').length;
 
   res.render('tributos/dashboard', {
     titulo: 'Tributos de La Placeta',
     entidad_actual: 'tributos',
-    totalContribuyentes: contribuyentes.length,
+    totalContribuyentes: mapa.size,
     ingresos,
     declaracionesPendientes: pendientes,
     esAdmin: req.session.roles?.includes('tributos_admin'),
@@ -60,44 +59,89 @@ router.get('/', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, 
 });
 
 // ── Listado de Contribuyentes (Registro Tributario REAL del backend-banco) ─
-router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
-  let contribuyentes = [];
+// ── Agrupación de contribuyentes por DIP o EIP ───────────────────────────
+// Regla: los contribuyentes son personas físicas (se identifican por DIP y
+// agrupan TODAS sus cuentas excepto las de empresa) o empresas (se identifican
+// por EIP y agrupan SOLO sus cuentas de empresa). Cada cuenta del banco se
+// asigna a un contribuyente según su tipo: Business/State → EIP, el resto → DIP.
+function agruparContribuyentes(state) {
+  const cuentas = state?.accounts || [];
+  const users = state?.users || [];
+  const SISTEMA = new Set(['sys-bank', 'sys-state', 'TGLP', 'AGLDP', 'VAULT_EMISION', 'CAPITALIA_BANK', 'DIP-ADMIN', 'DIP-DIGITAL']);
 
-  // Fuente de verdad: /api/v1/tributos/contribuyentes (tributos_contributors)
-  try {
-    const r = await fetch('https://api.banco.laplaceta.org/api/v1/tributos/contribuyentes?limit=1000', { signal: AbortSignal.timeout(8000) });
-    if (r.ok) {
-      const data = await r.json();
-      contribuyentes = (data.contribuyentes || []).map(c => ({
-        id: c.id || c.placeta_id || c.placetaId || '',
-        placetaId: c.placeta_id || c.placetaId || c.id || '',
-        displayName: c.nombre || c.name || c.displayName || c.placeta_id || '—',
-        dip: c.dip || '',
-        type: c.tipo_sujeto || c.type || '—',
-        iban: c.iban || '—',
-        eip: c.eip || null,
-        tributosCensusDate: c.fecha_alta_tributos || c.fecha_alta || null,
-        _estadoFiscal: c.estado_fiscal || 'Al Dia',
-        _roles: c.roles_json || []
-      }));
+  // Mapa placetaId → user (para resolver DIP/nombre)
+  const userPorPlaceta = new Map();
+  for (const u of users) userPorPlaceta.set(u.placetaId, u);
+
+  const contribuyentes = new Map(); // clave → { dip|eip, tipo, cuentas, displayName, ... }
+
+  const resolverNombre = (c) => {
+    const u = userPorPlaceta.get(c.placetaId);
+    if (u?.displayName) return u.displayName;
+    if (c.displayName && c.displayName !== c.id) return c.displayName;
+    return u?.dip || c.placetaId || c.id || '—';
+  };
+
+  for (const c of cuentas) {
+    if (!c.placetaId && !c.eip) continue;
+    if (SISTEMA.has(c.id) || SISTEMA.has(c.placetaId)) continue;
+    if (c.kind === 'OperationalFee') continue;
+
+    const esEmpresa = c.type === 'Business' || c.type === 'State';
+    const u = userPorPlaceta.get(c.placetaId);
+
+    if (esEmpresa) {
+      // Empresa → se identifica por EIP
+      const eip = String(c.eip || '').trim().toUpperCase();
+      const clave = eip || `EMP-${c.id}`;
+      if (!contribuyentes.has(clave)) {
+        contribuyentes.set(clave, {
+          clave, eip: eip || null, tipo: 'Empresa', cuentas: [],
+          displayName: c.displayName && c.displayName !== c.id ? c.displayName : (eip || c.id),
+          dip: u?.dip || ''
+        });
+      }
+      contribuyentes.get(clave).cuentas.push(c);
+    } else {
+      // Persona → se identifica por DIP
+      const dip = u?.dip || c.placetaId || c.id;
+      const clave = `DIP-${dip}`;
+      if (!contribuyentes.has(clave)) {
+        contribuyentes.set(clave, {
+          clave, dip, eip: null, tipo: 'Fisico', cuentas: [],
+          displayName: resolverNombre(c)
+        });
+      }
+      contribuyentes.get(clave).cuentas.push(c);
     }
-  } catch (e) { /* sin acceso al registro → fallback */ }
-
-  // Fallback: estado del Banco (todas las cuentas reales de contribuyentes,
-  // excluyendo cuentas de sistema / internas)
-  if (contribuyentes.length === 0) {
-    const state = await apiBancoGetState().catch(() => null);
-    const SISTEMA = new Set(['sys-bank', 'sys-state', 'TGLP', 'AGLDP', 'VAULT_EMISION', 'CAPITALIA_BANK', 'DIP-ADMIN', 'DIP-DIGITAL']);
-    contribuyentes = (state?.accounts || [])
-      .filter(a => a.placetaId && !SISTEMA.has(a.id) && !SISTEMA.has(a.placetaId) && a.kind !== 'OperationalFee')
-      .map(c => ({
-        id: c.id || '', placetaId: c.placetaId || c.id || '', displayName: c.displayName || c.id, dip: c.dip || '',
-        type: c.type || '—', iban: c.iban || '—', eip: c.eip || null,
-        tributosCensusDate: c.tributosCensusDate || null, _estadoFiscal: 'Al Dia', _roles: []
-      }));
   }
 
-  const { busqueda, regimen } = req.query;
+  return contribuyentes;
+}
+
+router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
+  const state = await apiBancoGetState().catch(() => null);
+  const mapa = agruparContribuyentes(state);
+
+  let contribuyentes = [];
+  for (const c of mapa.values()) {
+    const saldo = c.cuentas.reduce((s, a) => s + (a.balancePz || 0), 0);
+    contribuyentes.push({
+      id: c.clave,
+      placetaId: c.eip || c.dip || c.clave,
+      dip: c.dip || '',
+      eip: c.eip || null,
+      type: c.tipo,
+      displayName: c.displayName || (c.eip || c.dip || c.clave),
+      iban: c.cuentas[0]?.iban || '—',
+      tributosCensusDate: c.cuentas.find(a => a.tributosCensusDate)?.tributosCensusDate || null,
+      numCuentas: c.cuentas.length,
+      saldoTotal: saldo
+    });
+  }
+  contribuyentes.sort((a, b) => (b.saldoTotal || 0) - (a.saldoTotal || 0));
+
+  const { busqueda } = req.query;
   let filtrados = [...contribuyentes];
   if (busqueda) {
     const q = busqueda.toLowerCase();
@@ -513,17 +557,10 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
 router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
   try {
     const state = await apiBancoGetState();
-    const cuentas = state?.accounts || [];
     const transacciones = state?.transactions || [];
 
-    // Agrupar cuentas por placetaId (cada contribuyente puede tener varias cuentas)
-    const porContribuyente = new Map();
-    for (const c of cuentas) {
-      const pid = c.placetaId || c.id;
-      if (!pid) continue;
-      if (!porContribuyente.has(pid)) porContribuyente.set(pid, []);
-      porContribuyente.get(pid).push(c);
-    }
+    // Agrupar por DIP (personas) o EIP (empresas) — todas sus cuentas
+    const porContribuyente = agruparContribuyentes(state);
 
     // Determinar desde qué mes declara cada contribuyente
     const MES_INICIO = '2026-06'; // junio 2026
@@ -540,7 +577,11 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
     const resultados = [];
     let creadas = 0, yaExistentes = 0, errores = 0;
 
-    for (const [placetaId, cuentasContrib] of porContribuyente) {
+    for (const [clave, contrib] of porContribuyente) {
+      // placeta_id de la declaración: EIP para empresas, DIP para personas
+      const placetaId = contrib.eip || contrib.dip || clave;
+      const cuentasContrib = contrib.cuentas;
+
       // Mes de creación del contribuyente: usar la transacción más antigua si existe
       let mesInicio = MES_INICIO;
       const idsC = new Set(cuentasContrib.map(c => c.id));
@@ -555,7 +596,7 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
       }
 
       for (const mes of meses) {
-        if (mes < mesInicio) continue; // la cuenta aún no existía ese mes
+        if (mes < mesInicio) continue; // el contribuyente aún no existía ese mes
         try {
           const existentes = await sbListDeclaracionesPorMes(mes);
           const ya = existentes.some(d => d.placeta_id === placetaId);
@@ -563,11 +604,11 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
           const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes);
           if (r.success) {
             creadas++;
-            resultados.push({ placetaId, mes, patrimonio: r.patrimonioMedio, irm: r.cuotaIRM, igf: r.cuotaIGF, id: r.declaracion.id });
+            resultados.push({ contribuyente: placetaId, mes, patrimonio: r.patrimonioMedio, irm: r.cuotaIRM, igf: r.cuotaIGF, id: r.declaracion.id });
           } else errores++;
         } catch (e) {
           errores++;
-          resultados.push({ placetaId, mes, error: e.message });
+          resultados.push({ contribuyente: placetaId, mes, error: e.message });
         }
       }
     }
