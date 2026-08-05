@@ -161,7 +161,7 @@
 
         <div style="margin-top:12px;padding:10px;background:#f6f3ff;border-radius:8px;font-size:12px">
           <strong>💡 Ejemplo de llamada:</strong>
-          <pre style="margin-top:6px;font-size:11px;background:#1c005f;color:#fff;padding:10px;border-radius:8px;overflow-x:auto"><%= `curl -X ${ep.method} "https://admin.laplaceta.org/api/v1/${entidad_actual}${ep.path}" \\\n  -H "X-API-Key: tu-api-key" \\\n  -H "X-Platform: web"${ep.method === 'POST' || ep.method === 'PUT' ? ` \\\n  -H "Content-Type: application/json" \\\n  -d '{}'` : ''}` %></pre>
+          <pre style="margin-top:6px;font-size:11px;background:#1c005f;color:#fff;padding:10px;border-radius:8px;overflow-x:auto"><%= `curl -X ${ep.method} "https://rsp.laplaceta.org/api/v1/${entidad_actual}${ep.path}" \\n  -H "X-API-Key: tu-api-key" \\n  -H "X-Platform: web"${ep.method === 'POST' || ep.method === 'PUT' ? ` \\n  -H "Content-Type: application/json" \\n  -d '{}'` : ''}` %></pre>
         </div>
       </div>
     </div>

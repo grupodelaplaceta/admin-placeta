@@ -70,7 +70,7 @@
           </td>
           <td style="padding:8px">
             <% if (!f.esReversal && f.status !== 'Reversed') { %>
-              <button class="btn-secondary" style="padding:4px 10px;font-size:12px" onclick="revertir('<%= f.id %>','<%= (f.concepto||'').replace(/'/g,"") %>')">↩️ Revertir</button>
+              <button class="btn-sm btn-warning" onclick="revertir('<%= f.id %>','<%= (f.concepto||'').replace(/'/g,"") %>')">↩️ Revertir</button>
             <% } %>
           </td>
         </tr>

@@ -33,6 +33,10 @@ a:hover{color:#1f0070}
 .divider{display:flex;align-items:center;gap:12px;color:var(--l);font-size:12px;margin:18px 0}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--l)}
 details.demo-login summary{cursor:pointer;color:var(--tm);font-size:13px;text-align:center}
+.demo-form{display:flex;gap:8px;margin-top:12px}
+.demo-form .form-input{flex:1}
+.btn-demo{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:var(--radius);font:600 13px var(--font);border:1px solid var(--l);background:var(--s);color:var(--t);cursor:pointer;transition:all .12s;min-height:38px}
+.btn-demo:hover{background:#f6f3ff;border-color:#c8bde8}
 .login-footer{text-align:center;margin-top:20px;font-size:12px;color:var(--l)}
 .login-footer a{color:var(--p)}
 
@@ -305,6 +309,8 @@ td.id-cell{font-family:'Courier New',monospace;font-size:11px;color:#5a4a7a;max-
 .btn-warning:hover{background:#c49020}
 .btn-ghost{background:0 0;color:#888;border:none;padding:5px 8px;min-height:auto}
 .btn-ghost:hover{background:#f0ecf8;color:var(--p)}
+.btn-outline{background:#fff;color:var(--p);border-color:var(--p)}
+.btn-outline:hover{background:#3702b3;color:#fff}
 .btn-link{color:var(--p);font-weight:600;font-size:13px;background:0 0;border:none;padding:0;min-height:auto;cursor:pointer;font-family:var(--font)}
 .btn-link:hover{text-decoration:underline}
 .btn-sm{padding:4px 11px;font-size:11px;border-radius:8px;min-height:28px;gap:4px}
@@ -480,6 +486,7 @@ code{font-family:'Courier New',monospace;font-size:11px;background:#f0ecff;paddi
 .rsp-action-ver:hover { background: #e0d8f8; }
 .rsp-action-generar { background: #3702b3; color: #fff; padding: 10px 20px; font-size: 12px; border-radius: 12px; }
 .rsp-action-generar:hover { background: #2a0190; }
+.rsp-btn-sm { padding: 8px 18px; font-size: 12px; }
 
 /* ── Alerta RSP ────────────────────────────── */
 .rsp-alert {

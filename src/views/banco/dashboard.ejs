@@ -4,6 +4,11 @@
   <div class="stat-card"><span class="stat-value"><%= totalCuentas %></span><span class="stat-label">Total Cuentas</span></div>
   <div class="stat-card"><span class="stat-value"><%= cuentasActivas %></span><span class="stat-label">Cuentas Activas</span></div>
   <div class="stat-card"><span class="stat-value"><%= saldoTotal.toLocaleString() %></span><span class="stat-label">Masa Monetaria (Pz)</span></div>
+  <% if (typeof totalUsuarios !== 'undefined') { %>
+  <div class="stat-card"><span class="stat-value"><%= totalUsuarios %></span><span class="stat-label">Usuarios</span></div>
+  <div class="stat-card"><span class="stat-value"><%= totalTransacciones %></span><span class="stat-label">Operaciones</span></div>
+  <div class="stat-card"><span class="stat-value"><%= totalTarjetas %></span><span class="stat-label">Tarjetas</span></div>
+  <% } %>
 </div>
 
 <div class="flex-between mb-16">

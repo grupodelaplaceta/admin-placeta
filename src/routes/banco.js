@@ -37,11 +37,16 @@ router.get('/', async (req, res) => {
   const totalCuentas = cuentas.length;
   const cuentasActivas = cuentas.filter(c => !c.closedAt).length;
   const saldoTotal = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
+  const totalUsuarios = (state?.users || []).length;
+  const totalTransacciones = (state?.transactions || []).length;
+  const totalTarjetas = (state?.cards || []).length;
 
   res.render('banco/dashboard', {
     titulo: 'Banco de La Placeta',
     entidad_actual: 'banco',
-    totalCuentas, cuentasActivas, saldoTotal, cuentas: cuentas.slice(0, 20)
+    totalCuentas, cuentasActivas, saldoTotal,
+    totalUsuarios, totalTransacciones, totalTarjetas,
+    cuentas: cuentas.slice(0, 20)
   });
 });
 

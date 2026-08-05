@@ -47,20 +47,20 @@ function initAPIKeys() {
   const keys = {
     'android-app-banco-key-2026':  { nombre: 'Banco App Android',  plataforma: 'android', entidadesPermitidas: ['banco'], activa: true, allowedOrigins: ['laplaceta.org', 'banco.laplaceta.org'] },
     'ios-app-banco-key-2026':      { nombre: 'Banco App iOS',      plataforma: 'ios',     entidadesPermitidas: ['banco'], activa: true, allowedOrigins: ['laplaceta.org', 'banco.laplaceta.org'] },
-    'web-app-banco-key-2026':      { nombre: 'Banco App Web',      plataforma: 'web',     entidadesPermitidas: ['banco'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'banco.laplaceta.org'] },
+    'web-app-banco-key-2026':      { nombre: 'Banco App Web',      plataforma: 'web',     entidadesPermitidas: ['banco'], activa: true, allowedOrigins: ['rsp.laplaceta.org', 'banco.laplaceta.org'] },
     'android-tributos-key-2026':   { nombre: 'Tributos App Android', plataforma: 'android', entidadesPermitidas: ['tributos'], activa: true, allowedOrigins: ['laplaceta.org', 'tributos.laplaceta.org'] },
     'ios-tributos-key-2026':       { nombre: 'Tributos App iOS',   plataforma: 'ios',     entidadesPermitidas: ['tributos'], activa: true, allowedOrigins: ['laplaceta.org', 'tributos.laplaceta.org'] },
-    'web-tributos-key-2026':       { nombre: 'Tributos App Web',   plataforma: 'web',     entidadesPermitidas: ['tributos'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'tributos.laplaceta.org'] },
+    'web-tributos-key-2026':       { nombre: 'Tributos App Web',   plataforma: 'web',     entidadesPermitidas: ['tributos'], activa: true, allowedOrigins: ['rsp.laplaceta.org', 'tributos.laplaceta.org'] },
     'android-junta-key-2026':      { nombre: 'Junta App Android',  plataforma: 'android', entidadesPermitidas: ['junta'], activa: true, allowedOrigins: ['laplaceta.org', 'junta.laplaceta.org'] },
     'ios-junta-key-2026':          { nombre: 'Junta App iOS',      plataforma: 'ios',     entidadesPermitidas: ['junta'], activa: true, allowedOrigins: ['laplaceta.org', 'junta.laplaceta.org'] },
-    'web-junta-key-2026':          { nombre: 'Junta App Web',      plataforma: 'web',     entidadesPermitidas: ['junta'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'junta.laplaceta.org'] },
-    'web-admin-key-2026':          { nombre: 'Admin App Web',      plataforma: 'web',     entidadesPermitidas: ['administracion'], activa: true, allowedOrigins: ['admin.laplaceta.org'] },
+    'web-junta-key-2026':          { nombre: 'Junta App Web',      plataforma: 'web',     entidadesPermitidas: ['junta'], activa: true, allowedOrigins: ['rsp.laplaceta.org', 'junta.laplaceta.org'] },
+    'web-admin-key-2026':          { nombre: 'Admin App Web',      plataforma: 'web',     entidadesPermitidas: ['administracion'], activa: true, allowedOrigins: ['rsp.laplaceta.org'] },
     'android-rsp-key-2026':        { nombre: 'RSP App Android',    plataforma: 'android', entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['laplaceta.org', 'rsp.laplaceta.org'] },
     'ios-rsp-key-2026':            { nombre: 'RSP App iOS',        plataforma: 'ios',     entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['laplaceta.org', 'rsp.laplaceta.org'] },
-    'web-rsp-key-2026':            { nombre: 'RSP App Web',        plataforma: 'web',     entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'rsp.laplaceta.org'] },
+    'web-rsp-key-2026':            { nombre: 'RSP App Web',        plataforma: 'web',     entidadesPermitidas: ['rsp'], activa: true, allowedOrigins: ['rsp.laplaceta.org'] },
     'android-junior-key-2026':     { nombre: 'Junior App Android', plataforma: 'android', entidadesPermitidas: ['junior'], activa: true, allowedOrigins: ['laplaceta.org', 'junior.laplaceta.org'] },
     'ios-junior-key-2026':         { nombre: 'Junior App iOS',     plataforma: 'ios',     entidadesPermitidas: ['junior'], activa: true, allowedOrigins: ['laplaceta.org', 'junior.laplaceta.org'] },
-    'web-junior-key-2026':         { nombre: 'Junior App Web',     plataforma: 'web',     entidadesPermitidas: ['junior'], activa: true, allowedOrigins: ['admin.laplaceta.org', 'junior.laplaceta.org'] },
+    'web-junior-key-2026':         { nombre: 'Junior App Web',     plataforma: 'web',     entidadesPermitidas: ['junior'], activa: true, allowedOrigins: ['rsp.laplaceta.org', 'junior.laplaceta.org'] },
     // Clave maestra (solo para administración interna)
     'admin-master-key-2026':       { nombre: 'Admin Master',       plataforma: 'web',     entidadesPermitidas: ['banco','tributos','junta','administracion','rsp','junior'], activa: true, allowedOrigins: ['*'] },
   };
@@ -909,7 +909,7 @@ router.post('/v1/apps/registrar', verificarSesion, (req, res) => {
   const origins = {
     android: ['laplaceta.org', `${entidad}.laplaceta.org`],
     ios: ['laplaceta.org', `${entidad}.laplaceta.org`],
-    web: ['admin.laplaceta.org', `${entidad}.laplaceta.org`]
+    web: ['rsp.laplaceta.org', `${entidad}.laplaceta.org`]
   };
 
   const nuevaApp = {

@@ -65,7 +65,7 @@
     <%= fondos.saldo >= fondos.sancionPendiente ? '✅ Fondos suficientes.' : '❌ Fondos insuficientes.' %>
   </span>
   <% if (esAdmin && fondos.saldo >= fondos.sancionPendiente) { %>
-  <button class="rsp-action-btn rsp-action-pagar" onclick="pagarSancion()" style="padding:8px 18px;font-size:12px">💸 Pagar Sanción</button>
+  <button class="rsp-action-btn rsp-action-pagar rsp-btn-sm" onclick="pagarSancion()">💸 Pagar Sanción</button>
   <% } %>
 </div>
 <% } else { %>

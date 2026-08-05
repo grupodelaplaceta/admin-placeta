@@ -3,6 +3,7 @@
 <div class="stats-grid">
   <div class="stat-card"><span class="stat-value"><%= totalContribuyentes %></span><span class="stat-label">Contribuyentes</span></div>
   <div class="stat-card"><span class="stat-value"><%= ingresos.toLocaleString() %></span><span class="stat-label">Base Imponible (Pz)</span></div>
+  <div class="stat-card"><span class="stat-value" style="color:<%= declaracionesPendientes > 0 ? 'var(--go)' : 'var(--g)' %>"><%= declaracionesPendientes %></span><span class="stat-label">Declaraciones Pendientes</span></div>
 </div>
 
 <div class="flex gap-8" style="flex-wrap:wrap">
