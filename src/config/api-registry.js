@@ -213,6 +213,19 @@ const API_REGISTRY = {
         ]
       },
       {
+        path: '/declaraciones/:id/pdf',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'PDF de la declaración de la renta mensual (solo si está aprobada/emitida). El titular recibe su PDF; si no está aprobada devuelve 403.',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'placeta_id', tipo: DATA_TYPE.STRING, descripcion: 'DIP / placeta_id del titular', requerido: true }
+        ],
+        dataReturn: [
+          { campo: 'PDF', tipo: DATA_TYPE.STRING, descripcion: 'Documento PDF de la declaración' }
+        ]
+      },
+      {
         path: '/declaraciones',
         method: 'POST',
         tipo: 'modificacion',

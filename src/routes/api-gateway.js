@@ -362,7 +362,76 @@ async function handleTributosAPI(path, method, req) {
 
   if (path === '/declaraciones' && method === 'GET') {
     const declaraciones = await sbListDeclaraciones(200);
-    return { success: true, total: declaraciones.length, data: declaraciones };
+    const base = `${req.protocol}://${req.get('host')}`;
+    // Añadir URL del PDF a cada declaración aprobada/emitida (para el titular)
+    const enriquecidas = declaraciones.map(d => {
+      const sem = d._estado_semantico || d.estado_pago || '';
+      const permiso = d.id_permiso_junta || '';
+      const aprobada = permiso.startsWith('APROBADA') || permiso.startsWith('EMITIDO') || permiso.startsWith('COBRADO') || permiso.startsWith('BYPASS') ||
+        /aprob|emit|pag/i.test(sem);
+      return {
+        ...d,
+        pdf_url: aprobada ? `${base}/api/v1/tributos/declaraciones/${d.id}/pdf` : null,
+        _estado_semantico: sem
+      };
+    });
+    return { success: true, total: enriquecidas.length, data: enriquecidas };
+  }
+
+  // PDF de una declaración — SOLO si está aprobada/emitida (para el titular)
+  // El titular solicita el PDF de su declaración de renta mensual; se devuelve
+  // el buffer del PDF generado en el RSP si la declaración pertenece a su
+  // placeta_id/dip y su estado es Aprobada/Emitida/Cobrada (nunca Borrador).
+  const pdfMatch = path.match(/^\/declaraciones\/([^/]+)\/pdf$/);
+  if (pdfMatch && method === 'GET') {
+    const id = pdfMatch[1];
+    const { sbGetDeclaracion } = await import('../config/db.js');
+    const d = await sbGetDeclaracion(id);
+    if (!d) return { success: false, error: 'No encontrada', httpStatus: 404 };
+
+    // Estado semántico: Aprobada / Emitida / Cobrada
+    const sem = d._estado_semantico || d.estado_pago || '';
+    const permiso = d.id_permiso_junta || '';
+    const aprobada = permiso.startsWith('APROBADA') || permiso.startsWith('EMITIDO') || permiso.startsWith('COBRADO') || permiso.startsWith('BYPASS') ||
+      /aprob|emit|pag/i.test(sem);
+    if (!aprobada) {
+      return { success: false, error: 'La declaración aún no está aprobada', httpStatus: 403 };
+    }
+
+    // Verificar titular: el solicitante debe ser el dueño de la declaración
+    const solicitante = req.query.placeta_id || req.query.placetaId || req.query.dip || req.headers['x-user-dip'] || '';
+    const duenio = d.placeta_id || d.placetaId || d.dip || '';
+    if (solicitante && duenio && String(solicitante).trim().toUpperCase() !== String(duenio).trim().toUpperCase()) {
+      // Permitir a la app del banco acceder si coincide por cuenta
+      const state = await apiBancoGetState().catch(() => null);
+      const esDelSolicitante = (state?.accounts || []).some(a =>
+        (a.placetaId || '').toUpperCase() === String(solicitante).toUpperCase() &&
+        d.cuenta_id_blp && (a.id === d.cuenta_id_blp || a.placetaId === d.placeta_id)
+      );
+      if (!esDelSolicitante) {
+        return { success: false, error: 'No autorizado', httpStatus: 403 };
+      }
+    }
+
+    try {
+      const { generarPDF } = await import('../config/documentos.js');
+      const buffer = await generarPDF('tributos', {
+        id: d.id, titulo: `Declaración Tributaria ${d.mes_periodo}`,
+        tipo: 'declaracion-definitiva',
+        datos: {
+          contribuyente: d.placeta_id, periodo: d.mes_periodo,
+          baseImponible: d.patrimonio_medio, cuota: (d.cuota_irm || 0) + (d.cuota_igf || 0),
+          cuotaIRM: d.cuota_irm, cuotaIGF: d.cuota_igf,
+          estado: sem,
+          patrimonioMedio: d.patrimonio_medio, indiceAcumulacion: d.indice_acumulacion
+        },
+        estado: d.estado_pago, createdAt: d.created_at,
+        refId: d.id, refTipo: 'declaracion'
+      });
+      return { __pdf: buffer, __pdfName: `DEC-${d.id.slice(-8)}.pdf` };
+    } catch (e) {
+      return { success: false, error: 'Error generando PDF: ' + e.message, httpStatus: 500 };
+    }
   }
 
   // Reconciliación AUTOMÁTICA: la app envía el placeta_id y el mes; el RSP
@@ -782,6 +851,22 @@ router.all('/v1/:entidad/*path', validateAPIRequest, validateEntityAccess, (req,
           path: subpath,
           method: req.method
         });
+      }
+
+      // Si el handler devuelve un PDF (result.__pdf), enviarlo directamente
+      if (result.__pdf) {
+        res.set({
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `inline; filename=${result.__pdfName || 'documento.pdf'}`
+        });
+        return res.send(result.__pdf);
+      }
+
+      // Si el handler devuelve error con httpStatus, usarlo
+      if (result.httpStatus) {
+        const status = result.httpStatus;
+        delete result.httpStatus;
+        return res.status(status).json(result);
       }
 
       // Añadir metadatos de facturación
