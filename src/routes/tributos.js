@@ -42,7 +42,8 @@ router.get('/api/validar-eip', verificarPermiso('tributos', 'ver_contribuyentes'
 // ── Dashboard Tributos ─────────────────────────────────────────────────────
 router.get('/', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
   const state = await apiBancoGetState();
-  const contribuyentes = state?.accounts?.filter(a => a.tributosCensusDate) || [];
+  const SISTEMA = new Set(['sys-bank', 'sys-state', 'TGLP', 'AGLDP', 'VAULT_EMISION', 'CAPITALIA_BANK', 'DIP-ADMIN', 'DIP-DIGITAL']);
+  const contribuyentes = (state?.accounts || []).filter(a => a.placetaId && !SISTEMA.has(a.id) && !SISTEMA.has(a.placetaId) && a.kind !== 'OperationalFee');
   const ingresos = contribuyentes.reduce((s, c) => s + (c.balancePz || 0), 0);
   const declaraciones = await sbListDeclaraciones(5);
   const pendientes = declaraciones.filter(d => (d.estado_pago||'Borrador') === 'Borrador').length;
@@ -69,6 +70,7 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
       const data = await r.json();
       contribuyentes = (data.contribuyentes || []).map(c => ({
         id: c.id || c.placeta_id || c.placetaId || '',
+        placetaId: c.placeta_id || c.placetaId || c.id || '',
         displayName: c.nombre || c.name || c.displayName || c.placeta_id || '—',
         dip: c.dip || '',
         type: c.tipo_sujeto || c.type || '—',
@@ -81,14 +83,18 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
     }
   } catch (e) { /* sin acceso al registro → fallback */ }
 
-  // Fallback: estado del Banco (cuentas con censo)
+  // Fallback: estado del Banco (todas las cuentas reales de contribuyentes,
+  // excluyendo cuentas de sistema / internas)
   if (contribuyentes.length === 0) {
     const state = await apiBancoGetState().catch(() => null);
-    contribuyentes = (state?.accounts?.filter(a => a.tributosCensusDate) || []).map(c => ({
-      id: c.id || '', displayName: c.displayName || c.id, dip: c.dip || '',
-      type: c.type || '—', iban: c.iban || '—', eip: c.eip || null,
-      tributosCensusDate: c.tributosCensusDate || null, _estadoFiscal: 'Al Dia', _roles: []
-    }));
+    const SISTEMA = new Set(['sys-bank', 'sys-state', 'TGLP', 'AGLDP', 'VAULT_EMISION', 'CAPITALIA_BANK', 'DIP-ADMIN', 'DIP-DIGITAL']);
+    contribuyentes = (state?.accounts || [])
+      .filter(a => a.placetaId && !SISTEMA.has(a.id) && !SISTEMA.has(a.placetaId) && a.kind !== 'OperationalFee')
+      .map(c => ({
+        id: c.id || '', placetaId: c.placetaId || c.id || '', displayName: c.displayName || c.id, dip: c.dip || '',
+        type: c.type || '—', iban: c.iban || '—', eip: c.eip || null,
+        tributosCensusDate: c.tributosCensusDate || null, _estadoFiscal: 'Al Dia', _roles: []
+      }));
   }
 
   const { busqueda, regimen } = req.query;
@@ -103,10 +109,23 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
     );
   }
 
+  // Declaraciones mensuales por contribuyente (desde junio 2026)
+  const todasDecl = await sbListDeclaraciones(2000);
+  const declPorContrib = new Map();
+  for (const d of todasDecl) {
+    if (!declPorContrib.has(d.placeta_id)) declPorContrib.set(d.placeta_id, []);
+    declPorContrib.get(d.placeta_id).push(d);
+  }
+  // Ordenar por mes descendente
+  for (const arr of declPorContrib.values()) arr.sort((a, b) => (b.mes_periodo || '').localeCompare(a.mes_periodo || ''));
+
   res.render('tributos/contribuyentes', {
     titulo: 'Contribuyentes',
     entidad_actual: 'tributos',
-    contribuyentes: filtrados, total: filtrados.length
+    contribuyentes: filtrados, total: filtrados.length,
+    declaraciones: declPorContrib,
+    totalDeclaraciones: todasDecl.length,
+    mesActual: new Date().toISOString().slice(0, 7)
   });
 });
 
@@ -381,97 +400,185 @@ router.post('/api/reconcile/:placetaId', verificarPermiso('tributos', 'crear_dec
 
     const state = await apiBancoGetState();
     const cuentas = state?.accounts?.filter(a => a.placetaId === placetaId || a.id === placetaId) || [];
-    const ids = new Set(cuentas.map(c => c.id));
-    const transacciones = (state?.transactions || []).filter(t => ids.has(t.fromAccountId) || ids.has(t.toAccountId));
+    const transacciones = state?.transactions || [];
+    const resultado = await reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriodo);
+    if (resultado.error) return res.status(400).json({ error: resultado.error });
+    res.json(resultado);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
-    await sbClearDailyBalances(placetaId, mesPeriodo);
+// ── Reconciliación reutilizable (una cuenta + un mes) ────────────────────
+// Reconstruye los saldos diarios REALES desde las transacciones del banco,
+// calcula patrimonio medio, IA, IRM e IGF según normativa y crea/actualiza
+// la declaración mensual del contribuyente.
+async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriodo) {
+  if (!cuentas || cuentas.length === 0) return { error: 'Cuenta no encontrada en el banco' };
+  const ids = new Set(cuentas.map(c => c.id));
+  const trans = (transacciones || []).filter(t => ids.has(t.fromAccountId) || ids.has(t.toAccountId));
 
-    // ── Reconstrucción REAL del saldo diario desde las transacciones ──
-    // Saldo actual = saldo base + Σ movimientos del mes  ⇒  saldo base = actual - Σ mov.
-    const [anio, mes] = String(mesPeriodo).split('-').map(Number);
-    const enMes = (t) => {
-      const d = new Date(t.createdAt || t.updatedAt);
-      return d.getFullYear() === anio && d.getMonth() + 1 === mes;
-    };
-    const movMes = transacciones.filter(enMes);
-    const deltaMes = movMes.reduce((s, t) => {
+  await sbClearDailyBalances(placetaId, mesPeriodo);
+
+  // ── Reconstrucción REAL del saldo diario desde las transacciones ──
+  // Saldo actual = saldo base + Σ movimientos del mes  ⇒  saldo base = actual - Σ mov.
+  const [anio, mes] = String(mesPeriodo).split('-').map(Number);
+  const enMes = (t) => {
+    const d = new Date(t.createdAt || t.updatedAt);
+    return d.getFullYear() === anio && d.getMonth() + 1 === mes;
+  };
+  const movMes = trans.filter(enMes);
+  const deltaMes = movMes.reduce((s, t) => {
+    if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
+    if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
+    return s;
+  }, 0);
+  const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
+  const saldoBase = saldoActual - deltaMes;
+
+  const diasEnMes = new Date(anio, mes, 0).getDate();
+  const balances = [];
+  for (let d = 1; d <= diasEnMes; d++) {
+    // Saldo acumulado del contribuyente al final del día d.
+    const hastaDia = trans.filter(t => {
+      const dt = new Date(t.createdAt || t.updatedAt);
+      return dt.getFullYear() === anio && dt.getMonth() + 1 === mes && dt.getDate() <= d;
+    });
+    const delta = hastaDia.reduce((s, t) => {
       if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
       if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
       return s;
     }, 0);
-    const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
-    const saldoBase = saldoActual - deltaMes;
+    const saldoDia = Math.max(0, saldoBase + delta);
+    await sbUpsertDailyBalance(placetaId, mesPeriodo, d, Math.round(saldoDia));
+    balances.push(Math.round(saldoDia));
+  }
 
-    const diasEnMes = new Date(anio, mes, 0).getDate();
-    const balances = [];
-    for (let d = 1; d <= diasEnMes; d++) {
-      // Saldo acumulado del contribuyente al final del día d.
-      const hastaDia = transacciones.filter(t => {
-        const dt = new Date(t.createdAt || t.updatedAt);
-        return dt.getFullYear() === anio && dt.getMonth() + 1 === mes && dt.getDate() <= d;
-      });
-      const delta = hastaDia.reduce((s, t) => {
-        if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
-        if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
-        return s;
-      }, 0);
-      const saldoDia = Math.max(0, saldoBase + delta);
-      await sbUpsertDailyBalance(placetaId, mesPeriodo, d, Math.round(saldoDia));
-      balances.push(Math.round(saldoDia));
+  // Patrimonio medio del mes (Art. 4.8)
+  const patrimonioMedio = calcularPatrimonioMedio(balances);
+
+  // IA = (media ingresos - media pagos) / patrimonio medio (Art. 4.9)
+  const ingresosMes = movMes.filter(t => ids.has(t.toAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
+  const pagosMes = movMes.filter(t => ids.has(t.fromAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
+  const mediaIngresos = diasEnMes ? ingresosMes / diasEnMes : 0;
+  const mediaPagos = diasEnMes ? pagosMes / diasEnMes : 0;
+  const ia = calcularIA(mediaIngresos, mediaPagos, patrimonioMedio);
+
+  // Tipo de contribuyente: empresa si alguna cuenta es Business / State.
+  const tipoSujeto = cuentas.some(c => c.type === 'Business' || c.type === 'State') ? 'Empresa' : 'Personal';
+  const tipoCuenta = tipoSujeto === 'Empresa' ? 'Business' : 'Personal';
+  const esEmpresaPequeña = tipoCuenta === 'Business' && patrimonioMedio < 20000;
+
+  const irmTipo = calcularIRM(ia, tipoCuenta);
+  const cuotaIRM = patrimonioMedio * irmTipo;
+  const igfResult = calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña);
+  const cuotaIGF = igfResult.exento ? 0 : igfResult.total;
+
+  // Excepción de IVA a empresas: si la empresa tiene EIP registrado no se le
+  // carga IVA en sus operaciones internas; el IVA lo liquida el emisor.
+  const eipVinculado = cuentas.some(c => c.eip);
+
+  const decl = await sbCreateDeclaracion({
+    placeta_id: placetaId, mes_periodo: mesPeriodo,
+    patrimonio_medio: Math.round(patrimonioMedio * 100) / 100,
+    indice_acumulacion: Math.round(ia * 10000) / 10000,
+    cuota_irm: Math.round(cuotaIRM * 100) / 100,
+    cuota_igf: cuotaIGF,
+    cuenta_id_blp: cuentas[0]?.id || placetaId,
+    estado_pago: 'Borrador',
+    exencion_aplicada: igfResult.exento || false,
+    dias_declarados_banco: diasEnMes,
+    dias_activos_mes: diasEnMes,
+    eip: eipVinculado ? cuentas.find(c => c.eip)?.eip : null,
+    iva_exento_empresa: esEmpresaPequeña || eipVinculado || false
+  });
+
+  return {
+    success: true,
+    balances,
+    patrimonioMedio,
+    indice_acumulacion: ia,
+    tipoSujeto,
+    cuotaIRM: Math.round(cuotaIRM * 100) / 100,
+    cuotaIGF,
+    irmTipo,
+    igfResult,
+    exencionIGF: igfResult.exento,
+    iva_exento_empresa: esEmpresaPequeña || eipVinculado || false,
+    declaracion: decl
+  };
+}
+
+// ── Reconciliación MASIVA: declara TODAS las cuentas por cada mes ────────
+// Desde junio de 2026 (o el mes de creación de la cuenta si es posterior)
+// hasta el mes actual, genera/actualiza la declaración de cada contribuyente.
+router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
+  try {
+    const state = await apiBancoGetState();
+    const cuentas = state?.accounts || [];
+    const transacciones = state?.transactions || [];
+
+    // Agrupar cuentas por placetaId (cada contribuyente puede tener varias cuentas)
+    const porContribuyente = new Map();
+    for (const c of cuentas) {
+      const pid = c.placetaId || c.id;
+      if (!pid) continue;
+      if (!porContribuyente.has(pid)) porContribuyente.set(pid, []);
+      porContribuyente.get(pid).push(c);
     }
 
-    // Patrimonio medio del mes (Art. 4.8)
-    const patrimonioMedio = calcularPatrimonioMedio(balances);
+    // Determinar desde qué mes declara cada contribuyente
+    const MES_INICIO = '2026-06'; // junio 2026
+    const ahora = new Date();
+    const mesActual = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
+    const meses = [];
+    let [ai, mi] = MES_INICIO.split('-').map(Number);
+    const [af, mf] = mesActual.split('-').map(Number);
+    while (ai < af || (ai === af && mi <= mf)) {
+      meses.push(`${ai}-${String(mi).padStart(2, '0')}`);
+      mi++; if (mi > 12) { mi = 1; ai++; }
+    }
 
-    // IA = (media ingresos - media pagos) / patrimonio medio (Art. 4.9)
-    const ingresosMes = movMes.filter(t => ids.has(t.toAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
-    const pagosMes = movMes.filter(t => ids.has(t.fromAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
-    const mediaIngresos = diasEnMes ? ingresosMes / diasEnMes : 0;
-    const mediaPagos = diasEnMes ? pagosMes / diasEnMes : 0;
-    const ia = calcularIA(mediaIngresos, mediaPagos, patrimonioMedio);
+    const resultados = [];
+    let creadas = 0, yaExistentes = 0, errores = 0;
 
-    // Tipo de contribuyente: empresa si alguna cuenta es Business / State.
-    const tipoSujeto = cuentas.some(c => c.type === 'Business' || c.type === 'State') ? 'Empresa' : 'Personal';
-    const tipoCuenta = tipoSujeto === 'Empresa' ? 'Business' : 'Personal';
-    const esEmpresaPequeña = tipoCuenta === 'Business' && patrimonioMedio < 20000;
+    for (const [placetaId, cuentasContrib] of porContribuyente) {
+      // Mes de creación del contribuyente: usar la transacción más antigua si existe
+      let mesInicio = MES_INICIO;
+      const idsC = new Set(cuentasContrib.map(c => c.id));
+      const txDelContrib = (transacciones || []).filter(t => idsC.has(t.fromAccountId) || idsC.has(t.toAccountId));
+      if (txDelContrib.length > 0) {
+        const fechas = txDelContrib.map(t => new Date(t.createdAt || t.updatedAt)).filter(d => !isNaN(d));
+        if (fechas.length > 0) {
+          const min = new Date(Math.min(...fechas.map(d => d.getTime())));
+          const mesTx = `${min.getFullYear()}-${String(min.getMonth() + 1).padStart(2, '0')}`;
+          if (mesTx > MES_INICIO) mesInicio = mesTx;
+        }
+      }
 
-    const irmTipo = calcularIRM(ia, tipoCuenta);
-    const cuotaIRM = patrimonioMedio * irmTipo;
-    const igfResult = calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña);
-    const cuotaIGF = igfResult.exento ? 0 : igfResult.total;
-
-    // Excepción de IVA a empresas: si la empresa tiene EIP registrado no se le
-    // carga IVA en sus operaciones internas; el IVA lo liquida el emisor.
-    const eipVinculado = cuentas.some(c => c.eip);
-
-    const decl = await sbCreateDeclaracion({
-      placeta_id: placetaId, mes_periodo: mesPeriodo,
-      patrimonio_medio: Math.round(patrimonioMedio * 100) / 100,
-      indice_acumulacion: Math.round(ia * 10000) / 10000,
-      cuota_irm: Math.round(cuotaIRM * 100) / 100,
-      cuota_igf: cuotaIGF,
-      cuenta_id_blp: cuentas[0]?.id || placetaId,
-      estado_pago: 'Borrador',
-      exencion_aplicada: igfResult.exento || false,
-      dias_declarados_banco: diasEnMes,
-      dias_activos_mes: diasEnMes,
-      eip: eipVinculado ? cuentas.find(c => c.eip)?.eip : null,
-      iva_exento_empresa: esEmpresaPequeña || eipVinculado || false
-    });
+      for (const mes of meses) {
+        if (mes < mesInicio) continue; // la cuenta aún no existía ese mes
+        try {
+          const existentes = await sbListDeclaracionesPorMes(mes);
+          const ya = existentes.some(d => d.placeta_id === placetaId);
+          if (ya) { yaExistentes++; continue; }
+          const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes);
+          if (r.success) {
+            creadas++;
+            resultados.push({ placetaId, mes, patrimonio: r.patrimonioMedio, irm: r.cuotaIRM, igf: r.cuotaIGF, id: r.declaracion.id });
+          } else errores++;
+        } catch (e) {
+          errores++;
+          resultados.push({ placetaId, mes, error: e.message });
+        }
+      }
+    }
 
     res.json({
       success: true,
-      balances,
-      patrimonioMedio,
-      indice_acumulacion: ia,
-      tipoSujeto,
-      cuotaIRM: Math.round(cuotaIRM * 100) / 100,
-      cuotaIGF,
-      irmTipo,
-      igfResult,
-      exencionIGF: igfResult.exento,
-      iva_exento_empresa: esEmpresaPequeña || eipVinculado || false,
-      declaracion: decl
+      desde: MES_INICIO, hasta: mesActual,
+      contribuyentes: porContribuyente.size,
+      meses: meses.length,
+      creadas, yaExistentes, errores,
+      resultados: resultados.slice(0, 100)
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

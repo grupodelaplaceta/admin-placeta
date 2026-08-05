@@ -1,7 +1,37 @@
-<div class="flex gap-8 mb-16">
+<div class="flex gap-8 mb-16" style="flex-wrap:wrap;align-items:center">
   <input type="text" id="searchInput" placeholder="Buscar contribuyente..." class="form-input" style="width:300px">
   <button class="btn-secondary" data-search-btn>🔍</button>
+  <span style="flex:1"></span>
+  <button class="btn-primary" onclick="generarDeclaracionesMasivas()">🗓️ Generar declaraciones mensuales</button>
+  <span id="genResult" style="font-size:12px"></span>
 </div>
+
+<!-- KPIs declaraciones -->
+<div class="stats-grid mb-16">
+  <div class="stat-card"><span class="stat-value"><%= totalDeclaraciones %></span><span class="stat-label">Declaraciones</span></div>
+  <div class="stat-card"><span class="stat-value"><%= total %></span><span class="stat-label">Contribuyentes</span></div>
+</div>
+
+<script>
+async function generarDeclaracionesMasivas() {
+  const res = document.getElementById('genResult');
+  if (!confirm('🗓️ ¿Generar las declaraciones mensuales de TODOS los contribuyentes desde junio de 2026?\nSe crearán los borradores que falten para cada mes y cada cuenta.')) return;
+  res.textContent = '⏳ Generando… (puede tardar unos segundos)';
+  res.style.color = '#666';
+  try {
+    const r = await fetch('/tributos/api/reconciliar-todas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    const data = await r.json();
+    if (data.success) {
+      res.textContent = `✅ ${data.creadas} nuevas · ${data.yaExistentes} ya existían · ${data.errores} errores · (${data.contribuyentes} contribuyentes, ${data.meses} meses)`;
+      res.style.color = '#00c853';
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      res.textContent = '❌ ' + (data.error || 'Error al generar');
+      res.style.color = '#d03131';
+    }
+  } catch (e) { res.textContent = '⚠️ Error: ' + e.message; res.style.color = '#d03131'; }
+}
+</script>
 
 <!-- Verificador de EIP (registro real) -->
 <div class="info-card mb-16" style="background:linear-gradient(135deg,#f6f3ff,#fbfaff);border:1px solid #e0d8f0">
@@ -93,9 +123,10 @@ async function altaContribuyente(form) {
 
 <div class="table-container">
   <table>
-    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>EIP</th><th>Estado Fiscal</th><th>Docs</th></tr></thead>
+    <thead><tr><th>ID</th><th>Nombre</th><th>Tipo</th><th>IBAN</th><th>EIP</th><th>Estado Fiscal</th><th>Declaraciones mensuales</th><th>Docs</th></tr></thead>
     <tbody>
       <% (contribuyentes || []).forEach(c => { %>
+      <% const decls = (declaraciones && declaraciones.get(c.placetaId)) || (declaraciones && declaraciones.get(c.id)) || []; %>
       <tr>
         <td class="text-mono"><%= c.id %></td>
         <td><strong><%= c.displayName || '—' %></strong></td>
@@ -103,10 +134,27 @@ async function altaContribuyente(form) {
         <td class="text-mono"><%= c.iban || '—' %></td>
         <td class="text-mono"><%= c.eip || '—' %></td>
         <td><span class="badge <%= c.tributosCensusDate ? 'badge-success' : 'badge-warning' %>"><%= c.tributosCensusDate ? 'Al Dia' : 'Pendiente' %></span></td>
+        <td>
+          <% if (decls.length === 0) { %>
+          <span style="font-size:11px;color:#999">Sin declaraciones</span>
+          <% } else { %>
+          <details style="max-width:320px">
+            <summary style="cursor:pointer;font-size:12px;color:#3702b3"><%= decls.length %> declaración<%= decls.length > 1 ? 'es' : '' %> ▾</summary>
+            <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">
+              <% decls.forEach(d => { %>
+              <a href="/tributos/declaraciones?busqueda=<%= d.placeta_id %>" class="rsp-link" style="font-size:11px;display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid #f0ecf8;padding:2px 0">
+                <span><%= d.mes_periodo %></span>
+                <span style="color:#888"><%= ((d.cuota_irm||0)+(d.cuota_igf||0)).toLocaleString() %> Pz</span>
+              </a>
+              <% }) %>
+            </div>
+          </details>
+          <% } %>
+        </td>
         <td><button class="btn-sm btn-secondary" onclick="verDocsDe('contribuyente','<%= c.id %>','tributos','<%= (c.displayName || c.id).slice(0,20) %>')">📄</button></td>
       </tr>
       <% }) %>
     </tbody>
   </table>
 </div>
-<p style="font-size:12px;color:var(--text-light);margin-top:8px">Total: <strong><%= total %></strong> contribuyentes</p>
+<p style="font-size:12px;color:var(--text-light);margin-top:8px">Total: <strong><%= total %></strong> contribuyentes · <strong><%= totalDeclaraciones %></strong> declaraciones mensuales</p>
