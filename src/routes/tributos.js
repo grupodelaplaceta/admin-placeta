@@ -75,6 +75,12 @@ function agruparContribuyentes(state) {
 
   const contribuyentes = new Map(); // clave → { dip|eip, tipo, cuentas, displayName, ... }
 
+  // ── Validación de formatos correctos ──────────────────────────────────
+  // DIP de persona: DNI español (8 dígitos + letra) o NIE (X/Y/Z + 7-8 dígitos + letra)
+  const esDIPValido = (d) => /^[XYZ0-9][0-9]{7,8}[A-Z]$/.test(String(d || '').toUpperCase().trim());
+  // EIP de empresa: EIP-XXXXXX
+  const esEIPValido = (e) => /^EIP-[A-Z0-9]{4,}$/.test(String(e || '').toUpperCase().trim());
+
   const resolverNombre = (c) => {
     const u = userPorPlaceta.get(c.placetaId);
     if (u?.displayName) return u.displayName;
@@ -91,28 +97,28 @@ function agruparContribuyentes(state) {
     const u = userPorPlaceta.get(c.placetaId);
 
     if (esEmpresa) {
-      // Empresa → se identifica por EIP
+      // Empresa → SOLO si tiene EIP con formato correcto
       const eip = String(c.eip || '').trim().toUpperCase();
-      const clave = eip || `EMP-${c.id}`;
-      if (!contribuyentes.has(clave)) {
-        contribuyentes.set(clave, {
-          clave, eip: eip || null, tipo: 'Empresa', cuentas: [],
-          displayName: c.displayName && c.displayName !== c.id ? c.displayName : (eip || c.id),
+      if (!esEIPValido(eip)) continue;
+      if (!contribuyentes.has(eip)) {
+        contribuyentes.set(eip, {
+          clave: eip, eip, tipo: 'Empresa', cuentas: [],
+          displayName: c.displayName && c.displayName !== c.id ? c.displayName : eip,
           dip: u?.dip || ''
         });
       }
-      contribuyentes.get(clave).cuentas.push(c);
+      contribuyentes.get(eip).cuentas.push(c);
     } else {
-      // Persona → se identifica por DIP
-      const dip = u?.dip || c.placetaId || c.id;
-      const clave = `DIP-${dip}`;
-      if (!contribuyentes.has(clave)) {
-        contribuyentes.set(clave, {
-          clave, dip, eip: null, tipo: 'Fisico', cuentas: [],
+      // Persona → SOLO si el DIP tiene formato correcto (DNI/NIE)
+      const dip = (u?.dip || c.placetaId || '').toString().toUpperCase().trim();
+      if (!esDIPValido(dip)) continue;
+      if (!contribuyentes.has(dip)) {
+        contribuyentes.set(dip, {
+          clave: dip, dip, eip: null, tipo: 'Fisico', cuentas: [],
           displayName: resolverNombre(c)
         });
       }
-      contribuyentes.get(clave).cuentas.push(c);
+      contribuyentes.get(dip).cuentas.push(c);
     }
   }
 
