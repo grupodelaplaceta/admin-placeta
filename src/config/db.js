@@ -138,6 +138,25 @@ export async function sbListDeclaraciones(limit = 50) {
   } catch { return [...memDeclaraciones.values()]; }
 }
 
+// Columnas REALES de la tabla tributos_declaraciones (schema de Supabase).
+// Cualquier otra columna (p.ej. eip, iva_exento_empresa) se descarta en el
+// insert/update para evitar que el write falle y caiga en memoria.
+const COLUMNAS_DECLARACION = new Set([
+  'id', 'contributor_id', 'placeta_id', 'mes_periodo', 'cuenta_id_blp',
+  'patrimonio_medio', 'indice_acumulacion', 'cuota_irm', 'cuota_igf',
+  'exencion_aplicada', 'dias_declarados_banco', 'dias_reconstruidos_crm',
+  'dias_activos_mes', 'pdf_hash', 'estado_pago', 'bypass_junta_directiva',
+  'id_permiso_junta', 'is_rectified', 'created_at', 'updated_at'
+]);
+
+function filtrarColumnasDeclaracion(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (COLUMNAS_DECLARACION.has(k)) out[k] = v;
+  }
+  return out;
+}
+
 export async function sbGetDeclaracion(id) {
   if (!supabase) return memDeclaraciones.get(id) || null;
   try {
@@ -151,7 +170,7 @@ export async function sbCreateDeclaracion(data) {
   const record = { id, ...data, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
   if (!supabase) { memDeclaraciones.set(id, record); return record; }
   try {
-    const { data: inserted } = await supabase.from('tributos_declaraciones').insert(record).select().maybeSingle();
+    const { data: inserted } = await supabase.from('tributos_declaraciones').insert(filtrarColumnasDeclaracion(record)).select().maybeSingle();
     return inserted || record;
   } catch { memDeclaraciones.set(id, record); return record; }
 }
@@ -166,7 +185,7 @@ export async function sbUpdateDeclaracion(id, data) {
     return merged;
   }
   try {
-    const { data: updated } = await supabase.from('tributos_declaraciones').update(update).eq('id', id).select().maybeSingle();
+    const { data: updated } = await supabase.from('tributos_declaraciones').update(filtrarColumnasDeclaracion(update)).eq('id', id).select().maybeSingle();
     return updated;
   } catch { const existing = memDeclaraciones.get(id); if (!existing) return null; const merged = { ...existing, ...update }; memDeclaraciones.set(id, merged); return merged; }
 }
