@@ -246,6 +246,27 @@ const API_REGISTRY = {
         ]
       },
       {
+        path: '/estimado-impuestos',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Estimado de impuestos del contribuyente (solo lectura): IRM + IGF según normativa, tipo de tributo y exención de IVA para empresas. Todo el cálculo vive en el backend.',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'placeta_id', tipo: DATA_TYPE.STRING, descripcion: 'DIP / placeta_id del contribuyente', requerido: true },
+          { campo: 'mes_periodo', tipo: DATA_TYPE.STRING, descripcion: 'Periodo fiscal (YYYY-MM)', requerido: false }
+        ],
+        dataReturn: [
+          { campo: 'patrimonio_medio', tipo: DATA_TYPE.AMOUNT, descripcion: 'Patrimonio medio del mes' },
+          { campo: 'indice_acumulacion', tipo: DATA_TYPE.NUMBER, descripcion: 'Índice de acumulación (IA)' },
+          { campo: 'tipo_sujeto', tipo: DATA_TYPE.STRING, descripcion: 'Personal | Empresa' },
+          { campo: 'cuota_irm', tipo: DATA_TYPE.AMOUNT, descripcion: 'Cuota IRM' },
+          { campo: 'cuota_igf', tipo: DATA_TYPE.AMOUNT, descripcion: 'Cuota IGF' },
+          { campo: 'total_impuestos', tipo: DATA_TYPE.AMOUNT, descripcion: 'Total IRM + IGF' },
+          { campo: 'iva_exento_empresa', tipo: DATA_TYPE.BOOLEAN, descripcion: 'Empresa exenta de IVA' },
+          { campo: 'proximo_cobro', tipo: DATA_TYPE.DATE, descripcion: 'Próxima fecha de cargo (día 5 mes siguiente)' }
+        ]
+      },
+      {
         path: '/declaraciones',
         method: 'POST',
         tipo: 'modificacion',

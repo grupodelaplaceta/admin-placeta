@@ -388,6 +388,96 @@ async function handleTributosAPI(path, method, req) {
     return { success: true, total: subvenciones.length, data: subvenciones, eip };
   }
 
+  // ESTIMADO DE IMPUESTOS para la app (solo lectura, NO persiste):
+  // IRM + IGF según normativa, con tipo de tributo (personal/empresa) y
+  // exención de IVA para empresas. Toda la lógica de impuestos vive aquí,
+  // en el backend, nunca en el APK.
+  if (path === '/estimado-impuestos' && method === 'GET') {
+    const pid = String(req.query.placeta_id || req.query.placetaId || req.query.dip || '').trim();
+    if (!pid) return { success: false, error: 'placeta_id_requerido' };
+    const mesPeriodo = req.query.mes_periodo || new Date().toISOString().slice(0, 7);
+    const state = await apiBancoGetState();
+    const cuentas = state?.accounts?.filter(a => a.placetaId === pid || a.id === pid) || [];
+    if (cuentas.length === 0) return { success: false, error: 'cuenta_no_encontrada', httpStatus: 404 };
+    const ids = new Set(cuentas.map(c => c.id));
+    const transacciones = (state?.transactions || []).filter(t => ids.has(t.fromAccountId) || ids.has(t.toAccountId));
+    const { calcularPatrimonioMedio, calcularIA, calcularIRM, calcularIGF } = await import('../config/normativa.js');
+    const [anio, mes] = String(mesPeriodo).split('-').map(Number);
+    const diasEnMes = new Date(anio, mes, 0).getDate();
+    const movMes = transacciones.filter(t => {
+      const d = new Date(t.createdAt || t.updatedAt);
+      return d.getFullYear() === anio && d.getMonth() + 1 === mes;
+    });
+    // Saldo base: restar movimientos posteriores al mes objetivo para no inflar
+    // el patrimonio de meses pasados (misma lógica que la reconciliación).
+    const movDesdeInicio = transacciones.filter(t => {
+      const d = new Date(t.createdAt || t.updatedAt);
+      return d.getFullYear() > anio || (d.getFullYear() === anio && d.getMonth() + 1 >= mes);
+    });
+    const deltaDesdeInicio = movDesdeInicio.reduce((s, t) => {
+      if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
+      if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
+      return s;
+    }, 0);
+    const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
+    const saldoBase = saldoActual - deltaDesdeInicio;
+    const balances = [];
+    for (let d = 1; d <= diasEnMes; d++) {
+      const hasta = transacciones.filter(t => {
+        const dt = new Date(t.createdAt || t.updatedAt);
+        return dt.getFullYear() === anio && dt.getMonth() + 1 === mes && dt.getDate() <= d;
+      });
+      const delta = hasta.reduce((s, t) => {
+        if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
+        if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
+        return s;
+      }, 0);
+      balances.push(Math.round(Math.max(0, saldoBase + delta)));
+    }
+    const patrimonioMedio = calcularPatrimonioMedio(balances);
+    const ingresosMes = movMes.filter(t => ids.has(t.toAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
+    const pagosMes = movMes.filter(t => ids.has(t.fromAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
+    const ia = calcularIA(diasEnMes ? ingresosMes / diasEnMes : 0, diasEnMes ? pagosMes / diasEnMes : 0, patrimonioMedio);
+    const tipoCuenta = cuentas.some(c => c.type === 'Business' || c.type === 'State') ? 'Business' : 'Personal';
+    const esEmpresaPequeña = tipoCuenta === 'Business' && patrimonioMedio < 20000;
+    const esJunior = cuentas.some(c => c.type === 'Child');
+    const irmTipo = calcularIRM(ia, tipoCuenta);
+    const cuotaIRM = patrimonioMedio * irmTipo;
+    const igfResult = calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña);
+    const cuotaIGF = igfResult.exento ? 0 : igfResult.total;
+    const eipVinculado = cuentas.some(c => c.eip);
+    const ivaExentoEmpresa = esEmpresaPequeña || eipVinculado || false;
+    const total = Math.round((cuotaIRM + cuotaIGF) * 100) / 100;
+    // Art. 4.11 bis: cargo el día 5 del mes siguiente (lunes hábil más próximo).
+    const proximoCobro = (() => {
+      const sigMes = new Date(anio, mes, 1);
+      const cobro = new Date(sigMes.getFullYear(), sigMes.getMonth(), 5);
+      const dia = cobro.getDay(); // 0=domingo, 6=sábado
+      if (dia === 0) cobro.setDate(cobro.getDate() + 1);
+      else if (dia === 6) cobro.setDate(cobro.getDate() + 2);
+      return cobro.toISOString().slice(0, 10);
+    })();
+    return {
+      success: true,
+      estimado: {
+        mes_periodo: mesPeriodo,
+        patrimonio_medio: Math.round(patrimonioMedio * 100) / 100,
+        indice_acumulacion: Math.round(ia * 10000) / 10000,
+        tipo_cuenta: tipoCuenta,
+        tipo_sujeto: tipoCuenta === 'Business' ? 'Empresa' : 'Personal',
+        escala_irm: irmTipo,
+        cuota_irm: Math.round(cuotaIRM * 100) / 100,
+        cuota_igf: cuotaIGF,
+        total_impuestos: total,
+        exencion_igf: igfResult.exento || false,
+        iva_exento_empresa: ivaExentoEmpresa,
+        es_junior: esJunior,
+        proximo_cobro: proximoCobro,
+        saldo_actual: Math.round(saldoActual * 100) / 100
+      }
+    };
+  }
+
   // PDF de una declaración — SOLO si está aprobada/emitida (para el titular)
   // El titular solicita el PDF de su declaración de renta mensual; se devuelve
   // el buffer del PDF generado en el RSP si la declaración pertenece a su
