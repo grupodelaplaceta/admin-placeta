@@ -378,6 +378,16 @@ async function handleTributosAPI(path, method, req) {
     return { success: true, total: enriquecidas.length, data: enriquecidas };
   }
 
+  // Subvenciones entre empresas: la app consulta por EIP y recibe las
+  // subvenciones en las que la empresa es subvencionadora o beneficiaria.
+  if (path === '/subvenciones' && method === 'GET') {
+    const { listarSubvencionesDeEmpresa } = await import('./subvenciones.js');
+    const eip = String(req.query.eip || req.query.EIP || '').trim().toUpperCase();
+    if (!eip) return { success: false, error: 'eip_requerido' };
+    const subvenciones = await listarSubvencionesDeEmpresa(eip);
+    return { success: true, total: subvenciones.length, data: subvenciones, eip };
+  }
+
   // PDF de una declaración — SOLO si está aprobada/emitida (para el titular)
   // El titular solicita el PDF de su declaración de renta mensual; se devuelve
   // el buffer del PDF generado en el RSP si la declaración pertenece a su

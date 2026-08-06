@@ -130,6 +130,32 @@ router.get('/api/subvenciones', async (req, res) => {
   res.json(list);
 });
 
+// ── Consulta para la app del Banco (por EIP) ─────────────────────────────
+// Devuelve las subvenciones en las que la empresa es emisora o receptora.
+// Se usa desde el API Gateway (/api/v1/tributos/subvenciones) y desde el
+// backend-banco (proxy) para que la app muestre las subvenciones de la empresa.
+export async function listarSubvencionesDeEmpresa(eip) {
+  await subvencionesReady;
+  const eipNorm = String(eip || '').trim().toUpperCase();
+  if (!eipNorm) return [];
+  return [...memSubvenciones.values()]
+    .filter(s => String(s.emisor_eip || '').toUpperCase() === eipNorm || String(s.receptor_eip || '').toUpperCase() === eipNorm)
+    .map(s => ({
+      id: s.id,
+      emisor_eip: s.emisor_eip, emisor_nombre: s.emisor_nombre,
+      receptor_eip: s.receptor_eip, receptor_nombre: s.receptor_nombre,
+      importe: Number(s.importe || 0), importe_restante: Number(s.importe_restante || 0),
+      concepto: s.concepto || '', estado: s.estado || 'concedida',
+      concedida_por: s.concedida_por, fecha_concesion: s.fecha_concesion,
+      fecha_limite: s.fecha_limite, fecha_cierre: s.fecha_cierre,
+      rol: String(s.emisor_eip || '').toUpperCase() === eipNorm ? 'subvencionadora' : 'beneficiaria',
+      pdf_concesion: s.pdf_concesion, pdf_cierre: s.pdf_cierre,
+      justificaciones: (s.justificaciones || []).length,
+      created_at: s.created_at, updated_at: s.updated_at
+    }))
+    .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+}
+
 // ── API: Obtener subvención ───────────────────────────────────────────────
 router.get('/api/subvenciones/:id', async (req, res) => {
   await subvencionesReady;

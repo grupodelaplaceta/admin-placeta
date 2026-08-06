@@ -226,6 +226,26 @@ const API_REGISTRY = {
         ]
       },
       {
+        path: '/subvenciones',
+        method: 'GET',
+        tipo: 'consulta',
+        descripcion: 'Subvenciones entre empresas: devuelve las subvenciones en las que la empresa (por EIP) es subvencionadora o beneficiaria.',
+        platforms: ['android', 'ios', 'web'],
+        params: [
+          { campo: 'eip', tipo: DATA_TYPE.STRING, descripcion: 'EIP de la empresa', requerido: true }
+        ],
+        dataReturn: [
+          { campo: 'id', tipo: DATA_TYPE.STRING, descripcion: 'ID de la subvención' },
+          { campo: 'emisor_nombre', tipo: DATA_TYPE.STRING, descripcion: 'Empresa subvencionadora' },
+          { campo: 'receptor_nombre', tipo: DATA_TYPE.STRING, descripcion: 'Empresa beneficiaria' },
+          { campo: 'importe', tipo: DATA_TYPE.AMOUNT, descripcion: 'Importe concedido' },
+          { campo: 'importe_restante', tipo: DATA_TYPE.AMOUNT, descripcion: 'Importe por justificar' },
+          { campo: 'concepto', tipo: DATA_TYPE.STRING, descripcion: 'Concepto' },
+          { campo: 'estado', tipo: DATA_TYPE.STRING, descripcion: 'Estado (concedida/cerrada)' },
+          { campo: 'rol', tipo: DATA_TYPE.STRING, descripcion: 'subvencionadora | beneficiaria' }
+        ]
+      },
+      {
         path: '/declaraciones',
         method: 'POST',
         tipo: 'modificacion',
