@@ -71,9 +71,12 @@ function filtrarSubvenciones() {
   });
 }
 
-function selectEmpresas(id) {
-  const opts = empresas.map(e =>
+function selectEmpresas(id, incluirCapitalia = false) {
+  let opts = empresas.map(e =>
     `<option value="${e.eip}">${e.nombre} (${e.eip})</option>`).join('');
+  if (incluirCapitalia) {
+    opts += `<option value="CAPITALIA">CAPITALIA — Placeta Junior (impuestos menores 16)</option>`;
+  }
   return `<select id="${id}" class="form-input" style="width:100%"><option value="">— Selecciona empresa (EIP) —</option>${opts}</select>`;
 }
 
@@ -88,12 +91,15 @@ function concederSubvencion() {
     <p style="margin-bottom:10px;font-size:13px">Fija una cantidad. <strong>No se mueve ningún Placeta</strong> hasta justificar gastos.</p>
     ${selectEmpresas('subEmisor')}
     <div style="font-size:12px;color:#999;margin:4px 0">→</div>
-    ${selectEmpresas('subReceptor')}
+    ${selectEmpresas('subReceptor', true)}
     <input type="text" id="subConcepto" class="form-input" placeholder="Concepto de la subvención" style="width:100%;margin-top:8px">
     <input type="number" id="subImporte" class="form-input" placeholder="Importe (Pz) *" min="1" style="width:100%;margin-top:8px">
     <input type="date" id="subFechaLimite" class="form-input" style="width:100%;margin-top:8px">
     <div style="font-size:12px;color:#999;margin:8px 0">Tipos de gasto EXCLUIDOS (opcional):</div>
     <div style="max-height:150px;overflow:auto;border:1px solid #eee;border-radius:6px;padding:8px">${selectTiposExcluidos()}</div>
+    <p id="capAviso" style="display:none;font-size:12px;color:#5F27FF;background:#F2ECFF;border-radius:6px;padding:8px;margin-top:8px">
+      ℹ️ <strong>CAPITALIA (Art. 5 CNI):</strong> solo puede justificar los impuestos de los menores de 16 (IVA, IRM, IGF). No se aplican exclusiones.
+    </p>
   `, [
     { texto: 'Cancelar', clase: 'btn-secondary', onClick: cerrarModal },
     { texto: '💸 Conceder', clase: 'btn-primary', onClick: () => {
@@ -102,7 +108,7 @@ function concederSubvencion() {
         const importe = Number(document.getElementById('subImporte').value);
         if (!emisorEip || !receptorEip || !importe || importe <= 0) { mostrarToast('Indica emisor, receptor e importe', 'error'); return; }
         if (emisorEip === receptorEip) { mostrarToast('Emisor y receptor deben ser distintas', 'error'); return; }
-        const excluirTipos = [...document.querySelectorAll('.chk-tipo:checked')].map(c => c.value);
+        const excluirTipos = receptorEip === 'CAPITALIA' ? [] : [...document.querySelectorAll('.chk-tipo:checked')].map(c => c.value);
         apiFetch(`/${entidadActual}/api/subvenciones/conceder`, 'POST', {
           emisorEip, receptorEip, importe,
           concepto: document.getElementById('subConcepto').value,
@@ -111,6 +117,14 @@ function concederSubvencion() {
         }).then(r => { if (r.success) { cerrarModal(); mostrarToast('Subvención concedida', 'ok'); setTimeout(() => location.reload(), 800); } });
     }}
   ]);
+  // Mostrar aviso si el receptor es CAPITALIA
+  setTimeout(() => {
+    const sel = document.getElementById('subReceptor');
+    if (sel) sel.addEventListener('change', () => {
+      const aviso = document.getElementById('capAviso');
+      if (aviso) aviso.style.display = sel.value === 'CAPITALIA' ? 'block' : 'none';
+    });
+  }, 100);
 }
 
 // ── Justificar gastos ──────────────────────────────────────────────────

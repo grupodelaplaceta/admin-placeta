@@ -694,7 +694,7 @@ router.get('/junior/tutor-info/:dip', async (req, res) => {
 router.post('/junior/regalias', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/regalias');
   try {
-    const { adminDip, fromAccountId, toAccountId, cantidad, concepto } = req.body;
+    const { adminDip, fromAccountId, toAccountId, cantidad, concepto, kind } = req.body;
     if (!adminDip || !fromAccountId || !toAccountId || !cantidad || cantidad <= 0) {
       return res.status(400).json({
         error: 'Faltan datos: adminDip, fromAccountId, toAccountId y cantidad (positiva) son requeridos'
@@ -705,10 +705,17 @@ router.post('/junior/regalias', async (req, res) => {
     const admin = await sbFindSolicitanteByDip(adminDip);
     if (!admin) return res.status(401).json({ error: 'Admin no encontrado' });
 
+    // Art. 6 CNI: los pagos de recompensas y juegos de Capitalia (en nombre de
+    // PLACETA JUNIOR) usan la categoría PLJUNIOR_PAYMENT. El resto de regalías
+    // de admins usan Royalty. El emisor debe ser CAPITALIA para PLJUNIOR_PAYMENT.
+    const esPlJunior = kind === 'PLJUNIOR_PAYMENT' || String(fromAccountId).toUpperCase() === 'CAPITALIA_BANK';
+    const kindFinal = esPlJunior ? 'PLJUNIOR_PAYMENT' : 'Royalty';
+
     // Pagar regalía real: cuenta admin → cuenta del titular
     const resultado = await apiBancoPost('pagar-regalia', {
       from: fromAccountId, to: toAccountId,
-      cantidad, concepto: concepto || 'Regalía Placeta Junior'
+      cantidad, concepto: concepto || 'Regalía Placeta Junior',
+      kind: kindFinal
     });
 
     if (!resultado?.success) {

@@ -33,8 +33,27 @@ export const TIPOS_GASTO_EXCLUIBLES = [
   { id: 'ForcedVatRegularization', label: 'Declaraciones renta / IVA (IRM, IGF, IVA)' },
   { id: 'Rbu', label: 'Renta Básica (RBU)' },
   { id: 'Donation', label: 'Donaciones' },
-  { id: 'Gift', label: 'Regalos' }
+  { id: 'Gift', label: 'Regalos' },
+  // Art. 6 CNI: categoría PLJUNIOR_PAYMENT (pagos de recompensas y juegos de
+  // Capitalia en nombre de Placeta Junior). El sistema de subvenciones puede
+  // EXCLUIR esta categoría o INCLUIR SOLO esta (ver incluir_tipos).
+  { id: 'PljuniorPayment', label: 'Pagos Placeta Junior (PLJUNIOR_PAYMENT)' }
 ];
+
+// CAPITALIA: empresa que organiza "Placeta Junior" (Art. 5 CNI). Las empresas
+// pueden subvencionarla SOLO para abonar los impuestos de IVA, IRM e IGF de los
+// menores de 16. El receptor se identifica por su cuenta bancaria del sistema.
+const CAPITALIA = {
+  id: 'CAPITALIA',
+  cuentaId: 'CAPITALIA_BANK',
+  nombre: 'CAPITALIA (Placeta Junior)'
+};
+
+// Tipos de gasto que CAPITALIA puede justificar: ÚNICAMENTE impuestos de los
+// menores (IVA/IRM/IGF). Art. 5 CNI.
+const CAPITALIA_GASTOS_PERMITIDOS = new Set([
+  'Tax', 'IrmCharge', 'ForcedVatRegularization', 'InvestmentTax', 'PljuniorPayment'
+]);
 
 async function persistirSubvencion(s) {
   if (!supabase) return;
@@ -42,11 +61,13 @@ async function persistirSubvencion(s) {
     const { error } = await supabase.from('rsp_subvenciones').upsert({
       id: s.id, emisor_eip: s.emisor_eip, emisor_nombre: s.emisor_nombre,
       receptor_eip: s.receptor_eip, receptor_nombre: s.receptor_nombre,
+      es_capitalia: s.es_capitalia || false,
       importe: s.importe, importe_restante: s.importe_restante,
       concepto: s.concepto, estado: s.estado,
       concedida_por: s.concedida_por, fecha_concesion: s.fecha_concesion,
       fecha_limite: s.fecha_limite, fecha_cierre: s.fecha_cierre,
       excluir_tipos: s.excluir_tipos || [],
+      incluir_tipos: s.incluir_tipos || [],
       justificaciones: s.justificaciones || [],
       pdf_concesion: s.pdf_concesion, pdf_cierre: s.pdf_cierre,
       created_at: s.created_at, updated_at: new Date().toISOString()
@@ -55,10 +76,12 @@ async function persistirSubvencion(s) {
       try { await supabase.rpc('exec_sql', { sql: `CREATE TABLE IF NOT EXISTS rsp_subvenciones (
         id TEXT PRIMARY KEY, emisor_eip TEXT, emisor_nombre TEXT,
         receptor_eip TEXT, receptor_nombre TEXT,
+        es_capitalia BOOLEAN DEFAULT FALSE,
         importe NUMERIC DEFAULT 0, importe_restante NUMERIC DEFAULT 0,
         concepto TEXT, estado TEXT DEFAULT 'concedida',
         concedida_por TEXT, fecha_concesion TEXT, fecha_limite TEXT, fecha_cierre TEXT,
-        excluir_tipos JSONB DEFAULT '[]', justificaciones JSONB DEFAULT '[]',
+        excluir_tipos JSONB DEFAULT '[]', incluir_tipos JSONB DEFAULT '[]',
+        justificaciones JSONB DEFAULT '[]',
         pdf_concesion TEXT, pdf_cierre TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
       );`}); } catch (_) {}
@@ -76,11 +99,13 @@ async function initSubvenciones() {
           memSubvenciones.set(row.id, {
             id: row.id, emisor_eip: row.emisor_eip, emisor_nombre: row.emisor_nombre,
             receptor_eip: row.receptor_eip, receptor_nombre: row.receptor_nombre,
+            es_capitalia: !!row.es_capitalia,
             importe: Number(row.importe || 0), importe_restante: Number(row.importe_restante || 0),
             concepto: row.concepto || '', estado: row.estado || 'concedida',
             concedida_por: row.concedida_por, fecha_concesion: row.fecha_concesion,
             fecha_limite: row.fecha_limite, fecha_cierre: row.fecha_cierre,
             excluir_tipos: parseJson(row.excluir_tipos, []),
+            incluir_tipos: parseJson(row.incluir_tipos, []),
             justificaciones: parseJson(row.justificaciones, []),
             pdf_concesion: row.pdf_concesion, pdf_cierre: row.pdf_cierre,
             created_at: row.created_at
@@ -100,7 +125,27 @@ function cuentaPorEip(state, eip) {
   return list.length ? list[0] : null;
 }
 
+// Resolver el RECEPTOR de una subvención: una empresa (por EIP) o CAPITALIA
+// (Art. 5 CNI, empresa que organiza Placeta Junior). CAPITALIA se identifica
+// por su cuenta del sistema y solo puede recibir para pagar impuestos junior.
+function resolverReceptor(state, receptorEip) {
+  const key = String(receptorEip || '').trim().toUpperCase();
+  if (key === 'CAPITALIA') {
+    const cuenta = (state?.accounts || []).find(a => a.id === CAPITALIA.cuentaId);
+    return {
+      esCapitalia: true,
+      eip: 'CAPITALIA',
+      nombre: CAPITALIA.nombre,
+      cuentaId: cuenta?.id || CAPITALIA.cuentaId
+    };
+  }
+  const cuenta = cuentaPorEip(state, key);
+  if (!cuenta) return null;
+  return { esCapitalia: false, eip: String(cuenta.eip || key).toUpperCase(), nombre: cuenta.displayName || key, cuentaId: cuenta.id };
+}
+
 function displayEmpresa(state, eip) {
+  if (String(eip || '').toUpperCase() === 'CAPITALIA') return CAPITALIA.nombre;
   const c = cuentaPorEip(state, eip);
   return c?.displayName || eip;
 }
@@ -165,10 +210,10 @@ router.get('/api/subvenciones/:id', async (req, res) => {
 });
 
 // ── API: Conceder subvención (NO mueve Placetas) ─────────────────────────
-// Body: { emisorEip, receptorEip, importe, concepto, fechaLimite?, excluirTipos?[] }
+// Body: { emisorEip, receptorEip, importe, concepto, fechaLimite?, excluirTipos?[], incluirTipos?[] }
 router.post('/api/subvenciones/conceder', async (req, res) => {
   try {
-    const { emisorEip, receptorEip, importe, concepto, fechaLimite, excluirTipos } = req.body;
+    const { emisorEip, receptorEip, importe, concepto, fechaLimite, excluirTipos, incluirTipos } = req.body;
     if (!emisorEip || !receptorEip) return res.status(400).json({ error: 'Se requieren EIP emisor y receptor' });
     if (String(emisorEip).toUpperCase() === String(receptorEip).toUpperCase()) return res.status(400).json({ error: 'El emisor y el receptor no pueden ser la misma empresa' });
     const amount = Number(importe);
@@ -176,7 +221,7 @@ router.post('/api/subvenciones/conceder', async (req, res) => {
 
     const state = await apiBancoGetState();
     const emisor = cuentaPorEip(state, emisorEip);
-    const receptor = cuentaPorEip(state, receptorEip);
+    const receptor = resolverReceptor(state, receptorEip);
     if (!emisor) return res.status(404).json({ error: `Empresa subvencionadora ${emisorEip} no encontrada en el banco` });
     if (!receptor) return res.status(404).json({ error: `Empresa subvencionada ${receptorEip} no encontrada en el banco` });
 
@@ -186,8 +231,9 @@ router.post('/api/subvenciones/conceder', async (req, res) => {
       id,
       emisor_eip: String(emisor.eip || emisorEip).toUpperCase(),
       emisor_nombre: emisor.displayName || emisorEip,
-      receptor_eip: String(receptor.eip || receptorEip).toUpperCase(),
-      receptor_nombre: receptor.displayName || receptorEip,
+      receptor_eip: receptor.eip,
+      receptor_nombre: receptor.nombre,
+      es_capitalia: receptor.esCapitalia || false,
       importe: amount,
       importe_restante: amount,
       concepto: String(concepto || '').trim() || 'Subvención',
@@ -196,6 +242,9 @@ router.post('/api/subvenciones/conceder', async (req, res) => {
       fecha_concesion: now,
       fecha_limite: fechaLimite || null,
       fecha_cierre: null,
+      // Art. 6: si se indica incluir_tipos (p.ej. solo PLJUNIOR_PAYMENT), la
+      // subvención SOLO cubre esos tipos. Si no, usa las exclusiones.
+      incluir_tipos: Array.isArray(incluirTipos) ? incluirTipos.filter(Boolean) : [],
       excluir_tipos: Array.isArray(excluirTipos) ? excluirTipos.filter(Boolean) : [],
       justificaciones: [],
       pdf_concesion: null,
@@ -236,7 +285,10 @@ router.post('/api/subvenciones/:id/justificar', async (req, res) => {
 
     const state = await apiBancoGetState();
     const emisor = cuentaPorEip(state, s.emisor_eip);
-    const receptor = cuentaPorEip(state, s.receptor_eip);
+    // CAPITALIA se resuelve por su cuenta del sistema; el resto por EIP.
+    const receptor = s.es_capitalia
+      ? (state?.accounts || []).find(a => a.id === CAPITALIA.cuentaId) || null
+      : cuentaPorEip(state, s.receptor_eip);
     if (!emisor) return res.status(404).json({ error: `Empresa subvencionadora ${s.emisor_eip} no encontrada` });
     if (!receptor) return res.status(404).json({ error: `Empresa subvencionada ${s.receptor_eip} no encontrada` });
 
@@ -246,10 +298,24 @@ router.post('/api/subvenciones/:id/justificar', async (req, res) => {
 
     if (gastos.length === 0) return res.status(400).json({ error: 'Ninguna transacción seleccionada es un gasto válido de la empresa subvencionada' });
 
-    // Aplicar exclusiones de tipos de gasto
+    // Art. 5 CNI: las subvenciones a CAPITALIA SOLO cubren impuestos de los
+    // menores de 16 (IVA, IRM, IGF). No se pueden justificar otros gastos.
+    if (s.es_capitalia) {
+      const permitidosCap = gastos.filter(t => CAPITALIA_GASTOS_PERMITIDOS.has(t.kind));
+      if (permitidosCap.length === 0) {
+        return res.status(400).json({ error: 'CAPITALIA (Art. 5) solo puede justificar impuestos de menores de 16: IVA, IRM o IGF (PLJUNIOR_PAYMENT)' });
+      }
+      gastos.length = 0; gastos.push(...permitidosCap);
+    }
+
+    // Art. 6 CNI: si la subvención fija incluir_tipos (p.ej. solo
+    // PLJUNIOR_PAYMENT), SOLO se cubren esos tipos. Si no, aplican exclusiones.
+    const incluir = (s.incluir_tipos || []).filter(Boolean);
     const excluidos = new Set(s.excluir_tipos || []);
-    const permitidos = gastos.filter(t => !excluidos.has(t.kind));
-    if (permitidos.length === 0) return res.status(400).json({ error: 'Todas las transacciones seleccionadas corresponden a tipos de gasto excluidos' });
+    const permitidos = gastos.filter(t =>
+      (incluir.length === 0 || incluir.includes(t.kind)) && !excluidos.has(t.kind)
+    );
+    if (permitidos.length === 0) return res.status(400).json({ error: 'Todas las transacciones seleccionadas corresponden a tipos de gasto no cubiertos por esta subvención' });
 
     const importeJustificar = Number(permitidos.reduce((sum, t) => sum + Number(t.amountPz || 0), 0).toFixed(2));
     if (importeJustificar <= 0) return res.status(400).json({ error: 'Importe a justificar no válido' });
@@ -358,8 +424,11 @@ router.get('/api/subvenciones/:id/gastos', async (req, res) => {
     const s = memSubvenciones.get(req.params.id);
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
     const state = await apiBancoGetState();
-    const receptor = cuentaPorEip(state, s.receptor_eip);
+    const receptor = s.es_capitalia
+      ? (state?.accounts || []).find(a => a.id === CAPITALIA.cuentaId) || null
+      : cuentaPorEip(state, s.receptor_eip);
     if (!receptor) return res.json({ gastos: [] });
+    const incluir = (s.incluir_tipos || []).filter(Boolean);
     const excluidos = new Set(s.excluir_tipos || []);
     const gastos = (state?.transactions || [])
       .filter(t => t.fromAccountId === receptor.id && t.status === 'Settled' && Number(t.amountPz) > 0)
@@ -368,10 +437,14 @@ router.get('/api/subvenciones/:id/gastos', async (req, res) => {
         importe: Number(t.amountPz || 0),
         concepto: t.concept || t.note || t.kind,
         tipo: t.kind,
-        excluido: excluidos.has(t.kind)
+        // Art. 5: CAPITALIA solo puede justificar impuestos junior.
+        // Art. 6: si la subvención fija incluir_tipos, solo esos; si no, aplican exclusiones.
+        excluido: s.es_capitalia
+          ? !CAPITALIA_GASTOS_PERMITIDOS.has(t.kind)
+          : (incluir.length > 0 ? !incluir.includes(t.kind) : excluidos.has(t.kind))
       }))
       .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
-    res.json({ gastos, excluidos: [...excluidos] });
+    res.json({ gastos, excluidos: [...excluidos], incluir: incluir, es_capitalia: !!s.es_capitalia });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
