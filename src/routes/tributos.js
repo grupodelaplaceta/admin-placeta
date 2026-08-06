@@ -309,13 +309,22 @@ router.get('/declaraciones', verificarPermiso('tributos', 'crear_declaraciones')
   const registro = await cargarRegistroTributario();
   // Mapa de nombres legales por placetaId / dip / eip (del agrupamiento por
   // contribuyente), para mostrar el NOMBRE del titular y no el de la cuenta.
+  // ⚠️ Las EMPRESAS comparten placetaId con su titular persona: solo deben
+  // registrarse por su EIP (y sus cuentas), NUNCA por placetaId/dip, para no
+  // sobreescribir el nombre de la persona con el de su empresa.
   const nombreLegalPorId = new Map();
   for (const c of agruparContribuyentes(state, registro).values()) {
     const nombre = c.displayName;
-    if (c.placetaId) nombreLegalPorId.set(String(c.placetaId).toLowerCase(), nombre);
-    if (c.dip) nombreLegalPorId.set(String(c.dip).toLowerCase(), nombre);
-    if (c.eip) nombreLegalPorId.set(String(c.eip).toLowerCase(), nombre);
-    for (const a of (c.cuentas || [])) nombreLegalPorId.set(String(a.id).toLowerCase(), nombre);
+    if (c.eip) {
+      // Empresa: SOLO por EIP + sus cuentas
+      nombreLegalPorId.set(String(c.eip).toLowerCase(), nombre);
+      for (const a of (c.cuentas || [])) nombreLegalPorId.set(String(a.id).toLowerCase(), nombre);
+    } else {
+      // Persona: por placetaId / dip + sus cuentas
+      if (c.placetaId) nombreLegalPorId.set(String(c.placetaId).toLowerCase(), nombre);
+      if (c.dip) nombreLegalPorId.set(String(c.dip).toLowerCase(), nombre);
+      for (const a of (c.cuentas || [])) nombreLegalPorId.set(String(a.id).toLowerCase(), nombre);
+    }
   }
   const nombreLegal = (c) => nombreLegalPorId.get(String(c.placetaId || c.id || '').toLowerCase()) || c.displayName || c.id;
 
@@ -475,12 +484,28 @@ router.put('/api/declaraciones/:id/emit', verificarPermiso('tributos', 'crear_de
     // Junior (menor de 16): sus impuestos los paga Capitalia hasta que cumple
     // los 16 años y deja de ser junior. El cobro se hace de CAPITALIA_BANK → TGLP.
     const esJunior = d.cuenta_id_blp === 'CAPITALIA_BANK' || /^CAPITALIA/i.test(d.cuenta_id_blp || '');
-    const fromAccount = esJunior ? 'CAPITALIA_BANK' : d.cuenta_id_blp;
+    let fromAccount = esJunior ? 'CAPITALIA_BANK' : (d.cuenta_id_blp || '');
+
+    // El pago se realiza SIEMPRE desde el IBAN principal del contribuyente:
+    // se consulta el estado real del banco y se elige la cuenta principal
+    // (empresa → cuenta con EIP; persona → la de mayor saldo), para que el
+    // cobro no dependa de una cuenta_id_blp antigua guardada en la declaración.
+    if (!esJunior) {
+      try {
+        const state = await apiBancoGetState();
+        const cuentasContrib = (state?.accounts || []).filter(a =>
+          (a.type === 'Business' || a.type === 'State')
+            ? String(a.eip || '').toUpperCase() === String(d.placeta_id || '').toUpperCase()
+            : (a.placetaId === d.placeta_id || a.id === d.placeta_id || a.id === fromAccount));
+        const principal = elegirCuentaPrincipal(cuentasContrib);
+        if (principal?.id) fromAccount = principal.id;
+      } catch { /* si no hay estado, se usa cuenta_id_blp */ }
+    }
     const concepto = esJunior
       ? `DEC-JUNIOR ${d.id.slice(-8)} ${d.mes_periodo} (impuestos asumidos por Capitalia)`
       : `DEC-${d.id.slice(-8)} ${d.mes_periodo}`;
 
-    // Intentar cobro vía API Banco
+    // Intentar cobro vía API Banco (cuenta principal → TGLP)
     let transactionId = null;
     try {
       const { apiBancoPost } = await import('../config/db.js');
@@ -579,7 +604,18 @@ router.post('/api/reconcile/:placetaId', verificarPermiso('tributos', 'crear_dec
           (a.placetaId === placetaId || a.id === placetaId) &&
           a.type !== 'Business' && a.type !== 'State');
     const transacciones = state?.transactions || [];
-    const resultado = await reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriodo);
+    // Cuota del mes ANTERIOR del contribuyente: se descuenta del patrimonio del
+    // mes solicitado como si el pago ya se hubiera hecho (Art. 4.11: cargo el
+    // día 5 del mes siguiente).
+    let cuotaAnterior = 0;
+    const [anioA, mesA] = String(mesPeriodo).split('-').map(Number);
+    const mesPrevio = mesA === 1 ? `${anioA - 1}-12` : `${anioA}-${String(mesA - 1).padStart(2, '0')}`;
+    try {
+      const previas = await sbListDeclaracionesPorMes(mesPrevio);
+      const prev = previas.find(x => x.placeta_id === placetaId);
+      if (prev) cuotaAnterior = (prev.cuota_irm || 0) + (prev.cuota_igf || 0);
+    } catch { /* si no hay mes anterior, cuotaAnterior = 0 */ }
+    const resultado = await reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriodo, { cuotaAnterior });
     if (resultado.error) return res.status(400).json({ error: resultado.error });
     res.json(resultado);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -589,6 +625,19 @@ router.post('/api/reconcile/:placetaId', verificarPermiso('tributos', 'crear_dec
 // Reconstruye los saldos diarios REALES desde las transacciones del banco,
 // calcula patrimonio medio, IA, IRM e IGF según normativa y crea/actualiza
 // la declaración mensual del contribuyente.
+
+// Cuenta principal del contribuyente: la que se usa para el cobro de tributos.
+// - Empresa (Business/State): la cuenta con EIP.
+// - Persona: la cuenta personal con más saldo (el IBAN principal del titular).
+function elegirCuentaPrincipal(cuentas) {
+  if (!cuentas || cuentas.length === 0) return null;
+  const business = cuentas.filter(c => c.type === 'Business' || c.type === 'State');
+  if (business.length > 0) return business.find(c => c.eip) || business[0];
+  const personales = cuentas.filter(c => c.type !== 'Child');
+  if (personales.length === 0) return cuentas[0];
+  return personales.reduce((a, b) => ((b.balancePz || 0) > (a?.balancePz || 0) ? b : a), personales[0]);
+}
+
 async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriodo, opts = {}) {
   if (!cuentas || cuentas.length === 0) return { error: 'Cuenta no encontrada en el banco' };
   const esJunior = opts.esJunior === true || cuentas.some(c => c.type === 'Child');
@@ -621,7 +670,11 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     return s;
   }, 0);
   const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
-  const saldoBase = saldoActual - deltaDesdeInicio;
+  // La declaración del mes ANTERIOR ya se pagó (Art. 4.11: cargo día 5 del mes
+  // siguiente). Para calcular el patrimonio de este mes como si ese pago ya se
+  // hubiera hecho, restamos la cuota acumulada de meses anteriores.
+  const cuotaAnterior = Number(opts.cuotaAnterior || 0);
+  const saldoBase = saldoActual - deltaDesdeInicio - cuotaAnterior;
 
   const diasEnMes = new Date(anio, mes, 0).getDate();
   const balances = [];
@@ -664,6 +717,9 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
   // Excepción de IVA a empresas: si la empresa tiene EIP registrado no se le
   // carga IVA en sus operaciones internas; el IVA lo liquida el emisor.
   const eipVinculado = cuentas.some(c => c.eip);
+  // Cuenta principal del contribuyente: se usa como origen del cobro de tributos
+  // (el IBAN principal, no la primera cuenta que aparezca).
+  const cuentaPrincipal = elegirCuentaPrincipal(cuentas);
 
   const decl = await sbCreateDeclaracion({
     placeta_id: placetaId, mes_periodo: mesPeriodo,
@@ -671,7 +727,7 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     indice_acumulacion: Math.round(ia * 10000) / 10000,
     cuota_irm: Math.round(cuotaIRM * 100) / 100,
     cuota_igf: cuotaIGF,
-    cuenta_id_blp: pagaCapitalia ? 'CAPITALIA_BANK' : (cuentas[0]?.id || placetaId),
+    cuenta_id_blp: pagaCapitalia ? 'CAPITALIA_BANK' : (cuentaPrincipal?.id || cuentas[0]?.id || placetaId),
     estado_pago: 'Borrador',
     exencion_aplicada: igfResult.exento || false,
     dias_declarados_banco: diasEnMes,
@@ -728,6 +784,9 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
       // placeta_id de la declaración: EIP para empresas, DIP para personas
       const placetaId = contrib.eip || contrib.dip || clave;
       const cuentasContrib = contrib.cuentas;
+      // Cuota acumulada de declaraciones anteriores del contribuyente: cada mes
+      // se descuenta del patrimonio como si la del mes anterior ya se pagó.
+      let cuotaAcumulada = 0;
 
       // Mes de creación del contribuyente: usar la transacción más antigua si existe
       let mesInicio = MES_INICIO;
@@ -746,14 +805,29 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
         if (mes < mesInicio) continue; // el contribuyente aún no existía ese mes
         try {
           const existentes = await sbListDeclaracionesPorMes(mes);
-          const ya = existentes.some(d => d.placeta_id === placetaId);
-          if (ya) { yaExistentes++; continue; }
+          const existente = existentes.find(x => x.placeta_id === placetaId);
+          if (existente) {
+            // Recalcular los BORRADORES sin procesar (sin id_permiso_junta): se
+            // borran y se regeneran con la lógica actual (cuota del mes anterior
+            // descontada del patrimonio). Las aprobadas/emitidas se respetan.
+            const esRecalculable = existente.estado_pago === 'Borrador' && !existente.id_permiso_junta;
+            if (!esRecalculable) {
+              // Sumar la cuota de la declaración existente al acumulado (para los
+              // meses posteriores, como si ese pago ya se hubiera hecho).
+              cuotaAcumulada += (existente.cuota_irm || 0) + (existente.cuota_igf || 0);
+              yaExistentes++;
+              continue;
+            }
+            await sbDeleteDeclaracion(existente.id);
+          }
           const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes, {
             esJunior: contrib.esJunior,
-            pagaCapitalia: contrib.pagaCapitalia
+            pagaCapitalia: contrib.pagaCapitalia,
+            cuotaAnterior: cuotaAcumulada
           });
           if (r.success) {
             creadas++;
+            cuotaAcumulada += r.cuotaIRM + r.cuotaIGF;
             resultados.push({ contribuyente: placetaId, mes, patrimonio: r.patrimonioMedio, irm: r.cuotaIRM, igf: r.cuotaIGF, id: r.declaracion.id, esJunior: r.esJunior, pagaCapitalia: r.pagaCapitalia });
           } else errores++;
         } catch (e) {

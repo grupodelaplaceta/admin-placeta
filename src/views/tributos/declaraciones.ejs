@@ -108,9 +108,7 @@
             <% if (d._puede_eliminar) { %>
             <button class="btn-icon" onclick="accionDeclaracion('<%= d.id %>','delete')" title="Eliminar">🗑️</button>
             <% } %>
-            <% if (d.estado_pago !== 'Borrador') { %>
             <button class="btn-icon" onclick="verPDF('<%= d.id %>')" title="PDF">📄</button>
-            <% } %>
           </div>
         </td>
         <td><button class="btn-icon" onclick="verDocsDe('declaracion','<%= d.id %>','tributos','<%= d.id %>')" title="Documentos">📎</button></td>
@@ -205,7 +203,7 @@ function verDeclaracion(id) {
       <p><strong>Transacción:</strong> ${d.transaction_id_blp||'—'}</p>
       ${d.exencion_aplicada ? '<p><span class="badge badge-info">Exención IGF aplicada</span></p>' : ''}
     </div>
-    ${d.estado_pago !== 'Borrador' ? `<button class="btn-secondary mt-16" onclick="window.open('/tributos/api/declaraciones/${id}/pdf','_blank')">📄 Ver PDF</button>` : ''}
+    <button class="btn-secondary mt-16" onclick="window.open('/tributos/api/declaraciones/${id}/pdf','_blank')">📄 Ver PDF</button>
   `);
 }
 
