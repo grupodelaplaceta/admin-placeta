@@ -74,7 +74,9 @@
       <tr class="fila-declaracion" data-estado="<%= d._estado_semantico || d.estado_pago %>" data-mes="<%= d.mes_periodo %>">
         <td><input type="checkbox" class="chk-declaracion" value="<%= d.id %>"></td>
         <td class="text-mono" style="font-size:10px"><%= d.id?.slice(0,12) %></td>
-        <td><%= d.placeta_id || '—' %></td>
+        <td>
+          <% if (d._nombreLegal) { %><strong><%= d._nombreLegal %></strong><br><span class="text-mono" style="font-size:10px;color:#8a8494"><%= d.placeta_id %></span><% } else { %><%= d.placeta_id || '—' %><% } %>
+        </td>
         <td><%= d.mes_periodo || '—' %></td>
         <td><%= d.patrimonio_medio ? d.patrimonio_medio.toLocaleString() + ' Pz' : '—' %></td>
         <td><%= d.cuota_irm ? d.cuota_irm.toLocaleString() + ' Pz' : '—' %></td>
@@ -191,7 +193,7 @@ function verDeclaracion(id) {
   const total = (d.cuota_irm||0) + (d.cuota_igf||0);
   mostrarModal('📝 Declaración ' + id.slice(0,12), `
     <div class="grid-2" style="gap:8px;font-size:13px">
-      <p><strong>Contribuyente:</strong> ${d.placeta_id||'—'}</p>
+      <p><strong>Contribuyente:</strong> ${d._nombreLegal ? d._nombreLegal + ' (' + (d.placeta_id||'—') + ')' : (d.placeta_id||'—')}</p>
       <p><strong>Periodo:</strong> ${d.mes_periodo||'—'}</p>
       <p><strong>Patrimonio medio:</strong> ${d.patrimonio_medio?.toLocaleString()||'0'} Pz</p>
       <p><strong>IA:</strong> ${d.indice_acumulacion||'0.0000'}</p>

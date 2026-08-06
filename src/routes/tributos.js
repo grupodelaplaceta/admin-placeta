@@ -299,7 +299,8 @@ router.get('/declaraciones', verificarPermiso('tributos', 'crear_declaraciones')
       _puede_publicar: sem === 'Borrador' && !p,
       _puede_aprobar: sem === 'Pendiente_Aprobacion',
       _puede_emitir: sem === 'Aprobada',
-      _puede_eliminar: sem === 'Borrador' && !p
+      _puede_eliminar: sem === 'Borrador' && !p,
+      _nombreLegal: nombreLegalPorId.get(String(d.placeta_id || '').toLowerCase()) || null
     };
   });
 
