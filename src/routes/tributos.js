@@ -267,6 +267,18 @@ router.post('/api/alta', verificarPermiso('tributos', 'crear_declaraciones'), as
 // ── Declaraciones (View) ──────────────────────────────────────────────────
 router.get('/declaraciones', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
   const state = await apiBancoGetState();
+  // Mapa de nombres legales por placetaId / dip / eip (del agrupamiento por
+  // contribuyente), para mostrar el NOMBRE del titular y no el de la cuenta.
+  const nombreLegalPorId = new Map();
+  for (const c of agruparContribuyentes(state).values()) {
+    const nombre = c.displayName;
+    if (c.placetaId) nombreLegalPorId.set(String(c.placetaId).toLowerCase(), nombre);
+    if (c.dip) nombreLegalPorId.set(String(c.dip).toLowerCase(), nombre);
+    if (c.eip) nombreLegalPorId.set(String(c.eip).toLowerCase(), nombre);
+    for (const a of (c.cuentas || [])) nombreLegalPorId.set(String(a.id).toLowerCase(), nombre);
+  }
+  const nombreLegal = (c) => nombreLegalPorId.get(String(c.placetaId || c.id || '').toLowerCase()) || c.displayName || c.id;
+
   const contribuyentes = state?.accounts?.filter(a => a.tributosCensusDate) || [];
   const declaraciones = await sbListDeclaraciones(200);
   const control = await sbGetControlRecaudacion(new Date().toISOString().slice(0,7));
@@ -293,7 +305,7 @@ router.get('/declaraciones', verificarPermiso('tributos', 'crear_declaraciones')
 
   // Calcular un patrimonio medio estimado para cada contribuyente
   const contribuyentesConPatrimonio = contribuyentes.map(c => ({
-    id: c.id, placetaId: c.placetaId, displayName: c.displayName, dip: c.dip,
+    id: c.id, placetaId: c.placetaId, displayName: nombreLegal(c), dip: c.dip,
     type: c.type, balancePz: c.balancePz || 0, eip: c.eip
   }));
 
