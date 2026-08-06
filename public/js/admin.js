@@ -144,7 +144,12 @@ function mostrarToast(mensaje, tipo = 'info') {
 }
 
 // ── Modal ──────────────────────────────────────────────────────────────────
-function mostrarModal(titulo, html) {
+function cerrarModal() {
+  const existing = document.querySelector('.modal-overlay');
+  if (existing) existing.remove();
+}
+
+function mostrarModal(titulo, html, botones) {
   const existing = document.querySelector('.modal-overlay');
   if (existing) existing.remove();
 
@@ -158,6 +163,14 @@ function mostrarModal(titulo, html) {
     animation: overlayIn 0.2s ease;
     padding: 20px;
   `;
+  const botonesHtml = Array.isArray(botones) && botones.length
+    ? `<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid #f0ecf8">
+        ${botones.map(b => {
+          const cl = b.clase || 'btn-secondary';
+          const accion = typeof b.onClick === 'function' ? b.onClick.toString() : (b.onClick || '');
+          return `<button class="${cl}" ${accion ? `onclick="(${accion})()"` : ''}>${b.texto}</button>`;
+        }).join('')}
+      </div>` : '';
   overlay.innerHTML = `
     <div class="modal-window" style="
       background: #fff; border: 1px solid #e8e4f0;
@@ -169,7 +182,7 @@ function mostrarModal(titulo, html) {
     ">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #f0ecf8">
         <h3 style="font-weight:700;font-size:18px;color:#111;margin:0">${titulo}</h3>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()" style="
+        <button class="modal-close" onclick="cerrarModal()" style="
           background: #f0ecf8; border: none;
           width: 32px; height: 32px; border-radius: 50%;
           font-size: 16px; cursor: pointer; color: #666;
@@ -178,12 +191,13 @@ function mostrarModal(titulo, html) {
         " onmouseover="this.style.background='#e0daf0'" onmouseout="this.style.background='#f0ecf8'">✕</button>
       </div>
       <div style="font-size:14px;color:#444;line-height:1.6">${html}</div>
+      ${botonesHtml}
     </div>
   `;
   document.body.appendChild(overlay);
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrarModal(); });
   // Close on Escape
-  const escHandler = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); } };
+  const escHandler = (e) => { if (e.key === 'Escape') { cerrarModal(); document.removeEventListener('keydown', escHandler); } };
   document.addEventListener('keydown', escHandler);
 }
 
