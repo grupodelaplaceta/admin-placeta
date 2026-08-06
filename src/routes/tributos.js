@@ -81,6 +81,41 @@ function agruparContribuyentes(state) {
   // EIP de empresa: EIP-XXXXXX
   const esEIPValido = (e) => /^EIP-[A-Z0-9]{4,}$/.test(String(e || '').toUpperCase().trim());
 
+  // ── Nombre LEGAL del contribuyente (no el nombre de la cuenta) ─────────
+  // Las cuentas se llaman p.ej. "Salma El Harrak - Personal (Banco del Grupo
+  // de La Placeta)" o "Unhiro S.PV. (Empresa)". El nombre legal es el del
+  // TITULAR: quitamos los sufijos de "nombre de cuenta" y nos quedamos con la
+  // parte real (nombre de la persona o razón social de la empresa).
+  const SUFIJOS_CUENTA = [
+    /\s*[-–—]+\s*Personal\s*\([^)]*\)\s*$/i,   // "- Personal (Banco del Grupo de La Placeta)"
+    /\s*[-–—]+\s*\(\s*\)\s*$/i,                 // "-  ()"
+    /\s*[-–—]+\s*Personal\s*$/i,                // "- Personal"
+    /\s*\(\s*Empresa\s*\)\s*$/i,                // "(Empresa)"
+    /\s*\(\s*Banco del Grupo de La Placeta\s*\)\s*$/i
+  ];
+  // Nombres que NO son un nombre legal (genéricos o institucionales)
+  const NOMBRE_GENERICO = /^(cuenta principal|cuenta personal|personal|ahorro|hucha|fondos|inversiones?\b.*|cuenta\b.*|ahorro\s*[·.]?\s*hucha)$|fundación|fundacion|banco de la placeta|banco del grupo/i;
+
+  const limpiarNombreCuenta = (raw) => {
+    let n = String(raw || '').trim();
+    for (const rx of SUFIJOS_CUENTA) n = n.replace(rx, '').trim();
+    return n.replace(/\s{2,}/g, ' ').trim();
+  };
+  const esNombreLegal = (n) => n && !NOMBRE_GENERICO.test(n) && n !== '—';
+
+  // Mejor nombre legal del contribuyente: el candidato más completo (con
+  // apellidos) entre sus cuentas, o el displayName del user si es un nombre.
+  const mejorNombreLegal = (contrib) => {
+    const u = userPorPlaceta.get(contrib.placetaId) || userPorPlaceta.get(contrib.dip) || userPorPlaceta.get(contrib.eip);
+    const candidatos = contrib.cuentas
+      .map(c => limpiarNombreCuenta(c.displayName))
+      .filter(esNombreLegal);
+    if (u?.displayName && esNombreLegal(u.displayName)) candidatos.push(u.displayName);
+    if (candidatos.length === 0) return u?.displayName || contrib.dip || contrib.clave || '—';
+    candidatos.sort((a, b) => b.length - a.length);
+    return candidatos[0];
+  };
+
   const resolverNombre = (c) => {
     const u = userPorPlaceta.get(c.placetaId);
     if (u?.displayName) return u.displayName;
@@ -102,8 +137,8 @@ function agruparContribuyentes(state) {
       if (!esEIPValido(eip)) continue;
       if (!contribuyentes.has(eip)) {
         contribuyentes.set(eip, {
-          clave: eip, eip, tipo: 'Empresa', cuentas: [],
-          displayName: c.displayName && c.displayName !== c.id ? c.displayName : eip,
+          clave: eip, eip, tipo: 'Empresa', cuentas: [], placetaId: c.placetaId || '',
+          displayName: limpiarNombreCuenta(c.displayName) || eip,
           dip: u?.dip || ''
         });
       }
@@ -117,7 +152,7 @@ function agruparContribuyentes(state) {
       if (!esDIPValido(dipJunior)) continue;
       if (!contribuyentes.has(dipJunior)) {
         contribuyentes.set(dipJunior, {
-          clave: dipJunior, dip: dipJunior, eip: null, tipo: 'Fisico', cuentas: [],
+          clave: dipJunior, dip: dipJunior, eip: null, tipo: 'Fisico', cuentas: [], placetaId: c.placetaId || '',
           displayName: resolverNombre(c),
           esJunior: true, pagaCapitalia: true
         });
@@ -129,12 +164,18 @@ function agruparContribuyentes(state) {
       if (!esDIPValido(dip)) continue;
       if (!contribuyentes.has(dip)) {
         contribuyentes.set(dip, {
-          clave: dip, dip, eip: null, tipo: 'Fisico', cuentas: [],
+          clave: dip, dip, eip: null, tipo: 'Fisico', cuentas: [], placetaId: c.placetaId || '',
           displayName: resolverNombre(c)
         });
       }
       contribuyentes.get(dip).cuentas.push(c);
     }
+  }
+
+  // Recalcular el displayName de cada contribuyente con el nombre legal real
+  // (el del titular, no el nombre de la cuenta bancaria).
+  for (const contrib of contribuyentes.values()) {
+    contrib.displayName = mejorNombreLegal(contrib);
   }
 
   return contribuyentes;
