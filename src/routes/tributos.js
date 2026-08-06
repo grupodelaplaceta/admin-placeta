@@ -176,7 +176,7 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
     );
   }
 
-  // Declaraciones mensuales por contribuyente (desde junio 2026)
+  // Declaraciones mensuales por contribuyente (desde julio 2026)
   const todasDecl = await sbListDeclaraciones(2000);
   const declPorContrib = new Map();
   for (const d of todasDecl) {
@@ -518,10 +518,7 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     return s;
   }, 0);
   const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
-  // Cuota de la declaración del mes anterior (simulación en lote): se descuenta
-  // del saldo base como si ya se hubiera pagado.
-  const cuotaAnterior = Number(opts.cuotaAnterior || 0);
-  const saldoBase = saldoActual - deltaDesdeInicio - cuotaAnterior;
+  const saldoBase = saldoActual - deltaDesdeInicio;
 
   const diasEnMes = new Date(anio, mes, 0).getDate();
   const balances = [];
@@ -599,7 +596,7 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
 }
 
 // ── Reconciliación MASIVA: declara TODAS las cuentas por cada mes ────────
-// Desde junio de 2026 (o el mes de creación de la cuenta si es posterior)
+// Desde julio de 2026 (o el mes de creación de la cuenta si es posterior)
 // hasta el mes actual, genera/actualiza la declaración de cada contribuyente.
 router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
   try {
@@ -610,7 +607,7 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
     const porContribuyente = agruparContribuyentes(state);
 
     // Determinar desde qué mes declara cada contribuyente
-    const MES_INICIO = '2026-06'; // junio 2026
+    const MES_INICIO = '2026-07'; // julio 2026
     const ahora = new Date();
     const mesActual = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
     const meses = [];
@@ -628,9 +625,6 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
       // placeta_id de la declaración: EIP para empresas, DIP para personas
       const placetaId = contrib.eip || contrib.dip || clave;
       const cuentasContrib = contrib.cuentas;
-      // Cuota acumulada de declaraciones anteriores (simulación en lote): cada
-      // mes se descuenta del patrimonio como si la del mes anterior se pagó.
-      let cuotaAcumulada = 0;
 
       // Mes de creación del contribuyente: usar la transacción más antigua si existe
       let mesInicio = MES_INICIO;
@@ -651,17 +645,12 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
           const existentes = await sbListDeclaracionesPorMes(mes);
           const ya = existentes.some(d => d.placeta_id === placetaId);
           if (ya) { yaExistentes++; continue; }
-          // La declaración del mes anterior ya "se pagó": se descuenta su cuota
-          // del patrimonio del mes actual en la simulación en lote.
           const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes, {
             esJunior: contrib.esJunior,
-            pagaCapitalia: contrib.pagaCapitalia,
-            cuotaAnterior: cuotaAcumulada
+            pagaCapitalia: contrib.pagaCapitalia
           });
           if (r.success) {
             creadas++;
-            const cuotaTotal = r.cuotaIRM + r.cuotaIGF;
-            cuotaAcumulada = cuotaAcumulada + cuotaTotal;
             resultados.push({ contribuyente: placetaId, mes, patrimonio: r.patrimonioMedio, irm: r.cuotaIRM, igf: r.cuotaIGF, id: r.declaracion.id, esJunior: r.esJunior, pagaCapitalia: r.pagaCapitalia });
           } else errores++;
         } catch (e) {
