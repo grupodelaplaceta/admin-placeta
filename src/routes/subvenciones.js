@@ -14,7 +14,6 @@
  *  - Se generan PDFs: concesión, justificación y cierre.
  */
 import { Router } from 'express';
-import { verificarPermiso } from '../middleware/auth.js';
 import { supabase } from '../config/supabase.js';
 import { apiBancoGetState, apiBancoPost } from '../config/db.js';
 
@@ -141,7 +140,7 @@ router.get('/api/subvenciones/:id', async (req, res) => {
 
 // ── API: Conceder subvención (NO mueve Placetas) ─────────────────────────
 // Body: { emisorEip, receptorEip, importe, concepto, fechaLimite?, excluirTipos?[] }
-router.post('/api/subvenciones/conceder', verificarPermiso('rsp', 'gestionar_subvenciones'), async (req, res) => {
+router.post('/api/subvenciones/conceder', async (req, res) => {
   try {
     const { emisorEip, receptorEip, importe, concepto, fechaLimite, excluirTipos } = req.body;
     if (!emisorEip || !receptorEip) return res.status(400).json({ error: 'Se requieren EIP emisor y receptor' });
@@ -198,7 +197,7 @@ router.post('/api/subvenciones/conceder', verificarPermiso('rsp', 'gestionar_sub
 
 // ── API: Justificar gastos (mueve Placetas del emisor al receptor) ──────
 // Body: { transaccionIds: [txId,...] } — transacciones de GASTO del receptor
-router.post('/api/subvenciones/:id/justificar', verificarPermiso('rsp', 'gestionar_subvenciones'), async (req, res) => {
+router.post('/api/subvenciones/:id/justificar', async (req, res) => {
   try {
     await subvencionesReady;
     const s = memSubvenciones.get(req.params.id);
@@ -275,7 +274,7 @@ router.post('/api/subvenciones/:id/justificar', verificarPermiso('rsp', 'gestion
 });
 
 // ── API: Cerrar subvención ───────────────────────────────────────────────
-router.post('/api/subvenciones/:id/cerrar', verificarPermiso('rsp', 'gestionar_subvenciones'), async (req, res) => {
+router.post('/api/subvenciones/:id/cerrar', async (req, res) => {
   try {
     await subvencionesReady;
     const s = memSubvenciones.get(req.params.id);
