@@ -174,7 +174,7 @@ function verSubvencion(id) {
        <strong>${j.id}</strong> · ${(j.importe).toLocaleString('es-ES')} Pz · ${j.fecha ? j.fecha.slice(0,10) : ''}
        <div style="color:#999;font-size:10px;margin-top:2px">${(j.conceptos||[]).join('; ')}</div>
        <div class="flex gap-4" style="margin-top:6px">
-         <button class="btn-icon" onclick="descargarPDFJust('<%= s.id %>','${j.id}')" title="PDF justificación">📄</button>
+         <button class="btn-icon" onclick="descargarPDFJust('${id}','${j.id}')" title="PDF justificación">📄</button>
        </div>
      </div>`).join('') || '<div style="color:#999;font-size:12px">Sin justificaciones.</div>';
   mostrarModal('👁️ Subvención ' + s.id, `
