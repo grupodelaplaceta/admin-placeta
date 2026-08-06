@@ -111,6 +111,7 @@ const WORKSPACES = {
           { texto: 'Junior', url: '/junta/junior', icono: '🧒' },
           { texto: 'Empresas', url: '/junta/empresas', icono: '🏢' },
           { texto: 'Cumplimiento', url: '/junta/empresas/cumplimiento', icono: '📊' },
+          { texto: 'Subvenciones', url: '/junta/subvenciones', icono: '💸' },
           { texto: 'Documentos', url: '/junta/documentos', icono: '📑' },
         ]
       },
@@ -148,6 +149,7 @@ const WORKSPACES = {
           { texto: 'Junior', url: '/administracion/junior', icono: '🧒' },
           { texto: 'Empresas', url: '/administracion/empresas', icono: '🏢' },
           { texto: 'Cumplimiento', url: '/administracion/empresas/cumplimiento', icono: '📊' },
+          { texto: 'Subvenciones', url: '/administracion/subvenciones', icono: '💸' },
           { texto: 'Documentos', url: '/administracion/documentos', icono: '📑' },
         ]
       },

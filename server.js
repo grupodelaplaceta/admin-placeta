@@ -24,6 +24,7 @@ import administracionRoutes from './src/routes/administracion.js';
 import apiRoutes from './src/routes/api.js';
 import documentosRoutes from './src/routes/documentos.js';
 import empresasRoutes from './src/routes/empresas.js';
+import subvencionesRoutes from './src/routes/subvenciones.js';
 import juniorApiRoutes from './src/routes/junior-api.js';
 import juniorOficialApiRoutes from './src/routes/junior-oficial-api.js';
 import juniorAcademiaApiRoutes from './src/routes/junior-academia-api.js';
@@ -209,7 +210,9 @@ app.post('/api/mobil/multi/votaciones', async (req, res) => {
 app.use(documentosRoutes); // /api/:entidad/documentos...
 app.use(accionesDocumentoRoutes); // /api/acciones/*
 app.use('/junta', empresasRoutes);
+app.use('/junta', subvencionesRoutes);
 app.use('/administracion', empresasRoutes);
+app.use('/administracion', subvencionesRoutes);
 // También accesible desde banco
 app.use('/banco', empresasRoutes);
 

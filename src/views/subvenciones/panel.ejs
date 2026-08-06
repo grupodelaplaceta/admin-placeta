@@ -1,0 +1,202 @@
+<div class="info-card mb-16">
+  <h4>💸 Subvenciones entre Empresas (RSP / Sociedades)</h4>
+  <p>Una empresa <strong>subvencionadora</strong> concede una subvención a otra <strong>empresa</strong> (por EIP) fijando una cantidad. <strong>No se mueve ni un solo Placeta en la concesión</strong>: el dinero se entrega al <em>justificar gastos</em>. La empresa subvencionada selecciona transacciones de gasto y solo entonces se transfieren los Placetas de la subvencionadora a la subvencionada, restándose del restante. Se generan PDFs de concesión, justificación y cierre.</p>
+</div>
+
+<!-- KPIs -->
+<div class="grid-3 mb-16">
+  <div class="stat-card"><div class="stat-value"><%= subvenciones.length %></div><div class="stat-label">Subvenciones</div></div>
+  <div class="stat-card"><div class="stat-value"><%= subvenciones.filter(s => s.estado === 'concedida').length %></div><div class="stat-label">Concedidas</div></div>
+  <div class="stat-card"><div class="stat-value"><%= subvenciones.filter(s => s.estado === 'cerrada').length %></div><div class="stat-label">Cerradas</div></div>
+</div>
+
+<div class="flex gap-8 mb-16 flex-wrap">
+  <button class="btn-primary" onclick="concederSubvencion()">💸 Conceder subvención</button>
+  <input type="text" id="filtroSub" class="form-input" placeholder="🔍 Buscar por empresa o EIP..." style="width:260px" oninput="filtrarSubvenciones()">
+</div>
+
+<% if (subvenciones.length === 0) { %>
+<div class="empty-state">
+  <div class="empty-icon">💸</div>
+  <h3>Sin subvenciones</h3>
+  <p>Usa "Conceder subvención" para conceder la primera entre empresas.</p>
+</div>
+<% } else { %>
+<div class="table-container">
+  <table>
+    <thead><tr><th>Subvención</th><th>Subvencionadora → Subvencionada</th><th>Concepto</th><th>Importe</th><th>Restante</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody id="tablaSubvenciones">
+      <% subvenciones.forEach(s => { %>
+      <tr class="fila-sub">
+        <td><strong style="font-size:12px"><%= s.id %></strong><br><span style="font-size:10px;color:#999"><%= (s.fecha_concesion||'').slice(0,10) %></span></td>
+        <td style="font-size:12px">
+          <span class="badge badge-purple" style="font-size:9px"><%= s.emisor_eip %></span> <%= s.emisor_nombre %>
+          <div style="color:#999;font-size:10px">→ <span class="badge badge-info" style="font-size:9px"><%= s.receptor_eip %></span> <%= s.receptor_nombre %></div>
+        </td>
+        <td style="font-size:12px"><%= s.concepto %></td>
+        <td style="font-size:12px"><%= (Number(s.importe)||0).toLocaleString('es-ES') %> Pz</td>
+        <td style="font-size:12px"><strong><%= (Number(s.importe_restante)||0).toLocaleString('es-ES') %> Pz</strong></td>
+        <td>
+          <% if (s.estado === 'cerrada') { %><span class="badge badge-success">Cerrada</span><% } else { %><span class="badge badge-warning">Concedida</span><% } %>
+        </td>
+        <td>
+          <div class="flex gap-4" style="flex-wrap:nowrap">
+            <button class="btn-icon" onclick="verSubvencion('<%= s.id %>')" title="Ver detalle">👁️</button>
+            <% if (s.estado !== 'cerrada') { %>
+            <button class="btn-icon" onclick="justificarGastos('<%= s.id %>')" title="Justificar gastos">🧾</button>
+            <button class="btn-icon" onclick="cerrarSubvencion('<%= s.id %>')" title="Cerrar subvención">🔒</button>
+            <% } %>
+            <button class="btn-icon" onclick="descargarPDF('<%= s.id %>','concesion')" title="PDF concesión">📄</button>
+            <button class="btn-icon" onclick="descargarPDF('<%= s.id %>','cierre')" title="PDF cierre">📁</button>
+          </div>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+<p style="font-size:12px;color:#999;margin-top:8px">Total: <strong><%= subvenciones.length %></strong> subvenciones</p>
+<% } %>
+
+<script>
+const subvenciones = <%- JSON.stringify(subvenciones) %>;
+const empresas = <%- JSON.stringify(empresas) %>;
+const tiposExcluibles = <%- JSON.stringify(tiposExcluibles) %>;
+const entidadActual = '<%= entidad_actual %>';
+
+function filtrarSubvenciones() {
+  const q = document.getElementById('filtroSub').value.toLowerCase();
+  document.querySelectorAll('.fila-sub').forEach(row => {
+    row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function selectEmpresas(id) {
+  const opts = empresas.map(e =>
+    `<option value="${e.eip}">${e.nombre} (${e.eip})</option>`).join('');
+  return `<select id="${id}" class="form-input" style="width:100%"><option value="">— Selecciona empresa (EIP) —</option>${opts}</select>`;
+}
+
+function selectTiposExcluidos() {
+  return tiposExcluibles.map(t =>
+    `<label style="display:block;font-size:12px;margin:3px 0"><input type="checkbox" class="chk-tipo" value="${t.id}"> ${t.label}</label>`).join('');
+}
+
+// ── Conceder subvención ────────────────────────────────────────────────
+function concederSubvencion() {
+  mostrarModal('💸 Conceder subvención', `
+    <p style="margin-bottom:10px;font-size:13px">Fija una cantidad. <strong>No se mueve ningún Placeta</strong> hasta justificar gastos.</p>
+    ${selectEmpresas('subEmisor')}
+    <div style="font-size:12px;color:#999;margin:4px 0">→</div>
+    ${selectEmpresas('subReceptor')}
+    <input type="text" id="subConcepto" class="form-input" placeholder="Concepto de la subvención" style="width:100%;margin-top:8px">
+    <input type="number" id="subImporte" class="form-input" placeholder="Importe (Pz) *" min="1" style="width:100%;margin-top:8px">
+    <input type="date" id="subFechaLimite" class="form-input" style="width:100%;margin-top:8px">
+    <div style="font-size:12px;color:#999;margin:8px 0">Tipos de gasto EXCLUIDOS (opcional):</div>
+    <div style="max-height:150px;overflow:auto;border:1px solid #eee;border-radius:6px;padding:8px">${selectTiposExcluidos()}</div>
+  `, [
+    { texto: 'Cancelar', clase: 'btn-secondary', onClick: cerrarModal },
+    { texto: '💸 Conceder', clase: 'btn-primary', onClick: () => {
+        const emisorEip = document.getElementById('subEmisor').value;
+        const receptorEip = document.getElementById('subReceptor').value;
+        const importe = Number(document.getElementById('subImporte').value);
+        if (!emisorEip || !receptorEip || !importe || importe <= 0) { mostrarToast('Indica emisor, receptor e importe', 'error'); return; }
+        if (emisorEip === receptorEip) { mostrarToast('Emisor y receptor deben ser distintas', 'error'); return; }
+        const excluirTipos = [...document.querySelectorAll('.chk-tipo:checked')].map(c => c.value);
+        apiFetch(`/${entidadActual}/api/subvenciones/conceder`, 'POST', {
+          emisorEip, receptorEip, importe,
+          concepto: document.getElementById('subConcepto').value,
+          fechaLimite: document.getElementById('subFechaLimite').value || null,
+          excluirTipos
+        }).then(r => { if (r.success) { cerrarModal(); mostrarToast('Subvención concedida', 'ok'); setTimeout(() => location.reload(), 800); } });
+    }}
+  ]);
+}
+
+// ── Justificar gastos ──────────────────────────────────────────────────
+function justificarGastos(id) {
+  apiFetch(`/${entidadActual}/api/subvenciones/${id}/gastos`, 'GET').then(r => {
+    const gastos = r.gastos || [];
+    if (gastos.length === 0) { mostrarToast('No hay gastos para justificar', 'error'); return; }
+    const filas = gastos.map(g =>
+      `<label style="display:block;font-size:12px;margin:4px 0;border:1px solid #eee;border-radius:6px;padding:6px 8px">
+        <input type="checkbox" class="chk-gasto" value="${g.id}" data-imp="${g.importe}" ${g.excluido ? 'disabled' : ''}>
+        <strong>${(g.importe).toLocaleString('es-ES')} Pz</strong> — ${g.concepto || g.tipo}
+        <span style="color:#999;font-size:10px"> (${g.fecha ? g.fecha.slice(0,10) : ''} · ${g.tipo})</span>
+        ${g.excluido ? '<span class="badge badge-error" style="font-size:8px">excluido</span>' : ''}
+      </label>`).join('');
+    mostrarModal('🧾 Justificar gastos — ' + id, `
+      <p style="font-size:12px;color:#999;margin-bottom:8px">Selecciona los gastos que la subvención debe cubrir. Se transferirá ese importe de la subvencionadora a la subvencionada.</p>
+      <div style="max-height:320px;overflow:auto">${filas}</div>
+      <div style="margin-top:10px;font-size:13px"><strong>Total seleccionado: <span id="totalSel">0</span> Pz</strong></div>
+    `, [
+      { texto: 'Cancelar', clase: 'btn-secondary', onClick: cerrarModal },
+      { texto: '✅ Justificar y transferir', clase: 'btn-primary', onClick: () => {
+          const sel = [...document.querySelectorAll('.chk-gasto:checked')].map(c => c.value);
+          if (sel.length === 0) { mostrarToast('Selecciona al menos un gasto', 'error'); return; }
+          apiFetch(`/${entidadActual}/api/subvenciones/${id}/justificar`, 'POST', { transaccionIds: sel })
+            .then(r => { if (r.success) { cerrarModal(); mostrarToast('Gastos justificados y transferidos', 'ok'); setTimeout(() => location.reload(), 800); } });
+      }}
+    ]);
+    // Actualizar total
+    setTimeout(() => {
+      document.querySelectorAll('.chk-gasto').forEach(c => c.addEventListener('change', () => {
+        let t = 0;
+        document.querySelectorAll('.chk-gasto:checked').forEach(x => t += Number(x.dataset.imp || 0));
+        document.getElementById('totalSel').textContent = t.toLocaleString('es-ES');
+      }));
+    }, 100);
+  });
+}
+
+// ── Cerrar subvención ──────────────────────────────────────────────────
+function cerrarSubvencion(id) {
+  const s = subvenciones.find(x => x.id === id);
+  const restante = Number(s?.importe_restante || 0);
+  mostrarModal('🔒 Cerrar subvención ' + id, `
+    <p style="font-size:13px">¿Cerrar esta subvención? El importe no justificado (<strong>${restante.toLocaleString('es-ES')} Pz</strong>) quedará liberado y se generará el PDF de cierre.</p>
+  `, [
+    { texto: 'Cancelar', clase: 'btn-secondary', onClick: cerrarModal },
+    { texto: '🔒 Cerrar', clase: 'btn-primary', onClick: () => {
+        apiFetch(`/${entidadActual}/api/subvenciones/${id}/cerrar`, 'POST', {}).then(r => {
+          if (r.success) { cerrarModal(); mostrarToast('Subvención cerrada', 'ok'); setTimeout(() => location.reload(), 800); }
+        });
+    }}
+  ]);
+}
+
+// ── Ver detalle ────────────────────────────────────────────────────────
+function verSubvencion(id) {
+  const s = subvenciones.find(x => x.id === id);
+  if (!s) return;
+  const justis = (s.justificaciones || []).map(j =>
+    `<div style="font-size:12px;border:1px solid #eee;border-radius:6px;padding:8px;margin-bottom:6px">
+       <strong>${j.id}</strong> · ${(j.importe).toLocaleString('es-ES')} Pz · ${j.fecha ? j.fecha.slice(0,10) : ''}
+       <div style="color:#999;font-size:10px;margin-top:2px">${(j.conceptos||[]).join('; ')}</div>
+       <div class="flex gap-4" style="margin-top:6px">
+         <button class="btn-icon" onclick="descargarPDFJust('<%= s.id %>','${j.id}')" title="PDF justificación">📄</button>
+       </div>
+     </div>`).join('') || '<div style="color:#999;font-size:12px">Sin justificaciones.</div>';
+  mostrarModal('👁️ Subvención ' + s.id, `
+    <div style="font-size:13px;line-height:1.7">
+      <div><strong>Subvencionadora:</strong> ${s.emisor_nombre} (<span class="badge badge-purple" style="font-size:9px">${s.emisor_eip}</span>)</div>
+      <div><strong>Subvencionada:</strong> ${s.receptor_nombre} (<span class="badge badge-info" style="font-size:9px">${s.receptor_eip}</span>)</div>
+      <div><strong>Concepto:</strong> ${s.concepto}</div>
+      <div><strong>Importe:</strong> ${(Number(s.importe)||0).toLocaleString('es-ES')} Pz</div>
+      <div><strong>Restante:</strong> ${(Number(s.importe_restante)||0).toLocaleString('es-ES')} Pz</div>
+      <div><strong>Estado:</strong> ${s.estado}</div>
+      <div><strong>Excluidos:</strong> ${(s.excluir_tipos||[]).join(', ') || '—'}</div>
+      <hr style="margin:10px 0">
+      <div style="font-weight:600;margin-bottom:6px">Justificaciones:</div>
+      ${justis}
+    </div>
+  `, [{ texto: 'Cerrar', clase: 'btn-secondary', onClick: cerrarModal }]);
+}
+
+function descargarPDF(id, tipo) {
+  window.open(`/${entidadActual}/api/subvenciones/${id}/pdf/${tipo}`, '_blank');
+}
+function descargarPDFJust(id, jus) {
+  window.open(`/${entidadActual}/api/subvenciones/${id}/pdf/justificacion?jus=${jus}`, '_blank');
+}
+</script>

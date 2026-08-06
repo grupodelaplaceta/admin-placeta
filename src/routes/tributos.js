@@ -108,6 +108,21 @@ function agruparContribuyentes(state) {
         });
       }
       contribuyentes.get(eip).cuentas.push(c);
+    } else if (c.type === 'Child') {
+      // Junior (cuenta Child): el menor tributa pero sus impuestos los paga
+      // Capitalia hasta que cumple 16 años (art. régimen junior).
+      // El DIP del junior se deriva del id de la cuenta (u-<dipminúscula>).
+      const m = String(c.id || '').match(/^u-([0-9]{8}[A-Z])$/i);
+      const dipJunior = m ? m[1].toUpperCase() : (u?.dip || '').toString().toUpperCase().trim();
+      if (!esDIPValido(dipJunior)) continue;
+      if (!contribuyentes.has(dipJunior)) {
+        contribuyentes.set(dipJunior, {
+          clave: dipJunior, dip: dipJunior, eip: null, tipo: 'Fisico', cuentas: [],
+          displayName: resolverNombre(c),
+          esJunior: true, pagaCapitalia: true
+        });
+      }
+      contribuyentes.get(dipJunior).cuentas.push(c);
     } else {
       // Persona → SOLO si el DIP tiene formato correcto (DNI/NIE)
       const dip = (u?.dip || c.placetaId || '').toString().toUpperCase().trim();
@@ -142,7 +157,9 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
       iban: c.cuentas[0]?.iban || '—',
       tributosCensusDate: c.cuentas.find(a => a.tributosCensusDate)?.tributosCensusDate || null,
       numCuentas: c.cuentas.length,
-      saldoTotal: saldo
+      saldoTotal: saldo,
+      esJunior: c.esJunior || false,
+      pagaCapitalia: c.pagaCapitalia || false
     });
   }
   contribuyentes.sort((a, b) => (b.saldoTotal || 0) - (a.saldoTotal || 0));
@@ -361,13 +378,21 @@ router.put('/api/declaraciones/:id/emit', verificarPermiso('tributos', 'crear_de
 
     const total = (d.cuota_irm || 0) + (d.cuota_igf || 0);
 
+    // Junior (menor de 16): sus impuestos los paga Capitalia hasta que cumple
+    // los 16 años y deja de ser junior. El cobro se hace de CAPITALIA_BANK → TGLP.
+    const esJunior = d.cuenta_id_blp === 'CAPITALIA_BANK' || /^CAPITALIA/i.test(d.cuenta_id_blp || '');
+    const fromAccount = esJunior ? 'CAPITALIA_BANK' : d.cuenta_id_blp;
+    const concepto = esJunior
+      ? `DEC-JUNIOR ${d.id.slice(-8)} ${d.mes_periodo} (impuestos asumidos por Capitalia)`
+      : `DEC-${d.id.slice(-8)} ${d.mes_periodo}`;
+
     // Intentar cobro vía API Banco
     let transactionId = null;
     try {
       const { apiBancoPost } = await import('../config/db.js');
       const cobro = await apiBancoPost('transfer', {
-        from: d.cuenta_id_blp, to: 'TGLP',
-        amount: total, concept: `DEC-${d.id.slice(-8)} ${d.mes_periodo}`
+        from: fromAccount, to: 'TGLP',
+        amount: total, concept: concepto
       });
       if (cobro?.transactionId) transactionId = cobro.transactionId;
     } catch { /* fallback: marcar como emitida sin cobro */ }
@@ -461,8 +486,10 @@ router.post('/api/reconcile/:placetaId', verificarPermiso('tributos', 'crear_dec
 // Reconstruye los saldos diarios REALES desde las transacciones del banco,
 // calcula patrimonio medio, IA, IRM e IGF según normativa y crea/actualiza
 // la declaración mensual del contribuyente.
-async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriodo) {
+async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriodo, opts = {}) {
   if (!cuentas || cuentas.length === 0) return { error: 'Cuenta no encontrada en el banco' };
+  const esJunior = opts.esJunior === true || cuentas.some(c => c.type === 'Child');
+  const pagaCapitalia = opts.pagaCapitalia === true || esJunior;
   const ids = new Set(cuentas.map(c => c.id));
   const trans = (transacciones || []).filter(t => ids.has(t.fromAccountId) || ids.has(t.toAccountId));
 
@@ -532,7 +559,7 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     indice_acumulacion: Math.round(ia * 10000) / 10000,
     cuota_irm: Math.round(cuotaIRM * 100) / 100,
     cuota_igf: cuotaIGF,
-    cuenta_id_blp: cuentas[0]?.id || placetaId,
+    cuenta_id_blp: pagaCapitalia ? 'CAPITALIA_BANK' : (cuentas[0]?.id || placetaId),
     estado_pago: 'Borrador',
     exencion_aplicada: igfResult.exento || false,
     dias_declarados_banco: diasEnMes,
@@ -553,6 +580,8 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     igfResult,
     exencionIGF: igfResult.exento,
     iva_exento_empresa: esEmpresaPequeña || eipVinculado || false,
+    esJunior,
+    pagaCapitalia,
     declaracion: decl
   };
 }
@@ -607,10 +636,10 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
           const existentes = await sbListDeclaracionesPorMes(mes);
           const ya = existentes.some(d => d.placeta_id === placetaId);
           if (ya) { yaExistentes++; continue; }
-          const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes);
+          const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes, { esJunior: contrib.esJunior, pagaCapitalia: contrib.pagaCapitalia });
           if (r.success) {
             creadas++;
-            resultados.push({ contribuyente: placetaId, mes, patrimonio: r.patrimonioMedio, irm: r.cuotaIRM, igf: r.cuotaIGF, id: r.declaracion.id });
+            resultados.push({ contribuyente: placetaId, mes, patrimonio: r.patrimonioMedio, irm: r.cuotaIRM, igf: r.cuotaIGF, id: r.declaracion.id, esJunior: r.esJunior, pagaCapitalia: r.pagaCapitalia });
           } else errores++;
         } catch (e) {
           errores++;

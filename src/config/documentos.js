@@ -159,6 +159,11 @@ export const TIPOS_DOCUMENTO = {
       'alta-admin-junior', 'baja-admin-junior',
       'certificado-admin-junior', 'historial-admin-junior'
     ]
+  },
+  rsp: {
+    subvenciones: [
+      'subvencion-concesion', 'subvencion-justificacion', 'subvencion-cierre'
+    ]
   }
 };
 
@@ -953,6 +958,113 @@ function generarContenidoDocumento(tipo, datos = {}) {
       if (datos.notas) {
         datos.notas.split('\n').filter(l=>l.trim()).forEach(n => L.push({nota: n.trim()}));
       }
+      break;
+    }
+
+    // ── Subvención: Concesión ──────────────────────────────────────────
+    case 'subvencion-concesion': {
+      const fmt = (n) => (Number(n)||0).toLocaleString('es-ES') + ' Pz';
+      const fec = (f) => f ? new Date(f).toLocaleDateString('es-ES', { year:'numeric', month:'long', day:'numeric' }) : hoy;
+      sf('SUBVENCION CONCEDIDA');
+      cf('Nº de subvención', datos.id || datos.refId || '—');
+      cf('Fecha de concesión', fec(datos.fecha_concesion || datos.createdAt));
+      cf('Estado', 'Concedida');
+      ln();
+      sf('PARTES');
+      cf('Empresa subvencionadora (EIP)', `${datos.emisor_nombre || datos.emisor_eip} (${datos.emisor_eip || '—'})`);
+      cf('Empresa subvencionada (EIP)', `${datos.receptor_nombre || datos.receptor_eip} (${datos.receptor_eip || '—'})`);
+      cf('Concedida por', datos.concedida_por || '—');
+      ln();
+      sf('DETALLE DE LA SUBVENCION');
+      cf('Concepto', datos.concepto || 'Subvención');
+      cf('Importe total', fmt(datos.importe));
+      cf('Importe restante', fmt(datos.importe_restante !== undefined ? datos.importe_restante : datos.importe));
+      if (datos.fecha_limite) cf('Fecha límite de justificación', fec(datos.fecha_limite));
+      if (Array.isArray(datos.excluir_tipos) && datos.excluir_tipos.length) {
+        cf('Tipos de gasto excluidos', datos.excluir_tipos.join(', '));
+      }
+      ln(); sf('EXPONE');
+      tx('PRIMERO. — Que la empresa subvencionadora identificada en el presente documento, en ejercicio de su autonomía de la voluntad y de conformidad con el régimen de Subvenciones del Registro de Sociedades de La Placeta (RSP), ha resuelto conceder una subvención a favor de la empresa subvencionada identificada, por el importe total indicado, con el objeto y finalidad descritos en el concepto de la subvención.');
+      tx('SEGUNDO. — Que el importe total de la subvención se fija en la cuantía señalada, sin que en el momento de la concesión se produzca movimiento alguno de Placetas entre las cuentas bancarias de las empresas intervinientes. Los fondos se harán efectivos exclusivamente mediante la justificación de gastos reales de la empresa subvencionada, conforme al procedimiento establecido.');
+      tx('TERCERO. — Que la empresa subvencionada deberá justificar los gastos cubiertos por la subvención seleccionando transacciones de gasto de su cuenta bancaria dentro del importe restante, pudiendo la empresa subvencionadora excluir determinados tipos de gasto (impuestos, comisiones, declaraciones de la renta IRM/IGF, IVA u otros).');
+      tx('CUARTO. — Que la subvención podrá cerrarse por la empresa subvencionada, por la empresa subvencionadora o automáticamente en la fecha límite programada, generándose en tal caso el correspondiente documento de cierre.');
+      ln(); sf('RESUELVE');
+      tx('Primero. — CONCEDER a la empresa subvencionada la subvención por el importe total indicado, que se mantendrá reservado a favor de la misma en el Registro de Sociedades de La Placeta.');
+      tx('Segundo. — DETERMINAR que el importe se hará efectivo únicamente mediante la justificación de gastos de la empresa subvencionada, en los términos y con las exclusiones previstas en el presente documento.');
+      tx('Tercero. — ESTABLECER que el importe no justificado en el plazo previsto quedará sin efecto a favor de la empresa subvencionada en el momento del cierre de la subvención.');
+      tx('Cuarto. — NOTIFICAR la presente concesión a ambas empresas a través del sistema PlacetaID, dejando constancia en el historial de auditoría del RSP.');
+      ln();
+      L.push({nota: 'Documento oficial de concesión de subvención emitido por el Registro de Sociedades de La Placeta (RSP), entidad integrada en el ecosistema de ASOCIACIÓN GRUPO DE LA PLACETA.'});
+      break;
+    }
+
+    // ── Subvención: Justificación de gastos ────────────────────────────
+    case 'subvencion-justificacion': {
+      const fmt = (n) => (Number(n)||0).toLocaleString('es-ES') + ' Pz';
+      const fec = (f) => f ? new Date(f).toLocaleDateString('es-ES', { year:'numeric', month:'long', day:'numeric' }) : hoy;
+      const jus = datos.justificacion || {};
+      sf('JUSTIFICACION DE SUBVENCION');
+      cf('Nº de subvención', datos.id || '—');
+      cf('Nº de justificación', jus.id || '—');
+      cf('Fecha de justificación', fec(jus.fecha || datos.createdAt));
+      cf('Justificada por', jus.justificada_por || '—');
+      ln();
+      sf('PARTES');
+      cf('Empresa subvencionadora (EIP)', `${datos.emisor_nombre || datos.emisor_eip} (${datos.emisor_eip || '—'})`);
+      cf('Empresa subvencionada (EIP)', `${datos.receptor_nombre || datos.receptor_eip} (${datos.receptor_eip || '—'})`);
+      ln();
+      sf('DETALLE DE LA JUSTIFICACION');
+      cf('Importe justificado', fmt(jus.importe));
+      cf('Importe restante tras justificación', fmt(datos.importe_restante));
+      cf('Referencia bancaria', jus.transactionId || '—');
+      if (Array.isArray(jus.conceptos) && jus.conceptos.length) {
+        sf('GASTOS JUSTIFICADOS');
+        jus.conceptos.forEach((c, i) => tx(`• ${c || 'Gasto sin concepto'}`));
+      }
+      ln(); sf('EXPONE');
+      tx('PRIMERO. — Que la empresa subvencionada, en cumplimiento de las condiciones de la subvención ' + (datos.id || '') + ', ha procedido a la justificación de gastos seleccionando transacciones de gasto reales efectuadas desde su cuenta bancaria, por el importe total indicado en el presente documento.');
+      tx('SEGUNDO. — Que, verificada la selección de gastos y descartados aquellos tipos de gasto expresamente excluidos en la concesión, procede la transferencia de los Placetas correspondientes desde la cuenta de la empresa subvencionadora a la cuenta de la empresa subvencionada, restándose dicho importe del restante de la subvención.');
+      tx('TERCERO. — Que la presente justificación se registra en el sistema bancario con la referencia indicada, quedando constancia del movimiento en el historial de transacciones del Banco de La Placeta.');
+      ln(); sf('RESUELVE');
+      tx('Primero. — DAR POR JUSTIFICADO el importe indicado, transfiriéndose los Placetas de la empresa subvencionadora a la empresa subvencionada.');
+      tx('Segundo. — ACTUALIZAR el importe restante de la subvención, que queda fijado en la cuantía indicada en el presente documento.');
+      tx('Tercero. — REGISTRAR la presente justificación en el expediente de la subvención y en el historial de auditoría del RSP.');
+      ln();
+      L.push({nota: 'Documento oficial de justificación de subvención emitido por el Registro de Sociedades de La Placeta (RSP).'});
+      break;
+    }
+
+    // ── Subvención: Cierre ─────────────────────────────────────────────
+    case 'subvencion-cierre': {
+      const fmt = (n) => (Number(n)||0).toLocaleString('es-ES') + ' Pz';
+      const fec = (f) => f ? new Date(f).toLocaleDateString('es-ES', { year:'numeric', month:'long', day:'numeric' }) : hoy;
+      const justificado = (datos.importe || 0) - (datos.importe_restante || 0);
+      sf('CIERRE DE SUBVENCION');
+      cf('Nº de subvención', datos.id || '—');
+      cf('Fecha de cierre', fec(datos.fecha_cierre || datos.createdAt));
+      cf('Estado', 'Cerrada');
+      ln();
+      sf('PARTES');
+      cf('Empresa subvencionadora (EIP)', `${datos.emisor_nombre || datos.emisor_eip} (${datos.emisor_eip || '—'})`);
+      cf('Empresa subvencionada (EIP)', `${datos.receptor_nombre || datos.receptor_eip} (${datos.receptor_eip || '—'})`);
+      ln();
+      sf('LIQUIDACION DE LA SUBVENCION');
+      cf('Importe total concedido', fmt(datos.importe));
+      cf('Importe justificado', fmt(justificado));
+      cf('Importe no utilizado (liberado)', fmt(datos.importe_restante));
+      if (Array.isArray(datos.justificaciones) && datos.justificaciones.length) {
+        cf('Número de justificaciones', String(datos.justificaciones.length));
+      }
+      ln(); sf('EXPONE');
+      tx('PRIMERO. — Que la subvención ' + (datos.id || '') + ' se cierra en la fecha indicada, por agotamiento del importe, por decisión de las partes o por transcurso del plazo programado.');
+      tx('SEGUNDO. — Que el importe total justificado asciende a la cuantía indicada, habiéndose transferido los Placetas correspondientes de la empresa subvencionadora a la empresa subvencionada conforme a las justificaciones registradas.');
+      tx('TERCERO. — Que el importe no utilizado queda liberado y sin efecto a favor de la empresa subvencionada, quedando la subvención definitivamente cerrada en el Registro de Sociedades de La Placeta.');
+      ln(); sf('RESUELVE');
+      tx('Primero. — DECLARAR el cierre definitivo de la subvención, con la liquidación de importes indicada en el presente documento.');
+      tx('Segundo. — LIBERAR el importe no utilizado, que deja de estar reservado a favor de la empresa subvencionada.');
+      tx('Tercero. — REGISTRAR el cierre en el expediente de la subvención y en el historial de auditoría del RSP, quedando el expediente archivado.');
+      ln();
+      L.push({nota: 'Documento oficial de cierre de subvención emitido por el Registro de Sociedades de La Placeta (RSP).'});
       break;
     }
 

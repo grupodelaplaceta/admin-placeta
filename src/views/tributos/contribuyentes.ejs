@@ -130,7 +130,10 @@ async function altaContribuyente(form) {
       <tr>
         <td><strong><%= c.displayName || '—' %></strong></td>
         <td class="text-mono"><%= c.type === 'Empresa' ? (c.eip || c.id) : (c.dip || c.id) %></td>
-        <td><span class="badge <%= c.type === 'Empresa' ? 'badge-purple' : 'badge-info' %>"><%= c.type === 'Empresa' ? 'Empresa' : 'Persona' %></span></td>
+        <td>
+          <span class="badge <%= c.type === 'Empresa' ? 'badge-purple' : 'badge-info' %>"><%= c.type === 'Empresa' ? 'Empresa' : 'Persona' %></span>
+          <% if (c.esJunior) { %><span class="badge badge-warning" style="margin-left:4px" title="Menor de 16 años. Los impuestos los paga Capitalia">🧒 Junior</span><% } %>
+        </td>
         <td><span class="badge badge-secondary"><%= c.numCuentas || 1 %></span></td>
         <td><strong><%= (c.saldoTotal || 0).toLocaleString() %></strong> Pz</td>
         <td class="text-mono"><%= c.iban || '—' %></td>
