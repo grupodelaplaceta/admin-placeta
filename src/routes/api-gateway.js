@@ -455,13 +455,20 @@ async function handleTributosAPI(path, method, req) {
       const d = new Date(t.createdAt || t.updatedAt);
       return d.getFullYear() === anio && d.getMonth() + 1 === mes;
     });
-    const deltaMes = movMes.reduce((s, t) => {
+    // Para un mes PASADO, el saldo base debe restar los movimientos de los meses
+    // posteriores (de lo contrario el patrimonio del mes pasado se infla con
+    // dinero que aún no existía en esa fecha).
+    const movDesdeInicio = transacciones.filter(t => {
+      const d = new Date(t.createdAt || t.updatedAt);
+      return d.getFullYear() > anio || (d.getFullYear() === anio && d.getMonth() + 1 >= mes);
+    });
+    const deltaDesdeInicio = movDesdeInicio.reduce((s, t) => {
       if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
       if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
       return s;
     }, 0);
     const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
-    const saldoBase = saldoActual - deltaMes;
+    const saldoBase = saldoActual - deltaDesdeInicio;
     const balances = [];
     for (let d = 1; d <= diasEnMes; d++) {
       const hasta = transacciones.filter(t => {

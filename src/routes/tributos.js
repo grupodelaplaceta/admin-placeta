@@ -502,14 +502,26 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     const d = new Date(t.createdAt || t.updatedAt);
     return d.getFullYear() === anio && d.getMonth() + 1 === mes;
   };
+  // Movimientos del mes objetivo
   const movMes = trans.filter(enMes);
-  const deltaMes = movMes.reduce((s, t) => {
+  // Movimientos desde el INICIO del mes objetivo hasta HOY (incluye este mes y
+  // todos los posteriores). Para un mes PASADO, el saldo base debe restar los
+  // movimientos de los meses siguientes: de lo contrario el patrimonio del mes
+  // pasado se infla con dinero que aún no existía en esa fecha.
+  const movDesdeInicio = trans.filter(t => {
+    const d = new Date(t.createdAt || t.updatedAt);
+    return d.getFullYear() > anio || (d.getFullYear() === anio && d.getMonth() + 1 >= mes);
+  });
+  const deltaDesdeInicio = movDesdeInicio.reduce((s, t) => {
     if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
     if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
     return s;
   }, 0);
   const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
-  const saldoBase = saldoActual - deltaMes;
+  // Cuota de la declaración del mes anterior (simulación en lote): se descuenta
+  // del saldo base como si ya se hubiera pagado.
+  const cuotaAnterior = Number(opts.cuotaAnterior || 0);
+  const saldoBase = saldoActual - deltaDesdeInicio - cuotaAnterior;
 
   const diasEnMes = new Date(anio, mes, 0).getDate();
   const balances = [];
@@ -616,6 +628,9 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
       // placeta_id de la declaración: EIP para empresas, DIP para personas
       const placetaId = contrib.eip || contrib.dip || clave;
       const cuentasContrib = contrib.cuentas;
+      // Cuota acumulada de declaraciones anteriores (simulación en lote): cada
+      // mes se descuenta del patrimonio como si la del mes anterior se pagó.
+      let cuotaAcumulada = 0;
 
       // Mes de creación del contribuyente: usar la transacción más antigua si existe
       let mesInicio = MES_INICIO;
@@ -636,9 +651,17 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
           const existentes = await sbListDeclaracionesPorMes(mes);
           const ya = existentes.some(d => d.placeta_id === placetaId);
           if (ya) { yaExistentes++; continue; }
-          const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes, { esJunior: contrib.esJunior, pagaCapitalia: contrib.pagaCapitalia });
+          // La declaración del mes anterior ya "se pagó": se descuenta su cuota
+          // del patrimonio del mes actual en la simulación en lote.
+          const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes, {
+            esJunior: contrib.esJunior,
+            pagaCapitalia: contrib.pagaCapitalia,
+            cuotaAnterior: cuotaAcumulada
+          });
           if (r.success) {
             creadas++;
+            const cuotaTotal = r.cuotaIRM + r.cuotaIGF;
+            cuotaAcumulada = cuotaAcumulada + cuotaTotal;
             resultados.push({ contribuyente: placetaId, mes, patrimonio: r.patrimonioMedio, irm: r.cuotaIRM, igf: r.cuotaIGF, id: r.declaracion.id, esJunior: r.esJunior, pagaCapitalia: r.pagaCapitalia });
           } else errores++;
         } catch (e) {
