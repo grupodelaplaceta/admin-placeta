@@ -42,7 +42,8 @@ router.get('/api/validar-eip', verificarPermiso('tributos', 'ver_contribuyentes'
 // ── Dashboard Tributos ─────────────────────────────────────────────────────
 router.get('/', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
   const state = await apiBancoGetState();
-  const mapa = agruparContribuyentes(state);
+  const registro = await cargarRegistroTributario();
+  const mapa = agruparContribuyentes(state, registro);
   const ingresos = [...mapa.values()].reduce((s, c) => s + c.cuentas.reduce((x, a) => x + (a.balancePz || 0), 0), 0);
   const declaraciones = await sbListDeclaraciones(5);
   const pendientes = declaraciones.filter(d => (d.estado_pago||'Borrador') === 'Borrador').length;
@@ -64,7 +65,25 @@ router.get('/', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, 
 // agrupan TODAS sus cuentas excepto las de empresa) o empresas (se identifican
 // por EIP y agrupan SOLO sus cuentas de empresa). Cada cuenta del banco se
 // asigna a un contribuyente según su tipo: Business/State → EIP, el resto → DIP.
-function agruparContribuyentes(state) {
+
+// ── Registro Tributario REAL (nombres legales del censo) ──────────────────
+// El censo fiscal vive en el backend-banco (/api/v1/tributos/contribuyentes).
+// Su campo `nombre` es el nombre legal / razón social registrado. Se cachea
+// en memoria un breve tiempo para no golpear el backend en cada render.
+let _cacheRegistro = { ts: 0, data: null };
+const REGISTRO_TTL_MS = 60 * 1000;
+async function cargarRegistroTributario() {
+  if (_cacheRegistro.data && Date.now() - _cacheRegistro.ts < REGISTRO_TTL_MS) return _cacheRegistro.data;
+  try {
+    const r = await fetch('https://api.banco.laplaceta.org/api/v1/tributos/contribuyentes?limit=1000', { signal: AbortSignal.timeout(9000) });
+    const body = await r.json();
+    const lista = Array.isArray(body) ? body : (body?.contribuyentes || []);
+    _cacheRegistro = { ts: Date.now(), data: lista };
+    return lista;
+  } catch { return _cacheRegistro.data || []; }
+}
+
+function agruparContribuyentes(state, registro = []) {
   const cuentas = state?.accounts || [];
   const users = state?.users || [];
   const SISTEMA = new Set(['sys-bank', 'sys-state', 'TGLP', 'AGLDP', 'VAULT_EMISION', 'CAPITALIA_BANK', 'DIP-ADMIN', 'DIP-DIGITAL']);
@@ -103,9 +122,28 @@ function agruparContribuyentes(state) {
   };
   const esNombreLegal = (n) => n && !NOMBRE_GENERICO.test(n) && n !== '—';
 
-  // Mejor nombre legal del contribuyente: el candidato más completo (con
-  // apellidos) entre sus cuentas, o el displayName del user si es un nombre.
+  // Mapa del Registro Tributario REAL. Las EMPRESAS se resuelven por EIP
+  // (identificador único); las PERSONAS por DIP, pero SOLO con registros de
+  // persona (tipo_sujeto !== 'Empresa') para no colisionar con el mismo DIP
+  // cuando el titular tiene a la vez cuenta personal y empresas.
+  const nombreRegistroPorEip = new Map();
+  const nombreRegistroPorDip = new Map();
+  for (const r of (registro || [])) {
+    const n = String(r?.nombre || '').trim();
+    if (!n) continue;
+    if (r.eip) nombreRegistroPorEip.set(String(r.eip).toUpperCase(), n);
+    const esEmpresa = String(r?.tipo_sujeto || '').toLowerCase() === 'empresa' || !!r.eip;
+    if (r.dip && !esEmpresa) nombreRegistroPorDip.set(String(r.dip).toUpperCase(), n);
+  }
+
+  // Mejor nombre legal del contribuyente: prioriza el censo tributario real
+  // (nombre legal / razón social); si no, el candidato más completo (con
+  // apellidos) entre sus cuentas; si no, el displayName del user.
   const mejorNombreLegal = (contrib) => {
+    const delRegistro = contrib.eip
+      ? nombreRegistroPorEip.get(String(contrib.eip).toUpperCase())
+      : nombreRegistroPorDip.get(String(contrib.dip || contrib.clave || '').toUpperCase());
+    if (delRegistro) return delRegistro;
     const u = userPorPlaceta.get(contrib.placetaId) || userPorPlaceta.get(contrib.dip) || userPorPlaceta.get(contrib.eip);
     const candidatos = contrib.cuentas
       .map(c => limpiarNombreCuenta(c.displayName))
@@ -183,7 +221,8 @@ function agruparContribuyentes(state) {
 
 router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes'), async (req, res) => {
   const state = await apiBancoGetState().catch(() => null);
-  const mapa = agruparContribuyentes(state);
+  const registro = await cargarRegistroTributario();
+  const mapa = agruparContribuyentes(state, registro);
 
   let contribuyentes = [];
   for (const c of mapa.values()) {
@@ -267,10 +306,11 @@ router.post('/api/alta', verificarPermiso('tributos', 'crear_declaraciones'), as
 // ── Declaraciones (View) ──────────────────────────────────────────────────
 router.get('/declaraciones', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
   const state = await apiBancoGetState();
+  const registro = await cargarRegistroTributario();
   // Mapa de nombres legales por placetaId / dip / eip (del agrupamiento por
   // contribuyente), para mostrar el NOMBRE del titular y no el de la cuenta.
   const nombreLegalPorId = new Map();
-  for (const c of agruparContribuyentes(state).values()) {
+  for (const c of agruparContribuyentes(state, registro).values()) {
     const nombre = c.displayName;
     if (c.placetaId) nombreLegalPorId.set(String(c.placetaId).toLowerCase(), nombre);
     if (c.dip) nombreLegalPorId.set(String(c.dip).toLowerCase(), nombre);
@@ -658,7 +698,7 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
     const transacciones = state?.transactions || [];
 
     // Agrupar por DIP (personas) o EIP (empresas) — todas sus cuentas
-    const porContribuyente = agruparContribuyentes(state);
+    const porContribuyente = agruparContribuyentes(state, await cargarRegistroTributario());
 
     // Determinar desde qué mes declara cada contribuyente
     const MES_INICIO = '2026-07'; // julio 2026
