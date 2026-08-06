@@ -397,7 +397,17 @@ async function handleTributosAPI(path, method, req) {
     if (!pid) return { success: false, error: 'placeta_id_requerido' };
     const mesPeriodo = req.query.mes_periodo || new Date().toISOString().slice(0, 7);
     const state = await apiBancoGetState();
-    const cuentas = state?.accounts?.filter(a => a.placetaId === pid || a.id === pid) || [];
+    // Regla de agrupación (igual que agruparContribuyentes): un EIP (empresa)
+    // agrupa SOLO sus cuentas de empresa; un DIP (persona) agrupa SOLO sus
+    // cuentas NO de empresa. Nunca se mezclan en el patrimonio.
+    const esEIP = /^EIP-[A-Z0-9]{4,}$/i.test(pid);
+    const cuentas = esEIP
+      ? (state?.accounts || []).filter(a =>
+          String(a.eip || '').toUpperCase() === pid.toUpperCase() &&
+          (a.type === 'Business' || a.type === 'State'))
+      : (state?.accounts || []).filter(a =>
+          (a.placetaId === pid || a.id === pid) &&
+          a.type !== 'Business' && a.type !== 'State');
     if (cuentas.length === 0) return { success: false, error: 'cuenta_no_encontrada', httpStatus: 404 };
     const ids = new Set(cuentas.map(c => c.id));
     const transacciones = (state?.transactions || []).filter(t => ids.has(t.fromAccountId) || ids.has(t.toAccountId));
@@ -543,7 +553,16 @@ async function handleTributosAPI(path, method, req) {
     const periodo = mesPeriodo || mesPeriodoAlt || new Date().toISOString().slice(0, 7);
     if (!pid) return { success: false, error: 'placeta_id_requerido' };
     const state = await apiBancoGetState();
-    const cuentas = state?.accounts?.filter(a => a.placetaId === pid || a.id === pid) || [];
+    // Regla de agrupación: EIP → solo cuentas de empresa; DIP → solo cuentas NO
+    // de empresa. Nunca se mezclan en el patrimonio.
+    const esEIP = /^EIP-[A-Z0-9]{4,}$/i.test(pid);
+    const cuentas = esEIP
+      ? (state?.accounts || []).filter(a =>
+          String(a.eip || '').toUpperCase() === pid.toUpperCase() &&
+          (a.type === 'Business' || a.type === 'State'))
+      : (state?.accounts || []).filter(a =>
+          (a.placetaId === pid || a.id === pid) &&
+          a.type !== 'Business' && a.type !== 'State');
     const ids = new Set(cuentas.map(c => c.id));
     const transacciones = (state?.transactions || []).filter(t => ids.has(t.fromAccountId) || ids.has(t.toAccountId));
     const { sbClearDailyBalances, sbUpsertDailyBalance, sbCreateDeclaracion } = await import('../config/db.js');

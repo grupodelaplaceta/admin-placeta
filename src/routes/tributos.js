@@ -568,7 +568,16 @@ router.post('/api/reconcile/:placetaId', verificarPermiso('tributos', 'crear_dec
     if (!mesPeriodo) return res.status(400).json({ error: 'mesPeriodo requerido' });
 
     const state = await apiBancoGetState();
-    const cuentas = state?.accounts?.filter(a => a.placetaId === placetaId || a.id === placetaId) || [];
+    // Regla de agrupación: EIP → solo cuentas de empresa; DIP → solo cuentas NO
+    // de empresa. Nunca se mezclan en el patrimonio.
+    const esEIP = /^EIP-[A-Z0-9]{4,}$/i.test(placetaId);
+    const cuentas = esEIP
+      ? (state?.accounts || []).filter(a =>
+          String(a.eip || '').toUpperCase() === placetaId.toUpperCase() &&
+          (a.type === 'Business' || a.type === 'State'))
+      : (state?.accounts || []).filter(a =>
+          (a.placetaId === placetaId || a.id === placetaId) &&
+          a.type !== 'Business' && a.type !== 'State');
     const transacciones = state?.transactions || [];
     const resultado = await reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriodo);
     if (resultado.error) return res.status(400).json({ error: resultado.error });
