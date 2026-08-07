@@ -87,6 +87,16 @@ export async function apiBancoPost(action, data = {}) {
   } catch { return null; }
 }
 
+// ── Transferencias MASIVAS en una sola operación ─────────────────────────
+// Envía un lote de transferencias al banco con UNA sola lectura + UNA sola
+// escritura del estado. Evita que cada transferencia haga una lectura y
+// escritura completas del estado (el banco tarda mucho en lotes grandes).
+// transferencias: [{ from, to, cantidad, concepto, iva?, juniorDip?, tutorDip? }]
+export async function apiBancoPostTransferenciaMasiva(transferencias = []) {
+  if (!Array.isArray(transferencias) || transferencias.length === 0) return null;
+  return apiBancoPost('transferir-masivo', { transferencias });
+}
+
 // ── API PlacetaID ─────────────────────────────────────────────────────────
 
 const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';

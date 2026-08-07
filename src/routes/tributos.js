@@ -546,8 +546,12 @@ router.put('/api/declaraciones/bulk/:accion', verificarPermiso('tributos', 'crea
         results.push({ id, success: true, accion: 'approved' });
       } else if (accion === 'emit') {
         const total = (d.cuota_irm || 0) + (d.cuota_igf || 0);
-        await sbUpdateDeclaracion(id, { estado_pago: 'Emitido', id_permiso_junta: `EMITIDO-${Date.now()}` });
-        results.push({ id, success: true, accion: 'emitted' });
+        const esJunior = d.cuenta_id_blp === 'CAPITALIA_BANK' || /^CAPITALIA/i.test(d.cuenta_id_blp || '');
+        const fromAccount = esJunior ? 'CAPITALIA_BANK' : (d.cuenta_id_blp || '');
+        const concepto = esJunior
+          ? `DEC-JUNIOR ${d.id.slice(-8)} ${d.mes_periodo} (impuestos asumidos por Capitalia)`
+          : `DEC-${d.id.slice(-8)} ${d.mes_periodo}`;
+        results.push({ id, total, fromAccount, concepto, esJunior });
       } else if (accion === 'delete') {
         if (d.estado_pago === 'Borrador' && !d.id_permiso_junta) {
           await sbDeleteDeclaracion(id);
@@ -556,6 +560,35 @@ router.put('/api/declaraciones/bulk/:accion', verificarPermiso('tributos', 'crea
       }
     } catch { results.push({ id, success: false }); }
   }
+
+  // ── Emisión en lote: cobrar TODAS en una sola transferencia masiva ─────
+  // En vez de una llamada al banco por declaración (lectura+escritura completa
+  // del estado por cada una), se agrupan los cobros y se envían con
+  // transferir-masivo: UNA lectura + UNA escritura para todo el lote.
+  if (accion === 'emit') {
+    const pendientes = results.filter(r => r.fromAccount && r.total > 0);
+    const porTx = new Map();
+    if (pendientes.length) {
+      try {
+        const { apiBancoPostTransferenciaMasiva } = await import('../config/db.js');
+        const batch = await apiBancoPostTransferenciaMasiva(pendientes.map(r => ({
+          from: r.fromAccount, to: 'TGLP', cantidad: r.total, concepto: r.concepto
+        })));
+        (batch?.resultados || []).filter(x => x.success && x.transactionId).forEach(x => porTx.set(x.from, x));
+      } catch (e) { /* el lote falló: se marcarán como emitidas sin cobro */ }
+    }
+    for (const r of results) {
+      const cobro = porTx.get(r.fromAccount);
+      r.success = true;
+      r.transactionId = cobro?.transactionId || null;
+      await sbUpdateDeclaracion(r.id, {
+        estado_pago: 'Emitido',
+        id_permiso_junta: r.transactionId ? `COBRADO-${r.transactionId}` : `EMITIDO-${Date.now()}`,
+        transaction_id_blp: r.transactionId
+      });
+    }
+  }
+
   res.json({ success: true, results });
 });
 
