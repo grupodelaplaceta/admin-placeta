@@ -128,6 +128,41 @@ router.get('/junior/academy/precios', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+//  CONFIG — valores y sistemas importantes para la app (público, solo lectura)
+//  La app NO debe hardcodear estos valores: se sirven desde aquí para que no
+//  sean manipulables en el cliente. La app los cachea y usa como fuente remota.
+// ═══════════════════════════════════════════════════════════════════════
+router.get('/junior/config', (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/config');
+  res.json({
+    success: true,
+    rbu: { cantidad: RBU_DIARIO, unidad: 'Pz', cooldown: 'diario' },
+    control_parental: {
+      nota: 'Límites por nivel de edad (PJ-N1..N5). La app los aplica cuando no hay límites personalizados del tutor.',
+      niveles: {
+        'PJ-N1': { diario: 0, semanal: 0, aprobacion_tutor: 0 },
+        'PJ-N2': { diario: 10, semanal: 50, aprobacion_tutor: 5 },
+        'PJ-N3': { diario: 25, semanal: 100, aprobacion_tutor: 10 },
+        'PJ-N4': { diario: 50, semanal: 250, aprobacion_tutor: 50 },
+        'PJ-N5': { diario: 100, semanal: 500, aprobacion_tutor: 100 }
+      }
+    },
+    academia: {
+      iva_porcentaje: IVA_PERCENT,
+      examen_umbral_preguntas: 10,
+      aprobado_min: 70,
+      puntos_rojos_por_intento: 1,
+      canje_puntos_verdes: TABLA_CANJE_PUNTOS_VERDES
+    },
+    offline: {
+      max_actividades: 10,
+      nota: 'Placeta Junior permite descargar hasta 10 actividades para usar sin conexión con la sesión guardada.'
+    },
+    fecha: new Date().toISOString()
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 //  PUNTOS — Tabla de canje Puntos Verdes → Placetas (spec §16)
 // ═══════════════════════════════════════════════════════════════════════
 router.get('/junior/puntos/canje', (req, res) => {
