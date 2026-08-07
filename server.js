@@ -39,6 +39,7 @@ import votacionesApiRoutes from './src/routes/votaciones-api.js';
 import { mobilGetPendientes, mobilGetHistorial, mobilEmitirVoto } from './src/routes/votaciones-api.js';
 import { registrarConexionPublica } from './src/routes/rsp.js';
 import { getConexiones, getConexionesFromSupabase } from './src/config/rsp.js';
+import bopEditorRoutes from './src/routes/bop-editor.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -169,6 +170,8 @@ app.use('/administracion', verificarSesion, verificarAccesoEntidad('administraci
 
 // API REST
 app.use('/api', apiRoutes);
+// ═══ BOP Editor API — escritura de normativa (bop.laplaceta.org) ════════
+app.use('/api/bop', bopEditorRoutes);
 // ═══ API GATEWAY v1 — APIs externas por entidad ═══════════════════════
 // Montado ANTES del router oficial junior para que pueda delegar por
 // reescritura de URL (evita fetch HTTP interno / timeouts en serverless).
