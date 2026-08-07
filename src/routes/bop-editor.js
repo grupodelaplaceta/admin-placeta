@@ -188,8 +188,9 @@ async function guardarDocumento(req, res) {
     const versionNueva = Math.max((existente.version || 1) + 1, Number(b.version) || 1);
     const notasCambio = b.notas_cambio || b.notas || null;
 
-    // 1. Mover la versión actual al historial
-    const { error: errVer } = await supabase.from('bop_versiones').insert({
+    // 1. Mover la versión actual al historial (upsert: si la versión ya está
+    //    registrada —p.ej. al crear el documento ya se insertó la v1— no duplica)
+    const { error: errVer } = await supabase.from('bop_versiones').upsert({
       documento_id: existente.id,
       version: existente.version || 1,
       estado: existente.estado,
@@ -200,7 +201,7 @@ async function guardarDocumento(req, res) {
       fecha_propuesta: existente.fecha_propuesta,
       fecha_aprobacion_junta: existente.fecha_aprobacion_junta,
       aprobada_en_junta: existente.aprobada_en_junta
-    });
+    }, { onConflict: 'documento_id,version' });
     if (errVer) throw errVer;
 
     // 2. Actualizar el documento
@@ -316,6 +317,45 @@ router.post('/cnic', verificarBopAdmin, async (req, res) => {
     return res.json({ ...actualizado, creado: false });
   } catch (e) {
     res.status(500).json({ error: 'Error al guardar CNIC: ' + (e.message || e) });
+  }
+});
+
+/** Eliminar un documento (solo administrador) */
+router.delete('/documentos/:codigo', verificarBopAdmin, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible' });
+  const codigo = String(req.params.codigo).toUpperCase();
+  try {
+    const { data: existente } = await supabase
+      .from('bop_documentos')
+      .select('id')
+      .eq('codigo', codigo)
+      .maybeSingle();
+    if (!existente) return res.status(404).json({ error: 'Documento no encontrado' });
+    const { error } = await supabase.from('bop_documentos').delete().eq('codigo', codigo);
+    if (error) throw error;
+    // Las versiones se borran en cascada (on delete cascade)
+    res.json({ success: true, codigo });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al eliminar documento: ' + (e.message || e) });
+  }
+});
+
+/** Eliminar un CNIC (solo administrador) */
+router.delete('/cnic/:codigo', verificarBopAdmin, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible' });
+  const codigo = String(req.params.codigo).toUpperCase();
+  try {
+    const { data: existente } = await supabase
+      .from('bop_cnic')
+      .select('id')
+      .eq('codigo', codigo)
+      .maybeSingle();
+    if (!existente) return res.status(404).json({ error: 'CNIC no encontrado' });
+    const { error } = await supabase.from('bop_cnic').delete().eq('codigo', codigo);
+    if (error) throw error;
+    res.json({ success: true, codigo });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al eliminar CNIC: ' + (e.message || e) });
   }
 });
 
