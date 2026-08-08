@@ -79,6 +79,7 @@
             <input name="num_preguntas" type="number" value="<%= a.num_preguntas || 0 %>" placeholder="Nº preguntas">
             <input name="portada_url" type="text" value="<%= a.portada_url || '' %>" placeholder="URL portada">
           </div>
+          <input name="pictograma" type="text" value="<%= (a.contenido && a.contenido.pictograma) || '' %>" placeholder="🖼️ URL pictograma ARASAAC (opcional)" style="width:100%;margin-top:6px;">
           <label style="display:block;margin-top:6px;">Contenido (JSON de bloques)</label>
           <textarea name="contenido" rows="4" style="width:100%;font-family:monospace;font-size:11px;"><%= JSON.stringify(a.contenido || {}) %></textarea>
           <button class="btn btn-secondary" style="margin-top:8px;">Guardar cambios</button>
@@ -157,6 +158,9 @@
     const fd = new FormData(form);
     let contenido = {};
     try { contenido = JSON.parse(fd.get('contenido') || '{}'); } catch (e) { alert('⚠️ El JSON del contenido no es válido'); return false; }
+    const pictograma = (fd.get('pictograma') || '').trim();
+    if (pictograma) contenido.pictograma = pictograma;
+    else delete contenido.pictograma;
     const data = {
       titulo: fd.get('titulo'),
       descripcion: fd.get('descripcion'),

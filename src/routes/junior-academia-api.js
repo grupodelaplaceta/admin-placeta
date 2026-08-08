@@ -228,7 +228,7 @@ router.post('/junior/actividades', async (req, res) => {
     const {
       tipo_titular = TIPOS_TITULAR.INTERNO, dip, eip, nombre_entidad, nombre_autor,
       titulo, descripcion, categoria, edad_recomendada, dificultad, tiempo_estimado,
-      tipo, contenido, num_preguntas, num_fases, portada_url
+      tipo, contenido, num_preguntas, num_fases, portada_url, pictograma
     } = req.body;
 
     if (!titulo || !descripcion || !categoria) {
@@ -281,7 +281,7 @@ router.post('/junior/actividades', async (req, res) => {
       tiempo_estimado: tiempo_estimado || 10,
       num_preguntas: nPreguntas, num_fases: nFases,
       es_examen: esExamen,
-      contenido: contenido || {},
+      contenido: pictograma ? { ...(contenido || {}), pictograma } : (contenido || {}),
       autor_dip: autorDip,
       autor_nombre: autorNombre,
       tipo_titular: titular,
