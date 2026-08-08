@@ -130,6 +130,17 @@ async function guardarDocumento(req, res) {
 
   const autor = req.bopAuth?.usuario || {};
   const contenidoMd = b.contenido_md ?? b.contenido ?? '';
+
+  // CNIC vinculados (referencias cruzadas del documento)
+  const cnicRefs = Array.isArray(b.cnic_refs)
+    ? b.cnic_refs
+        .map(r => (typeof r === 'string' ? { codigo: r } : r))
+        .map(r => ({
+          codigo: String(r.codigo || '').trim().toUpperCase(),
+          etiqueta: r.etiqueta || String(r.codigo || '').trim().toUpperCase()
+        }))
+        .filter(r => r.codigo)
+    : [];
   const fechas = {
     fecha_aplicacion: b.fecha_aplicacion || null,
     fecha_propuesta: b.fecha_propuesta || null,
@@ -156,6 +167,7 @@ async function guardarDocumento(req, res) {
           categoria: b.categoria || 'capitulo',
           estado: b.estado || 'proyecto',
           contenido_md: contenidoMd,
+          cnic_refs: cnicRefs,
           version: 1,
           ...fechas,
           autor_dip: b.autor_dip || autor.dip || null,
@@ -213,6 +225,7 @@ async function guardarDocumento(req, res) {
         categoria: b.categoria || existente.categoria,
         estado: b.estado || existente.estado,
         contenido_md: contenidoMd,
+        cnic_refs: cnicRefs,
         version: versionNueva,
         ...fechas,
         autor_dip: b.autor_dip || autor.dip || existente.autor_dip,
