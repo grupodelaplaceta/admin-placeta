@@ -79,7 +79,10 @@
             <input name="num_preguntas" type="number" value="<%= a.num_preguntas || 0 %>" placeholder="Nº preguntas">
             <input name="portada_url" type="text" value="<%= a.portada_url || '' %>" placeholder="URL portada">
           </div>
-          <input name="pictograma" type="text" value="<%= (a.contenido && a.contenido.pictograma) || '' %>" placeholder="🖼️ URL pictograma ARASAAC (opcional)" style="width:100%;margin-top:6px;">
+          <div style="display:flex;gap:6px;align-items:center;margin-top:6px;">
+            <input name="pictograma" type="text" value="<%= (a.contenido && a.contenido.pictograma) || '' %>" placeholder="🖼️ URL pictograma ARASAAC (opcional)" style="flex:1;">
+            <button type="button" class="btn btn-secondary" onclick="buscarPicto(this)" title="Buscar pictograma ARASAAC por internet">🔎 Buscar</button>
+          </div>
           <label style="display:block;margin-top:6px;">Contenido (JSON de bloques)</label>
           <textarea name="contenido" rows="4" style="width:100%;font-family:monospace;font-size:11px;"><%= JSON.stringify(a.contenido || {}) %></textarea>
           <button class="btn btn-secondary" style="margin-top:8px;">Guardar cambios</button>
@@ -189,5 +192,70 @@
     const r = await postJSON('/junior/academia/eliminar/' + id, {});
     alert(r.mensaje || (r.error || 'Listo'));
     if (r.success) recargar();
+  }
+
+  // ── Buscador de pictogramas ARASAAC (internet) ────────────────────
+  function buscarPicto(btn) {
+    const input = btn.closest('.info-card').querySelector('input[name="pictograma"]');
+    if (!input) return;
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:400;padding:20px;';
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:16px;border-top:5px solid #7c3aed;max-width:680px;width:100%;max-height:88vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+        <h4 style="margin:0 0 4px;">🖼️ Buscar pictograma (ARASAAC)</h4>
+        <p style="font-size:12px;color:#666;margin:0 0 12px;">Pictogramas libres de ARASAAC (Gobierno de Aragón). Escribe una palabra y elige.</p>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="search" placeholder="Ej: comer, casa, feliz, escuela…" style="flex:1;padding:9px 12px;border:1px solid #ccc;border-radius:8px;">
+          <button type="button" class="btn btn-primary">🔎 Buscar</button>
+        </div>
+        <div class="galeria" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;max-height:340px;overflow:auto;border:1px solid #eee;border-radius:10px;background:#fafafa;padding:8px;">
+          <div style="grid-column:1/-1;text-align:center;color:#888;padding:20px;font-size:13px;">Escribe una palabra y pulsa Buscar o Enter.</div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+          <button type="button" class="btn btn-secondary">Cancelar</button>
+        </div>
+      </div>`;
+    overlay.className = 'modal-overlay-x';
+    document.body.appendChild(overlay);
+    const q = overlay.querySelector('input[type="search"]');
+    const grid = overlay.querySelector('.galeria');
+    let timer = null;
+    function disparar() {
+      const texto = q.value.trim();
+      if (!texto) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#888;padding:20px;font-size:13px;">Escribe una palabra y pulsa Buscar o Enter.</div>'; return; }
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#888;padding:20px;font-size:13px;">⏳ Buscando…</div>';
+      fetch('https://api.arasaac.org/api/pictograms/es/search/' + encodeURIComponent(texto))
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(lista => {
+          lista = Array.isArray(lista) ? lista : [];
+          if (!lista.length) { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#888;padding:20px;font-size:13px;">Sin resultados. Prueba con otra palabra.</div>'; return; }
+          grid.innerHTML = '';
+          lista.slice(0, 60).forEach(function (p) {
+            const id = p._id;
+            const pal = (p.keywords && p.keywords[0] && p.keywords[0].keyword) || (p.tags && p.tags[0]) || String(id);
+            const url = 'https://static.arasaac.org/pictograms/' + id + '/' + id + '_300.png';
+            const el = document.createElement('div');
+            el.style.cssText = 'position:relative;aspect-ratio:1/1;border-radius:10px;overflow:hidden;border:2px solid #eee;cursor:pointer;background:url("' + url + '") center/contain no-repeat #fff;';
+            el.title = pal;
+            el.innerHTML = '<div style="position:absolute;bottom:0;left:0;right:0;font-size:9px;padding:2px 4px;background:rgba(0,0,0,.55);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + pal + '</div>';
+            el.addEventListener('click', function () {
+              input.value = url;
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              overlay.remove();
+            });
+            grid.appendChild(el);
+          });
+        })
+        .catch(() => { grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#c00;padding:20px;font-size:13px;">⚠️ No se pudo conectar con ARASAAC.</div>'; });
+    }
+    q.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); disparar(); }
+      else { clearTimeout(timer); timer = setTimeout(disparar, 400); }
+    });
+    overlay.querySelector('button.btn-primary').addEventListener('click', disparar);
+    overlay.querySelector('button.btn-secondary').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    document.addEventListener('keydown', function esc(e) { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', esc); } });
+    q.focus();
   }
 </script>
