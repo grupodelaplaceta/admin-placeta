@@ -333,6 +333,58 @@ router.post('/cnic', verificarBopAdmin, async (req, res) => {
   }
 });
 
+/** Actualizar metadatos de un CNIC (etiqueta, descripción, artículo, unidad,
+ *  tipo de valor, vigente). Solo si cambia `valor` se registra historial. */
+router.patch('/cnic/:codigo', verificarBopAdmin, async (req, res) => {
+  if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible' });
+  const codigo = String(req.params.codigo).toUpperCase();
+  const b = req.body || {};
+  try {
+    const { data: existente } = await supabase
+      .from('bop_cnic')
+      .select('*')
+      .eq('codigo', codigo)
+      .maybeSingle();
+    if (!existente) return res.status(404).json({ error: 'CNIC no encontrado' });
+
+    const valorNuevo = b.valor !== undefined ? String(b.valor).trim() : existente.valor;
+    const cambiaValor = String(existente.valor) !== valorNuevo;
+
+    const update = {
+      etiqueta: b.etiqueta !== undefined ? b.etiqueta : existente.etiqueta,
+      descripcion: b.descripcion !== undefined ? b.descripcion : existente.descripcion,
+      tipo_valor: b.tipo_valor || existente.tipo_valor,
+      valor: valorNuevo,
+      unidad: b.unidad !== undefined ? b.unidad : existente.unidad,
+      vigente: b.vigente !== undefined ? !!b.vigente : existente.vigente,
+      articulo: b.articulo !== undefined ? b.articulo : existente.articulo,
+      updated_at: new Date().toISOString()
+    };
+
+    if (cambiaValor) {
+      const historial = Array.isArray(existente.historial) ? existente.historial : [];
+      historial.push({
+        valor: existente.valor,
+        desde: new Date().toISOString().slice(0, 10),
+        autor_dip: existente.autor_dip,
+        notas: b.notas || 'Cambio de valor.'
+      });
+      update.historial = historial;
+    }
+
+    const { data: actualizado, error: errUpd } = await supabase
+      .from('bop_cnic')
+      .update(update)
+      .eq('codigo', codigo)
+      .select()
+      .single();
+    if (errUpd) throw errUpd;
+    res.json(actualizado);
+  } catch (e) {
+    res.status(500).json({ error: 'Error al actualizar CNIC: ' + (e.message || e) });
+  }
+});
+
 /** Eliminar un documento (solo administrador) */
 router.delete('/documentos/:codigo', verificarBopAdmin, async (req, res) => {
   if (!supabase) return res.status(503).json({ error: 'Base de datos no disponible' });
