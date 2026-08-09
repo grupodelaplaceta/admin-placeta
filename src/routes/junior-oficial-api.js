@@ -812,6 +812,10 @@ router.post('/junior/amigos/solicitar', async (req, res) => {
     if (dip === amigoDip) return res.status(400).json({ error: 'No puedes añadirte a ti mismo.' });
 
     const amigo = await sbFindJuniorByDip(amigoDip).catch(() => null);
+    // Solo se añade la amistad si el usuario existe de verdad.
+    if (!amigo) {
+      return res.status(404).json({ error: 'No existe ningún usuario con ese DIP. Solo puedes añadir a personas que ya existen.' });
+    }
     let error = null;
     try {
       const resUpsert = await supabase.from('junior_amigos').upsert([
