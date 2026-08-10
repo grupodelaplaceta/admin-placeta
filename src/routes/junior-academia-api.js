@@ -32,6 +32,13 @@ import {
   sbCrearDiploma, sbListDiplomas, normalizarActividad
 } from '../config/junior-actividades.js';
 import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, desglosarPrecioConIva, getTablaCanje, PUNTOS_ROJOS_POR_INTENTO } from '../config/junior-precios.js';
+import {
+  sbCrearBundle, sbGetBundle, sbListBundles, sbUpdateBundle, sbDeleteBundle,
+  sbSetBundleItems, sbGetBundleItems, sbGetBundlesConActividad,
+  sbAddUserBundle, sbHasUserBundle, sbAddUserActivity, sbHasUserActivity,
+  comprobarAccesoActividad, entregarBundleEarlyAccess
+} from '../config/junior-bundles.js';
+import { ejecutarCode, evaluarCode, bloquesPermitidos, BLOQUES_CODE } from '../config/junior-code.js';
 import { saveDocumentoAsync, generarPDF, getDocumentoByIdAsync, ETIQUETAS_DOC } from '../config/documentos.js';
 
 const router = Router();
@@ -423,37 +430,17 @@ router.post('/junior/actividades/:id/revisar', async (req, res) => {
 
 /**
  * GET /junior/actividades/:id/acceso?dip= — Comprobar si el junior puede jugar
+ * Prioridad: gratuita → admin → individual → bundle → bloqueada (spec bundles).
  */
 router.get('/junior/actividades/:id/acceso', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.CONSULTA, `GET /junior/actividades/:id/acceso`);
   try {
-    const act = await sbGetActividad(req.params.id);
-    if (!act) return res.status(404).json({ error: 'Actividad no encontrada' });
     const dip = String(req.query.dip || '').trim();
-    const esGratis = !((act.precio_licencia || 0) > 0 || (act.precio_intento || 0) > 0);
-    const subvencionada = !!act.subvencionada;
-    let licencia = false;
-    let juniorId = null;
-    if (dip) {
-      const j = await sbFindJuniorByDip(dip).catch(() => null);
-      juniorId = j?.id || null;
+    const resultado = await comprobarAccesoActividad(req.params.id, dip);
+    if (!resultado.success) {
+      return res.status(404).json(resultado);
     }
-    if (juniorId && !esGratis && !subvencionada) {
-      let data = null;
-      try {
-        const r = await supabase.from('junior_licencias')
-          .select('id').eq('junior_id', juniorId).eq('actividad_id', act.id).maybeSingle();
-        data = r?.data || null;
-      } catch (e) { data = null; }
-      licencia = !!data;
-    }
-    res.json({
-      success: true,
-      desbloqueada: esGratis || subvencionada || licencia,
-      es_gratis: esGratis, subvencionada, licencia,
-      precio_licencia: act.precio_licencia || 0,
-      precio_intento: act.precio_intento || 0
-    });
+    res.json(resultado);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -545,6 +532,274 @@ router.post('/junior/actividades/:id/pagar', verificarJunior, async (req, res) =
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+//  BUNDLES — sistema genérico de packs de actividades
+//  · Listar, ver detalle (con actividades), comprar bundle y desbloquear
+//    actividad individualmente. Reutilizable para cualquier temática.
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /junior/bundles — Listar bundles (activos para el público)
+ */
+router.get('/junior/bundles', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/bundles');
+  try {
+    const bundles = await sbListBundles({ soloActivos: true });
+    res.json({ success: true, total: bundles.length, bundles });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * GET /junior/bundles/:id — Detalle de un bundle con sus actividades
+ */
+router.get('/junior/bundles/:id', async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, `GET /junior/bundles/:id`);
+  try {
+    const bundle = await sbGetBundle(req.params.id);
+    if (!bundle) return res.status(404).json({ error: 'Bundle no encontrado' });
+    const ids = await sbGetBundleItems(bundle.id);
+    const actividades = [];
+    for (const id of ids) {
+      const a = await sbGetActividad(id);
+      if (a) actividades.push(a);
+    }
+    res.json({ success: true, bundle, actividades });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * POST /junior/bundles/:id/comprar — Comprar un bundle con Placetas
+ * Body: { dip }
+ * Desbloquea todas las actividades del bundle (origen: bundle).
+ */
+router.post('/junior/bundles/:id/comprar', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, `POST /junior/bundles/:id/comprar`, '', req.juniorDip);
+  try {
+    const junior = req.juniorData;
+    const bundle = await sbGetBundle(req.params.id);
+    if (!bundle) return res.status(404).json({ error: 'Bundle no encontrado' });
+    if (bundle.activo === false) return res.status(400).json({ error: 'Bundle no disponible' });
+
+    const yaTiene = await sbHasUserBundle(junior.id, bundle.id);
+    if (yaTiene) {
+      return res.json({ success: true, ya_tenia: true, mensaje: `Ya tienes el bundle "${bundle.nombre}".` });
+    }
+
+    const precio = bundle.precio || 0;
+    const saldo = junior.placetas_saldo || 0;
+    if (saldo < precio) {
+      return res.status(400).json({ error: `Saldo insuficiente (tienes ${saldo} Pz) para el bundle de ${precio} Pz.` });
+    }
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    if (precio > 0) {
+      try {
+        await apiBancoPost('transferir', {
+          from: junior.cuenta_banco || junior.dip, to: CAPITALIA, cantidad: precio,
+          concepto: `Bundle — ${bundle.nombre}`, juniorDip: junior.dip, tutorDip: junior.tutor_dip, ip
+        });
+      } catch (e) { console.warn('[Bundle] Banco:', e.message); }
+      const nuevoSaldo = saldo - precio;
+      await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
+      await sbCreatePlacetaTransaction({
+        junior_id: junior.id, tipo: 'gastar',
+        concepto: `Bundle — ${bundle.nombre}`, cantidad: -precio, saldo_resultante: nuevoSaldo, ip
+      });
+    }
+
+    await sbAddUserBundle(junior.id, bundle.id, { precioPagado: precio, origen: 'bundle' });
+
+    // Desbloquea cada actividad del bundle (origen: bundle) para acceso directo
+    const ids = await sbGetBundleItems(bundle.id);
+    for (const actividadId of ids) {
+      await sbAddUserActivity(junior.id, actividadId, { origen: 'bundle' }).catch(() => {});
+    }
+
+    await sbCreateJuniorLog({
+      junior_id: junior.id, accion: 'bundle_comprado',
+      detalle: `Bundle "${bundle.nombre}" por ${precio} Pz (${ids.length} actividades)`, ip
+    }).catch(() => {});
+
+    res.json({
+      success: true, bundle_id: bundle.id, bundle_nombre: bundle.nombre,
+      actividades_desbloqueadas: ids.length, precio_pagado: precio,
+      mensaje: `🎁 Bundle "${bundle.nombre}" desbloqueado (${ids.length} actividades).`
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+/**
+ * POST /junior/actividades/:id/desbloquear — Comprar una actividad individual
+ * Body: { dip }
+ * Precio individual = precio_licencia de la actividad (20 Pz por defecto).
+ */
+router.post('/junior/actividades/:id/desbloquear', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, `POST /junior/actividades/:id/desbloquear`, '', req.juniorDip);
+  try {
+    const junior = req.juniorData;
+    const act = await sbGetActividad(req.params.id);
+    if (!act) return res.status(404).json({ error: 'Actividad no encontrada' });
+
+    const esGratis = !((act.precio_licencia || 0) > 0 || (act.precio_intento || 0) > 0);
+    if (esGratis || !!act.subvencionada) {
+      await sbAddUserActivity(junior.id, act.id, { origen: 'gratuito' }).catch(() => {});
+      return res.json({ success: true, desbloqueada: true, mensaje: 'Actividad gratuita.' });
+    }
+
+    const yaTiene = await sbHasUserActivity(junior.id, act.id).catch(() => false)
+      || await supabase.from('junior_licencias').select('id').eq('junior_id', junior.id).eq('actividad_id', act.id).maybeSingle().then(r => !!r?.data).catch(() => false);
+    if (yaTiene) {
+      return res.json({ success: true, desbloqueada: true, mensaje: 'Ya tienes esta actividad.' });
+    }
+
+    const precio = act.precio_licencia || 0;
+    if (precio <= 0) {
+      await sbAddUserActivity(junior.id, act.id, { origen: 'gratuito' }).catch(() => {});
+      return res.json({ success: true, desbloqueada: true, mensaje: 'Sin coste.' });
+    }
+
+    const saldo = junior.placetas_saldo || 0;
+    if (saldo < precio) {
+      return res.status(400).json({ error: `Saldo insuficiente (tienes ${saldo} Pz) para desbloquear (${precio} Pz).` });
+    }
+
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    try {
+      await apiBancoPost('transferir', {
+        from: junior.cuenta_banco || junior.dip, to: CAPITALIA, cantidad: precio,
+        concepto: `Desbloquear — ${act.titulo}`, juniorDip: junior.dip, tutorDip: junior.tutor_dip, ip
+      });
+    } catch (e) { console.warn('[Desbloquear] Banco:', e.message); }
+    const nuevoSaldo = saldo - precio;
+    await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
+    await sbCreatePlacetaTransaction({
+      junior_id: junior.id, tipo: 'gastar',
+      concepto: `Desbloquear — ${act.titulo}`, cantidad: -precio, saldo_resultante: nuevoSaldo, ip
+    });
+    await sbAddUserActivity(junior.id, act.id, { origen: 'individual' });
+    await sbCreateJuniorLog({
+      junior_id: junior.id, accion: 'actividad_desbloqueada',
+      detalle: `Desbloqueada "${act.titulo}" por ${precio} Pz`, ip
+    }).catch(() => {});
+
+    res.json({
+      success: true, desbloqueada: true, actividad_id: act.id,
+      precio_pagado: precio, saldo_actual: nuevoSaldo,
+      mensaje: `🔓 Actividad desbloqueada por ${precio} Pz. ¡A jugar!`
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+//  PLACETA JUNIOR CODE — evaluación de programas de bloques (code_blocks)
+//  El motor valida y ejecuta en un escenario controlado (sin código
+//  arbitrario del alumno en el servidor).
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /junior/code/evaluar
+ * Body: { dip, actividad_id, programa: [...bloques] }
+ * Ejecuta el programa en el escenario de la actividad y evalúa los objetivos.
+ */
+router.post('/junior/code/evaluar', verificarJunior, async (req, res) => {
+  rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/code/evaluar', '', req.juniorDip);
+  try {
+    const junior = req.juniorData;
+    const { actividad_id, programa = [] } = req.body;
+    if (!actividad_id) return res.status(400).json({ error: 'actividad_id requerido' });
+
+    const actividad = await sbGetActividad(actividad_id);
+    if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
+    if (actividad.tipo !== 'code_blocks') {
+      return res.status(400).json({ error: 'La actividad no es de tipo code_blocks.' });
+    }
+
+    // Comprobación de acceso (gratuita / admin / individual / bundle)
+    const acceso = await comprobarAccesoActividad(actividad.id, req.juniorDip);
+    if (acceso.success && !acceso.desbloqueada) {
+      return res.status(403).json({
+        error: 'Actividad bloqueada. Desbloquéala o compra el bundle.',
+        bloqueada: true, motivo: acceso.motivo,
+        precio_licencia: acceso.precio_licencia || 0,
+        bundles: acceso.bundles || []
+      });
+    }
+
+    const contenido = actividad.contenido || {};
+    const escenario = contenido.escenario || { tipo: 'cuadricula', ancho: 6, alto: 6 };
+    const inicio = contenido.inicio || { x: 0, y: 0, direccion: 'derecha' };
+    const objetivo = contenido.objetivo || {};
+
+    // Validar que solo usa bloques permitidos
+    const permitidos = bloquesPermitidos(actividad);
+    const usados = new Set();
+    (function recorrer(prog) {
+      (prog || []).forEach(b => {
+        const op = typeof b === 'string' ? b.split(/\s+/)[0] : (b.op || b.tipo || 'avanzar');
+        usados.add(op);
+        if (b && typeof b === 'object' && b.bloques) recorrer(b.bloques);
+      });
+    })(programa);
+    const noPermitidos = [...usados].filter(op => !permitidos.includes(op));
+    if (noPermitidos.length) {
+      return res.status(400).json({ error: `Bloque(s) no permitidos: ${noPermitidos.join(', ')}`, bloques_permitidos: permitidos });
+    }
+
+    // Ejecutar en el sandbox
+    const resultado = ejecutarCode(escenario, inicio, programa, { maxPasos: contenido.max_bloques ? contenido.max_bloques * 20 : 200 });
+    const evalRes = evaluarCode(escenario, inicio, objetivo, programa, resultado);
+
+    // Registrar puntos verdes/rojos si hay junior (best effort)
+    await sbUpsertPuntos(junior.id, { verdes: evalRes.superado ? 1 : 0, rojos: evalRes.superado ? 0 : 1 }).catch(() => {});
+    await sbIncrementActividadStats(actividad.id, { veces: 1, aprobados: evalRes.superado ? 1 : 0 }).catch(() => {});
+
+    // ── Recompensa (Placetas) al superar el reto ────────────────────
+    // La recompensa puede venir en contenido.recompensa (spec code) o en la
+    // columna recompensa de la actividad (sistema común). Se otorga solo al
+    // superar y una vez por junior (se registra en user_activities).
+    let placetasGanadas = 0;
+    let nuevoSaldo = junior.placetas_saldo || 0;
+    const recompensaCode = (contenido.recompensa && contenido.recompensa.activa) ? contenido.recompensa : null;
+    const placetasReto = recompensaCode ? (Number(recompensaCode.placetas) || 0) : (Number(actividad.recompensa) || 0);
+    if (evalRes.superado && placetasReto > 0) {
+      const yaSuperado = await sbHasUserActivity(junior.id, actividad.id).catch(() => false);
+      if (!yaSuperado) {
+        nuevoSaldo += placetasReto;
+        await sbUpdatePlacetaBalance(junior.id, nuevoSaldo).catch(() => {});
+        await sbCreatePlacetaTransaction({
+          junior_id: junior.id, tipo: 'ganar',
+          concepto: `Code: ${actividad.titulo}`,
+          cantidad: placetasReto, saldo_resultante: nuevoSaldo,
+          ip: req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown'
+        }).catch(() => {});
+        placetasGanadas = placetasReto;
+        // Marca como realizada para no repetir la recompensa
+        await sbAddUserActivity(junior.id, actividad.id, { origen: 'individual' }).catch(() => {});
+      }
+    }
+
+    res.json({
+      success: true,
+      superado: evalRes.superado,
+      fallos: evalRes.fallos,
+      resultado: {
+        posicion_final: resultado.posicion_final,
+        direccion_final: resultado.direccion_final,
+        monedas_recogidas: resultado.monedas_recogidas,
+        pasos: resultado.pasos,
+        error: resultado.error
+      },
+      bloques_permitidos: permitidos,
+      placetas_ganadas: placetasGanadas,
+      saldo_actual: nuevoSaldo,
+      recompensa: recompensaCode || { activa: false, placetas: 0, puntos_verdes: 0, puntos_rojos: 0 },
+      mensaje: evalRes.superado
+        ? (placetasGanadas > 0 ? `🎉 ¡Reto superado! +${placetasGanadas} Pz.` : '🎉 ¡Reto superado! Has completado el programa.')
+        : '💪 Casi… revisa el programa y vuelve a intentarlo.'
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 //  REALIZAR ACTIVIDAD — evaluación, puntos verdes/rojos, placetas, diploma
 // ═══════════════════════════════════════════════════════════════════════
 
@@ -560,6 +815,17 @@ router.post('/junior/actividades/:id/realizar', verificarJunior, async (req, res
     if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
     if (actividad.estado !== 'aprobada' && !actividad.publica) {
       return res.status(403).json({ error: 'Actividad no publicada.' });
+    }
+
+    // Comprobación de acceso: gratuita / admin / individual / bundle
+    const acceso = await comprobarAccesoActividad(actividad.id, req.juniorDip);
+    if (acceso.success && !acceso.desbloqueada) {
+      return res.status(403).json({
+        error: 'Actividad bloqueada. Desbloquéala o compra el bundle.',
+        bloqueada: true, motivo: acceso.motivo,
+        precio_licencia: acceso.precio_licencia || 0,
+        bundles: acceso.bundles || []
+      });
     }
 
     const { respuestas = [] } = req.body;

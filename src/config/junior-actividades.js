@@ -18,7 +18,8 @@ import { supabase } from './supabase.js';
 export const TIPOS_ACTIVIDAD = [
   'test', 'sopa_letras', 'relacionar_conceptos', 'relacionar_imagenes',
   'completar_frases', 'ordenar_elementos', 'verdadero_falso',
-  'calculo_mental', 'retos_interactivos', 'logica', 'otro'
+  'calculo_mental', 'retos_interactivos', 'logica', 'otro',
+  'code_blocks', 'code_debug', 'code_output', 'code_project'
 ];
 
 // ── ESTADOS DEL FILTRO (spec §6) ───────────────────────────────────────

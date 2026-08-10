@@ -246,6 +246,7 @@ const WORKSPACES = {
         enlaces: [
           { texto: 'Actividades (revisar/editar/publicar)', url: '/junior/academia', icono: '🧩' },
           { texto: 'Retos de Candela', url: '/junior/retos', icono: '🏆' },
+          { texto: 'Bundles (packs)', url: '/junior/bundles', icono: '🧺' },
           { texto: 'Premium (precios/licencias)', url: '/junior/premium', icono: '💎' },
           { texto: 'Config. Económica (canje)', url: '/junior/config', icono: '⚙️' },
           { texto: 'Puntos de los Juniors', url: '/junior/puntos', icono: '🔴🟢' },

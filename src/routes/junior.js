@@ -9,6 +9,10 @@ import { registrarConexion, TIPO_CONEXION } from '../config/rsp.js';
 import { getDocumentosByEntidadAsync, saveDocumentoAsync, ETIQUETAS_DOC } from '../config/documentos.js';
 import { supabase } from '../config/supabase.js';
 import { sbListActividades, sbGetActividad, sbUpdateActividad, sbDeleteActividad, sbListColaboradores, UMBRAL_EXAMEN, ESTADOS_ACTIVIDAD, TIPOS_TITULAR } from '../config/junior-actividades.js';
+import {
+  sbCrearBundle, sbGetBundle, sbListBundles, sbUpdateBundle, sbDeleteBundle,
+  sbSetBundleItems, sbGetBundleItems
+} from '../config/junior-bundles.js';
 import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, IVA_PERCENT, RECOMPENSAS_POR_COMPLEJIDAD, getConfigRsp, setConfigRsp, getTablaCanje } from '../config/junior-precios.js';
 
 const router = Router();
@@ -379,6 +383,70 @@ router.get('/puntos', async (req, res) => {
     esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin'),
     layout: 'layouts/admin'
   });
+});
+
+// ── Administración de Bundles (panel) ────────────────────────────────
+router.get('/bundles', async (req, res) => {
+  rspRegistrar('junior', TIPO_CONEXION.CONSULTA, 'GET /junior/bundles', req.session.usuario?.nombre);
+  const bundles = await sbListBundles({ soloActivos: false });
+  const actividades = await sbListActividades({ soloPublicas: false });
+  const itemsPorBundle = {};
+  for (const b of bundles) {
+    itemsPorBundle[b.id] = await sbGetBundleItems(b.id);
+  }
+  res.render('junior/bundles-admin', {
+    titulo: 'Bundles — Placeta Junior',
+    entidad_actual: 'junior',
+    bundles, actividades, itemsPorBundle,
+    ok: req.query.ok === '1',
+    error: req.query.error || '',
+    layout: 'layouts/admin'
+  });
+});
+
+router.post('/bundles/crear', async (req, res) => {
+  try {
+    const { nombre, descripcion, precio, imagen_url } = req.body;
+    if (!nombre) return res.redirect('/junior/bundles?error=Nombre requerido');
+    const bundle = await sbCrearBundle({
+      id: `bundle-${Date.now()}`,
+      nombre, descripcion: descripcion || '',
+      precio: Number(precio) || 0, moneda: 'Pz',
+      imagen_url: imagen_url || null,
+      activo: req.body.activo === 'on'
+    });
+    res.redirect('/junior/bundles?ok=1');
+  } catch (e) { res.redirect(`/junior/bundles?error=${encodeURIComponent(e.message)}`); }
+});
+
+router.post('/bundles/editar/:id', async (req, res) => {
+  try {
+    const { nombre, descripcion, precio, imagen_url } = req.body;
+    const cambios = {};
+    if (nombre != null) cambios.nombre = nombre;
+    if (descripcion != null) cambios.descripcion = descripcion;
+    if (precio != null) cambios.precio = Number(precio) || 0;
+    if (imagen_url != null) cambios.imagen_url = imagen_url || null;
+    cambios.activo = req.body.activo === 'on';
+    await sbUpdateBundle(req.params.id, cambios);
+    res.redirect('/junior/bundles?ok=1');
+  } catch (e) { res.redirect(`/junior/bundles?error=${encodeURIComponent(e.message)}`); }
+});
+
+router.post('/bundles/items/:id', async (req, res) => {
+  try {
+    const ids = req.body.actividad_ids;
+    const lista = Array.isArray(ids) ? ids : (ids ? [ids] : []);
+    await sbSetBundleItems(req.params.id, lista);
+    res.redirect('/junior/bundles?ok=1');
+  } catch (e) { res.redirect(`/junior/bundles?error=${encodeURIComponent(e.message)}`); }
+});
+
+router.post('/bundles/eliminar/:id', async (req, res) => {
+  try {
+    const ok = await sbDeleteBundle(req.params.id);
+    res.json({ success: ok, mensaje: ok ? 'Bundle eliminado' : 'Error al eliminar' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;

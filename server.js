@@ -370,6 +370,11 @@ async function generarDocumentosAutomaticos() {
 async function startServer() {
   await testConnection();
 
+  // Auto-migración del sistema de Bundles (Placeta Junior)
+  import('./src/config/init-bundles.js')
+    .then(m => m.initBundleTables())
+    .catch(e => console.warn('[Bundles] init:', e.message));
+
   // Iniciar generación automática de documentos
   autoDocsTimer = setInterval(generarDocumentosAutomaticos, AUTO_DOCS_INTERVAL);
   // Primera generación a los 30 segundos de iniciar
