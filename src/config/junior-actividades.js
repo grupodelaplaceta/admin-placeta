@@ -41,18 +41,68 @@ export const APROBADO_MIN = 70;
 
 export async function sbCrearActividad(data) {
   if (!supabase) return null;
+  const CAMPOS_OPCIONALES = ['subvencionada', 'destacada', 'precio_licencia', 'precio_intento', 'recompensa'];
   try {
     const { data: res, error } = await supabase.from('junior_actividades').insert(data).select().single();
     if (error) throw new Error(error.message);
     return res;
-  } catch { return null; }
+  } catch (e) {
+    // Si falla por una columna inexistente (migración pendiente), extraemos
+    // el/los nombre(s) de columna del error y movemos SOLO esos al JSON
+    // contenido, manteniendo las columnas reales en su sitio.
+    const msg = e.message || '';
+    if (/column .* does not exist|schema cache/i.test(msg)) {
+      try {
+        const fallidas = [];
+        const m = msg.match(/'([a-z_]+)'/gi) || [];
+        for (const f of m) fallidas.push(f.replace(/'/g, ''));
+        for (const campo of CAMPOS_OPCIONALES) {
+          if (msg.includes(`'${campo}'`) || msg.includes(`"${campo}"`)) fallidas.push(campo);
+        }
+        const unicas = [...new Set(fallidas)].filter(Boolean);
+        if (!unicas.length) unicas.push('subvencionada'); // por defecto la única pendiente
+        const respaldo = {};
+        const datos = { ...data };
+        for (const campo of unicas) {
+          if (datos[campo] !== undefined) { respaldo[campo] = datos[campo]; delete datos[campo]; }
+        }
+        const { data: res2, error: e2 } = await supabase.from('junior_actividades').insert(datos).select().single();
+        if (e2) return null;
+        if (Object.keys(respaldo).length && res2) {
+          const contenido = (typeof res2.contenido === 'object' && res2.contenido) ? { ...res2.contenido } : {};
+          Object.assign(contenido, respaldo);
+          // Aplicar también en memoria para devolver la actividad completa
+          if (res2) res2.contenido = contenido;
+          await supabase.from('junior_actividades').update({ contenido }).eq('id', res2.id);
+        }
+        return normalizarActividad(res2);
+      } catch { return null; }
+    }
+    return null;
+  }
+}
+
+/**
+ * Promueve los campos económicos que viven como respaldo en `contenido`
+ * (por si la columna no existe aún en la tabla) a nivel superior, para que
+ * toda la lectura los vea igual en `actividad.subvencionada`, etc.
+ */
+export function normalizarActividad(a) {
+  if (!a || typeof a !== 'object') return a;
+  const c = (typeof a.contenido === 'object' && a.contenido) ? a.contenido : {};
+  if (a.subvencionada === undefined && c.subvencionada !== undefined) a.subvencionada = !!c.subvencionada;
+  if (a.destacada === undefined && c.destacada !== undefined) a.destacada = !!c.destacada;
+  if (a.precio_licencia === undefined && c.precio_licencia !== undefined) a.precio_licencia = Number(c.precio_licencia) || 0;
+  if (a.precio_intento === undefined && c.precio_intento !== undefined) a.precio_intento = Number(c.precio_intento) || 0;
+  if (a.recompensa === undefined && c.recompensa !== undefined) a.recompensa = Number(c.recompensa) || 0;
+  return a;
 }
 
 export async function sbGetActividad(id) {
   if (!supabase) return null;
   try {
     const { data } = await supabase.from('junior_actividades').select('*').eq('id', id).maybeSingle();
-    return data;
+    return normalizarActividad(data);
   } catch { return null; }
 }
 
@@ -65,16 +115,45 @@ export async function sbListActividades({ estado, categoria, soloPublicas = fals
     if (soloPublicas) q = q.eq('publica', true);
     q = q.order('creado_en', { ascending: false }).limit(200);
     const { data } = await q;
-    return data || [];
+    return (data || []).map(normalizarActividad);
   } catch { return []; }
 }
 
 export async function sbUpdateActividad(id, data) {
   if (!supabase) return false;
+  // Columnas económicas que pueden no existir aún en la tabla (migración
+  // pendiente). Si el update falla por una columna inexistente, se mueven
+  // esos valores al JSON `contenido` como respaldo para NO perderlos nunca.
+  const CAMPOS_OPCIONALES = ['subvencionada', 'destacada', 'precio_licencia', 'precio_intento', 'recompensa'];
+  const intentar = async (d) => {
+    const { error } = await supabase.from('junior_actividades').update(d).eq('id', id);
+    return error ? error.message : null;
+  };
   try {
-    const { error } = await supabase.from('junior_actividades').update(data).eq('id', id);
-    if (error) throw new Error(error.message);
-    return true;
+    let err = await intentar(data);
+    if (err && /column .* does not exist|schema cache/i.test(err)) {
+      const respaldo = {};
+      const datos = { ...data };
+      for (const campo of CAMPOS_OPCIONALES) {
+        // Solo mueve la(s) columna(s) que realmente fallan (p. ej. subvencionada)
+        if (datos[campo] !== undefined && (err.includes(`'${campo}'`) || err.includes(`"${campo}"`) || new RegExp(`\\b${campo}\\b`).test(err))) {
+          respaldo[campo] = datos[campo];
+          delete datos[campo];
+        }
+      }
+      const err2 = await intentar(datos);
+      if (err2) return false;
+      if (Object.keys(respaldo).length) {
+        try {
+          const { data: act } = await supabase.from('junior_actividades').select('contenido').eq('id', id).maybeSingle();
+          const contenido = (act && typeof act.contenido === 'object' && act.contenido) ? { ...act.contenido } : {};
+          Object.assign(contenido, respaldo);
+          await supabase.from('junior_actividades').update({ contenido }).eq('id', id);
+        } catch (e) { /* respaldo no crítico */ }
+      }
+      return true;
+    }
+    return !err;
   } catch { return false; }
 }
 

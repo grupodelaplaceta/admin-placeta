@@ -130,6 +130,7 @@ export const TIPOS_DOCUMENTO = {
     ],
     junior: [
       'alta-junior', 'baja-junior', 'cambio-tutor', 'historial-junior',
+      'terminos-junior', 'privacidad-junior', 'consentimiento-junior',
       'autorizacion-actividad', 'compromiso-colaborador', 'diploma-actividad',
       'certificado-puntos', 'queja-reclamacion'
     ]
@@ -200,6 +201,9 @@ export const ETIQUETAS_DOC = {
   'bloqueo-cuenta': 'Resolución de Bloqueo (BLP-B-008)',
   'desbloqueo-cuenta': 'Resolución de Desbloqueo (BLP-B-009)',
   'baja-cuenta': 'Resolución de Baja Definitiva (BLP-B-010)',
+  'terminos-junior': 'Términos y Condiciones Placeta Junior (PJ-TYC-001)',
+  'privacidad-junior': 'Política de Privacidad Placeta Junior (PJ-PRV-001)',
+  'consentimiento-junior': 'Consentimiento Tutor Legal Placeta Junior (PJ-CON-001)',
 };
 function addLabels(obj, prefix = '') {
   for (const [cat, docs] of Object.entries(obj)) {
@@ -924,6 +928,119 @@ function generarContenidoDocumento(tipo, datos = {}) {
       tx('Tercero. — VINCULAR la cuenta del menor a la tutela del adulto responsable.');
       ln(); L.push({nota: 'Documento oficial del programa Placeta Junior · Grupo de La Placeta.'});
       L.push({nota: 'AVISO LEGAL: Al firmar electrónicamente este documento vía PlacetaID, el tutor otorga su consentimiento expreso para la participación del menor en Placeta Junior.'});
+      break;
+    }
+
+    // ── Placeta Junior · Términos y Condiciones (PJ-TYC-001) ───────────
+    case 'terminos-junior': {
+      sf('TÉRMINOS Y CONDICIONES — PLACETA JUNIOR');
+      cf('Documento', 'PJ-TYC-001');
+      if (datos.menor) { cf('Menor', `${datos.menor.nombre||''} ${datos.menor.apellidos||''}`); cf('Fecha nacimiento', datos.menor.fecha_nacimiento||'—'); if (datos.menor.dip) cf('DIP Junior', datos.menor.dip); }
+      if (datos.tutor) { ln(); sf('TUTOR LEGAL'); cf('Nombre', `${datos.tutor.nombre||''} ${datos.tutor.apellidos||''}`); cf('DIP', datos.tutor.dip||'—'); if (datos.tutor.email) cf('Email', datos.tutor.email); }
+      ln(); sf('1. IDENTIFICACIÓN');
+      tx('Operador del servicio: Grupo de La Placeta. Aplicación: Placeta Junior. Contacto: junta@laplaceta.org. Sitio web: https://junior.laplaceta.org.');
+      ln(); sf('2. OBJETO DEL SERVICIO');
+      tx('Placeta Junior es una plataforma educativa de actividades y juegos para niñas y niños de 6 a 16 años, integrada en el ecosistema del Grupo de La Placeta. A través de la aplicación, el menor puede realizar actividades (test, sopa de letras, relacionar, ordenar, completar, cálculo mental, mapamundi y bloques de texto), acumular puntos verdes y rojos, gestionar Placetas (moneda interna del programa) y relacionarse con otros menores a través de la lista de amistades. El acceso y uso de la aplicación implican la aceptación de estos Términos y Condiciones, de la Política de Privacidad y del documento de Consentimiento.');
+      ln(); sf('3. EDAD Y AUTORIZACIÓN DEL TUTOR');
+      tx('Placeta Junior está dirigida a menores de 6 a 16 años. El alta de un menor solo puede realizarla su tutor o tutora legal (mayor de edad). El tutor deberá leer, aceptar y firmar los documentos legales durante el proceso de registro, confirmando la tutela legal del menor. El menor no puede registrarse ni acceder a funciones sensibles por sí mismo sin la autorización expresa de su tutor. El tutor es responsable de supervisar el uso que el menor hace de la aplicación.');
+      ln(); sf('4. CUENTA JUNIOR Y DIP');
+      tx('Cada menor dispone de un DIP Junior (Documento de Identidad PlacetaID) que identifica su cuenta dentro del programa. La cuenta se vincula al tutor legal en el momento del alta. El menor puede iniciar sesión de forma persistente en su dispositivo. La suplantación de identidad, el uso de cuentas ajenas o la creación de cuentas sin autorización del tutor constituyen un uso indebido del servicio.');
+      ln(); sf('5. ACTIVIDADES Y CONTENIDO');
+      tx('Las actividades pueden ser públicas (gratuitas), subvencionadas o de pago con Placetas. El contenido educativo puede incluir textos, imágenes y pictogramas (en su caso, de ARASAAC, bajo su licencia). El progreso, los puntos verdes/rojos y los diplomas obtenidos quedan registrados en la cuenta del menor. El contenido descargado para el modo sin conexión permanece en el dispositivo del usuario.');
+      ln(); sf('6. PLACETAS Y ECONOMÍA INTERNA');
+      tx('Las Placetas son la moneda interna del programa y no tienen valor fuera del ecosistema de La Placeta. Se obtienen mediante canjes de puntos, la Renta Básica Universal (RBU) diaria del programa y otras recompensas. Pueden canjearse por actividades, recompensas y otras prestaciones del programa. El saldo de Placetas se gestiona a través de la cuenta del menor bajo supervisión del tutor y de los límites de control parental aplicables. Las transferencias de Placetas entre menores se realizan a través del sistema oficial del programa y están sujetas a los límites y autorizaciones establecidos.');
+      ln(); sf('7. AMISTADES');
+      tx('El menor puede añadir amigos dentro del programa mediante su DIP o mediante código QR. Solo se añaden menores que existen dentro del ecosistema. Las comisiones de las transferencias entre amigos las asume el programa (Capitalia), sin coste para el menor.');
+      ln(); sf('8. MODO SIN CONEXIÓN');
+      tx('La aplicación permite descargar actividades para jugar sin conexión, hasta el límite configurado por el servicio. Las actividades de pago no se pueden descargar para su uso sin conexión. Los datos descargados permanecen en el dispositivo y no se comparten con terceros.');
+      ln(); sf('9. USO RESPONSABLE Y CONDUCTA');
+      tx('El usuario (menor, bajo supervisión del tutor) se compromete a usar la aplicación de forma lícita, respetuosa y conforme a estos Términos; no intentar vulnerar la seguridad del servicio ni acceder a datos ajenos; no realizar transferencias, canjes o compras sin la autorización correspondiente; y comunicar al tutor cualquier incidencia o uso indebido detectado.');
+      ln(); sf('10. DERECHOS DEL TUTOR, SUSPENSIÓN Y BAJA');
+      tx('El tutor puede solicitar en cualquier momento la baja del menor del programa, lo que implicará la eliminación o anonimización de sus datos conforme a la normativa aplicable. El operador puede suspender el acceso a la cuenta en caso de uso indebido o incumplimiento de estos Términos, previa comunicación al tutor. El tutor puede ejercer los derechos de acceso, rectificación, supresión, limitación, oposición y portabilidad respecto de los datos del menor (ver Política de Privacidad).');
+      ln(); sf('11. LIMITACIONES DEL SERVICIO');
+      tx('El servicio se presta «tal cual», con la diligencia razonable, y puede requerir conexión a internet para determinadas funciones. El operador no garantiza la disponibilidad ininterrumpida del servicio. El ecosistema de La Placeta tiene un carácter lúdico y educativo; las Placetas y demás elementos del programa carecen de valor económico real fuera de dicho ecosistema.');
+      ln(); sf('12. PROPIEDAD INTELECTUAL');
+      tx('La aplicación, su contenido, la marca Placeta Junior y los elementos del ecosistema son propiedad del Grupo de La Placeta o de sus licenciantes. Las actividades creadas por los usuarios del programa (a través del Studio) se publican en el marco del programa con fines educativos. Los pictogramas de ARASAAC se utilizan bajo su licencia.');
+      ln(); sf('13. MODIFICACIONES');
+      tx('El Grupo de La Placeta puede actualizar estos Términos para adaptarlos a novedades legales, técnicas o funcionales. Los cambios relevantes se notificarán a través de la aplicación o de los canales habituales del ecosistema. La versión vigente estará siempre disponible en la aplicación y en el sitio web oficial.');
+      ln(); sf('14. LEGISLACIÓN APLICABLE');
+      tx('Estos Términos se rigen por la legislación española y de la Unión Europea, en particular el Reglamento (UE) 2016/679 (RGPD), la Ley Orgánica 3/2018, de 5 de diciembre, de Protección de Datos Personales y garantía de los derechos digitales (LOPDGDD) y la normativa interna del Grupo de La Placeta (Código Normativo Interno, CNI).');
+      ln(); sf('15. CONTACTO');
+      tx('Grupo de La Placeta · Correo electrónico: junta@laplaceta.org');
+      ln();
+      L.push({nota: 'Documento oficial del programa Placeta Junior · Grupo de La Placeta.'});
+      L.push({nota: 'AVISO LEGAL: Al firmar electrónicamente este documento vía PlacetaID Móvil, el tutor legal acepta los Términos y Condiciones de Placeta Junior en representación del menor.'});
+      break;
+    }
+
+    // ── Placeta Junior · Política de Privacidad (PJ-PRV-001) ───────────
+    case 'privacidad-junior': {
+      sf('POLÍTICA DE PRIVACIDAD — PLACETA JUNIOR');
+      cf('Documento', 'PJ-PRV-001');
+      if (datos.menor) { cf('Menor', `${datos.menor.nombre||''} ${datos.menor.apellidos||''}`); if (datos.menor.dip) cf('DIP Junior', datos.menor.dip); }
+      if (datos.tutor) { ln(); sf('TUTOR LEGAL'); cf('Nombre', `${datos.tutor.nombre||''} ${datos.tutor.apellidos||''}`); cf('DIP', datos.tutor.dip||'—'); if (datos.tutor.email) cf('Email', datos.tutor.email); }
+      ln(); sf('1. IDENTIFICACIÓN DEL RESPONSABLE');
+      tx('Responsable del tratamiento: Grupo de La Placeta. Aplicación: Placeta Junior. Contacto: junta@laplaceta.org. Sitio web: https://junior.laplaceta.org.');
+      ln(); sf('2. ÁMBITO DE APLICACIÓN Y EDAD');
+      tx('Esta política regula el tratamiento de los datos personales recabados a través de la aplicación móvil Placeta Junior, una plataforma educativa de actividades y juegos para niñas y niños de 6 a 16 años dentro del ecosistema del Grupo de La Placeta. El alta de un menor solo puede realizarla su tutor o tutora legal, quien deberá leer, aceptar y firmar los documentos legales durante el proceso de registro.');
+      ln(); sf('3. DATOS QUE TRATAMOS');
+      tx('Datos del tutor legal: nombre y apellidos, DIP (Documento de Identidad PlacetaID) y relación con el menor, para identificar al responsable del menor, verificar su identidad y confirmar la tutela legal.');
+      tx('Datos del menor: nombre, edad/fecha de nacimiento, DIP Junior, progreso y puntos (verdes/rojos), Placetas, actividades realizadas y amigos, para personalizar la interfaz, ajustar la dificultad, gestionar la economía interna y generar diplomas y estadísticas.');
+      tx('Datos recabados automáticamente: identificador de sesión, actividades descargadas para sin conexión y ajustes de accesibilidad. La aplicación NO recopila datos de ubicación, contactos, fotos ni micrófono.');
+      ln(); sf('4. FINALIDADES DEL TRATAMIENTO');
+      tx('Registro y alta del menor; juego y aprendizaje; seguimiento del progreso; economía interna (Placetas, canjes, recompensas y compras); relaciones sociales del programa; accesibilidad (lectura en voz alta y ajustes de visualización); juego sin conexión; y seguridad y control parental.');
+      ln(); sf('5. BASE LEGAL DEL TRATAMIENTO');
+      tx('Consentimiento del tutor legal (art. 6.1.a y art. 8 RGPD) prestado al firmar los documentos legales; ejecución de un contrato (art. 6.1.b RGPD); interés legítimo (art. 6.1.f RGPD) para seguridad y control parental; y obligación legal (art. 6.1.c RGPD) cuando corresponda.');
+      ln(); sf('6. PERMISOS DE LA APLICACIÓN');
+      tx('Placeta Junior solicita únicamente los permisos estrictamente necesarios: INTERNET (cargar actividades e imágenes), ACCESS_NETWORK_STATE (comprobar conectividad) y CAMERA (escanear el código QR de un amigo, opcional). No utiliza micrófono: los efectos de sonido se generan internamente y la lectura en voz alta usa el lector de texto (TTS) del sistema; los textos leídos no se envían a terceros.');
+      ln(); sf('7. ALMACENAMIENTO LOCAL Y JUEGO SIN CONEXIÓN');
+      tx('La aplicación guarda localmente en el dispositivo la sesión de la cuenta, las actividades descargadas (contenido y portadas) para jugar sin conexión, y los ajustes de accesibilidad. Estos datos se almacenan en el almacenamiento interno de la aplicación, no se comparten con terceros y permanecen en el dispositivo mientras no se eliminen o se desinstale la aplicación.');
+      ln(); sf('8. COMUNICACIÓN DE DATOS A TERCEROS');
+      tx('La aplicación se conecta al servidor oficial de Placeta Junior (Grupo de La Placeta) mediante conexiones seguras. Algunas actividades pueden mostrar pictogramas de ARASAAC, cuyas imágenes se cargan desde sus servidores bajo su licencia. Placeta Junior NO muestra publicidad, NO incorpora analíticas de terceros y NO cede datos personales de los menores a terceros para fines comerciales.');
+      ln(); sf('9. SEGURIDAD');
+      tx('Placeta Junior aplica medidas técnicas y organizativas razonables: comunicaciones mediante HTTPS, identificación por DIP y verificación de la tutela en el registro, almacenamiento local de la sesión en el contenedor privado de la aplicación, y control parental (el menor no puede registrarse ni acceder a funciones sensibles sin el tutor).');
+      ln(); sf('10. DERECHOS DEL USUARIO');
+      tx('El tutor legal puede ejercer, en nombre del menor, los derechos de acceso, rectificación, supresión, limitación, oposición y portabilidad, así como la retirada del consentimiento en cualquier momento. Para ejercerlos, escriba a junta@laplaceta.org indicando el DIP del menor y del tutor. También puede presentar una reclamación ante la Agencia Española de Protección de Datos (AEPD) en www.aepd.es.');
+      ln(); sf('11. CONSERVACIÓN DE DATOS');
+      tx('Los datos se conservan mientras el menor permanezca dado de alta en Placeta Junior y sean necesarios para prestar el servicio, mantener el progreso y cumplir obligaciones legales. Al causar baja (solicitada por el tutor), se eliminan o anonimizan los datos conforme a la normativa aplicable. Los datos locales se eliminan al borrar los datos de la aplicación o desinstalarla.');
+      ln(); sf('12. TRANSFERENCIAS INTERNACIONALES DE DATOS');
+      tx('Los servidores del ecosistema del Grupo de La Placeta pueden estar ubicados en la Unión Europea o en proveedores que ofrecen garantías adecuadas (Cláusulas Contractuales Tipo o marcos equivalentes). Las imágenes de ARASAAC se sirven desde sus infraestructuras bajo su propia política.');
+      ln(); sf('13. MENORES Y CONTROL PARENTAL');
+      tx('Placeta Junior está dirigida a menores de 6 a 16 años y requiere la autorización expresa del tutor legal en el momento del registro. El Grupo de La Placeta no recopila intencionadamente datos de menores sin el consentimiento de sus tutores. Si se detecta un tratamiento sin autorización, se procederá a su eliminación inmediata.');
+      ln(); sf('14. MODIFICACIONES DE LA POLÍTICA');
+      tx('El Grupo de La Placeta puede actualizar esta política para adaptarla a novedades legales, técnicas o funcionales. Los cambios relevantes se notificarán a través de la aplicación o de los canales habituales del ecosistema. La versión vigente estará siempre disponible en la aplicación y en el sitio web oficial.');
+      ln(); sf('15. LEGISLACIÓN APLICABLE');
+      tx('Esta política se rige por la legislación española y de la Unión Europea, en particular el Reglamento (UE) 2016/679 (RGPD) y la Ley Orgánica 3/2018, de 5 de diciembre, de Protección de Datos Personales y garantía de los derechos digitales (LOPDGDD).');
+      ln(); sf('16. CONTACTO');
+      tx('Para cualquier cuestión relacionada con la privacidad y el tratamiento de los datos personales: Grupo de La Placeta · junta@laplaceta.org');
+      ln();
+      L.push({nota: 'Documento oficial del programa Placeta Junior · Grupo de La Placeta.'});
+      L.push({nota: 'AVISO LEGAL: Al firmar electrónicamente este documento vía PlacetaID Móvil, el tutor legal manifiesta conocer y aceptar la Política de Privacidad de Placeta Junior en representación del menor.'});
+      break;
+    }
+
+    // ── Placeta Junior · Consentimiento del tutor (PJ-CON-001) ─────────
+    case 'consentimiento-junior': {
+      sf('CONSENTIMIENTO DE TRATAMIENTO DE DATOS DEL MENOR — PLACETA JUNIOR');
+      cf('Documento', 'PJ-CON-001');
+      if (datos.tutor) { sf('DATOS DEL TUTOR LEGAL'); cf('Nombre y apellidos', `${datos.tutor.nombre||''} ${datos.tutor.apellidos||''}`); cf('DIP', datos.tutor.dip||'—'); if (datos.tutor.email) cf('Email', datos.tutor.email); }
+      if (datos.menor) { ln(); sf('DATOS DEL MENOR'); cf('Nombre y apellidos', `${datos.menor.nombre||''} ${datos.menor.apellidos||''}`); cf('Fecha de nacimiento', datos.menor.fecha_nacimiento||'—'); if (datos.menor.dip) cf('DIP Junior', datos.menor.dip); }
+      ln(); sf('DECLARACIÓN DE TUTELA');
+      tx('El abajo firmante declara ser el tutor o tutora legal del menor identificado en el presente documento y, por tanto, estar legitimado para prestar el consentimiento en su nombre de conformidad con el artículo 8 del Reglamento (UE) 2016/679 (RGPD) y la Ley Orgánica 3/2018 (LOPDGDD).');
+      ln(); sf('CONSENTIMIENTO PARA EL TRATAMIENTO DE DATOS');
+      tx('En calidad de tutor legal del menor, otorgo mi consentimiento para que el Grupo de La Placeta trate los datos personales del menor con las siguientes finalidades: (1) registro y alta con vinculación al tutor; (2) juego y aprendizaje mediante actividades educativas; (3) seguimiento del progreso, puntos verdes/rojos, estadísticas, recompensas y diplomas; (4) economía interna: gestión de Placetas, canjes, recompensas y compras de actividades con el saldo del menor; (5) relaciones sociales del programa: lista de amistades dentro del ecosistema (solo si el amigo existe); (6) accesibilidad: lectura en voz alta con el lector del dispositivo y ajustes de visualización; (7) modo sin conexión: guardado local de actividades descargadas y sus portadas; y (8) seguridad y control parental: verificación de la tutela y protección de la cuenta.');
+      tx('Los datos tratados son los detallados en la Política de Privacidad (PJ-PRV-001): nombre, edad/fecha de nacimiento, DIP Junior, progreso y puntos, Placetas, actividades realizadas y amigos.');
+      ln(); sf('CARÁCTER VOLUNTARIO Y BASE LEGAL');
+      tx('Este consentimiento es voluntario y constituye la base legal del tratamiento de los datos del menor (art. 6.1.a y art. 8 RGPD). La negativa a prestarlo impedirá el alta y el uso de la aplicación por parte del menor.');
+      ln(); sf('DERECHOS DEL TUTOR');
+      tx('El tutor legal puede ejercer, en nombre del menor, los derechos de acceso, rectificación, supresión, limitación, oposición y portabilidad, así como la retirada del consentimiento en cualquier momento, sin efectos retroactivos. Para ejercer estos derechos, escriba a junta@laplaceta.org indicando el DIP del menor y del tutor. También puede presentar una reclamación ante la Agencia Española de Protección de Datos (AEPD) en www.aepd.es.');
+      ln(); sf('CONFIRMACIÓN Y FIRMA');
+      tx('Confirmo que he leído y comprendido este documento, la Política de Privacidad y los Términos y Condiciones de Placeta Junior, y que otorgo mi consentimiento libre, específico, informado e inequívoco para el tratamiento de los datos del menor conforme a lo anterior.');
+      if (datos.tutor) { cf('Firma del tutor legal', `${datos.tutor.nombre||''} ${datos.tutor.apellidos||''} (${datos.tutor.dip||'—'})`); }
+      cf('Fecha', datos.fecha || hoy);
+      ln();
+      L.push({nota: 'Documento oficial del programa Placeta Junior · Grupo de La Placeta.'});
+      L.push({nota: 'AVISO LEGAL: Al firmar electrónicamente este documento vía PlacetaID Móvil, el tutor legal otorga su consentimiento expreso para el tratamiento de los datos del menor, conforme al RGPD (UE) 2016/679 y la LOPDGDD 3/2018.'});
       break;
     }
 

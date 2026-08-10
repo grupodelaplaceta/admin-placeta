@@ -163,6 +163,29 @@ router.get('/junior/config', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+//  VERSIÓN — Control de actualización de la app (anti-fraude)
+//  La app consulta este endpoint para saber si está desactualizada y si
+//  DEBE actualizarse (force_update) para seguir usándose.
+//  versionCode es el código numérico (build.gradle.kts), p.ej. 260801.
+// ═══════════════════════════════════════════════════════════════════════
+router.get('/junior/version', (req, res) => {
+  rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/version');
+  res.json({
+    success: true,
+    // Versión publicada actualmente (el valor se actualiza al publicar)
+    version_code: 260801,          // BuildConfig.VERSION_CODE de la última publicada
+    version_name: '26.8.1',        // BuildConfig.VERSION_NAME de la última publicada
+    // Versión mínima aceptada: por debajo de este código la app se bloquea
+    min_version_code: 260801,
+    // Si true, la app se bloquea con un diálogo obligatorio de actualización
+    force_update: true,
+    update_url: 'https://junior.laplaceta.org/app/PlacetaJunior.apk',
+    update_message: 'Hay una nueva versión de Placeta Junior. Es obligatorio actualizar para seguir usando la aplicación de forma segura.',
+    fecha: new Date().toISOString()
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 //  PUNTOS — Tabla de canje Puntos Verdes → Placetas (spec §16)
 // ═══════════════════════════════════════════════════════════════════════
 router.get('/junior/puntos/canje', (req, res) => {
@@ -936,7 +959,13 @@ const RUTAS_JUNIOR_API_PROXY = [
   '/junior/menores/',
   '/junior/documentos-pendientes/',
   '/junior/firmar-documento',
-  '/junior/legal/'
+  '/junior/legal/',
+  '/junior/solicitar-alta',
+  '/junior/documentos/',
+  '/junior/register',
+  '/junior/login',
+  '/junior/verify/',
+  '/junior/logout'
 ];
 
 // Fallback catch-all: reenvía al CRM las rutas /junior/* no definidas nativamente

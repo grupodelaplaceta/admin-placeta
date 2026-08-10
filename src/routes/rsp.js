@@ -20,6 +20,7 @@ import {
   TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, IVA_PERCENT,
   RECOMPENSAS_POR_COMPLEJIDAD, getConfigRsp, setConfigRsp
 } from '../config/junior-precios.js';
+import { sbUpdateActividad, sbGetActividad, sbListActividades } from '../config/junior-actividades.js';
 
 const router = Router();
 
@@ -281,9 +282,10 @@ router.get('/premium', verificarSesion, verificarAccesoEntidad('rsp'), verificar
   let actividades = [];
   try {
     if (supabase) {
-      const { data } = await supabase.from('junior_actividades')
-        .select('*').order('creado_en', { ascending: false }).limit(200);
-      actividades = data || [];
+      // Usa sbListActividades (normaliza) para que los valores económicos que
+      // viven en `contenido` como respaldo (p. ej. subvencionada) se muestren
+      // igual que las columnas reales (precio_licencia, recompensa, etc.).
+      actividades = await sbListActividades({ soloPublicas: false });
     }
   } catch (e) { /* sin datos */ }
 
@@ -328,8 +330,11 @@ router.post('/premium', verificarSesion, verificarAccesoEntidad('rsp'), verifica
   campos.publica = req.body.publica === 'on';
   try {
     if (supabase) {
-      const { error } = await supabase.from('junior_actividades').update(campos).eq('id', id);
-      if (error) return res.redirect(`/rsp/premium?error=${encodeURIComponent(error.message)}`);
+      // sbUpdateActividad es tolerante: si la columna subvencionada aún no
+      // existe en la tabla, guarda precio/recompensa/destacada en sus columnas
+      // y mueve subvencionada al JSON contenido (no pierde nada).
+      const ok = await sbUpdateActividad(id, campos);
+      if (!ok) return res.redirect(`/rsp/premium?error=${encodeURIComponent('No se pudieron guardar los cambios')}`);
     }
   } catch (e) {
     return res.redirect(`/rsp/premium?error=${encodeURIComponent(e.message)}`);

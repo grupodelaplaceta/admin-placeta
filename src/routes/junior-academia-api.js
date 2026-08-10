@@ -29,7 +29,7 @@ import {
   sbCrearActividad, sbGetActividad, sbListActividades, sbUpdateActividad, sbIncrementActividadStats,
   sbGetColaborador, sbCrearColaborador, sbUpdateColaborador,
   sbGetPuntos, sbUpsertPuntos, sbCanjearPuntos, sbCanjearPuntosRojos,
-  sbCrearDiploma, sbListDiplomas
+  sbCrearDiploma, sbListDiplomas, normalizarActividad
 } from '../config/junior-actividades.js';
 import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, desglosarPrecioConIva, getTablaCanje, PUNTOS_ROJOS_POR_INTENTO } from '../config/junior-precios.js';
 import { saveDocumentoAsync, generarPDF, getDocumentoByIdAsync, ETIQUETAS_DOC } from '../config/documentos.js';
@@ -228,7 +228,8 @@ router.post('/junior/actividades', async (req, res) => {
     const {
       tipo_titular = TIPOS_TITULAR.INTERNO, dip, eip, nombre_entidad, nombre_autor,
       titulo, descripcion, categoria, edad_recomendada, dificultad, tiempo_estimado,
-      tipo, contenido, num_preguntas, num_fases, portada_url, pictograma
+      tipo, contenido, num_preguntas, num_fases, portada_url, pictograma,
+      precio_licencia, precio_intento, recompensa, subvencionada, destacada
     } = req.body;
 
     if (!titulo || !descripcion || !categoria) {
@@ -237,6 +238,23 @@ router.post('/junior/actividades', async (req, res) => {
     if (!TIPOS_ACTIVIDAD.includes(tipo)) {
       return res.status(400).json({ error: `Tipo de actividad no válido. Válidos: ${TIPOS_ACTIVIDAD.join(', ')}` });
     }
+
+    // ── Precio / recompensa ─────────────────────────────────────────
+    // El Studio/DevAI pueden enviarlos en el body, o dentro del propio
+    // JSON de la actividad (claves raíz precio_licencia, etc.). Se leen
+    // de ambos sitios para no perderlos al guardar "código nuevo".
+    let c = contenido;
+    if (typeof c === 'string') { try { c = JSON.parse(c); } catch (e) { c = {}; } }
+    const precioLicencia = precio_licencia != null ? Number(precio_licencia)
+      : (c && c.precio_licencia != null ? Number(c.precio_licencia) : 0);
+    const precioIntento = precio_intento != null ? Number(precio_intento)
+      : (c && c.precio_intento != null ? Number(c.precio_intento) : 0);
+    const recompensaFinal = recompensa != null ? Number(recompensa)
+      : (c && c.recompensa != null ? Number(c.recompensa) : 0);
+    const subvencionadaFinal = subvencionada != null ? (subvencionada === true || subvencionada === 'true' || subvencionada === 'on')
+      : !!(c && c.subvencionada);
+    const destacadaFinal = destacada != null ? (destacada === true || destacada === 'true' || destacada === 'on')
+      : !!(c && c.destacada);
 
     // ── Autor / titularidad ──────────────────────────────────────────
     let autorDip = null;
@@ -273,6 +291,13 @@ router.post('/junior/actividades', async (req, res) => {
     const nFases = Number(num_fases) || 1;
     const esExamen = nPreguntas > UMBRAL_EXAMEN; // >10 preguntas = examen (spec §11)
 
+    // Limpia del contenido las claves económicas (viven en columnas propias,
+    // no dentro del JSON de bloques) para no duplicarlas ni romper el formato.
+    if (c && typeof c === 'object') {
+      delete c.precio_licencia; delete c.precio_intento; delete c.recompensa;
+      delete c.subvencionada; delete c.destacada;
+    }
+
     const actividad = await sbCrearActividad({
       id: `act-${Date.now()}-${randomUUID().slice(0, 6)}`,
       titulo, descripcion, categoria, tipo,
@@ -281,7 +306,7 @@ router.post('/junior/actividades', async (req, res) => {
       tiempo_estimado: tiempo_estimado || 10,
       num_preguntas: nPreguntas, num_fases: nFases,
       es_examen: esExamen,
-      contenido: pictograma ? { ...(contenido || {}), pictograma } : (contenido || {}),
+      contenido: pictograma ? { ...(c || {}), pictograma } : (c || {}),
       autor_dip: autorDip,
       autor_nombre: autorNombre,
       tipo_titular: titular,
@@ -289,8 +314,12 @@ router.post('/junior/actividades', async (req, res) => {
       nombre_entidad: entidadNombre,
       estado: 'en_revision',          // → Filtro de Placeta Junior
       publica: false,
+      precio_licencia: precioLicencia,
+      precio_intento: precioIntento,
+      recompensa: recompensaFinal,
+      subvencionada: subvencionadaFinal,
+      destacada: destacadaFinal,
       portada_url: portada_url || null,
-      destacada: false,
       estadisticas: { veces_realizada: 0, aprobados: 0 },
       creado_en: new Date().toISOString()
     });
@@ -308,7 +337,7 @@ router.post('/junior/actividades', async (req, res) => {
 
     res.json({
       success: true,
-      actividad,
+      actividad: normalizarActividad(actividad),
       mensaje: esExamen
         ? '✅ Actividad creada. Por tener más de 10 preguntas se tratará como EXAMEN (genera diploma).'
         : '✅ Actividad creada y enviada al Filtro de Placeta Junior para revisión.'
@@ -536,7 +565,7 @@ router.post('/junior/actividades/:id/realizar', verificarJunior, async (req, res
     const { respuestas = [] } = req.body;
     const contenido = actividad.contenido || {};
     const preguntas = contenido.preguntas || [];
-    const totalPreguntas = preguntas.length || actividad.num_preguntas || respuestas.length;
+    const totalPreguntasBase = preguntas.length || actividad.num_preguntas || respuestas.length || 1;
 
     let aciertos = 0;
     let errores = 0;
@@ -545,19 +574,27 @@ router.post('/junior/actividades/:id/realizar', verificarJunior, async (req, res
       else errores++;
     }
     const respondidas = respuestas.length;
+    const totalPreguntas = Math.max(totalPreguntasBase, respondidas);
     const porcentaje = totalPreguntas > 0 ? Math.round((aciertos / totalPreguntas) * 100) : 0;
     const aprobado = porcentaje >= (actividad.es_examen ? APROBADO_MIN : 50);
 
-    // Recompensa (si está definida, en Placetas) — spec §10
-    const recompensaPz = actividad.recompensa || 0;
+    // ── RECOMPENSA PROPORCIONAL (spec §10) ──────────────────────────
+    // `actividad.recompensa` es el MÁXIMO que puede ganar el junior. Según
+    // su rendimiento (puntos verdes/aciertos vs puntos rojos/errores) recibe
+    // ese máximo o una cantidad menor, ajustada a cada actividad.
+    //   · Acierta todo (0 errores) → recompensa máxima.
+    //   · Cada error descuenta la mitad de su peso sobre el máximo.
+    //   · No aprobada → 0 Pz.
+    const recompensaMax = actividad.recompensa || 0;
+    const recompensaGanada = calcularRecompensa(recompensaMax, aciertos, errores, totalPreguntas, aprobado);
     let nuevoSaldo = junior.placetas_saldo || 0;
-    if (aprobado && recompensaPz > 0) {
-      nuevoSaldo += recompensaPz;
+    if (aprobado && recompensaGanada > 0) {
+      nuevoSaldo += recompensaGanada;
       await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
       await sbCreatePlacetaTransaction({
         junior_id: junior.id, tipo: 'ganar',
         concepto: `Actividad: ${actividad.titulo}`,
-        cantidad: recompensaPz, saldo_resultante: nuevoSaldo,
+        cantidad: recompensaGanada, saldo_resultante: nuevoSaldo,
         ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
       });
     }
@@ -571,7 +608,7 @@ router.post('/junior/actividades/:id/realizar', verificarJunior, async (req, res
     // Log
     await sbCreateJuniorLog({
       junior_id: junior.id, accion: 'actividad_realizada',
-      detalle: `Actividad "${actividad.titulo}": ${aciertos}/${totalPreguntas} (${porcentaje}%). ${aprobado ? 'Aprobada' : 'No aprobada'}. Placetas: +${aprobado ? recompensaPz : 0}`, ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
+      detalle: `Actividad "${actividad.titulo}": ${aciertos}/${totalPreguntas} (${porcentaje}%). ${aprobado ? 'Aprobada' : 'No aprobada'}. Recompensa: +${recompensaGanada}/${recompensaMax} Pz`, ip: req.headers['x-forwarded-for']?.split(',')[0] || 'unknown'
     });
 
     // ── DIPLOMA: si es examen y aprobado (spec §11) ──────────────
@@ -592,14 +629,20 @@ router.post('/junior/actividades/:id/realizar', verificarJunior, async (req, res
     res.json({
       success: true,
       aciertos, errores, total: totalPreguntas, porcentaje, aprobado,
-      placetas_ganadas: aprobado ? recompensaPz : 0,
+      recompensa_max: recompensaMax,
+      recompensa: recompensaGanada,
+      placetas_ganadas: recompensaGanada,
       saldo_actual: nuevoSaldo,
       puntos: await sbGetPuntos(junior.id),
       es_examen: actividad.es_examen,
       diploma: diploma ? { id: diploma.id, reconocimiento: diploma.reconocimiento } : null,
       mensaje: diploma
         ? `🎓 ¡Examen aprobado! Reconocimiento: ${diploma.reconocimiento}. Diploma generado.`
-        : (aprobado ? '🎉 ¡Actividad superada!' : '💪 Sigue practicando, los errores también enseñan.')
+        : (aprobado
+            ? (recompensaGanada > 0
+                ? `🎉 ¡Actividad superada! Recompensa: +${recompensaGanada} Pz (máximo ${recompensaMax} Pz).`
+                : '🎉 ¡Actividad superada!')
+            : '💪 Sigue practicando, los errores también enseñan.')
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -607,6 +650,28 @@ router.post('/junior/actividades/:id/realizar', verificarJunior, async (req, res
 // Identificador único para diplomas (CSV oficial)
 function csvIdentificador() {
   return createHash('sha256').update(Date.now() + randomUUID()).digest('hex').slice(0, 16).toUpperCase();
+}
+
+/**
+ * Calcula la recompensa real que recibe el junior al completar una actividad.
+ *
+ * `recompensaMax` es el MÁXIMO configurado para esa actividad. Según el
+ * rendimiento (puntos verdes = aciertos, puntos rojos = errores) se entrega
+ * ese máximo o una cantidad proporcional menor:
+ *
+ *   · Acierta TODO (0 errores)  → recompensa máxima.
+ *   · Con errores, cada fallo descuenta la mitad de su peso sobre el máximo:
+ *       recompensa = max · (aciertos/total) − max · (errores/total)/2
+ *   · No aprobada               → 0 Pz.
+ *   · Redondeo al entero y nunca negativa ni por encima del máximo.
+ */
+function calcularRecompensa(recompensaMax, aciertos, errores, total, aprobado) {
+  const max = Number(recompensaMax) || 0;
+  if (max <= 0 || !aprobado || total <= 0) return 0;
+  const proporcion = aciertos / total;                 // 0..1
+  const penalizacion = (errores / total) * 0.5;        // los rojos descuentan la mitad de su peso
+  const bruto = max * Math.max(0, proporcion - penalizacion);
+  return Math.max(0, Math.min(max, Math.round(bruto)));
 }
 
 // ═══════════════════════════════════════════════════════════════════════

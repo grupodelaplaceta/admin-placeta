@@ -212,7 +212,17 @@ router.post('/academia/editar/:id', async (req, res) => {
     if (tiempo_estimado != null) cambios.tiempo_estimado = Number(tiempo_estimado) || 10;
     if (num_preguntas != null) { cambios.num_preguntas = Number(num_preguntas) || 0; cambios.es_examen = (Number(num_preguntas) || 0) > UMBRAL_EXAMEN; }
     if (num_fases != null) cambios.num_fases = Number(num_fases) || 1;
-    if (contenido != null) cambios.contenido = contenido;
+    if (contenido != null) {
+      // Normaliza el contenido: si llega como string JSON (p. ej. desde el
+      // editor de código del panel), se convierte a objeto para no romper
+      // el formato { version, bloques } que esperan web y app.
+      let c = contenido;
+      if (typeof c === 'string') { try { c = JSON.parse(c); } catch (e) { c = {}; } }
+      if (typeof c === 'object' && c !== null) {
+        if (!c.version) c.version = 2;
+        cambios.contenido = c;
+      }
+    }
     if (portada_url != null) cambios.portada_url = portada_url;
     if (precio_licencia != null) cambios.precio_licencia = Number(precio_licencia) || 0;
     if (precio_intento != null) cambios.precio_intento = Number(precio_intento) || 0;

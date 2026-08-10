@@ -146,6 +146,18 @@ CREATE INDEX IF NOT EXISTS idx_junior_logs_junior ON junior_logs(junior_id);
 -- ── CONTROL DE RECLAMO DIARIO DE RBU (anti doble reclamo) ────────────
 ALTER TABLE junior_menores ADD COLUMN IF NOT EXISTS rbu_ultima TEXT;
 
+-- ── MIGRACIÓN: ACTIVIDADES — columna subvencionada ──────────────────
+-- Añade la columna si no existe (el backend ya guarda precios/recompensa
+-- en columnas propias y mueve subvencionada al JSON contenido si falta).
+ALTER TABLE junior_actividades ADD COLUMN IF NOT EXISTS subvencionada BOOLEAN DEFAULT false;
+
+-- Promueve los valores de respaldo que se guardaron en contenido.subvencionada
+-- a la nueva columna (una sola vez).
+UPDATE junior_actividades
+SET subvencionada = (contenido->>'subvencionada')::boolean,
+    contenido = contenido - 'subvencionada'
+WHERE contenido ? 'subvencionada' AND subvencionada IS NULL;
+
 -- ── REGISTRO MERCANTIL — EMPRESAS Y EIP (persistente) ────────────────
 CREATE TABLE IF NOT EXISTS rsp_empresas (
   id TEXT PRIMARY KEY,

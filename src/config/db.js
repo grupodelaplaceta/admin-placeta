@@ -426,3 +426,78 @@ export async function sbFindJuniorByTutor(tutorDip) {
   } catch { return []; }
 }
 
+// ── CREACIÓN (migrado del CRM a RSP) ────────────────────────────────────
+
+export async function sbCreateSolicitante(data) {
+  if (!supabase) return null;
+  try {
+    const { data: result, error } = await supabase.from('solicitantes')
+      .insert(data).select().single();
+    if (error) throw new Error(`Supabase insert solicitante: ${error.message}`);
+    return result;
+  } catch (e) { console.error('[DB] Error creando solicitante:', e.message); throw e; }
+}
+
+export async function sbUpdateSolicitante(id, data) {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('solicitantes').update(data).eq('id', id);
+    if (error) throw new Error(`Supabase update solicitante: ${error.message}`);
+    return true;
+  } catch (e) { console.error('[DB] Error actualizando solicitante:', e.message); return false; }
+}
+
+export async function sbCreateJunior(data) {
+  if (!supabase) return null;
+  try {
+    const { data: result, error } = await supabase.from('junior_menores')
+      .insert(data).select().single();
+    if (error) throw new Error(`Error al crear registro junior: ${error.message}`);
+    return result;
+  } catch (e) { console.error('[DB] Error creando junior:', e.message); throw e; }
+}
+
+export async function sbCreateLog(data) {
+  if (!supabase) return;
+  try { await supabase.from('logs_auditoria').insert(data); } catch (e) { console.error('[DB] Error insert log:', e.message); }
+}
+
+export async function sbFindControlParentalByDni(dni) {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase.from('control_parental')
+      .select('*').eq('dni_tutor', dni).order('creado_en', { ascending: false });
+    if (error) return [];
+    return data || [];
+  } catch { return []; }
+}
+
+export async function sbCreateControlParental(data) {
+  if (!supabase) return null;
+  try {
+    const { data: result, error } = await supabase.from('control_parental')
+      .insert(data).select().single();
+    if (error) throw new Error(`Supabase insert control_parental: ${error.message}`);
+    return result;
+  } catch (e) { console.error('[DB] Error creando control parental:', e.message); throw e; }
+}
+
+export async function sbCreateTributosContributor(data) {
+  if (!supabase) return null;
+  try {
+    const { data: result, error } = await supabase.from('tributos_contribuyentes')
+      .insert(data).select().single();
+    if (error) throw new Error(`Supabase insert tributos_contribuyentes: ${error.message}`);
+    return result;
+  } catch (e) { console.error('[DB] Error creando contribuyente:', e.message); return null; }
+}
+
+export async function sbGetTributosContributorByPlacetaId(placetaId) {
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.from('tributos_contribuyentes')
+      .select('*').eq('placeta_id', placetaId).limit(1).maybeSingle();
+    return data;
+  } catch { return null; }
+}
+
