@@ -213,9 +213,54 @@ export function evaluarCode(escenario, inicio, objetivo, programa, resultado) {
 }
 
 /** Devuelve los bloques permitidos para una actividad (default: todos los de movimiento). */
-export function bloquesPermitidos(actividad) {
+export function bloquesPermitidos(actividad, ejercicioIdx) {
   const contenido = actividad.contenido || {};
-  const permitidos = contenido.bloques_permitidos;
+  const ejercicios = obtenerEjercicios(contenido);
+  const ej = ejercicios[Number(ejercicioIdx) || 0] || {};
+  const permitidos = ej.bloques_permitidos || contenido.bloques_permitidos;
   if (Array.isArray(permitidos) && permitidos.length) return permitidos;
   return Object.keys(BLOQUES_CODE);
+}
+
+/**
+ * Normaliza el contenido de una actividad code_blocks a una lista de
+ * ejercicios. Soporta dos formatos:
+ *
+ *   A) `ejercicios: [ { titulo, explicacion, objetivo_texto, escenario,
+ *       inicio, objetivo, bloques_permitidos?, max_bloques?, pistas } ]`
+ *      → varios retos progresivos dentro de la misma actividad.
+ *
+ *   B) Formato antiguo: escenario/inicio/objetivo directamente en el
+ *      contenido → se envuelve en un único ejercicio.
+ *
+ * Cada ejercicio define su propio escenario y objetivo, así se avanza
+ * poco a poco (evolución progresiva) sin cambiar de actividad.
+ */
+export function obtenerEjercicios(contenido) {
+  const c = contenido || {};
+  if (Array.isArray(c.ejercicios) && c.ejercicios.length) {
+    return c.ejercicios.map((ej, i) => ({
+      titulo: ej.titulo || `Ejercicio ${i + 1}`,
+      explicacion: ej.explicacion || '',
+      objetivo_texto: ej.objetivo_texto || 'Lleva a Candela hasta la estrella.',
+      escenario: ej.escenario || c.escenario || { tipo: 'cuadricula', ancho: 6, alto: 6 },
+      inicio: ej.inicio || c.inicio || { x: 0, y: 0, direccion: 'derecha' },
+      objetivo: ej.objetivo || {},
+      bloques_permitidos: ej.bloques_permitidos || c.bloques_permitidos || null,
+      max_bloques: ej.max_bloques || c.max_bloques || null,
+      pistas: ej.pistas || c.pistas || [],
+    }));
+  }
+  // Formato antiguo: un único ejercicio
+  return [{
+    titulo: c.titulo || 'Ejercicio 1',
+    explicacion: c.explicacion || '',
+    objetivo_texto: c.objetivo_texto || 'Lleva a Candela hasta la estrella.',
+    escenario: c.escenario || { tipo: 'cuadricula', ancho: 6, alto: 6 },
+    inicio: c.inicio || { x: 0, y: 0, direccion: 'derecha' },
+    objetivo: c.objetivo || {},
+    bloques_permitidos: c.bloques_permitidos || null,
+    max_bloques: c.max_bloques || null,
+    pistas: c.pistas || [],
+  }];
 }

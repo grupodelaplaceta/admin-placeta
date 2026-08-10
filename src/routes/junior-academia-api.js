@@ -38,7 +38,7 @@ import {
   sbAddUserBundle, sbHasUserBundle, sbAddUserActivity, sbHasUserActivity,
   comprobarAccesoActividad, entregarBundleEarlyAccess
 } from '../config/junior-bundles.js';
-import { ejecutarCode, evaluarCode, bloquesPermitidos, BLOQUES_CODE } from '../config/junior-code.js';
+import { ejecutarCode, evaluarCode, bloquesPermitidos, obtenerEjercicios, BLOQUES_CODE } from '../config/junior-code.js';
 import { saveDocumentoAsync, generarPDF, getDocumentoByIdAsync, ETIQUETAS_DOC } from '../config/documentos.js';
 
 const router = Router();
@@ -697,14 +697,16 @@ router.post('/junior/actividades/:id/desbloquear', verificarJunior, async (req, 
 
 /**
  * POST /junior/code/evaluar
- * Body: { dip, actividad_id, programa: [...bloques] }
- * Ejecuta el programa en el escenario de la actividad y evalúa los objetivos.
+ * Body: { dip, actividad_id, ejercicio?, programa: [...bloques] }
+ * Ejecuta el programa en el escenario del ejercicio indicado y evalúa.
+ * La actividad code_blocks puede tener varios ejercicios progresivos;
+ * la recompensa se otorga al superar el ÚLTIMO ejercicio (actividad completa).
  */
 router.post('/junior/code/evaluar', verificarJunior, async (req, res) => {
   rspRegistrar(TIPO_CONEXION.MODIFICACION, 'POST /junior/code/evaluar', '', req.juniorDip);
   try {
     const junior = req.juniorData;
-    const { actividad_id, programa = [] } = req.body;
+    const { actividad_id, programa = [], ejercicio = 0 } = req.body;
     if (!actividad_id) return res.status(400).json({ error: 'actividad_id requerido' });
 
     const actividad = await sbGetActividad(actividad_id);
@@ -725,12 +727,17 @@ router.post('/junior/code/evaluar', verificarJunior, async (req, res) => {
     }
 
     const contenido = actividad.contenido || {};
-    const escenario = contenido.escenario || { tipo: 'cuadricula', ancho: 6, alto: 6 };
-    const inicio = contenido.inicio || { x: 0, y: 0, direccion: 'derecha' };
-    const objetivo = contenido.objetivo || {};
+    const ejercicios = obtenerEjercicios(contenido);
+    const totalEjercicios = ejercicios.length;
+    const ejIdx = Math.min(Math.max(Number(ejercicio) || 0, 0), totalEjercicios - 1);
+    const ej = ejercicios[ejIdx] || {};
+    const escenario = ej.escenario || { tipo: 'cuadricula', ancho: 6, alto: 6 };
+    const inicio = ej.inicio || { x: 0, y: 0, direccion: 'derecha' };
+    const objetivo = ej.objetivo || {};
+    const esUltimo = ejIdx === totalEjercicios - 1;
 
-    // Validar que solo usa bloques permitidos
-    const permitidos = bloquesPermitidos(actividad);
+    // Validar que solo usa bloques permitidos (los del ejercicio)
+    const permitidos = bloquesPermitidos(actividad, ejIdx);
     const usados = new Set();
     (function recorrer(prog) {
       (prog || []).forEach(b => {
@@ -745,22 +752,20 @@ router.post('/junior/code/evaluar', verificarJunior, async (req, res) => {
     }
 
     // Ejecutar en el sandbox
-    const resultado = ejecutarCode(escenario, inicio, programa, { maxPasos: contenido.max_bloques ? contenido.max_bloques * 20 : 200 });
+    const maxPasos = ej.max_bloques ? ej.max_bloques * 20 : 200;
+    const resultado = ejecutarCode(escenario, inicio, programa, { maxPasos });
     const evalRes = evaluarCode(escenario, inicio, objetivo, programa, resultado);
 
     // Registrar puntos verdes/rojos si hay junior (best effort)
     await sbUpsertPuntos(junior.id, { verdes: evalRes.superado ? 1 : 0, rojos: evalRes.superado ? 0 : 1 }).catch(() => {});
     await sbIncrementActividadStats(actividad.id, { veces: 1, aprobados: evalRes.superado ? 1 : 0 }).catch(() => {});
 
-    // ── Recompensa (Placetas) al superar el reto ────────────────────
-    // La recompensa puede venir en contenido.recompensa (spec code) o en la
-    // columna recompensa de la actividad (sistema común). Se otorga solo al
-    // superar y una vez por junior (se registra en user_activities).
+    // ── Recompensa (Placetas) al superar el ÚLTIMO ejercicio ────────
     let placetasGanadas = 0;
     let nuevoSaldo = junior.placetas_saldo || 0;
     const recompensaCode = (contenido.recompensa && contenido.recompensa.activa) ? contenido.recompensa : null;
     const placetasReto = recompensaCode ? (Number(recompensaCode.placetas) || 0) : (Number(actividad.recompensa) || 0);
-    if (evalRes.superado && placetasReto > 0) {
+    if (evalRes.superado && esUltimo && placetasReto > 0) {
       const yaSuperado = await sbHasUserActivity(junior.id, actividad.id).catch(() => false);
       if (!yaSuperado) {
         nuevoSaldo += placetasReto;
@@ -781,6 +786,11 @@ router.post('/junior/code/evaluar', verificarJunior, async (req, res) => {
       success: true,
       superado: evalRes.superado,
       fallos: evalRes.fallos,
+      ejercicio: ejIdx,
+      total_ejercicios: totalEjercicios,
+      es_ultimo: esUltimo,
+      ejercicio_titulo: ej.titulo || `Ejercicio ${ejIdx + 1}`,
+      ejercicio_explicacion: ej.explicacion || '',
       resultado: {
         posicion_final: resultado.posicion_final,
         direccion_final: resultado.direccion_final,
@@ -793,7 +803,9 @@ router.post('/junior/code/evaluar', verificarJunior, async (req, res) => {
       saldo_actual: nuevoSaldo,
       recompensa: recompensaCode || { activa: false, placetas: 0, puntos_verdes: 0, puntos_rojos: 0 },
       mensaje: evalRes.superado
-        ? (placetasGanadas > 0 ? `🎉 ¡Reto superado! +${placetasGanadas} Pz.` : '🎉 ¡Reto superado! Has completado el programa.')
+        ? (esUltimo
+            ? (placetasGanadas > 0 ? `🎉 ¡Actividad completada! +${placetasGanadas} Pz.` : '🎉 ¡Actividad completada! Has superado todos los retos.')
+            : '🎉 ¡Reto superado! Sigue al siguiente ejercicio.')
         : '💪 Casi… revisa el programa y vuelve a intentarlo.'
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
