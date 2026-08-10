@@ -16,11 +16,6 @@ import {
   generarFactura, generarFacturaPorIds, eliminarConexionesPorIds,
   pagarFactura, pagarSancionIVA, registrarConexion, TIPO_CONEXION
 } from '../config/rsp.js';
-import {
-  TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, IVA_PERCENT,
-  RECOMPENSAS_POR_COMPLEJIDAD, getConfigRsp, setConfigRsp
-} from '../config/junior-precios.js';
-import { sbUpdateActividad, sbGetActividad, sbListActividades } from '../config/junior-actividades.js';
 
 const router = Router();
 
@@ -278,131 +273,39 @@ router.get('/sistema', verificarSesion, verificarAccesoEntidad('rsp'), verificar
 });
 
 // ── Gestión premium: precios, subvención, destacadas, licencias ──────────
-router.get('/premium', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_facturas'), async (req, res) => {
-  let actividades = [];
-  try {
-    if (supabase) {
-      // Usa sbListActividades (normaliza) para que los valores económicos que
-      // viven en `contenido` como respaldo (p. ej. subvencionada) se muestren
-      // igual que las columnas reales (precio_licencia, recompensa, etc.).
-      actividades = await sbListActividades({ soloPublicas: false });
-    }
-  } catch (e) { /* sin datos */ }
-
-  // Licencias por actividad
-  const licenciasPorActividad = {};
-  let totalLicencias = 0;
-  let ingresos = 0;
-  try {
-    if (supabase) {
-      const { data: lic } = await supabase.from('junior_licencias').select('actividad_id');
-      if (lic) {
-        for (const l of lic) licenciasPorActividad[l.actividad_id] = (licenciasPorActividad[l.actividad_id] || 0) + 1;
-        totalLicencias = lic.length;
-        const ids = [...new Set(lic.map(l => l.actividad_id))];
-        const { data: acts } = await supabase.from('junior_actividades').select('id,precio_licencia').in('id', ids);
-        const precios = Object.fromEntries((acts || []).map(a => [a.id, a.precio_licencia || 0]));
-        ingresos = lic.reduce((a, l) => a + (precios[l.actividad_id] || 0), 0);
-      }
-    }
-  } catch (e) { /* sin licencias */ }
-
-  res.render('rsp/premium', {
-    titulo: 'Gestión Premium — Academia Placeta Junior',
-    entidad_actual: 'rsp',
-    actividades, licenciasPorActividad, totalLicencias, ingresos,
-    ok: req.query.ok === '1',
-    error: req.query.error || '',
-    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
-  });
+// (Movida a Placeta Junior → /junior/premium)
+router.get('/premium', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_facturas'), (req, res) => {
+  res.redirect('/junior/premium');
 });
 
-router.post('/premium', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_facturas'), async (req, res) => {
-  const { id } = req.body;
-  if (!id) return res.redirect('/rsp/premium?error=ID requerido');
-  const campos = {};
-  for (const k of ['precio_licencia', 'precio_intento', 'recompensa']) {
-    const v = Number(req.body[k]);
-    if (!Number.isNaN(v)) campos[k] = v;
-  }
-  campos.subvencionada = req.body.subvencionada === 'on';
-  campos.destacada = req.body.destacada === 'on';
-  campos.publica = req.body.publica === 'on';
-  try {
-    if (supabase) {
-      // sbUpdateActividad es tolerante: si la columna subvencionada aún no
-      // existe en la tabla, guarda precio/recompensa/destacada en sus columnas
-      // y mueve subvencionada al JSON contenido (no pierde nada).
-      const ok = await sbUpdateActividad(id, campos);
-      if (!ok) return res.redirect(`/rsp/premium?error=${encodeURIComponent('No se pudieron guardar los cambios')}`);
-    }
-  } catch (e) {
-    return res.redirect(`/rsp/premium?error=${encodeURIComponent(e.message)}`);
-  }
-  res.redirect('/rsp/premium?ok=1');
+router.post('/premium', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_facturas'), (req, res) => {
+  // Reenvía el POST a la ruta nueva de junior manteniendo el body
+  const { id, precio_licencia, precio_intento, recompensa, subvencionada, destacada, publica } = req.body;
+  const form = new URLSearchParams();
+  if (id != null) form.set('id', id);
+  if (precio_licencia != null) form.set('precio_licencia', precio_licencia);
+  if (precio_intento != null) form.set('precio_intento', precio_intento);
+  if (recompensa != null) form.set('recompensa', recompensa);
+  form.set('subvencionada', subvencionada === 'on' ? 'on' : '');
+  form.set('destacada', destacada === 'on' ? 'on' : '');
+  form.set('publica', publica === 'on' ? 'on' : '');
+  res.redirect(307, '/junior/premium');
 });
 
 // ── Configuración económica: tablas de canje ─────────────────────────────
-router.get('/config', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tarifas'), async (req, res) => {
-  const [canjeV, canjeR] = await Promise.all([getTablaCanje('verdes'), getTablaCanje('rojos')]);
-  res.render('rsp/config', {
-    titulo: 'Configuración Económica — RSP',
-    entidad_actual: 'rsp',
-    iva: IVA_PERCENT,
-    recompensas: RECOMPENSAS_POR_COMPLEJIDAD,
-    canjeV, canjeR,
-    ok: req.query.ok === '1',
-    error: req.query.error || '',
-    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
-  });
+// (Movida a Placeta Junior → /junior/config)
+router.get('/config', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tarifas'), (req, res) => {
+  res.redirect('/junior/config');
 });
 
-router.post('/config', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_facturas'), async (req, res) => {
-  try {
-    // Tabla de canje de verdes
-    const vArr = [];
-    for (const k of Object.keys(req.body).filter(k => k.startsWith('v_puntos_'))) {
-      const i = k.replace('v_puntos_', '');
-      const p = Number(req.body[k]);
-      const pz = Number(req.body[`v_placetas_${i}`]);
-      if (!Number.isNaN(p) && !Number.isNaN(pz) && p > 0) vArr.push({ puntos_verdes: p, placetas: pz });
-    }
-    // Tabla de canje de rojos
-    const rArr = [];
-    for (const k of Object.keys(req.body).filter(k => k.startsWith('r_puntos_'))) {
-      const i = k.replace('r_puntos_', '');
-      const p = Number(req.body[k]);
-      const pz = Number(req.body[`r_placetas_${i}`]);
-      if (!Number.isNaN(p) && !Number.isNaN(pz) && p > 0) rArr.push({ puntos_rojos: p, placetas: pz });
-    }
-    if (vArr.length) await setConfigRsp('tabla_canje_verdes', vArr);
-    if (rArr.length) await setConfigRsp('tabla_canje_rojos', rArr);
-    res.redirect('/rsp/config?ok=1');
-  } catch (e) {
-    res.redirect(`/rsp/config?error=${encodeURIComponent(e.message)}`);
-  }
+router.post('/config', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_facturas'), (req, res) => {
+  res.redirect(307, '/junior/config');
 });
 
 // ── Puntos por junior (verdes / rojos / canjeado) ────────────────────────
-router.get('/puntos', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_dashboard'), async (req, res) => {
-  let puntosList = [];
-  let nombres = {};
-  try {
-    if (supabase) {
-      const { data } = await supabase.from('junior_puntos').select('*').order('puntos_verdes', { ascending: false }).limit(300);
-      puntosList = data || [];
-      if (puntosList.length) {
-        const { data: menores } = await supabase.from('junior_menores').select('id,nombre,dip');
-        nombres = Object.fromEntries((menores || []).map(m => [m.id, m]));
-      }
-    }
-  } catch (e) { /* sin datos */ }
-  res.render('rsp/puntos', {
-    titulo: 'Puntos Placeta Junior — RSP',
-    entidad_actual: 'rsp',
-    puntosList, nombres,
-    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin')
-  });
+// (Movida a Placeta Junior → /junior/puntos)
+router.get('/puntos', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_dashboard'), (req, res) => {
+  res.redirect('/junior/puntos');
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

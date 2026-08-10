@@ -49,7 +49,7 @@
             <% if (esAdmin) { %>
             <details style="min-width:280px">
               <summary class="rsp-btn rsp-btn-outline" style="display:inline-flex;cursor:pointer;padding:6px 12px">⚙️ Editar</summary>
-              <form method="POST" action="/rsp/premium" style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px">
+              <form method="POST" action="/junior/premium" style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px">
                 <input type="hidden" name="id" value="<%= a.id %>">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
                   <label style="font-size:11px;color:#666">Precio licencia (Pz)<input name="precio_licencia" type="number" min="0" value="<%= a.precio_licencia || 0 %>" style="width:100%;padding:6px;border:1.5px solid #e0d8f0;border-radius:8px"></label>

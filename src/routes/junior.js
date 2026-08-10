@@ -7,7 +7,9 @@ import { Router } from 'express';
 import { getRetoActivo, getRetos } from '../config/junior-retos.js';
 import { registrarConexion, TIPO_CONEXION } from '../config/rsp.js';
 import { getDocumentosByEntidadAsync, saveDocumentoAsync, ETIQUETAS_DOC } from '../config/documentos.js';
+import { supabase } from '../config/supabase.js';
 import { sbListActividades, sbGetActividad, sbUpdateActividad, sbDeleteActividad, sbListColaboradores, UMBRAL_EXAMEN, ESTADOS_ACTIVIDAD, TIPOS_TITULAR } from '../config/junior-actividades.js';
+import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, IVA_PERCENT, RECOMPENSAS_POR_COMPLEJIDAD, getConfigRsp, setConfigRsp, getTablaCanje } from '../config/junior-precios.js';
 
 const router = Router();
 const CRM_URL = (process.env.CRM_BASE_URL || 'https://grupodelaplaceta.vercel.app').replace(/\/+$/, '');
@@ -254,6 +256,129 @@ router.post('/academia/eliminar/:id', async (req, res) => {
     const ok = await sbDeleteActividad(req.params.id);
     res.json({ success: ok, mensaje: ok ? 'Actividad eliminada' : 'Error al eliminar' });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Premium (precios/licencias) ───────────────────────────────────────
+router.get('/premium', async (req, res) => {
+  rspRegistrar('junior', TIPO_CONEXION.CONSULTA, 'GET /junior/premium', req.session.usuario?.nombre);
+  let actividades = [];
+  try {
+    actividades = await sbListActividades({ soloPublicas: false });
+  } catch (e) { /* sin datos */ }
+
+  const licenciasPorActividad = {};
+  let totalLicencias = 0;
+  let ingresos = 0;
+  try {
+    if (supabase) {
+      const { data: lic } = await supabase.from('junior_licencias').select('actividad_id');
+      if (lic) {
+        for (const l of lic) licenciasPorActividad[l.actividad_id] = (licenciasPorActividad[l.actividad_id] || 0) + 1;
+        totalLicencias = lic.length;
+        const ids = [...new Set(lic.map(l => l.actividad_id))];
+        const { data: acts } = await supabase.from('junior_actividades').select('id,precio_licencia').in('id', ids);
+        const precios = Object.fromEntries((acts || []).map(a => [a.id, a.precio_licencia || 0]));
+        ingresos = lic.reduce((a, l) => a + (precios[l.actividad_id] || 0), 0);
+      }
+    }
+  } catch (e) { /* sin licencias */ }
+
+  res.render('rsp/premium', {
+    titulo: 'Gestión Premium — Placeta Junior',
+    entidad_actual: 'junior',
+    actividades, licenciasPorActividad, totalLicencias, ingresos,
+    ok: req.query.ok === '1',
+    error: req.query.error || '',
+    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin'),
+    layout: 'layouts/admin'
+  });
+});
+
+router.post('/premium', async (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.redirect('/junior/premium?error=ID requerido');
+  const campos = {};
+  for (const k of ['precio_licencia', 'precio_intento', 'recompensa']) {
+    const v = Number(req.body[k]);
+    if (!Number.isNaN(v)) campos[k] = v;
+  }
+  campos.subvencionada = req.body.subvencionada === 'on';
+  campos.destacada = req.body.destacada === 'on';
+  campos.publica = req.body.publica === 'on';
+  try {
+    if (supabase) {
+      const ok = await sbUpdateActividad(id, campos);
+      if (!ok) return res.redirect(`/junior/premium?error=${encodeURIComponent('No se pudieron guardar los cambios')}`);
+    }
+  } catch (e) {
+    return res.redirect(`/junior/premium?error=${encodeURIComponent(e.message)}`);
+  }
+  res.redirect('/junior/premium?ok=1');
+});
+
+// ── Configuración económica: tablas de canje ─────────────────────────
+router.get('/config', async (req, res) => {
+  rspRegistrar('junior', TIPO_CONEXION.CONSULTA, 'GET /junior/config', req.session.usuario?.nombre);
+  const [canjeV, canjeR] = await Promise.all([getTablaCanje('verdes'), getTablaCanje('rojos')]);
+  res.render('rsp/config', {
+    titulo: 'Configuración Económica — Placeta Junior',
+    entidad_actual: 'junior',
+    iva: IVA_PERCENT,
+    recompensas: RECOMPENSAS_POR_COMPLEJIDAD,
+    canjeV, canjeR,
+    ok: req.query.ok === '1',
+    error: req.query.error || '',
+    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin'),
+    layout: 'layouts/admin'
+  });
+});
+
+router.post('/config', async (req, res) => {
+  try {
+    const vArr = [];
+    for (const k of Object.keys(req.body).filter(k => k.startsWith('v_puntos_'))) {
+      const i = k.replace('v_puntos_', '');
+      const p = Number(req.body[k]);
+      const pz = Number(req.body[`v_placetas_${i}`]);
+      if (!Number.isNaN(p) && !Number.isNaN(pz) && p > 0) vArr.push({ puntos_verdes: p, placetas: pz });
+    }
+    const rArr = [];
+    for (const k of Object.keys(req.body).filter(k => k.startsWith('r_puntos_'))) {
+      const i = k.replace('r_puntos_', '');
+      const p = Number(req.body[k]);
+      const pz = Number(req.body[`r_placetas_${i}`]);
+      if (!Number.isNaN(p) && !Number.isNaN(pz) && p > 0) rArr.push({ puntos_rojos: p, placetas: pz });
+    }
+    if (vArr.length) await setConfigRsp('tabla_canje_verdes', vArr);
+    if (rArr.length) await setConfigRsp('tabla_canje_rojos', rArr);
+    res.redirect('/junior/config?ok=1');
+  } catch (e) {
+    res.redirect(`/junior/config?error=${encodeURIComponent(e.message)}`);
+  }
+});
+
+// ── Puntos por junior (verdes / rojos / canjeado) ────────────────────
+router.get('/puntos', async (req, res) => {
+  rspRegistrar('junior', TIPO_CONEXION.CONSULTA, 'GET /junior/puntos', req.session.usuario?.nombre);
+  let puntosList = [];
+  let nombres = {};
+  try {
+    if (supabase) {
+      const { data } = await supabase.from('junior_puntos').select('*').order('puntos_verdes', { ascending: false }).limit(300);
+      puntosList = data || [];
+      if (puntosList.length) {
+        const { data: menores } = await supabase.from('junior_menores').select('id,nombre,dip');
+        nombres = Object.fromEntries((menores || []).map(m => [m.id, m]));
+      }
+    }
+  } catch (e) { /* sin datos */ }
+  res.render('rsp/puntos', {
+    titulo: 'Puntos Placeta Junior',
+    entidad_actual: 'junior',
+    puntosList, nombres,
+    esAdmin: req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin'),
+    layout: 'layouts/admin'
+  });
 });
 
 export default router;
