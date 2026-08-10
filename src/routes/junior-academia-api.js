@@ -796,7 +796,8 @@ router.post('/junior/code/evaluar', verificarJunior, async (req, res) => {
         direccion_final: resultado.direccion_final,
         monedas_recogidas: resultado.monedas_recogidas,
         pasos: resultado.pasos,
-        error: resultado.error
+        error: resultado.error,
+        trazado: resultado.trazado || null
       },
       bloques_permitidos: permitidos,
       placetas_ganadas: placetasGanadas,
