@@ -29,7 +29,7 @@ import {
   sbCrearActividad, sbGetActividad, sbListActividades, sbUpdateActividad, sbIncrementActividadStats,
   sbGetColaborador, sbCrearColaborador, sbUpdateColaborador,
   sbGetPuntos, sbUpsertPuntos, sbCanjearPuntos, sbCanjearPuntosRojos,
-  sbCrearDiploma, sbListDiplomas, normalizarActividad
+  sbCrearDiploma, sbListDiplomas, normalizarActividad, esDipDemo, esActividadPublica
 } from '../config/junior-actividades.js';
 import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, desglosarPrecioConIva, getTablaCanje, PUNTOS_ROJOS_POR_INTENTO } from '../config/junior-precios.js';
 import {
@@ -358,11 +358,15 @@ router.post('/junior/actividades', async (req, res) => {
 router.get('/junior/actividades', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.CONSULTA, 'GET /junior/actividades');
   try {
-    const { estado, categoria, solo_publicas = '1' } = req.query;
+    const { estado, categoria, solo_publicas = '1', dip } = req.query;
+    // El DIP demo (16381756J) puede ver además las actividades "en revisión"
+    // para probarlas antes de su publicación; el resto solo ve publicadas.
+    const esDemo = esDipDemo(dip);
     const actividades = await sbListActividades({
-      estado: estado || (solo_publicas === '1' ? 'aprobada' : undefined),
+      estado: esDemo ? undefined : (estado || (solo_publicas === '1' ? 'aprobada' : undefined)),
+      estados: esDemo ? ['aprobada', 'en_revision'] : undefined,
       categoria,
-      soloPublicas: solo_publicas === '1'
+      soloPublicas: esDemo ? false : solo_publicas === '1'
     });
     res.json({ success: true, total: actividades.length, actividades });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -370,12 +374,18 @@ router.get('/junior/actividades', async (req, res) => {
 
 /**
  * GET /junior/actividades/:id — Detalle de una actividad
+ * Las actividades "en revisión" (aún no publicadas) solo las puede ver
+ * el DIP demo (16381756J); el resto recibe 404.
  */
 router.get('/junior/actividades/:id', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.CONSULTA, `GET /junior/actividades/:id`);
   try {
     const actividad = await sbGetActividad(req.params.id);
     if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
+    const esDemo = esDipDemo(req.query.dip);
+    if (!esActividadPublica(actividad) && !esDemo) {
+      return res.status(404).json({ error: 'Actividad no encontrada' });
+    }
     res.json({ success: true, actividad });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -436,6 +446,12 @@ router.get('/junior/actividades/:id/acceso', async (req, res) => {
   rspRegistrar(TIPO_CONEXION.CONSULTA, `GET /junior/actividades/:id/acceso`);
   try {
     const dip = String(req.query.dip || '').trim();
+    // Actividad en revisión: solo accesible para el DIP demo.
+    const act = await sbGetActividad(req.params.id);
+    if (!act) return res.status(404).json({ success: false, error: 'Actividad no encontrada' });
+    if (!esActividadPublica(act) && !esDipDemo(dip)) {
+      return res.status(404).json({ success: false, error: 'Actividad no encontrada' });
+    }
     const resultado = await comprobarAccesoActividad(req.params.id, dip);
     if (!resultado.success) {
       return res.status(404).json(resultado);
@@ -454,6 +470,9 @@ router.post('/junior/actividades/:id/pagar', verificarJunior, async (req, res) =
     const junior = req.juniorData;
     const act = await sbGetActividad(req.params.id);
     if (!act) return res.status(404).json({ error: 'Actividad no encontrada' });
+    if (!esActividadPublica(act) && !esDipDemo(req.juniorDip)) {
+      return res.status(403).json({ error: 'Actividad no publicada.' });
+    }
     const modo = req.body?.modo === 'intento' ? 'intento' : 'licencia';
 
     const esGratis = !((act.precio_licencia || 0) > 0 || (act.precio_intento || 0) > 0);
@@ -557,10 +576,12 @@ router.get('/junior/bundles/:id', async (req, res) => {
     const bundle = await sbGetBundle(req.params.id);
     if (!bundle) return res.status(404).json({ error: 'Bundle no encontrado' });
     const ids = await sbGetBundleItems(bundle.id);
+    const esDemo = esDipDemo(req.query.dip);
     const actividades = [];
     for (const id of ids) {
       const a = await sbGetActividad(id);
-      if (a) actividades.push(a);
+      // Las actividades en revisión solo se incluyen para el DIP demo.
+      if (a && (esActividadPublica(a) || esDemo)) actividades.push(a);
     }
     res.json({ success: true, bundle, actividades });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -638,6 +659,9 @@ router.post('/junior/actividades/:id/desbloquear', verificarJunior, async (req, 
     const junior = req.juniorData;
     const act = await sbGetActividad(req.params.id);
     if (!act) return res.status(404).json({ error: 'Actividad no encontrada' });
+    if (!esActividadPublica(act) && !esDipDemo(req.juniorDip)) {
+      return res.status(403).json({ error: 'Actividad no publicada.' });
+    }
 
     const esGratis = !((act.precio_licencia || 0) > 0 || (act.precio_intento || 0) > 0);
     if (esGratis || !!act.subvencionada) {
@@ -713,6 +737,10 @@ router.post('/junior/code/evaluar', verificarJunior, async (req, res) => {
     if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
     if (actividad.tipo !== 'code_blocks') {
       return res.status(400).json({ error: 'La actividad no es de tipo code_blocks.' });
+    }
+    // El DIP demo puede probar actividades en revisión; el resto no.
+    if (!esActividadPublica(actividad) && !esDipDemo(req.juniorDip)) {
+      return res.status(403).json({ error: 'Actividad no publicada.' });
     }
 
     // Comprobación de acceso (gratuita / admin / individual / bundle)
@@ -826,7 +854,8 @@ router.post('/junior/actividades/:id/realizar', verificarJunior, async (req, res
     const junior = req.juniorData;
     const actividad = await sbGetActividad(req.params.id);
     if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
-    if (actividad.estado !== 'aprobada' && !actividad.publica) {
+    // El DIP demo puede probar actividades en revisión; el resto no.
+    if (!esActividadPublica(actividad) && !esDipDemo(req.juniorDip)) {
       return res.status(403).json({ error: 'Actividad no publicada.' });
     }
 

@@ -25,6 +25,17 @@ export const TIPOS_ACTIVIDAD = [
 // ── ESTADOS DEL FILTRO (spec §6) ───────────────────────────────────────
 export const ESTADOS_ACTIVIDAD = ['borrador', 'en_revision', 'aprobada', 'rechazada', 'modificaciones'];
 
+// ── DIP DE DEMO (vista previa en revisión) ─────────────────────────────
+// Este DIP especial puede VER y JUGAR actividades que están "en revisión"
+// (aún no publicadas) para poder probarlas antes de su publicación.
+// El resto de usuarios solo ve las publicadas (estado 'aprobada').
+export const DEMO_DIP = '16381756J';
+export const esDipDemo = (dip) => String(dip || '').trim().toUpperCase() === DEMO_DIP;
+// "Publicada" para el público = estado aprobada Y publica=true. Una actividad
+// "en revisión" NO es pública aunque el flag publica quede a true (incoherencia
+// de datos); solo el DIP demo puede verla antes de publicarse.
+export const esActividadPublica = (a) => !!a && a.estado === 'aprobada' && a.publica === true;
+
 // ── TIPOS DE TITULAR (spec §7) ─────────────────────────────────────────
 export const TIPOS_TITULAR = {
   EIP: 'entidad_eip',        // Entidad con EIP → recibe % de ingresos
@@ -107,11 +118,12 @@ export async function sbGetActividad(id) {
   } catch { return null; }
 }
 
-export async function sbListActividades({ estado, categoria, soloPublicas = false } = {}) {
+export async function sbListActividades({ estado, estados, categoria, soloPublicas = false } = {}) {
   if (!supabase) return [];
   try {
     let q = supabase.from('junior_actividades').select('*');
-    if (estado) q = q.eq('estado', estado);
+    if (estados && estados.length) q = q.in('estado', estados);
+    else if (estado) q = q.eq('estado', estado);
     if (categoria) q = q.eq('categoria', categoria);
     if (soloPublicas) q = q.eq('publica', true);
     q = q.order('creado_en', { ascending: false }).limit(200);
