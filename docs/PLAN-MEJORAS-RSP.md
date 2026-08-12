@@ -30,15 +30,15 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 - [x] **1.3 Nada de bulk data en el DOM** ✅ hecha (12/06)
   - Prohibido embeber listados completos (JSON, datalist, selects) de datos de terceros en páginas de usuario; solo lo del usuario.
   - Criterio: "inspeccionar elemento" en una sesión normal solo muestra datos propios. ✅ al eliminar el proxy, el buscador universal del CRM ya no recibe datos (devuelve `[]`); vistas públicas acotadas. Pendiente: rehacer buscador universal con búsqueda scoped server-side (FASE 2.3).
-- [ ] **1.4 RBAC y 2FA**
+- [~] **1.4 RBAC y 2FA** ⏳ RBAC revisado (fail-cerrado en gdlp-crm: `verificarRol` comprueba `roles.includes(rol)`, 403 si no). 2FA (PlacetaID) para acciones críticas → se implementa con FASE 8 (firma múltiple + 2FA).
   - Revisar `verificarRol`/permisos en todos los repos (fallar-cerrado). **2FA** (PlacetaID) para acciones críticas.
   - Criterio: un rol sin permiso recibe 403; acción crítica exige 2FA.
-- [ ] **1.5 Cabeceras y cache**
+- [x] **1.5 Cabeceras y cache** ✅ hecha (12/06)
   - `CSP`, `X-Content-Type-Options`, `no-store` en respuestas sensibles; `Cache-Control` en APIs.
-  - Criterio: respuestas sensibles sin cache; cabeceras presentes.
-- [ ] **1.6 Auditoría de acceso a datos personales**
+  - Criterio: respuestas sensibles sin cache; cabeceras presentes. ✅ en gdlp-crm: `Cache-Control: no-store` en todas las `/api/` + HTML; `X-Content-Type-Options: nosniff` (helmet). CSP diferido (EJS con inline scripts; re-evaluar en FASE 12).
+- [x] **1.6 Auditoría de acceso a datos personales** ✅ parcial (12/06)
   - Registrar quién accede/consulta datos de un tercero; consultable por el propio interesado.
-  - Criterio: toda lectura de datos ajenos queda en auditoría.
+  - Criterio: toda lectura de datos ajenos queda en auditoría. ✅ en gdlp-crm: las lecturas de IRM ajeno por gestores se registran en `logs_auditoria` (accion `lectura_irm_ajeno`). Pendiente: auditoría de más lecturas ajenas y consulta por el interesado (RSP, FASE 9).
 
 ## FASE 2 — BANCO DE LA PLACETA WEB (nuevo, P0) 🔴
 **Objetivo:** banco en línea ciudadano, seguro y funcional, **igualito a la app** (banco-app Android).
