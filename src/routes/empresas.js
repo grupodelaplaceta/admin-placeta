@@ -7,6 +7,7 @@ import { Router } from 'express';
 import { verificarPermiso } from '../middleware/auth.js';
 import { supabase } from '../config/supabase.js';
 import { apiBancoGetState } from '../config/db.js';
+import { getSnapshot } from '../config/normativa-dinamica.js';
 
 const router = Router();
 
@@ -233,7 +234,7 @@ router.get('/empresas/cumplimiento', async (req, res) => {
     entidad_actual: req.baseUrl.replace('/', ''),
     empresas: empresas.map(e => {
       const saldo = saldoPorEip.get(String(e.eip || '').toUpperCase()) || 0;
-      const limite = (e.tipo || 'Business') === 'Business' ? 10000000 : 500000;
+      const limite = (e.tipo || 'Business') === 'Business' ? getSnapshot('LIMITE_EMPRESA') : getSnapshot('LIMITE_PERSONAL');
       return {
         id: e.id, nombre: e.nombre, eip: e.eip, dip: e.dip, tipo: e.tipo || 'Business',
         numRepresentantes: e.representantes?.length || 0,

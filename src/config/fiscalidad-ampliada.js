@@ -32,6 +32,7 @@
 
 import { supabase } from './supabase.js';
 import { generarIdentificador } from './identificadores.js';
+import { getSnapshot } from './normativa-dinamica.js';
 
 const T_BLOQUEOS = 'rsp_limite_bloqueos';
 const T_RETRIBUCIONES = 'rsp_retribuciones';
@@ -73,9 +74,10 @@ export async function listarBloqueos(filtros = {}) {
 export async function comprobarLimiteCapital(cuenta, autor = {}) {
   const saldo = cuenta.balancePz || 0;
   const tipo = cuenta.type || 'Personal';
+  const limitePersonal = getSnapshot('LIMITE_PERSONAL');
   // Solo aplica a cuentas personales (no Business/State/Empresa)
   if (['Business', 'State', 'Child'].includes(tipo)) return null;
-  if (saldo <= LIMITE_PERSONAL) return null;
+  if (saldo <= limitePersonal) return null;
 
   // ¿Ya existe un bloqueo abierto para esta cuenta?
   const existentes = await listarBloqueos({ cuenta_id: cuenta.id });
@@ -90,15 +92,15 @@ export async function comprobarLimiteCapital(cuenta, autor = {}) {
     titular_dip: cuenta.titular_dip || autor.dip || null,
     tipo_cuenta: tipo,
     saldo,
-    limite: LIMITE_PERSONAL,
-    exceso: saldo - LIMITE_PERSONAL,
+    limite: limitePersonal,
+    exceso: saldo - limitePersonal,
     estado: 'bloqueada',
     fecha_bloqueo: fechaBloqueo.toISOString(),
     fecha_limite_justificacion: fechaLimite.toISOString(),
     justificacion: null,
     excedente_retirado: 0,
     regularizado_por: null,
-    historial: [{ estado: 'bloqueada', fecha: fechaBloqueo.toISOString(), motivo: `Supera el límite de ${LIMITE_PERSONAL.toLocaleString()} Pz (bloqueo preventivo, no sanción)` }],
+    historial: [{ estado: 'bloqueada', fecha: fechaBloqueo.toISOString(), motivo: `Supera el límite de ${limitePersonal.toLocaleString()} Pz (bloqueo preventivo, no sanción)` }],
     created_at: fechaBloqueo.toISOString(),
     updated_at: fechaBloqueo.toISOString(),
   };
@@ -274,14 +276,15 @@ export async function registrarRetribucion({ beneficiario_dip, beneficiario_nomb
   if (porcentaje_participacion <= 0 || porcentaje_participacion > 100) throw new Error('El % de participación debe estar entre 0 y 100');
   if (!declaracion_ok) throw new Error('Es obligatoria la declaración de no recibir otras remuneraciones (controles antifraude)');
 
-  const cuantia = cuantia_forzada ?? Math.min(Math.round(250 * (porcentaje_participacion / 100) * 100) / 100, MAX_RETRIBUCION_MENSUAL);
+  const maxRetribucion = getSnapshot('MAX_RETRIBUCION_MENSUAL');
+  const cuantia = cuantia_forzada ?? Math.min(Math.round(maxRetribucion * (porcentaje_participacion / 100) * 100) / 100, maxRetribucion);
 
   // Máximo personal de 250 Pz/mes aunque participe en varias entidades
   if (cuantia_forzada === null || cuantia_forzada === undefined) {
     const delMes = await listarRetribuciones({ beneficiario_dip, mes });
     const yaAsignado = delMes.reduce((s, r) => s + (r.cuantia_mensual || 0), 0);
-    if (yaAsignado + cuantia > MAX_RETRIBUCION_MENSUAL) {
-      throw new Error(`Máximo personal de ${MAX_RETRIBUCION_MENSUAL} Pz/mes superado (ya tiene ${yaAsignado} Pz asignados este mes)`);
+    if (yaAsignado + cuantia > maxRetribucion) {
+      throw new Error(`Máximo personal de ${maxRetribucion} Pz/mes superado (ya tiene ${yaAsignado} Pz asignados este mes)`);
     }
   }
 
@@ -425,7 +428,7 @@ export async function calcularRetribucionesMes(mes = new Date().toISOString().sl
     // % total (máx 100 para el tope personal de 250 Pz)
     const sumaPctRaw = parts.reduce((s, p) => s + (p.porcentaje || 0), 0) || 1;
     const sumaPct = Math.min(sumaPctRaw, 100);
-    const cuantiaTotal = Math.round((MAX_RETRIBUCION_MENSUAL * sumaPct / 100) * 100) / 100;
+    const cuantiaTotal = Math.round((getSnapshot('MAX_RETRIBUCION_MENSUAL') * sumaPct / 100) * 100) / 100;
 
     // Respetar lo ya generado este mes (no duplicar)
     const yaAsignado = generadoPorPersona[dip] || 0;

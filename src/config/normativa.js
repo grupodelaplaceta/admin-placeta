@@ -3,6 +3,7 @@
  * Basado en el Capítulo IV: Banca, Capital e Impuestos
  */
 import { apiBancoGetState } from './db.js';
+import { getSnapshot } from './normativa-dinamica.js';
 
 // ── Art. 4.1 — Límites de Capital ────────────────────────────────────────
 export const LIMITES_CAPITAL = {
@@ -14,19 +15,27 @@ export const LIMITES_CAPITAL = {
 };
 
 export function verificarLimiteCapital(cuenta) {
-  const limite = LIMITES_CAPITAL[cuenta.type] || LIMITES_CAPITAL.Personal;
+  const tipo = cuenta.type || 'Personal';
+  const limites = {
+    Personal: getSnapshot('LIMITE_PERSONAL'),
+    Business: getSnapshot('LIMITE_EMPRESA'),
+    Savings: getSnapshot('LIMITE_PERSONAL'),
+    Current: getSnapshot('LIMITE_PERSONAL'),
+    Child: 5000,
+  };
+  const limite = limites[tipo] ?? limites.Personal;
   if (!limite) return null;
   const saldo = cuenta.balancePz || 0;
-  if (saldo > limite.max) {
+  if (saldo > limite) {
     return {
       tipo: 'EXCESO_CAPITAL',
       gravedad: 'alta',
       cuenta: cuenta.id,
       saldo,
-      limite: limite.max,
-      exceso: saldo - limite.max,
-      sancion: limite.multa,
-      mensaje: `Saldo ${saldo.toLocaleString()} Pz supera límite de ${limite.max.toLocaleString()} Pz`
+      limite,
+      exceso: saldo - limite,
+      sancion: tipo === 'Business' ? null : 225000,
+      mensaje: `Saldo ${saldo.toLocaleString()} Pz supera límite de ${limite.toLocaleString()} Pz`
     };
   }
   return null;
@@ -55,17 +64,15 @@ export function calcularSancionDescubierto(cuenta) {
   };
 }
 
-// ── Art. 4.3 — Tasa de Transferencia (máx 12%) ───────────────────────────
-const TASA_TRANSFERENCIA = 0.12; // 12% máximo
-
+// ── Art. 4.3 — Tasa de Transferencia (máx 12%, dinámica desde BOP) ────────
 export function calcularTasaTransferencia(importe, tasaPersonalizada) {
-  const tasa = tasaPersonalizada || TASA_TRANSFERENCIA;
-  return Math.min(importe * tasa, importe * 0.12); // Nunca más del 12%
+  const tasaBop = getSnapshot('TASA_TRANSFERENCIA');
+  const tasa = tasaPersonalizada || tasaBop;
+  return Math.min(importe * tasa, importe * tasaBop); // Nunca más del tipo del BOP
 }
 
-// ── Art. 4.4 — IVA 12% ───────────────────────────────────────────────────
-const IVA = 0.12;
-export function calcularIVA(base) { return base * IVA; }
+// ── Art. 4.4 — IVA (dinámico desde BOP: CNIC-4.4) ─────────────────────────
+export function calcularIVA(base) { return base * getSnapshot('IVA'); }
 
 // ── Art. 4.5 — Cotizaciones Laborales ────────────────────────────────────
 export function calcularCotizaciones(sueldoBruto) {
@@ -94,9 +101,11 @@ export const SMI = 150;
 export const SALARIO_MAXIMO = 1750;
 
 export function validarSalario(sueldo) {
+  const smi = getSnapshot('SMI');
+  const max = getSnapshot('SALARIO_MAXIMO');
   const issues = [];
-  if (sueldo < SMI) issues.push({ tipo: 'BAJO_SMI', mensaje: `Salario ${sueldo} Pz/mes inferior al SMI (${SMI} Pz/mes)` });
-  if (sueldo > SALARIO_MAXIMO) issues.push({ tipo: 'EXCESO_SALARIO', mensaje: `Salario ${sueldo} Pz/mes superior al máximo (${SALARIO_MAXIMO} Pz/mes)` });
+  if (sueldo < smi) issues.push({ tipo: 'BAJO_SMI', mensaje: `Salario ${sueldo} Pz/mes inferior al SMI (${smi} Pz/mes)` });
+  if (sueldo > max) issues.push({ tipo: 'EXCESO_SALARIO', mensaje: `Salario ${sueldo} Pz/mes superior al máximo (${max} Pz/mes)` });
   return issues;
 }
 
@@ -333,5 +342,5 @@ export default {
   generarCSV,
   TIPOS_CONTRIBUCION,
   getTipoContribucionParaJunior,
-  SMI, SALARIO_MAXIMO, IVA,
+  SMI, SALARIO_MAXIMO,
 };

@@ -28,6 +28,7 @@ import {
   sbListSolicitantes, sbFindSolicitanteByDip, sbListDeclaraciones
 } from '../config/db.js';
 import { verificarSesion } from '../middleware/auth.js';
+import { getSnapshot } from '../config/normativa-dinamica.js';
 // Routers oficiales de la Academia Placeta Junior (delegación directa)
 import juniorOficialApiRoutes from './junior-oficial-api.js';
 import juniorAcademiaApiRoutes from './junior-academia-api.js';
@@ -273,8 +274,8 @@ router.get('/v1/:entidad/docs', (req, res) => {
     descripcion: api.descripcion,
     baseURL: `/api/v1/${entidad}`,
     tarifas: {
-      consulta: { precio: 0.001, iva: 0.12, total: 0.00112, descripcion: 'Por petición GET' },
-      modificacion: { precio: 0.1, iva: 0.12, total: 0.112, descripcion: 'Por petición POST/PUT/DELETE' }
+      consulta: { precio: 0.001, iva: getSnapshot('IVA'), total: 0.001 * (1 + getSnapshot('IVA')), descripcion: 'Por petición GET' },
+      modificacion: { precio: 0.1, iva: getSnapshot('IVA'), total: 0.1 * (1 + getSnapshot('IVA')), descripcion: 'Por petición POST/PUT/DELETE' }
     },
     facturacion: {
       metodo: 'Automática vía RSP',

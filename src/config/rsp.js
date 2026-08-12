@@ -20,7 +20,7 @@
 
 import { supabase } from './supabase.js';
 import { pagarFacturaBanco, pagarSancionBanco } from './pagos.js';
-import { getSnapshot } from './normativa-dinamica.js';
+import { getSnapshot, getSnapshotMeta } from './normativa-dinamica.js';
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────
 // IVA dinámico desde el BOP (FASE 5): CNIC-4.4, fallback 0.12 si aún no se carga
@@ -61,6 +61,7 @@ export function registrarConexion({ entidad, tipo, endpoint, usuario, dip, detal
   const tarifa = tipo === TIPO_CONEXION.MODIFICACION ? TARIFA_MODIFICACION : TARIFA_CONSULTA;
   const iva = tarifa * ivaActual();
   const total = tarifa + iva;
+  const cnicIva = getSnapshotMeta('IVA'); // trazabilidad 5.6
 
   const conexion = {
     id: nextConexionId(),
@@ -73,6 +74,7 @@ export function registrarConexion({ entidad, tipo, endpoint, usuario, dip, detal
     iva,
     total,
     detalle,
+    cnic_iva: cnicIva, // trazabilidad 5.6: versión de CNIC aplicada
     timestamp: new Date().toISOString()
   };
 

@@ -39,6 +39,19 @@ export function getSnapshot(clave) {
   return val !== undefined && val !== null ? val : (CATALOGO[clave]?.def ?? null);
 }
 
+/** Trazabilidad (5.6): devuelve {codigo, version, valor} del CNIC aplicado. */
+export function getSnapshotMeta(clave) {
+  const cat = CATALOGO[clave] || { codigo: clave, def: null };
+  const cnic = cache ? cache[cat.codigo] : null;
+  const valor = getSnapshot(clave);
+  return {
+    codigo: cat.codigo,
+    version: cnic && Array.isArray(cnic.historial) ? cnic.historial.length + 1 : null,
+    valor,
+    fuente: cnic ? 'bop' : 'fallback'
+  };
+}
+
 export function snapshotListo() { return snapshotCargado; }
 
 // ── Catálogo RSP → CNIC (5.2) ────────────────────────────────────────────
