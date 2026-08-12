@@ -25,6 +25,7 @@
       <strong><%= resultado.creadosPlacetaid %></strong> dados de alta en PlacetaID ·
       <strong><%= resultado.yaRegistradosPlacetaid %></strong> ya registrados ·
       <strong><%= resultado.altasCiudadano %></strong> altas como ciudadano (censo) ·
+      <strong><%= resultado.usuariosBancoCreadosCount || 0 %></strong> usuarios bancarios creados ·
       <strong><%= resultado.erroresPlacetaid %></strong> errores PlacetaID ·
       <strong><%= resultado.erroresCiudadano %></strong> errores ciudadano ·
       <% if (resultado.ciudadanosSupabase) { %>
@@ -92,6 +93,19 @@
         <tbody>
           <% resultado.ciudadanosAltas.forEach(c => { %>
           <tr><td class="text-mono"><%= c.dip %></td><td><%= c.nombre %></td><td class="text-mono"><%= c.eip || '—' %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <% if (resultado.usuariosBancoCreados && resultado.usuariosBancoCreados.length > 0) { %>
+    <div class="table-container mt-16">
+      <table>
+        <thead><tr><th>DIP</th><th>Nombre</th><th>PlacetaID</th></tr></thead>
+        <tbody>
+          <% resultado.usuariosBancoCreados.forEach(u => { %>
+          <tr><td class="text-mono"><%= u.dip %></td><td><%= u.nombre %></td><td class="text-mono"><%= u.placetaId %></td></tr>
           <% }) %>
         </tbody>
       </table>

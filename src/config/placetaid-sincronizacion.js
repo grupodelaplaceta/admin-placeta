@@ -197,11 +197,17 @@ export async function sincronizar() {
   const censo = await leerCensoTributario();
   const objetivosCiudadanos = padron.padron.filter(p => !censo.set.has(p.dip));
   const sinUsuarioBanco = [];
+  const usuariosBancoCreados = [];
   for (const p of objetivosCiudadanos) {
-    // alta-tributos necesita un bank_user; si no existe, no se puede censar aún.
+    // alta-tributos necesita un bank_user. Si no existe, se crea primero
+    // con la acción 'crear-usuario' (desde la cuenta, normaliza placetaId/dip).
     if (!p.tieneUsuario) {
-      sinUsuarioBanco.push({ dip: p.dip, nombre: p.nombre });
-      continue;
+      const cu = await apiBancoPost('crear-usuario', { placetaId: p.placetaId, dip: p.dip });
+      if (!cu || !cu.success) {
+        sinUsuarioBanco.push({ dip: p.dip, nombre: p.nombre, error: (cu && cu.error) || 'No se pudo crear el usuario bancario' });
+        continue;
+      }
+      usuariosBancoCreados.push({ dip: p.dip, nombre: p.nombre, placetaId: p.placetaId });
     }
     const res = await apiBancoPost('alta-tributos', { placetaId: p.placetaId });
     if (res && (res.eip || res.tributosCensusDate || res.message)) {
@@ -229,6 +235,8 @@ export async function sincronizar() {
     ciudadanosErrores,
     sinUsuarioBanco,
     sinUsuarioBancoCount: sinUsuarioBanco.length,
+    usuariosBancoCreados,
+    usuariosBancoCreadosCount: usuariosBancoCreados.length,
     ciudadanosSupabase: supabaseResult,
     ciudadanosSupabaseCreados: supabaseResult.creados.length,
     ciudadanosSupabaseActualizados: supabaseResult.actualizados.length,
