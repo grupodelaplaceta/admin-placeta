@@ -85,9 +85,29 @@ tramitesRouter.post('/api/tramites', verificarSesion, verificarAccesoEntidad('rs
 tramitesRouter.post('/api/tramites/:id/accion', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
   try {
     const { accion, nota = '', datos = {} } = req.body;
+    // FASE 8.3 — 2FA en acciones críticas (aprobar/resolver, pagar, anular)
+    const ACCIONES_CRITICAS = ['aprobar', 'autorizar', 'rechazar', 'emitir_firma', 'emitir_pago', 'ejecutar', 'confirmar'];
+    if (ACCIONES_CRITICAS.includes(accion) && actor(req).rol === 'admin') {
+      const dosfa = await import('../config/dosfa.js');
+      const ok = dosfa.exigir2FA(accion) && dosfa.verificarSesion2FA(req);
+      if (!ok) {
+        return res.status(403).json({ success: false, error: 'Acción crítica: se requiere verificación 2FA (PlacetaID). Verifícalo primero.', requiere2FA: true });
+      }
+    }
     const r = await avanzarTramite(req.params.id, { accion, nota, datos }, actor(req));
     await registrarAuditoria({ usuario: actor(req), servicio: 'rsp', accion, objeto_tipo: 'TRAMITE', objeto_id: r.tramite.id, valor_nuevo: { estado: r.tramite.estado }, motivo: nota || `Acción ${accion}` });
     res.json({ success: true, mensaje: r.mensaje, tramite: r.tramite });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
+// FASE 8.3 — Verificación 2FA de la sesión (acciones críticas)
+tramitesRouter.post('/api/2fa/verificar', verificarSesion, verificarAccesoEntidad('rsp'), async (req, res) => {
+  try {
+    const dosfa = await import('../config/dosfa.js');
+    const ok = await dosfa.verificarCodigo(req, req.body?.codigo);
+    if (!ok) return res.status(403).json({ success: false, error: 'Código 2FA incorrecto' });
+    dosfa.marcarVerificada(req);
+    res.json({ success: true, mensaje: '2FA verificado. Puedes ejecutar acciones críticas durante 10 minutos.' });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 

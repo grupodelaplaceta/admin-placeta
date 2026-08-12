@@ -80,6 +80,7 @@ const accionesAdmin = acciones.filter(a => a.rol === 'admin');
         <button class="v-tab" data-tab="datos">Datos</button>
         <% if (cfg.documentos && cfg.documentos.length) { %><button class="v-tab" data-tab="documentos">Documentos</button><% } %>
         <% if (t.validaciones && t.validaciones.length) { %><button class="v-tab" data-tab="validaciones">Validaciones</button><% } %>
+        <% if (t.requisitos_pendientes && t.requisitos_pendientes.length) { %><button class="v-tab" data-tab="subsanacion">Subsanación</button><% } %>
         <button class="v-tab" data-tab="comunicaciones">Comunicaciones</button>
         <button class="v-tab" data-tab="historial">Historial</button>
       </div>
@@ -132,6 +133,25 @@ const accionesAdmin = acciones.filter(a => a.rol === 'admin');
           </span>
         </div>
         <% }); %>
+        <% } %>
+      </div>
+
+      <!-- SUBSANACIÓN (FASE 8.1: checklist exacta) -->
+      <div class="tab-panel" id="tab-subsanacion" style="display:none">
+        <% if (t.requisitos_pendientes && t.requisitos_pendientes.length) { %>
+        <div style="margin-bottom:12px">Requisitos pendientes para completar la subsanación:</div>
+        <% t.requisitos_pendientes.forEach(function(r) { %>
+        <div class="v-doc">
+          <div class="v-doc-ico"><span class="ms" style="color:var(--warn)">checklist</span></div>
+          <div>
+            <div class="v-doc-name"><%= r.etiqueta %></div>
+            <div class="v-entity-id"><%= r.tipo === 'documento' ? 'Documentación' : 'Dato obligatorio' %></div>
+          </div>
+          <span class="v-doc-state v-status v-status--err"><span class="ms" style="font-size:15px">pending</span> Pendiente</span>
+        </div>
+        <% }); %>
+        <% } else { %>
+        <div style="text-align:center;color:var(--tq);padding:30px">Sin requisitos pendientes.</div>
         <% } %>
       </div>
 

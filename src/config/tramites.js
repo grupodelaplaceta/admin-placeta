@@ -472,6 +472,24 @@ export async function validarTramite(t) {
   ];
 }
 
+/* ── FASE 8.1 — requisitos pendientes de subsanación (checklist exacta) ── */
+function calcularRequisitosPendientes(t) {
+  const cfg = TRAMITES[t.tipo] || {};
+  const reqs = [];
+  const docEstados = (t.documentos || []).reduce((m, d) => { m[d.nombre] = d.estado; return m; }, {});
+  for (const doc of (cfg.documentos || [])) {
+    if (docEstados[doc] !== 'validado') {
+      reqs.push({ tipo: 'documento', clave: doc, etiqueta: `Documento: ${doc}`, ok: false });
+    }
+  }
+  for (const campo of (cfg.campos || [])) {
+    if (campo.obligatorio && (t.datos?.[campo.key] === undefined || t.datos?.[campo.key] === null || t.datos?.[campo.key] === '')) {
+      reqs.push({ tipo: 'campo', clave: campo.key, etiqueta: `Campo obligatorio: ${campo.label}`, ok: false });
+    }
+  }
+  return reqs;
+}
+
 /* ── API pública ───────────────────────────────────────────────── */
 
 export async function listarTramites(filtros = {}) {
@@ -528,6 +546,9 @@ export async function crearTramite(datos, autor = {}) {
     fecha_limite: datos.fecha_limite || null,
     plazos: getPlazosTipo(datos.tipo),
     silencio: getSilencioTipo(datos.tipo),
+    requisitos_pendientes: [],
+    firmantes: [],
+    firmas_completas: 0,
     resolucion: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -583,6 +604,7 @@ export async function avanzarTramite(id, { accion, nota = '', datos = {} }, auto
     autorizar: async () => { t.estado = 'resolucion'; t.siguiente_accion = 'Emitir pago'; return 'Pago autorizado'; },
     subsanar: async () => {
       t.estado = 'subsanacion';
+      t.requisitos_pendientes = calcularRequisitosPendientes(t);
       t.siguiente_accion = 'Aportar la documentación requerida';
       await crearNotificacion({ nivel: 'accion', titulo: `${t.id}: se requiere subsanación`, mensaje: nota || 'Debes aportar documentación adicional', servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
       return 'Subsanación solicitada';
