@@ -1,0 +1,75 @@
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+  <div><a href="/rsp/expedientes" class="btn btn-sm btn-ghost">← Expedientes</a></div>
+  <div style="display:flex;gap:8px">
+    <% if (esAdmin && exp.estado !== 'archivado') { %>
+    <button class="btn btn-sm btn-outline" onclick="cambiarEstado()">↔️ Cambiar estado</button>
+    <% } %>
+    <% if (esAdmin) { %>
+    <button class="btn btn-sm btn-secondary" onclick="vincular()">🔗 Vincular objeto</button>
+    <% } %>
+  </div>
+</div>
+
+<div class="rsp-hero" style="background:linear-gradient(135deg,#0d3b1f 0%,#1a7a4a 100%)">
+  <div class="rsp-hero-content">
+    <div style="width:80px;height:80px;border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:38px">🗂️</div>
+    <div style="flex:1">
+      <div class="rsp-hero-title"><%= exp.id %></div>
+      <div class="rsp-hero-sub" style="font-size:17px;opacity:.95"><%= exp.titulo %></div>
+      <div class="rsp-hero-stats">
+        <span>Estado: <strong><%= exp.estado %></strong></span>
+        <span>Tipo: <strong><%= exp.tipo %></strong></span>
+        <span>Prioridad: <strong><%= exp.prioridad %></strong></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+  <div class="table-container">
+    <div style="padding:12px 16px;font-weight:700;font-size:13px;border-bottom:1px solid #e8e4f0">📋 Datos</div>
+    <table>
+      <tbody>
+        <tr><th style="width:180px">Persona (DIP)</th><td><%= exp.persona_dip || '—' %></td></tr>
+        <tr><th>Entidad (EIP)</th><td><%= exp.entidad_eip || '—' %></td></tr>
+        <tr><th>Responsable</th><td><%= exp.responsable_nombre ? exp.responsable_nombre + (exp.responsable_dip?' ('+exp.responsable_dip+')':'') : '—' %></td></tr>
+        <tr><th>Resolución</th><td><%= exp.resolucion || '—' %></td></tr>
+        <tr><th>Hash integridad</th><td style="font-size:10px;font-family:monospace"><%= exp.hash || '—' %></td></tr>
+        <tr><th>Creado</th><td><%= exp.created_at ? exp.created_at.slice(0,16).replace('T',' ') : '—' %></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-container">
+    <div style="padding:12px 16px;font-weight:700;font-size:13px;border-bottom:1px solid #e8e4f0">🔗 Objetos vinculados</div>
+    <table>
+      <thead><tr><th>Tipo</th><th>ID</th><th>Etiqueta</th></tr></thead>
+      <tbody>
+        <% if (!exp.relacion_ids || exp.relacion_ids.length === 0) { %>
+        <tr><td colspan="3" style="text-align:center;color:#999;padding:20px">Sin objetos vinculados.</td></tr>
+        <% } %>
+        <% (exp.relacion_ids||[]).forEach(function(r) { %>
+        <tr><td><span class="badge badge-info"><%= r.tipo %></span></td><td><%= r.id %></td><td><%= r.label || '' %></td></tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function cambiarEstado(){
+  const estado = prompt('Nuevo estado (abierto, en_tramite, resuelto, cerrado, archivado):', '<%= exp.estado %>');
+  if(!estado) return;
+  fetch('/rsp/expedientes/api/expedientes/<%= exp.id %>', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ estado }) })
+    .then(r=>r.json()).then(j=>{ if(!j.success){ alert('Error: '+j.error); return; } window.location.reload(); }).catch(e=>alert('Error: '+e.message));
+}
+function vincular(){
+  const tipo = prompt('Tipo (operacion, solicitud, documento, firma, pago, resolucion, notificacion):');
+  if(!tipo) return;
+  const objeto_id = prompt('ID del objeto (p.ej. TRF-2026-000001):');
+  if(!objeto_id) return;
+  const label = prompt('Etiqueta (opcional):', objeto_id) || objeto_id;
+  fetch('/rsp/expedientes/api/expedientes/<%= exp.id %>/vincular', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tipo, objeto_id, label }) })
+    .then(r=>r.json()).then(j=>{ if(!j.success){ alert('Error: '+j.error); return; } window.location.reload(); }).catch(e=>alert('Error: '+e.message));
+}
+</script>

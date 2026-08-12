@@ -219,14 +219,30 @@ router.post('/api/empresas/:id/reactivar', async (req, res) => {
 router.get('/empresas/cumplimiento', async (req, res) => {
   await empresasReady;
   const empresas = [...memEmpresas.values()].filter(e => e.activa !== false);
+  // Enriquecer con el saldo REAL del banco (por EIP): el cumplimiento se calcula
+  // sobre los fondos reales de la empresa, no sobre datos simulados.
+  const state = await apiBancoGetState().catch(() => null);
+  const saldoPorEip = new Map();
+  for (const a of (state?.accounts || [])) {
+    if (!a.eip) continue;
+    const eip = String(a.eip).toUpperCase();
+    saldoPorEip.set(eip, (saldoPorEip.get(eip) || 0) + (a.balancePz || 0));
+  }
   res.render('empresas/cumplimiento', {
     titulo: 'Cumplimiento Fiscal — Empresas',
     entidad_actual: req.baseUrl.replace('/', ''),
-    empresas: empresas.map(e => ({
-      id: e.id, nombre: e.nombre, eip: e.eip, dip: e.dip,
-      numRepresentantes: e.representantes?.length || 0,
-      compliance: 'Clear'
-    }))
+    empresas: empresas.map(e => {
+      const saldo = saldoPorEip.get(String(e.eip || '').toUpperCase()) || 0;
+      const limite = (e.tipo || 'Business') === 'Business' ? 10000000 : 500000;
+      return {
+        id: e.id, nombre: e.nombre, eip: e.eip, dip: e.dip, tipo: e.tipo || 'Business',
+        numRepresentantes: e.representantes?.length || 0,
+        saldo: Math.round(saldo * 100) / 100,
+        limite,
+        exceso: saldo > limite ? Math.round((saldo - limite) * 100) / 100 : 0,
+        compliance: saldo > limite ? 'ExcesoCapital' : 'Clear'
+      };
+    })
   });
 });
 

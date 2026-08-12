@@ -1,15 +1,24 @@
-<%- include('../parciales/guia-rol', { entidad_actual: 'administracion', roles }) %>
+<%- include('../parciales/hero', {
+  icono: '📋',
+  titulo: 'Administración de La Placeta',
+  subtitulo: 'Trámites, actas, PlacetaID y gestión ciudadana',
+  stats: [
+    { label: 'Ciudadanos', value: totalCiudadanos }
+  ],
+  grad: 'linear-gradient(135deg,#78350f 0%,#b45309 55%,#d97706 100%)'
+}) %>
 
-<div class="stats-grid">
-  <div class="stat-card"><span class="stat-value"><%= totalCiudadanos %></span><span class="stat-label">Ciudadanos</span></div>
-</div>
-<div class="flex gap-8" style="flex-wrap:wrap">
-  <a href="/administracion/tramites" class="btn btn-primary">📋 Trámites</a>
-  <a href="/administracion/ciudadanos" class="btn btn-secondary">👥 Ciudadanos</a>
-  <a href="/administracion/tributos" class="btn btn-secondary">📊 Tributos</a>
-  <a href="/administracion/banco" class="btn btn-secondary">🏦 Banco</a>
-  <a href="/administracion/actas" class="btn btn-secondary">📄 Actas</a>
-  <a href="/administracion/votaciones" class="btn btn-secondary">🗳️ Votaciones</a>
-  <a href="/administracion/placetaid" class="btn btn-secondary">🔑 PlacetaID</a>
-  <a href="/administracion/junior" class="btn btn-secondary">🧒 Junior</a>
+<%- include('../parciales/kpis', { kpis: [
+  { icono: '👥', valor: totalCiudadanos, label: 'Ciudadanos', color: 'rgba(217,119,6,.12)' }
+] }) %>
+
+<div class="rsp-acciones">
+  <a href="/administracion/tramites" class="rsp-btn rsp-btn-primary"><span class="rsp-btn-icon">📋</span><span class="rsp-btn-text">Trámites</span></a>
+  <a href="/administracion/ciudadanos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">👥</span><span class="rsp-btn-text">Ciudadanos</span></a>
+  <a href="/administracion/tributos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📊</span><span class="rsp-btn-text">Tributos</span></a>
+  <a href="/administracion/banco" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🏦</span><span class="rsp-btn-text">Banco</span></a>
+  <a href="/administracion/actas" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📄</span><span class="rsp-btn-text">Actas</span></a>
+  <a href="/administracion/votaciones" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🗳️</span><span class="rsp-btn-text">Votaciones</span></a>
+  <a href="/administracion/placetaid" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🔑</span><span class="rsp-btn-text">PlacetaID</span></a>
+  <a href="/administracion/junior" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🧒</span><span class="rsp-btn-text">Junior</span></a>
 </div>

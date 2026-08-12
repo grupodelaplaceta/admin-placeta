@@ -74,6 +74,14 @@ export const TIPOS_DOCUMENTO = {
       'declaracion-borrador', 'declaracion-definitiva', 'declaracion-rectificada',
       'declaracion-complementaria', 'declaracion-anulada', 'declaracion-historica'
     ],
+    // Expediente fiscal automático: la declaración mensual (DFM) + sus anexos
+    // específicos (movimientos, IRM, IGF, IVA) + certificados de bonificación
+    // y cierre. Se generan automáticamente por sujeto fiscal y periodo.
+    expediente: [
+      'dfm-mensual', 'anexo-movimientos-fiscales', 'declaracion-irm',
+      'declaracion-igf', 'declaracion-iva',
+      'certificado-bonificacion-fiscal', 'certificado-cierre-fiscal'
+    ],
     liquidaciones: [
       'liquidacion-mensual', 'liquidacion-anual', 'liquidacion-extraordinaria'
     ],
@@ -687,6 +695,351 @@ function generarContenidoDocumento(tipo, datos = {}) {
         L.push({nota:'BORRADOR — Esta declaración no ha sido presentada ni aprobada. Los cálculos son estimaciones preliminares sujetas a revisión. No produce efectos legales hasta su publicación y aprobación.'});
       }
       break;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // EXPEDIENTE FISCAL AUTOMÁTICO (DFM + anexos por sujeto y periodo)
+    // ═══════════════════════════════════════════════════════════════════
+
+    // ── 1. Documento principal: Declaración Fiscal Mensual (DFM) ──────
+    // Uno por cada sujeto fiscal y periodo. Sólo muestra las casillas que
+    // corresponden al sujeto (no muestra casillas irrelevantes).
+    case 'dfm-mensual': {
+      const fmtPz = (n) => (Number(n) || 0).toLocaleString('es-ES') + ' Pz';
+      const pct = (n) => n !== undefined && n !== null ? (Number(n) * 100).toFixed(2) + ' %' : '—';
+      sf('DECLARACIÓN FISCAL MENSUAL (DFM)');
+      cf('Nº de declaración', datos.numeroDfm || 'DFM-YYYY-MM-000000');
+      cf('Estado', datos.estado || 'Borrador');
+      ln();
+      sf('DATOS DEL SUJETO PASIVO');
+      cf('Titular', datos.titular || datos.contribuyente || '—');
+      cf('Identificador fiscal', datos.identificador || datos.dip || (datos.eip || '—'));
+      cf('Tipo de sujeto', datos.tipoSujeto || 'Persona Física');
+      if (datos.esJunior) cf('Régimen', 'Placeta Junior (impuestos asumidos por CAPITALIA)');
+      ln();
+      sf('PERIODO IMPOSITIVO');
+      cf('Periodo', datos.periodo || '—');
+      cf('Fecha de emisión', datos.fechaEmision || hoy);
+      cf('Fecha de cierre', datos.fechaCierre || '—');
+      ln();
+      sf('RESUMEN ECONÓMICO');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Importe'],
+        filas: [
+          ['Patrimonio medio del periodo', fmtPz(datos.patrimonioMedio)],
+          ['Ingresos del periodo', fmtPz(datos.ingresosPeriodo)],
+          ['Pagos del periodo', fmtPz(datos.pagosPeriodo)],
+          ['Índice de acumulación (IA)', datos.indiceAcumulacion !== undefined ? String(datos.indiceAcumulacion) : '—'],
+          ['Saldo final del periodo', fmtPz(datos.saldoFinal)],
+          ['Días activos del mes', datos.diasActivos !== undefined ? String(datos.diasActivos) : '—'],
+        ],
+        anchos: [340, 160], alineaciones: ['left', 'right']
+      }});
+      ln();
+      sf('LIQUIDACIÓN DE IMPUESTOS (desglosada)');
+      L.push({ tabla: {
+        cabeceras: ['Impuesto', 'Base', 'Tipo', 'Cuota'],
+        filas: [
+          ['IRM — Impuesto de Regulación Monetaria', fmtPz(datos.baseIRM !== undefined ? datos.baseIRM : datos.patrimonioMedio), pct(datos.tipoIRM), fmtPz(datos.cuotaIRM)],
+          ['IGF — Impuesto sobre Grandes Fortunas', fmtPz(datos.baseIGF !== undefined ? datos.baseIGF : datos.patrimonioMedio), datos.tipoIGF ? String(datos.tipoIGF) : 'Escala Art. 4.13', fmtPz(datos.cuotaIGF)],
+        ],
+        anchos: [230, 90, 90, 90], alineaciones: ['left', 'right', 'right', 'right']
+      }});
+      if (datos.muestraIVA) {
+        L.push({ tabla: {
+          cabeceras: ['IVA — Impuesto sobre el Valor Añadido', 'Base', 'Tipo', 'Cuota'],
+          filas: [
+            ['IVA repercutido', fmtPz(datos.baseRepercutida), '12 %', fmtPz(datos.ivaRepercutido)],
+            ['IVA soportado / deducciones', fmtPz(datos.baseSoportada), '12 %', '−' + fmtPz(datos.deduccionesIVA !== undefined ? datos.deduccionesIVA : 0)],
+            ['Rectificaciones', '—', '—', fmtPz(datos.rectificacionesIVA)],
+            ['Resultado IVA', '—', '—', fmtPz(datos.cuotaIVA)],
+          ],
+          anchos: [230, 90, 90, 90], alineaciones: ['left', 'right', 'right', 'right'], resaltarDesde: 3
+        }});
+      }
+      if (datos.bonificaciones !== undefined && datos.bonificaciones > 0) {
+        L.push({ tabla: {
+          cabeceras: ['Bonificaciones', 'Base', 'Tipo', 'Cuota'],
+          filas: [['Bonificación aplicada (asumida por CAPITALIA)', '—', '100 %', '−' + fmtPz(datos.bonificaciones)]],
+          anchos: [230, 90, 90, 90], alineaciones: ['left', 'right', 'right', 'right']
+        }});
+      }
+      ln();
+      sf('RESULTADO FISCAL');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Importe'],
+        filas: [
+          ['IRM', fmtPz(datos.cuotaIRM)],
+          ['IGF', fmtPz(datos.cuotaIGF)],
+          ...(datos.muestraIVA ? [['IVA', fmtPz(datos.cuotaIVA)]] : []),
+          ...(datos.bonificaciones > 0 ? [['Bonificaciones (CAPITALIA)', '−' + fmtPz(datos.bonificaciones)]] : []),
+          ['TOTAL IMPUESTOS', fmtPz(datos.totalImpuestos)],
+          ...(datos.esJunior && datos.pagaCapitalia
+            ? [['Importe asumido por CAPITALIA', fmtPz(datos.totalImpuestos)], ['Importe a cargo del titular', '0 Pz']]
+            : [['Importe a cargo del sujeto', fmtPz(datos.totalImpuestos)]]),
+        ],
+        anchos: [340, 160], alineaciones: ['left', 'right'], resaltarDesde: (datos.muestraIVA ? 3 : 2) + (datos.bonificaciones > 0 ? 1 : 0)
+      }});
+      L.push({nota: 'DFM: documento principal del expediente fiscal mensual. Cada impuesto se desglosa en base, tipo y cuota. No muestra casillas que no corresponden al sujeto (IVA o retenciones solo cuando aplican).'});
+      L.push({nota:'Firma/sello digital: este documento queda sellado digitalmente por el sistema fiscal de La Placeta al ser emitido.'});
+      break;
+    }
+
+    // ── 2. Anexo de movimientos fiscales (auditoría) ──────────────────
+    // Cada movimiento con ID, Fecha, Concepto, Importe, Impuesto, Tratamiento.
+    // Permite rastrear el origen de cada cuota hasta las operaciones que la generaron.
+    case 'anexo-movimientos-fiscales': {
+      sf('ANEXO DE MOVIMIENTOS FISCALES');
+      cf('Declaración', datos.numeroDfm || '—');
+      cf('Titular', datos.titular || datos.contribuyente || '—');
+      cf('Periodo', datos.periodo || '—');
+      ln();
+      sf('MOVIMIENTOS DEL PERIODO');
+      if (datos.movimientos && datos.movimientos.length > 0) {
+        L.push({ tabla: {
+          cabeceras: ['ID', 'Fecha', 'Concepto', 'Importe', 'Impuesto', 'Tratamiento'],
+          filas: datos.movimientos.map((m) => [
+            m.id || '—',
+            m.fecha || '—',
+            (m.concepto || '—').slice(0, 60),
+            fmtPz ? fmtPz(m.importe) : ((m.importe || 0).toLocaleString('es-ES') + ' Pz'),
+            m.impuesto || '—',
+            m.tratamiento || '—'
+          ]),
+          anchos: [70, 60, 160, 80, 60, 70], alineaciones: ['left', 'left', 'left', 'right', 'center', 'center']
+        }});
+        L.push({ tabla: {
+          cabeceras: ['Total movimientos', 'Operaciones sujetas', 'Operaciones no sujetas', 'Base sujeta'],
+          filas: [[
+            String(datos.movimientos.length),
+            String((datos.movimientos||[]).filter(x => x.tratamiento === 'Sujeto').length),
+            String((datos.movimientos||[]).filter(x => x.tratamiento !== 'Sujeto').length),
+            fmtPz ? fmtPz(datos.totalSujeto) : '—'
+          ]],
+          anchos: [125, 125, 125, 125], alineaciones: ['center', 'center', 'center', 'right']
+        }});
+      } else {
+        cf('No hay movimientos', '—');
+      }
+      L.push({nota:'Anexo de auditoría: cada cuota de la DFM se puede rastrear hasta las operaciones que la originaron. Tratamiento Sujeto/No sujeto según su clasificación fiscal.'});
+      break;
+    }
+
+    // ── 3. Declaración específica de IRM ───────────────────────────────
+    case 'declaracion-irm': {
+      const fmtPz = (n) => (Number(n) || 0).toLocaleString('es-ES') + ' Pz';
+      const pct = (n) => n !== undefined && n !== null ? (Number(n) * 100).toFixed(2) + ' %' : '—';
+      sf('DECLARACIÓN ESPECÍFICA DE IRM');
+      cf('Titular', datos.titular || datos.contribuyente || '—');
+      cf('Identificador fiscal', datos.identificador || datos.dip || (datos.eip || '—'));
+      cf('Periodo', datos.periodo || '—');
+      ln();
+      sf('CÁLCULO DESGLOSADO (Art. 4.8 a 4.11)');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Base / Valor', 'Tipo', 'Importe'],
+        filas: [
+          ['Rendimientos / ingresos computables', fmtPz(datos.ingresosPeriodo), '—', '—'],
+          ['Patrimonio medio del periodo', fmtPz(datos.patrimonioMedio), '—', '—'],
+          ['Índice de acumulación (IA)', String(datos.indiceAcumulacion !== undefined ? datos.indiceAcumulacion : '—'), '—', '—'],
+          ['Exenciones', fmtPz(datos.exencionesIRM), '—', '−' + fmtPz(datos.exencionesIRM)],
+          ['Reducciones', fmtPz(datos.reduccionesIRM), '—', '−' + fmtPz(datos.reduccionesIRM)],
+          ['Base imponible', fmtPz(datos.baseIRM), '—', '—'],
+          ['Tipo aplicable (escala Art. 4.10)', '—', pct(datos.tipoIRM), '—'],
+          ['Cuota íntegra', fmtPz(datos.cuotaIntegraIRM), '—', fmtPz(datos.cuotaIRM)],
+          ['Deducciones', fmtPz(datos.deduccionesIRM), '—', '−' + fmtPz(datos.deduccionesIRM)],
+          ['Retenciones', fmtPz(datos.retenciones), '—', '−' + fmtPz(datos.retenciones)],
+          ['Bonificaciones', fmtPz(datos.bonificacionesIRM), '—', '−' + fmtPz(datos.bonificacionesIRM)],
+          ['CUOTA FINAL IRM', fmtPz(datos.cuotaFinalIRM), '—', fmtPz(datos.cuotaFinalIRM)],
+        ],
+        anchos: [220, 100, 80, 100], alineaciones: ['left', 'right', 'center', 'right'], resaltarDesde: 11
+      }});
+      if (datos.esJunior && datos.pagaCapitalia) {
+        ln();
+        sf('RÉGIMEN JUNIOR (Art. 5 Normativa Placeta Junior)');
+        L.push({ tabla: {
+          cabeceras: ['Concepto', 'Importe'],
+          filas: [
+            ['Cuota calculada', fmtPz(datos.cuotaIRM)],
+            ['Bonificación Junior', '−' + fmtPz(datos.cuotaIRM)],
+            ['Cuota a cargo del titular', '0 Pz'],
+            ['Asumido por CAPITALIA', fmtPz(datos.cuotaIRM)],
+          ],
+          anchos: [340, 160], alineaciones: ['left', 'right'], resaltarDesde: 2
+        }});
+        L.push({nota:'Los menores de 16 años generan IRM igual que el resto, pero CAPITALIA asume el pago (CNI Art. 5).'});
+      }
+      break;
+    }
+
+    // ── 4. Declaración específica de IGF ───────────────────────────────
+    case 'declaracion-igf': {
+      const fmtPz = (n) => (Number(n) || 0).toLocaleString('es-ES') + ' Pz';
+      sf('DECLARACIÓN ESPECÍFICA DE IGF');
+      cf('Titular', datos.titular || datos.contribuyente || '—');
+      cf('Identificador fiscal', datos.identificador || datos.dip || (datos.eip || '—'));
+      cf('Periodo', datos.periodo || '—');
+      ln();
+      sf('DETERMINACIÓN DEL PATRIMONIO');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Importe'],
+        filas: [
+          ['Patrimonio bruto', fmtPz(datos.patrimonioBruto)],
+          ['Bienes computables', fmtPz(datos.bienesComputables)],
+          ['Deudas computables', '−' + fmtPz(datos.deudasComputables)],
+          ['Patrimonio exento', '−' + fmtPz(datos.patrimonioExento)],
+          ['PATRIMONIO NETO', fmtPz(datos.patrimonioNeto)],
+        ],
+        anchos: [340, 160], alineaciones: ['left', 'right'], resaltarDesde: 4
+      }});
+      ln();
+      sf('BASE LIQUIDABLE');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Importe'],
+        filas: [
+          ['Patrimonio neto', fmtPz(datos.patrimonioNeto)],
+          ['Mínimo exento (5.000 Pz)', '− 5.000 Pz'],
+          ['BASE LIQUIDABLE', fmtPz(datos.baseIGF)],
+        ],
+        anchos: [340, 160], alineaciones: ['left', 'right'], resaltarDesde: 2
+      }});
+      if (datos.tramosIGF && datos.tramosIGF.length > 0) {
+        ln();
+        sf('APLICACIÓN DE LA ESCALA (Art. 4.13)');
+        L.push({ tabla: {
+          cabeceras: ['Tramo', 'Base', 'Tipo', 'Cuota'],
+          filas: datos.tramosIGF.map(t => [
+            t.label || t.tramo || '—',
+            fmtPz(t.base),
+            t.tipo !== undefined ? (Number(t.tipo) * 100).toFixed(2) + ' %' : '—',
+            fmtPz(t.cuota)
+          ]),
+          anchos: [220, 90, 90, 100], alineaciones: ['left', 'right', 'right', 'right']
+        }});
+      }
+      ln();
+      sf('CUOTA Y RESULTADO');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Importe'],
+        filas: [
+          ['Cuota', fmtPz(datos.cuotaIGF)],
+          ['Bonificaciones', '−' + fmtPz(datos.bonificacionesIGF)],
+          ['RESULTADO', fmtPz(datos.resultadoIGF)],
+        ],
+        anchos: [340, 160], alineaciones: ['left', 'right'], resaltarDesde: 2
+      }});
+      if (datos.exencionIGF) L.push({nota:'Exención IGF aplicada (Art. 4.15): empresa de reducida dimensión (< 20.000 Pz) o patrimonio bajo mínimo exento.'});
+      if (datos.esJunior && datos.pagaCapitalia) {
+        L.push({nota:'Régimen Junior: la bonificación se aplica automáticamente y CAPITALIA asume la cuota (Art. 5).'});
+      }
+      break;
+    }
+
+    // ── 5. Declaración de IVA (solo sujetos con operaciones sujetas) ──
+    case 'declaracion-iva': {
+      const fmtPz = (n) => (Number(n) || 0).toLocaleString('es-ES') + ' Pz';
+      sf('DECLARACIÓN DE IVA');
+      cf('Titular', datos.titular || datos.contribuyente || '—');
+      cf('Identificador fiscal', datos.identificador || datos.dip || (datos.eip || '—'));
+      cf('Periodo', datos.periodo || '—');
+      ln();
+      sf('IVA REPERCUTIDO (Art. 4.4)');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Base', 'Tipo', 'Cuota'],
+        filas: [
+          ['Base imponible repercutida', fmtPz(datos.baseRepercutida), '12 %', '—'],
+          ['IVA repercutido', '—', '12 %', fmtPz(datos.ivaRepercutido)],
+        ],
+        anchos: [220, 90, 90, 100], alineaciones: ['left', 'right', 'center', 'right']
+      }});
+      ln();
+      sf('IVA SOPORTADO');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Base', 'Tipo', 'Cuota'],
+        filas: [
+          ['Base imponible soportada', fmtPz(datos.baseSoportada), '12 %', '—'],
+          ['IVA soportado', '—', '12 %', fmtPz(datos.ivaSoportado)],
+        ],
+        anchos: [220, 90, 90, 100], alineaciones: ['left', 'right', 'center', 'right']
+      }});
+      ln();
+      sf('RECTIFICACIONES Y DEDUCCIONES');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Importe'],
+        filas: [
+          ['Rectificaciones', fmtPz(datos.rectificacionesIVA)],
+          ['Deducciones (IVA soportado deducible)', '−' + fmtPz(datos.deduccionesIVA)],
+          ['RESULTADO (cuota IVA)', fmtPz(datos.resultadoIVA)],
+        ],
+        anchos: [340, 160], alineaciones: ['left', 'right'], resaltarDesde: 2
+      }});
+      if (datos.campañas && datos.campañas.length > 0) {
+        ln();
+        sf('OPERACIONES DE CAMPAÑA IDENTIFICADAS');
+        L.push({ tabla: {
+          cabeceras: ['ID', 'Fecha', 'Concepto', 'Importe'],
+          filas: datos.campañas.map(c => [
+            c.id || '—', c.fecha || '—', (c.concepto || '—').slice(0, 50), fmtPz(c.importe)
+          ]),
+          anchos: [70, 60, 280, 90], alineaciones: ['left', 'left', 'left', 'right']
+        }});
+        L.push({nota:'Operaciones relacionadas con campañas (p.ej. «Placetas que Vuelven») identificadas en el anexo.'});
+      }
+      break;
+    }
+
+    // ── 6. Documento de bonificaciones (CERTIFICADO DE BONIFICACIÓN FISCAL) ──
+    case 'certificado-bonificacion-fiscal': {
+      const fmtPz = (n) => (Number(n) || 0).toLocaleString('es-ES') + ' Pz';
+      sf('CERTIFICADO DE BONIFICACIÓN FISCAL');
+      cf('Titular', datos.titular || datos.contribuyente || '—');
+      cf('Periodo', datos.periodo || '—');
+      ln();
+      sf('OBLIGACIONES CALCULADAS');
+      L.push({ tabla: {
+        cabeceras: ['Impuesto', 'Importe calculado'],
+        filas: [
+          ['IRM calculado', fmtPz(datos.cuotaIRM)],
+          ['IGF calculado', fmtPz(datos.cuotaIGF)],
+          ['Otros impuestos', fmtPz(datos.otrosImpuestos)],
+        ],
+        anchos: [300, 200], alineaciones: ['left', 'right']
+      }});
+      ln();
+      const totalBon = (datos.cuotaIRM||0) + (datos.cuotaIGF||0) + (datos.otrosImpuestos||0);
+      sf('BONIFICACIÓN Y ASUNCIÓN');
+      L.push({ tabla: {
+        cabeceras: ['Concepto', 'Importe'],
+        filas: [
+          ['Total bonificado', fmtPz(totalBon)],
+          ['Importe asumido por CAPITALIA', fmtPz(totalBon)],
+          ['Importe a cargo del titular', '0 Pz'],
+        ],
+        anchos: [300, 200], alineaciones: ['left', 'right'], resaltarDesde: 0
+      }});
+      L.push({nota:'Este certificado deja constancia de que SÍ existía una obligación calculada, pero fue cubierta por CAPITALIA (Art. 5 Normativa Placeta Junior).'});
+      break;
+    }
+
+    // ── 7. Certificado de cierre fiscal ────────────────────────────────
+    case 'certificado-cierre-fiscal': {
+      sf('CERTIFICADO DE CIERRE FISCAL');
+      tx('El sistema fiscal de La Placeta certifica que los datos correspondientes al periodo ' + (datos.periodo || '—') + ' han sido procesados y conciliados.');
+      ln();
+      sf('DATOS DEL CIERRE');
+      L.push({ tabla: {
+        cabeceras: ['Campo', 'Valor'],
+        filas: [
+          ['Nº de declaración', datos.numeroDfm || '—'],
+          ['Hash del expediente', datos.hashExpediente || '—'],
+          ['Fecha de cierre', datos.fechaCierre || hoy],
+          ['Responsable', datos.responsable || 'Sistema Fiscal de La Placeta (RSP)'],
+          ['Estado', datos.estado || 'Definitivo'],
+          ['Firma digital / QR', datos.firmaDigital || 'Sello digital RSP — verificación en rsp.laplaceta.org'],
+        ],
+        anchos: [180, 320], alineaciones: ['left', 'left']
+      }});
+      L.push({nota:'Cierre del expediente fiscal mensual. El hash del expediente garantiza la integridad de las declaraciones del periodo.'});
+      break;
+    }
 
     case 'informe-inspeccion-trib':
       sf('DATOS DE LA INSPECCIÓN'); cf('Inspector', datos.inspector); cf('Contribuyente', datos.contribuyente);
@@ -1348,6 +1701,90 @@ export async function generarPDF(entidad, documento) {
         dibujarCabecera(false);
       }
 
+      // ── Helper: dibujar tabla desglosada ─────────────────────────────
+      // item.tabla = { cabeceras:[], filas:[[...]], anchos:[] (px, opcional),
+      //                alineaciones:[] ('left'|'right'|'center', opcional),
+      //                resaltarDesde: (índice fila desde el que resaltar, opcional),
+      //                resaltarFilas: [índices], columnaImporte: índice (opcional) }
+      function dibujarTabla(t) {
+        const cab = t.cabeceras || [];
+        const filas = t.filas || [];
+        if (!cab.length || !filas.length) return;
+        const margen = 50, anchoTotal = 500;
+        const anchos = t.anchos && t.anchos.length === cab.length
+          ? t.anchos
+          : cab.map(() => Math.floor(anchoTotal / cab.length));
+        const alin = t.alineaciones || cab.map(() => 'left');
+        const filaH = 16;
+        const padX = 4;
+
+        // ── Cabecera (fondo morado, texto blanco) ──
+        function dibujarCabeceraTabla() {
+          let x = margen;
+          const y = doc.y;
+          doc.save();
+          doc.rect(margen, y, anchoTotal, filaH).fill('#3702b3');
+          doc.font(fontBold).fontSize(7.5).fillColor('#ffffff');
+          cab.forEach((c, i) => {
+            const ancho = anchos[i];
+            const opts = { width: ancho - padX * 2, align: alin[i] === 'right' ? 'right' : alin[i] === 'center' ? 'center' : 'left', lineBreak: false };
+            doc.text(String(c), x + padX, y + 4.5, opts);
+            x += ancho;
+          });
+          doc.restore();
+          doc.y = y + filaH;
+        }
+
+        // ── ¿Cabe una fila? Si no, nueva página con cabecera de tabla ──
+        function asegurarEspacio() {
+          if (doc.y > doc.page.height - 70) {
+            nuevaPagina();
+            dibujarCabeceraTabla();
+          }
+        }
+
+        dibujarCabeceraTabla();
+        const resaltar = new Set(t.resaltarFilas || []);
+        filas.forEach((fila, fi) => {
+          // Altura real: puede crecer si el texto se envuelve
+          let altoFila = filaH;
+          fila.forEach((celda, ci) => {
+            if (celda === null || celda === undefined) return;
+            const ancho = anchos[ci] - padX * 2;
+            const n = doc.font(fontReg).fontSize(7.5).widthOfString(String(celda), { width: ancho, lineBreak: true });
+            const lineasNecesarias = Math.max(1, Math.ceil((n + 2) / Math.max(1, ancho)));
+            altoFila = Math.max(altoFila, lineasNecesarias * 10 + 4);
+          });
+          asegurarEspacio();
+          const yFila = doc.y;
+          const esResaltada = resaltar.has(fi) || (t.resaltarDesde !== undefined && fi >= t.resaltarDesde);
+          if (esResaltada) {
+            doc.save();
+            doc.rect(margen, yFila, anchoTotal, altoFila).fill('#f3eefe');
+            doc.restore();
+          }
+          let x = margen;
+          doc.save();
+          fila.forEach((celda, ci) => {
+            if (celda === null || celda === undefined) return;
+            const ancho = anchos[ci];
+            const bold = esResaltada;
+            doc.font(bold ? fontBold : fontReg).fontSize(7.5)
+              .fillColor(esResaltada ? '#3702b3' : '#1c1226');
+            const opts = { width: ancho - padX * 2, align: alin[ci] === 'right' ? 'right' : alin[ci] === 'center' ? 'center' : 'left', lineBreak: true };
+            doc.text(String(celda), x + padX, yFila + 3, opts);
+            x += ancho;
+          });
+          doc.restore();
+          doc.y = yFila + altoFila;
+          // Línea separadora suave
+          doc.save();
+          doc.moveTo(margen, doc.y).lineTo(margen + anchoTotal, doc.y).lineWidth(0.3).strokeColor('#e0daf0').stroke();
+          doc.restore();
+        });
+        doc.moveDown(0.3);
+      }
+
       // ── CABECERA (página 1) ──
       dibujarCabecera(true);
 
@@ -1359,6 +1796,8 @@ export async function generarPDF(entidad, documento) {
           doc.moveDown(0.2);
           doc.font(fontBold).fontSize(11).fillColor('#3702b3').text(item.seccion.toUpperCase(), 50, doc.y, {width:500});
           doc.moveDown(0.2);
+        } else if (item.tabla) {
+          dibujarTabla(item.tabla);
         } else if (item.linea) {
           doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(0.5).strokeColor('#e0daf0').stroke();
           doc.moveDown(0.3);
@@ -1395,47 +1834,56 @@ export async function generarPDF(entidad, documento) {
       doc.font(fontReg).fontSize(7).fillColor('#5c5566').text(entL, {width:500, align:'center'});
 
       // ── FIRMA DEL TITULAR ──
-      doc.moveDown(0.5);
-      doc.moveTo(100, doc.y).lineTo(500, doc.y).lineWidth(0.5).strokeColor('#c0b8d8').stroke();
-      doc.moveDown(0.2);
-      doc.font(fontBold).fontSize(9).fillColor('#3702b3').text('FIRMA DEL TITULAR', {width:500, align:'center'});
-
-      if (documento.firmado) {
-        const firmaImg = documento.datos?.firma_base64 || documento.datos?.firmaImagen;
-        if (firmaImg) {
-          try {
-            const imgData = firmaImg.includes('base64,') ? firmaImg : `data:image/png;base64,${firmaImg}`;
-            // Firma SIN deformar ni cortar: escala manteniendo la proporción
-            // (se usa openImage para conocer el tamaño real y nunca se supera 320x90).
-            const img = doc.openImage(imgData);
-            const maxW = 320, maxH = 90;
-            const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
-            const w = img.width * ratio, h = img.height * ratio;
-            const x = Math.max(50, (doc.page.width - w) / 2);
-            doc.image(imgData, x, doc.y, { width: w, height: h });
-            doc.y += h + 4;
-          } catch {}
-        }
-        doc.moveDown(0.2);
-        // Salto de página si hace falta
-        if (doc.y > doc.page.height - 50) nuevaPagina();
-        doc.font(fontReg).fontSize(8).fillColor('#5c5566');
-        doc.text(`Firmado digitalmente por: ${documento.datos?.firmadoPor || '—'}`, {width:500, align:'center'});
-        if (documento.datos?.fechaFirma) {
-          const fFecha = new Date(documento.datos.fechaFirma).toLocaleString('es-ES');
-          doc.text(`Fecha: ${fFecha}`, {width:500, align:'center'});
-        }
-        doc.text('Firma electrónica PlacetaID', {width:500, align:'center'});
-      } else {
+      // Los documentos de TRIBUTOS no requieren firma del titular: se emiten
+      // y sellan automáticamente por el sistema (sello digital + CSV).
+      if (entidad !== 'tributos') {
         doc.moveDown(0.5);
-        // Líneas guía para firma manuscrita
-        doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
-        doc.moveDown(1.2);
-        doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
-        doc.moveDown(0.3);
-        doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text('Firma pendiente — PlacetaID Móvil', {width:500, align:'center'});
-        doc.font(fontReg).fontSize(6.5).fillColor('#d0c8e0');
-        doc.text('Firme desde la app PlacetaID Móvil', {width:500, align:'center'});
+        doc.moveTo(100, doc.y).lineTo(500, doc.y).lineWidth(0.5).strokeColor('#c0b8d8').stroke();
+        doc.moveDown(0.2);
+        doc.font(fontBold).fontSize(9).fillColor('#3702b3').text('FIRMA DEL TITULAR', {width:500, align:'center'});
+
+        if (documento.firmado) {
+          const firmaImg = documento.datos?.firma_base64 || documento.datos?.firmaImagen;
+          if (firmaImg) {
+            try {
+              const imgData = firmaImg.includes('base64,') ? firmaImg : `data:image/png;base64,${firmaImg}`;
+              // Firma SIN deformar ni cortar: escala manteniendo la proporción
+              // (se usa openImage para conocer el tamaño real y nunca se supera 320x90).
+              const img = doc.openImage(imgData);
+              const maxW = 320, maxH = 90;
+              const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
+              const w = img.width * ratio, h = img.height * ratio;
+              const x = Math.max(50, (doc.page.width - w) / 2);
+              doc.image(imgData, x, doc.y, { width: w, height: h });
+              doc.y += h + 4;
+            } catch {}
+          }
+          doc.moveDown(0.2);
+          // Salto de página si hace falta
+          if (doc.y > doc.page.height - 50) nuevaPagina();
+          doc.font(fontReg).fontSize(8).fillColor('#5c5566');
+          doc.text(`Firmado digitalmente por: ${documento.datos?.firmadoPor || '—'}`, {width:500, align:'center'});
+          if (documento.datos?.fechaFirma) {
+            const fFecha = new Date(documento.datos.fechaFirma).toLocaleString('es-ES');
+            doc.text(`Fecha: ${fFecha}`, {width:500, align:'center'});
+          }
+          doc.text('Firma electrónica PlacetaID', {width:500, align:'center'});
+        } else {
+          doc.moveDown(0.5);
+          // Líneas guía para firma manuscrita
+          doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
+          doc.moveDown(1.2);
+          doc.moveTo(120, doc.y).lineTo(480, doc.y).lineWidth(0.5).strokeColor('#d0c8e0').stroke();
+          doc.moveDown(0.3);
+          doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text('Firma pendiente — PlacetaID Móvil', {width:500, align:'center'});
+          doc.font(fontReg).fontSize(6.5).fillColor('#d0c8e0');
+          doc.text('Firme desde la app PlacetaID Móvil', {width:500, align:'center'});
+        }
+      } else {
+        // Documentos de tributos: sello automático, sin firma del titular.
+        doc.moveDown(0.6);
+        doc.font(fontReg).fontSize(7.5).fillColor('#8a6fd8').text('Documento emitido automáticamente por el Sistema Fiscal de La Placeta.', {width:500, align:'center'});
+        doc.font(fontReg).fontSize(7).fillColor('#b8a8e0').text('No requiere firma del titular. Validez mediante sello digital y CSV de verificación.', {width:500, align:'center'});
       }
 
       // ── CSV ──
@@ -1509,6 +1957,42 @@ export function getPlantilla(tipo, entidad) {
       titulo: 'Declaración Definitiva',
       descripcion: 'Declaración tributaria definitiva',
       datos: { contribuyente: '', dip: '', periodo: '', baseImponible: 0, tipoImpositivo: 0, cuota: 0, estado: 'Definitiva' }
+    },
+    // ── Expediente fiscal automático ───────────────────────────────────
+    'dfm-mensual': {
+      titulo: 'Declaración Fiscal Mensual (DFM)',
+      descripcion: 'Documento principal del expediente fiscal mensual por sujeto y periodo',
+      datos: { numeroDfm: '', titular: '', identificador: '', dip: '', eip: '', tipoSujeto: 'Persona Física', periodo: '', patrimonioMedio: 0, ingresosPeriodo: 0, pagosPeriodo: 0, indiceAcumulacion: 0, cuotaIRM: 0, cuotaIGF: 0, cuotaIVA: 0, retenciones: 0, bonificaciones: 0, totalImpuestos: 0, esJunior: false, pagaCapitalia: false, estado: 'Borrador' }
+    },
+    'anexo-movimientos-fiscales': {
+      titulo: 'Anexo de Movimientos Fiscales',
+      descripcion: 'Detalle de movimientos del periodo para auditoría',
+      datos: { numeroDfm: '', titular: '', periodo: '', movimientos: [] }
+    },
+    'declaracion-irm': {
+      titulo: 'Declaración específica de IRM',
+      descripcion: 'Detalle del Impuesto de Regulación Monetaria del periodo',
+      datos: { titular: '', identificador: '', periodo: '', ingresosPeriodo: 0, exencionesIRM: 0, reduccionesIRM: 0, baseIRM: 0, tipoIRM: 0, cuotaIntegraIRM: 0, deduccionesIRM: 0, retenciones: 0, bonificacionesIRM: 0, cuotaFinalIRM: 0, cuotaIRM: 0, esJunior: false, pagaCapitalia: false }
+    },
+    'declaracion-igf': {
+      titulo: 'Declaración específica de IGF',
+      descripcion: 'Detalle del Impuesto sobre Grandes Fortunas del periodo',
+      datos: { titular: '', identificador: '', periodo: '', patrimonioBruto: 0, bienesComputables: 0, deudasComputables: 0, patrimonioExento: 0, patrimonioNeto: 0, baseIGF: 0, cuotaIGF: 0, bonificacionesIGF: 0, resultadoIGF: 0, exencionIGF: false, esJunior: false, pagaCapitalia: false }
+    },
+    'declaracion-iva': {
+      titulo: 'Declaración de IVA',
+      descripcion: 'Liquidación de IVA repercutido, soportado y resultado',
+      datos: { titular: '', identificador: '', periodo: '', baseRepercutida: 0, ivaRepercutido: 0, baseSoportada: 0, ivaSoportado: 0, rectificacionesIVA: 0, deduccionesIVA: 0, resultadoIVA: 0, campañas: [] }
+    },
+    'certificado-bonificacion-fiscal': {
+      titulo: 'Certificado de Bonificación Fiscal',
+      descripcion: 'Constancia de bonificación asumida por CAPITALIA para Juniors',
+      datos: { titular: '', periodo: '', cuotaIRM: 0, cuotaIGF: 0, otrosImpuestos: 0 }
+    },
+    'certificado-cierre-fiscal': {
+      titulo: 'Certificado de Cierre Fiscal',
+      descripcion: 'Certificación de cierre y conciliación del periodo',
+      datos: { numeroDfm: '', periodo: '', hashExpediente: '', fechaCierre: '', responsable: '', estado: 'Definitivo', firmaDigital: '' }
     },
     'certificado-situacion-tributaria': {
       titulo: 'Certificado de Situación Tributaria',

@@ -1,0 +1,79 @@
+<div style="margin-bottom:14px"><a href="/rsp/operaciones" class="btn btn-sm btn-ghost">← Operation Engine</a></div>
+<div class="rsp-hero" style="background:linear-gradient(135deg,#0d2137 0%,#1e5a8a 100%)">
+  <div class="rsp-hero-content">
+    <div style="width:80px;height:80px;border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:38px">⚙️</div>
+    <div style="flex:1">
+      <div class="rsp-hero-title"><%= op.id %></div>
+      <div class="rsp-hero-sub" style="font-size:17px;opacity:.95"><%= op.concepto %></div>
+      <div class="rsp-hero-stats">
+        <span>Importe: <strong><%= (op.importe||0).toLocaleString() %> Pz</strong></span>
+        <span>Clasificación: <strong><%= op.clasificacion %></strong></span>
+        <span>Estado: <strong><%= op.estado_motor %></strong></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<% if (op.inconsistencias && op.inconsistencias.length > 0) { %>
+<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:14px 16px;margin-top:14px">
+  <strong style="color:#b82929">⚠️ Inconsistencias detectadas (<%= op.inconsistencias.length %>)</strong>
+  <% op.inconsistencias.forEach(function(i) { %>
+  <div style="font-size:13px;margin-top:6px;color:#7f1d1d">• <strong><%= i.tipo %></strong> (<%= i.gravedad %>): <%= i.mensaje %></div>
+  <% }); %>
+</div>
+<% } %>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+  <div class="table-container">
+    <div style="padding:12px 16px;font-weight:700;font-size:13px;border-bottom:1px solid #e8e4f0">📋 Datos</div>
+    <table>
+      <tbody>
+        <tr><th style="width:170px">TRF global</th><td><%= op.trf_id || '—' %></td></tr>
+        <tr><th>Cuenta origen</th><td><%= op.cuenta_origen || '—' %></td></tr>
+        <tr><th>Cuenta destino</th><td><%= op.cuenta_destino || '—' %></td></tr>
+        <tr><th>Periodicidad</th><td><%= op.periodicidad %></td></tr>
+        <tr><th>Servicio</th><td><%= op.servicio %></td></tr>
+        <tr><th>Expediente</th><td><%= op.expediente_id ? '<a href="/rsp/expedientes/' + op.expediente_id + '">' + op.expediente_id + '</a>' : '—' %></td></tr>
+        <tr><th>Regla aplicada</th><td><%= op.regla_aplicada || '—' %></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="table-container">
+    <div style="padding:12px 16px;font-weight:700;font-size:13px;border-bottom:1px solid #e8e4f0">🔄 Etapas del motor</div>
+    <table>
+      <tbody>
+        <% var etapas = ['creada','identificada','clasificada','validada','reglas','fiscalidad','documentacion','ejecutada','auditada']; %>
+        <% etapas.forEach(function(e) { %>
+        <tr>
+          <td><%= e %></td>
+          <td>
+            <% if (e === op.estado_motor) { %><span class="badge badge-success">actual</span><% } else if (['retenida','rechazada','revertida'].includes(op.estado_motor) && etapas.indexOf(e) >= etapas.indexOf(op.estado_motor === 'retenida' ? 'validada' : 'creada')) { %><span class="badge badge-outline">bloqueada</span><% } %>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+    <% if (esAdmin) { %>
+    <div style="padding:12px">
+      <button class="btn btn-sm btn-warning" onclick="marcarEjecutada()">✔️ Marcar ejecutada</button>
+      <button class="btn btn-sm btn-danger" onclick="marcarRechazada()">✖️ Rechazar</button>
+    </div>
+    <% } %>
+  </div>
+</div>
+
+<script>
+async function marcarEjecutada(){
+  await etapa('ejecutada');
+}
+async function marcarRechazada(){
+  await etapa('rechazada');
+}
+async function etapa(e){
+  const r = await fetch('/rsp/operaciones/api/operaciones/<%= op.id %>/etapa', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ etapa: e, motivo: 'Acción manual' }) });
+  const j = await r.json();
+  if(!j.success){ alert('Error: ' + j.error); return; }
+  window.location.reload();
+}
+</script>

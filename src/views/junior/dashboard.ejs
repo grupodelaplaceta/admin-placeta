@@ -1,60 +1,54 @@
-<div class="junior-dashboard">
-  <!-- Header -->
-  <div style="background:linear-gradient(135deg,#880e4f,#e91e63);color:#fff;border-radius:16px;padding:24px 28px;margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-      <div style="width:64px;height:64px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:32px">🧒</div>
-      <div>
-        <h4 style="font-size:20px;font-weight:700">Placeta Junior</h4>
-        <p style="font-size:13px;opacity:.7">Gestión de menores, retos y juegos educativos</p>
-      </div>
+<%- include('../parciales/hero', {
+  icono: '🧒',
+  titulo: 'Placeta Junior',
+  subtitulo: 'Gestión de menores, retos y juegos educativos',
+  stats: [
+    { label: 'Menores', value: totalMenores || 0 },
+    { label: 'Membresía', value: membresiaActiva ? '✅' : '—' },
+    { label: 'Documentos pend.', value: documentosPendientes || 0 },
+    { label: 'Reto activo', value: reto ? '🔥' : '—' }
+  ],
+  grad: 'linear-gradient(135deg,#880e4f 0%,#c2185b 55%,#e91e63 100%)'
+}) %>
+
+<!-- Reto activo -->
+<% if (reto) { %>
+<div class="info-card mb-16" style="border-left:4px solid #e91e63">
+  <div class="flex items-center justify-between flex-wrap gap-8">
+    <div>
+      <h4 style="font-size:15px"><%= reto.icono %> Reto Semanal: <%= reto.titulo %></h4>
+      <p style="font-size:12px;color:#666;margin-top:2px"><%= reto.descripcion %></p>
+      <p style="font-size:11px;color:#999;margin-top:2px">
+        <%= reto.juegos.length %> juegos · <%= new Date(reto.fechaInicio).toLocaleDateString('es-ES') %> → <%= new Date(reto.fechaFin).toLocaleDateString('es-ES') %>
+      </p>
     </div>
-  </div>
-
-  <!-- Stats -->
-  <div class="stats-grid mb-16">
-    <div class="stat-card"><div class="stat-value"><%= totalMenores || 0 %></div><div class="stat-label">Menores</div></div>
-    <div class="stat-card"><div class="stat-value"><%= membresiaActiva ? '✅' : '—' %></div><div class="stat-label">Membresía</div></div>
-    <div class="stat-card"><div class="stat-value"><%= documentosPendientes || 0 %></div><div class="stat-label">Documentos pendientes</div></div>
-    <div class="stat-card"><div class="stat-value"><%= reto ? '🔥' : '—' %></div><div class="stat-label">Reto activo</div></div>
-  </div>
-
-  <!-- Reto activo -->
-  <% if (reto) { %>
-  <div class="info-card mb-16" style="border-left:4px solid #e91e63">
-    <div class="flex items-center justify-between flex-wrap gap-8">
-      <div>
-        <h4 style="font-size:15px"><%= reto.icono %> Reto Semanal: <%= reto.titulo %></h4>
-        <p style="font-size:12px;color:#666;margin-top:2px"><%= reto.descripcion %></p>
-        <p style="font-size:11px;color:#999;margin-top:2px">
-          <%= reto.juegos.length %> juegos · <%= new Date(reto.fechaInicio).toLocaleDateString('es-ES') %> → <%= new Date(reto.fechaFin).toLocaleDateString('es-ES') %>
-        </p>
-      </div>
-      <a href="/junior/retos" class="btn btn-primary" style="background:#e91e63;border-color:#e91e63">🧩 Jugar ahora</a>
-    </div>
-  </div>
-  <% } %>
-
-  <!-- Acceso rápido -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
-    <a href="/junior/retos" class="entidad-card" style="border-left:4px solid #e91e63;text-decoration:none">
-      <div class="entidad-icon">🧩</div>
-      <div class="entidad-info"><h3>Retos</h3><p>Juegos y actividades semanales</p></div>
-      <span class="entidad-arrow">→</span>
-    </a>
-    <a href="/junior/menores" class="entidad-card" style="border-left:4px solid #e91e63;text-decoration:none">
-      <div class="entidad-icon">👶</div>
-      <div class="entidad-info"><h3>Menores</h3><p>Gestión de niños y niñas</p></div>
-      <span class="entidad-arrow">→</span>
-    </a>
-    <a href="/junior/tutores" class="entidad-card" style="border-left:4px solid #e91e63;text-decoration:none">
-      <div class="entidad-icon">👤</div>
-      <div class="entidad-info"><h3>Tutores</h3><p>Padres, madres y tutores legales</p></div>
-      <span class="entidad-arrow">→</span>
-    </a>
-    <a href="/junior/cuentas" class="entidad-card" style="border-left:4px solid #e91e63;text-decoration:none">
-      <div class="entidad-icon">🏦</div>
-      <div class="entidad-info"><h3>Cuentas</h3><p>Cuentas infantiles GDLP-APxx-xxx</p></div>
-      <span class="entidad-arrow">→</span>
-    </a>
+    <a href="/junior/retos" class="btn btn-primary" style="background:#e91e63;border-color:#e91e63">🧩 Jugar ahora</a>
   </div>
 </div>
+<% } %>
+
+<!-- Acceso rápido -->
+<div class="rsp-section-title">🚀 Acceso rápido</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+  <a href="/junior/retos" class="entidad-card" style="--card-glow:rgba(233,30,99,.14);border:1px solid var(--l)">
+    <div class="entidad-icon">🧩</div>
+    <div class="entidad-info"><h3>Retos</h3><p>Juegos y actividades semanales</p></div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <a href="/junior/menores" class="entidad-card" style="--card-glow:rgba(233,30,99,.14);border:1px solid var(--l)">
+    <div class="entidad-icon">👶</div>
+    <div class="entidad-info"><h3>Menores</h3><p>Gestión de niños y niñas</p></div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <a href="/junior/tutores" class="entidad-card" style="--card-glow:rgba(233,30,99,.14);border:1px solid var(--l)">
+    <div class="entidad-icon">👤</div>
+    <div class="entidad-info"><h3>Tutores</h3><p>Padres, madres y tutores legales</p></div>
+    <span class="entidad-arrow">→</span>
+  </a>
+  <a href="/junior/cuentas" class="entidad-card" style="--card-glow:rgba(233,30,99,.14);border:1px solid var(--l)">
+    <div class="entidad-icon">🏦</div>
+    <div class="entidad-info"><h3>Cuentas</h3><p>Cuentas infantiles GDLP-APxx-xxx</p></div>
+    <span class="entidad-arrow">→</span>
+  </a>
+</div>
+

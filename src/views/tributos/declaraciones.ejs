@@ -18,10 +18,12 @@
 <div class="flex gap-8 mb-16 flex-wrap">
   <button class="btn-primary" onclick="nuevaDeclaracion()">📝 Nueva Declaración</button>
   <button class="btn-secondary" onclick="mostrarReconciliacion()">🔄 Reconciliar</button>
+  <button class="btn-secondary btn-regenerar" onclick="regenerarDeclaraciones()">♻️ Regenerar (datos reales)</button>
   <button class="btn-secondary" onclick="mostrarModalBulk('publish')">📤 Publicar Seleccionadas</button>
   <button class="btn-secondary" onclick="mostrarModalBulk('approve')">✅ Aprobar Seleccionadas</button>
   <button class="btn-secondary" onclick="mostrarModalBulk('emit')">💰 Emitir Seleccionadas</button>
   <button class="btn-danger" onclick="mostrarModalBulk('delete')">🗑️ Eliminar Seleccionadas</button>
+  <button class="btn-secondary" onclick="generarExpedienteBulk()">📁 Expediente Seleccionadas</button>
   <% if (esAdmin) { %>
   <button class="btn-secondary" onclick="toggleInhibicion()">🚫 Control Recaudación</button>
   <% } %>
@@ -95,6 +97,7 @@
         <td>
           <div class="flex gap-4" style="flex-wrap:nowrap">
             <button class="btn-icon" onclick="verDeclaracion('<%= d.id %>')" title="Ver detalle">👁️</button>
+            <button class="btn-icon" onclick="generarExpediente('<%= d.id %>')" title="Generar expediente fiscal (DFM)">📁</button>
             <% if (d._puede_publicar) { %>
             <button class="btn-icon" onclick="accionDeclaracion('<%= d.id %>','publish')" title="Publicar">📤</button>
             <% } %>
@@ -143,6 +146,29 @@ function toggleSeleccionarTodo() {
 
 function getSelectedIds() {
   return [...document.querySelectorAll('.chk-declaracion:checked')].map(cb => cb.value);
+}
+
+// ── Regenerar declaraciones con datos reales ─────────────────────────────
+// Borra TODAS las declaraciones anteriores (ya no valen) y recalcula el
+// periodo indicado para todos los contribuyentes reales (personas + empresas)
+// con % de cuentas compartidas, % de empresas, subvenciones e inversiones.
+function regenerarDeclaraciones() {
+  const mes = document.getElementById('filtroMes').value || '<%= mesActual %>';
+  if (!confirm('♻️ REGENERAR DECLARACIONES\n\nSe BORRARÁN TODAS las declaraciones anteriores (ya no valen) y se recalcularán con los DATOS REALES del banco para el periodo ' + mes + ':\n\n· % cuentas compartidas (cotitularidad)\n· % empresas (participaciones)\n· subvenciones recibidas\n· inversiones (patrimonio)\n\n¿Continuar?')) return;
+  const btn = document.querySelector('.btn-regenerar');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Regenerando…'; }
+  fetch('/tributos/api/declaraciones/regenerar', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mesPeriodo: mes })
+  }).then(r => r.json()).then(j => {
+    if (!j.success) { alert('Error: ' + (j.error || 'desconocido')); if (btn){btn.disabled=false;btn.textContent='♻️ Regenerar (datos reales)';} return; }
+    const detalle = (j.resultados || []).map(r => (r.id ? '✅ ' + r.clave + ': ' + (r.patrimonio||0).toLocaleString() + ' Pz · IRM ' + (r.cuotaIRM||0).toLocaleString() + ' · IGF ' + (r.cuotaIGF||0).toLocaleString() : '❌ ' + r.clave + ': ' + (r.error||'error'))).join('<br>');
+    mostrarModal('♻️ Declaraciones regeneradas', `
+      <p><strong>${j.eliminadas}</strong> declaraciones anteriores eliminadas.</p>
+      <p><strong>${j.generadas}</strong> declaraciones recalculadas para ${mes} con datos reales.</p>
+      <hr style="margin:10px 0;border:none;border-top:1px solid #eee">
+      <div style="font-size:12px;max-height:280px;overflow:auto">${detalle}</div>`);
+    setTimeout(() => window.location.reload(), 1200);
+  }).catch(e => { alert('Error: ' + e.message); if (btn){btn.disabled=false;btn.textContent='♻️ Regenerar (datos reales)';} });
 }
 
 // ── Nueva declaración ─────────────────────────────────────────────────────
@@ -291,6 +317,40 @@ async function ejecutarReconciliacion() {
 // ── PDF ───────────────────────────────────────────────────────────────────
 function verPDF(id) {
   window.open('/tributos/api/declaraciones/' + id + '/pdf', '_blank');
+}
+
+// ── Expediente fiscal (DFM + anexos) ─────────────────────────────────────
+// Genera/regenera el expediente completo de una declaración y muestra los
+// documentos generados (DFM, Anexo, IRM, IGF, IVA, Bonificación, Cierre).
+async function generarExpediente(id) {
+  try {
+    const r = await fetch('/tributos/api/declaraciones/' + id + '/expediente', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    const data = await r.json();
+    if (data.success) {
+      const n = data.documentos?.length || 0;
+      mostrarToast('📁 Expediente generado: ' + data.numeroDfm + ' (' + n + ' docs)', 'success');
+      setTimeout(() => verDocsDe('declaracion', id, 'tributos', id), 400);
+    } else {
+      mostrarToast('Error: ' + (data.error || 'desconocido'), 'error');
+    }
+  } catch (e) { mostrarToast('Error de red', 'error'); }
+}
+
+// ── Expediente en lote ────────────────────────────────────────────────────
+async function generarExpedienteBulk() {
+  const ids = getSelectedIds();
+  if (!ids.length) return mostrarToast('Selecciona al menos una declaración', 'error');
+  if (!confirm('📁 ¿Generar el expediente fiscal (DFM + anexos) de las ' + ids.length + ' declaraciones seleccionadas?')) return;
+  let ok = 0, err = 0;
+  for (const id of ids) {
+    try {
+      const r = await fetch('/tributos/api/declaraciones/' + id + '/expediente', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const data = await r.json();
+      if (data.success) ok++; else err++;
+    } catch (e) { err++; }
+  }
+  mostrarToast('📁 Expedientes: ' + ok + ' generados · ' + err + ' errores', ok ? 'success' : 'error');
+  setTimeout(() => location.reload(), 1200);
 }
 
 // ── Control de recaudación ────────────────────────────────────────────────

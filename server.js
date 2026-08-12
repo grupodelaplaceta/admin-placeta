@@ -40,6 +40,22 @@ import { mobilGetPendientes, mobilGetHistorial, mobilEmitirVoto } from './src/ro
 import { registrarConexionPublica } from './src/routes/rsp.js';
 import { getConexiones, getConexionesFromSupabase } from './src/config/rsp.js';
 import bopEditorRoutes from './src/routes/bop-editor.js';
+// ═══ RSP Core (plan maestro) ═══════════════════════════════════════════
+import normativoRoutes from './src/routes/normativo.js';
+import expedientesRoutes from './src/routes/expedientes.js';
+import incidenciasRoutes from './src/routes/incidencias.js';
+import auditoriaRoutes from './src/routes/auditoria.js';
+import notificacionesRoutes from './src/routes/notificaciones.js';
+import contabilidadRoutes from './src/routes/contabilidad.js';
+import fundacionRoutes from './src/routes/fundacion.js';
+import patrimonioRoutes from './src/routes/patrimonio.js';
+import operacionesRoutes from './src/routes/operaciones.js';
+import comprobacionRoutes from './src/routes/comprobacion.js';
+import fiscalidadRoutes from './src/routes/fiscalidad.js';
+import nominasRoutes from './src/routes/nominas.js';
+import facturacionRoutes from './src/routes/facturacion.js';
+import economicoRoutes from './src/routes/economico.js';
+import herenciasRoutes from './src/routes/herencias.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -158,8 +174,40 @@ function rspBillingMiddleware(entidad) {
 app.use('/', authRoutes);
 
 // Dashboard principal
-app.get('/dashboard', verificarSesion, (req, res) => {
-  res.render('dashboard', { titulo: 'Panel Principal - RSP' });
+app.get('/dashboard', verificarSesion, async (req, res) => {
+  // Métricas del RSP Core para el panel principal
+  const stats = {
+    expedientes: 0, incidencias: 0, incidenciasAbiertas: 0,
+    notificaciones: 0, cnicVigentes: 0, nominas: 0, facturas: 0,
+    bloqueos500k: 0, retribucionesPendientes: 0, operacionesRetenidas: 0,
+    comprobaciones: 0, comprobacionesInconsistencia: 0,
+  };
+  try {
+    const [exp, inc, notif, cnic, nom, fac, fisc, op, comp] = await Promise.all([
+      import('./src/config/expedientes.js').then(m => m.estadoExpedientes()),
+      import('./src/config/incidencias.js').then(m => m.estadoIncidencias()),
+      import('./src/config/notificaciones.js').then(m => m.estadoNotificaciones()),
+      import('./src/config/motor-normativo.js').then(m => m.estadoCNIC()),
+      import('./src/config/nominas.js').then(m => m.estadoNominas()),
+      import('./src/config/facturacion.js').then(m => m.estadoFacturacion()),
+      import('./src/config/fiscalidad-ampliada.js').then(m => m.estadoFiscalidadAmpliada()),
+      import('./src/config/operation-engine.js').then(m => m.estadoOperationEngine()),
+      import('./src/config/comprobacion.js').then(m => m.estadoComprobacion()),
+    ]);
+    stats.expedientes = exp?.total || 0;
+    stats.incidencias = inc?.total || 0;
+    stats.incidenciasAbiertas = inc?.abiertas || 0;
+    stats.notificaciones = notif?.noLeidas || 0;
+    stats.cnicVigentes = cnic?.vigentes?.length || 0;
+    stats.nominas = nom?.total || 0;
+    stats.facturas = fac?.total || 0;
+    stats.bloqueos500k = fisc?.limite500k?.bloqueadas || 0;
+    stats.retribucionesPendientes = fisc?.retribuciones?.pendientes || 0;
+    stats.operacionesRetenidas = op?.retenidas || 0;
+    stats.comprobaciones = comp?.total || 0;
+    stats.comprobacionesInconsistencia = comp?.inconsistencia || 0;
+  } catch (e) { /* métricas opcionales */ }
+  res.render('dashboard', { titulo: 'Panel Principal - RSP', stats });
 });
 
 // Módulos protegidos por entidad (con RSP billing)
@@ -234,6 +282,47 @@ app.get('/rsp/api/debug/conexiones', async (req, res) => {
 // Red de Servicios de La Placeta (RSP) — protegido con sesión
 app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), rspRoutes);
 app.use('/rsp', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), supervisionBancoRoutes);
+
+// ═══ RSP Core (plan maestro) — montado bajo /rsp ═════════════════════
+app.use('/rsp/normativo', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), normativoRoutes);
+app.use('/rsp/expedientes', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), expedientesRoutes);
+app.use('/rsp/incidencias', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), incidenciasRoutes);
+app.use('/rsp/auditoria', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), auditoriaRoutes);
+app.use('/rsp/notificaciones', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), notificacionesRoutes);
+app.use('/rsp/contabilidad', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), contabilidadRoutes);
+app.use('/rsp/fundacion', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), fundacionRoutes);
+app.use('/rsp/patrimonio', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), patrimonioRoutes);
+app.use('/rsp/operaciones', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), operacionesRoutes);
+app.use('/rsp/comprobacion', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), comprobacionRoutes);
+app.use('/rsp/fiscalidad', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), fiscalidadRoutes);
+app.use('/rsp/nominas', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), nominasRoutes);
+// Facturas de negocio (NO confundir con /rsp/facturacion = billing de conexiones RSP)
+app.use('/rsp/facturas', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), facturacionRoutes);
+// Dashboard Económico del Grupo (FASE 22)
+app.use('/rsp/economico', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), economicoRoutes);
+// Bajas / Altas / Herencias / Testamento digital (puntos 17-21)
+app.use('/rsp/herencias', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), herenciasRoutes);
+
+// ═══ CAMPANA DE NOTIFICACIONES (cualquier usuario autenticado) ═══════
+app.get('/api/notificaciones/mis', verificarSesion, async (req, res) => {
+  try {
+    const { listarNotificaciones, estadoNotificaciones } = await import('./src/config/notificaciones.js');
+    const dip = req.session?.usuario?.dip || '';
+    const globales = await listarNotificaciones({});
+    const mias = dip ? globales.filter(n => !n.destinatario_dip || n.destinatario_dip === dip) : globales;
+    const estado = await estadoNotificaciones(dip);
+    res.json({ success: true, notificaciones: mias.slice(0, 12), estado });
+  } catch (e) {
+    res.json({ success: false, error: e.message, notificaciones: [], estado: null });
+  }
+});
+app.post('/api/notificaciones/:id/leida', verificarSesion, async (req, res) => {
+  try {
+    const { marcarLeida } = await import('./src/config/notificaciones.js');
+    await marcarLeida(req.params.id, req.body.leida !== false);
+    res.json({ success: true });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
 
 // Placeta Junior
 app.use('/junior', verificarSesion, verificarAccesoEntidad('junior'), rspBillingMiddleware('junior'), juniorRoutes);

@@ -100,11 +100,24 @@ const PERMISOS_ENTIDAD = {
     admin: [
       'ver_dashboard', 'ver_conexiones', 'ver_facturas',
       'ver_fondos', 'gestionar_facturas', 'pagar_sancion',
-      'ver_tarifas', 'exportar_datos', 'ver_estadisticas'
+      'ver_tarifas', 'exportar_datos', 'ver_estadisticas',
+      // ── RSP Core (plan maestro) ──
+      'ver_normativa', 'editar_normativa', 'aprobar_normativa',
+      'ver_expedientes', 'gestionar_expedientes',
+      'ver_incidencias', 'gestionar_incidencias',
+      'ver_auditoria', 'ver_notificaciones', 'gestionar_notificaciones',
+      'ver_contabilidad', 'gestionar_contabilidad',
+      'ver_fundacion', 'gestionar_fundacion',
+      'ver_patrimonio', 'gestionar_patrimonio',
+      'ver_comprobacion', 'gestionar_comprobacion',
+      'ver_operaciones', 'gestionar_operaciones'
     ],
     operador: [
       'ver_dashboard', 'ver_conexiones', 'ver_facturas',
-      'ver_fondos', 'ver_tarifas'
+      'ver_fondos', 'ver_tarifas',
+      'ver_normativa', 'ver_expedientes', 'ver_incidencias',
+      'ver_auditoria', 'ver_notificaciones', 'ver_contabilidad',
+      'ver_fundacion', 'ver_patrimonio', 'ver_comprobacion', 'ver_operaciones'
     ]
   }
 };

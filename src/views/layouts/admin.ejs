@@ -6,7 +6,7 @@
   <title><%= titulo || 'RSP — Red de Servicios de La Placeta' %></title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/admin.css">
+  <link rel="stylesheet" href="/css/admin-v5.css">
   <link rel="icon" href="/img/favicon-rsp.png" type="image/png">
 </head>
 <body class="<%= workspaceActivo ? 'workspace-active' : '' %>">
@@ -162,6 +162,32 @@
         <% } else { %>
         <span class="badge-entidad">🏛️ RSP</span>
         <% } %>
+
+        <!-- Campana de notificaciones -->
+        <div class="bell-wrap">
+          <button class="bell-btn" onclick="toggleBell(event)" title="Notificaciones">
+            🔔
+            <span class="bell-count" id="bellCount" style="display:none">0</span>
+          </button>
+          <div class="bell-dropdown" id="bellDropdown">
+            <div class="bell-dd-header">
+              <span>🔔 Notificaciones</span>
+              <button class="btn-link" onclick="marcarTodasBell()" style="font-size:11px">Marcar leídas</button>
+            </div>
+            <div class="bell-dd-list" id="bellList">
+              <div class="bell-dd-empty">Cargando…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chip de usuario -->
+        <div class="user-chip" title="Tu sesión">
+          <div class="uc-avatar"><%= (usuario.nombre || 'U').charAt(0).toUpperCase() %></div>
+          <div>
+            <div class="uc-name"><%= usuario.nombre %></div>
+            <div class="uc-role"><%= (roles || []).slice(0, 1).join(', ') || 'usuario' %></div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="content-body">
@@ -169,7 +195,91 @@
     </div>
   </main>
 
+  <!-- Toast root -->
+  <div id="toast-root"></div>
+
+  <!-- Modal genérico -->
+  <div class="modal-overlay" id="modalRoot">
+    <div class="modal-box" id="modalBox"></div>
+  </div>
+
   <script src="/js/admin.js"></script>
+  <script>
+    // ── Helpers globales UI ─────────────────────────────────────────
+    function toast(msj, tipo) {
+      const root = document.getElementById('toast-root');
+      if (!root) return alert(msj);
+      const icons = { success: '✅', error: '❌', warning: '⚠️' };
+      const el = document.createElement('div');
+      el.className = 'toast ' + (tipo || 'success');
+      el.innerHTML = '<span class="toast-ico">' + (icons[tipo] || 'ℹ️') + '</span><span class="toast-msg"></span>';
+      el.querySelector('.toast-msg').textContent = msj;
+      root.appendChild(el);
+      setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 320); }, 3200);
+    }
+    function abrirModal(html) {
+      document.getElementById('modalBox').innerHTML = html;
+      document.getElementById('modalRoot').classList.add('open');
+    }
+    function cerrarModal() { document.getElementById('modalRoot').classList.remove('open'); }
+    document.getElementById('modalRoot').addEventListener('click', function (e) { if (e.target === this) cerrarModal(); });
+
+    // ── Campana de notificaciones ───────────────────────────────────
+    const NIVEL_EMOJI = { accion: '🔴', pendiente: '🟡', info: '🔵', completado: '🟢' };
+    function toggleBell(ev) {
+      ev.stopPropagation();
+      const dd = document.getElementById('bellDropdown');
+      const open = dd.classList.toggle('open');
+      if (open) cargarBell();
+    }
+    document.addEventListener('click', function (ev) {
+      if (!document.getElementById('bellDropdown').contains(ev.target)) {
+        document.getElementById('bellDropdown').classList.remove('open');
+      }
+    });
+    async function cargarBell() {
+      try {
+        const r = await fetch('/api/notificaciones/mis');
+        const j = await r.json();
+        const list = document.getElementById('bellList');
+        const count = document.getElementById('bellCount');
+        if (!j.success) { list.innerHTML = '<div class="bell-dd-empty">Sin acceso</div>'; return; }
+        const noLeidas = j.estado ? j.estado.noLeidas : 0;
+        count.style.display = noLeidas > 0 ? 'flex' : 'none';
+        count.textContent = noLeidas;
+        if (!j.notificaciones || !j.notificaciones.length) {
+          list.innerHTML = '<div class="bell-dd-empty">No hay notificaciones 🎉</div>';
+          return;
+        }
+        list.innerHTML = j.notificaciones.map(function (n) {
+          const unread = !n.leida ? ' unread' : '';
+          const emoji = NIVEL_EMOJI[n.nivel] || '🔵';
+          const time = n.fecha ? n.fecha.slice(0, 16).replace('T', ' ') : '';
+          return '<div class="bell-item' + unread + '" onclick="leerBell(\'' + n.id + '\')">' +
+            '<span class="bell-ico">' + emoji + '</span>' +
+            '<div class="bell-txt"><div class="bell-title">' + (n.titulo || '') + '</div>' +
+            (n.mensaje ? '<div class="bell-msg">' + n.mensaje + '</div>' : '') +
+            '<div class="bell-time">' + time + (n.servicio ? ' · ' + n.servicio : '') + '</div></div></div>';
+        }).join('');
+      } catch (e) { document.getElementById('bellList').innerHTML = '<div class="bell-dd-empty">Error</div>'; }
+    }
+    async function leerBell(id) {
+      await fetch('/api/notificaciones/' + id + '/leida', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leida: true }) });
+      cargarBell();
+    }
+    async function marcarTodasBell() {
+      await fetch('/api/notificaciones/mis', { method: 'GET' });
+      const r = await fetch('/rsp/notificaciones/api/notificaciones/marcar-todas', { method: 'POST', headers: { 'Content-Type': 'application/json' } }).catch(() => null);
+      cargarBell();
+    }
+    // Cargar contador de la campana al inicio
+    fetch('/api/notificaciones/mis').then(r => r.json()).then(j => {
+      if (j.success && j.estado && j.estado.noLeidas > 0) {
+        document.getElementById('bellCount').style.display = 'flex';
+        document.getElementById('bellCount').textContent = j.estado.noLeidas;
+      }
+    }).catch(() => {});
+  </script>
   <% } else { %>
   <%- body %>
   <% } %>

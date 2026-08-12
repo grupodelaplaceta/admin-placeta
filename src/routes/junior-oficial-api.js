@@ -49,6 +49,7 @@ const router = Router();
 const CAPITALIA = 'CAPITALIA_BANK';
 const TGLP = 'TGLP';
 const AGLDP = 'AGLDP'; // Fundación / Administración (RBU, bonos)
+const FOUNDATION_RBU = 'FOUNDATION_RBU';
 const RBU_DIARIO = 5;  // Renta Básica Universal Junior: 5 Pz/día
 
 // ── Registro de conexión RSP (tarificación) ────────────────────────────
@@ -95,6 +96,72 @@ async function notificarTutor(junior, concepto, detalles, monto = 0) {
       });
     }
   } catch (_) { /* PlacetaID offline, ignorar */ }
+}
+
+function juniorAccountId(junior = {}) {
+  return junior.cuenta_banco || `u-${String(junior.dip || '').toLowerCase().replace(/-/g, '')}`;
+}
+
+function resolveJuniorBankAccount(bankState, junior, limites) {
+  const accountId = juniorAccountId(junior);
+  const fallback = {
+    id: accountId,
+    tipo: 'Child',
+    iban: '',
+    sendLimitPz: limites.gasto_diario,
+    saldo_real: 0
+  };
+  const real = (bankState?.accounts || []).find(a => a.id === accountId);
+  if (!real) return fallback;
+  return {
+    id: real.id || accountId,
+    tipo: real.type || 'Child',
+    iban: real.iban || '',
+    sendLimitPz: real.sendLimitPz || limites.gasto_diario,
+    saldo_real: Number(real.balancePz) || 0,
+    titular: real.displayName || '',
+    tutorDip: junior.tutor_dip || '',
+    tutorNombre: junior.tutor_nombre || ''
+  };
+}
+
+function bankTransactionsForAccount(bankState, accountId, limit = 50) {
+  return (bankState?.transactions || [])
+    .filter(t => t.status !== 'Denied' && (t.fromAccountId === accountId || t.toAccountId === accountId))
+    .sort((a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0))
+    .slice(0, limit);
+}
+
+function bankTxToJuniorTransaction(tx, accountId, juniorId, index = 0) {
+  const incoming = tx.toAccountId === accountId;
+  const amount = Math.abs(Number(tx.amountPz) || 0);
+  const kind = String(tx.kind || '').toLowerCase();
+  const concept = String(tx.concept || tx.note || 'Movimiento banco');
+  const tipo = incoming
+    ? (kind === 'gift' || concept.toLowerCase().includes('rbu') ? 'rbu' : 'ingreso')
+    : (kind === 'transfer' ? 'transferencia' : 'gastar');
+  return {
+    id: index + 1,
+    junior_id: juniorId,
+    tipo,
+    concepto: concept,
+    cantidad: incoming ? amount : -amount,
+    saldo_resultante: null,
+    creado_en: tx.createdAt || new Date().toISOString(),
+    banco_transaction_id: tx.id || ''
+  };
+}
+
+function sumJuniorOutgoingsSince(transactions, accountId, sinceDate) {
+  return (transactions || [])
+    .filter(t => t.fromAccountId === accountId && String(t.createdAt || '').slice(0, 10) >= sinceDate)
+    .reduce((sum, t) => sum + (Number(t.amountPz) || 0), 0);
+}
+
+function sumJuniorIncomings(transactions, accountId) {
+  return (transactions || [])
+    .filter(t => t.toAccountId === accountId)
+    .reduce((sum, t) => sum + (Number(t.amountPz) || 0), 0);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -322,16 +389,37 @@ router.post('/junior/academy/evaluar', verificarJunior, async (req, res) => {
       puntos_verdes: aciertos, puntos_rojos: errores
     });
 
-    const nuevoSaldo = (junior.placetas_saldo || 0) + totalPlacetasGanadas;
-    await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    let nuevoSaldo = junior.placetas_saldo || 0;
+    let rewardTransactionId = null;
+    if (totalPlacetasGanadas > 0) {
+      const bankState = await apiBancoGetState().catch(() => null);
+      const cuentaBanco = resolveJuniorBankAccount(bankState, junior, { gasto_diario: 10 });
+      const rewardBank = await apiBancoPost('transferir', {
+        from: CAPITALIA,
+        to: cuentaBanco.id,
+        cantidad: totalPlacetasGanadas,
+        concepto: `Recompensa cuestionario ${nivel} - ${materia}`,
+        juniorDip: junior.dip,
+        tutorDip: junior.tutor_dip,
+        ip
+      });
+      if (!rewardBank?.success) {
+        return res.status(400).json({
+          success: false,
+          error: rewardBank?.error || 'No se pudo abonar la recompensa en el Banco de La Placeta.'
+        });
+      }
+      nuevoSaldo = Number(rewardBank.toBalance ?? (cuentaBanco.saldo_real + totalPlacetasGanadas));
+      rewardTransactionId = rewardBank.transactionId || null;
+      await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
+    }
     await sbUpsertAcademyProgress({
       junior_id: junior.id, completados,
       puntuacion_total: (progresoActual.puntuacion_total || 0) + totalPlacetasGanadas,
       nivel_maximo: junior.nivel_academia || 1,
       actualizado_en: new Date().toISOString()
     });
-
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
 
     if (totalPlacetasGanadas > 0) {
       await sbCreatePlacetaTransaction({
@@ -355,6 +443,7 @@ router.post('/junior/academy/evaluar', verificarJunior, async (req, res) => {
     res.json({
       success: true, aciertos, errores, total: totalPreguntas, porcentaje,
       placetas_ganadas: totalPlacetasGanadas, saldo_actual: nuevoSaldo,
+      transactionId: rewardTransactionId,
       resultados, aprobado: porcentaje >= 60,
       puntos: { verdes: aciertos, rojos: errores }
     });
@@ -422,7 +511,9 @@ router.post('/junior/academy/desbloquear-nivel', verificarJunior, async (req, re
       });
     }
 
-    const saldoActual = junior.placetas_saldo || 0;
+    const bankState = await apiBancoGetState().catch(() => null);
+    const cuentaBanco = resolveJuniorBankAccount(bankState, junior, { gasto_diario: limiteDiario });
+    const saldoActual = cuentaBanco.saldo_real;
     if (saldoActual < costo) {
       return res.status(400).json({
         error: `No tienes suficientes placetas. Necesitas ${costo}, tienes ${saldoActual}.`,
@@ -431,11 +522,8 @@ router.post('/junior/academy/desbloquear-nivel', verificarJunior, async (req, re
     }
 
     // ── Pago bancario REAL: Junior → Capitalia (con IVA que abona Capitalia) ──
-    const juniorAccountId = junior.cuenta_banco || `u-${junior.dip?.toLowerCase().replace(/-/g, '')}`;
-    let pagoBancario = null;
-    try {
-      pagoBancario = await apiBancoPost('transferir', {
-        from: juniorAccountId,
+    const pagoBancario = await apiBancoPost('transferir', {
+        from: cuentaBanco.id,
         to: CAPITALIA,
         cantidad: costo,
         concepto: `Desbloquear nivel ${siguienteNivel} - Academia`,
@@ -444,12 +532,15 @@ router.post('/junior/academy/desbloquear-nivel', verificarJunior, async (req, re
         tutorDip: junior.tutor_dip,
         ip
       });
-    } catch (bankErr) {
-      console.warn('[Academy Oficial] Pago bancario no disponible:', bankErr.message);
+    if (!pagoBancario?.success) {
+      return res.status(400).json({
+        success: false,
+        error: pagoBancario?.error || 'No se pudo confirmar el pago en el Banco de La Placeta.'
+      });
     }
 
-    // ── Descontar placetas internas + actualizar nivel ────────────
-    const nuevoSaldo = saldoActual - costo;
+    // ── Sincronizar caché interna con el saldo confirmado del banco + actualizar nivel ────────────
+    const nuevoSaldo = Number(pagoBancario.fromBalance ?? (saldoActual - costo));
     await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
     await sbUpdateJunior(junior.id, { nivel_academia: siguienteNivel });
     await sbUpsertAcademyProgress({
@@ -478,7 +569,7 @@ router.post('/junior/academy/desbloquear-nivel', verificarJunior, async (req, re
       nivel_actual: siguienteNivel, nivel_maximo: 10,
       saldo_actual: nuevoSaldo, costo,
       iva: ivaInfo,
-      pago_bancario: !!pagoBancario,
+      pago_bancario: true,
       siguiente_nivel: siguienteNivel < 10 ? {
         nivel: siguienteNivel + 1,
         costo: COSTOS_ACADEMIA[siguienteNivel + 1] || '—'
@@ -499,25 +590,32 @@ router.post('/junior/academy/confirmar-pago', verificarJunior, async (req, res) 
     const junior = req.juniorData;
     if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
 
-    if ((junior.placetas_saldo || 0) < cantidad) {
-      return res.status(400).json({ error: 'Saldo insuficiente', saldo_actual: junior.placetas_saldo, costo: cantidad });
-    }
-
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
     const ivaInfo = desglosarPrecioConIva(cantidad);
-    const nuevoSaldo = (junior.placetas_saldo || 0) - cantidad;
+    const bankState = await apiBancoGetState().catch(() => null);
+    const cuentaBanco = resolveJuniorBankAccount(bankState, junior, { gasto_diario: 10 });
+    const saldoActual = cuentaBanco.saldo_real;
+    if (saldoActual < cantidad) {
+      return res.status(400).json({ error: 'Saldo insuficiente', saldo_actual: saldoActual, costo: cantidad });
+    }
 
     // Pago bancario real → Capitalia
-    const juniorAccountId = junior.cuenta_banco || `u-${junior.dip?.toLowerCase().replace(/-/g, '')}`;
     let pagoBancario = null;
     try {
       pagoBancario = await apiBancoPost('transferir', {
-        from: juniorAccountId, to: CAPITALIA, cantidad,
+        from: cuentaBanco.id, to: CAPITALIA, cantidad,
         concepto: concepto || 'Pago Academia Placeta Junior',
         iva: ivaInfo.iva, juniorDip: junior.dip, tutorDip: junior.tutor_dip, ip
       });
     } catch (e) { console.warn('[Pago Oficial] Banco:', e.message); }
+    if (!pagoBancario?.success) {
+      return res.status(400).json({
+        success: false,
+        error: pagoBancario?.error || 'No se pudo confirmar el pago en el Banco de La Placeta.'
+      });
+    }
 
+    const nuevoSaldo = Number(pagoBancario.fromBalance ?? (saldoActual - cantidad));
     await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
     await sbCreatePlacetaTransaction({
       junior_id: junior.id, tipo: 'gastar',
@@ -530,8 +628,8 @@ router.post('/junior/academy/confirmar-pago', verificarJunior, async (req, res) 
     });
 
     res.json({
-      success: true, pagado: cantidad, saldo_anterior: junior.placetas_saldo,
-      nuevo_saldo: nuevoSaldo, iva: ivaInfo, pago_bancario: !!pagoBancario,
+      success: true, pagado: cantidad, saldo_anterior: saldoActual,
+      nuevo_saldo: nuevoSaldo, iva: ivaInfo, pago_bancario: true,
       message: `✅ Pago confirmado: -${cantidad} Pz. Te quedan ${nuevoSaldo} Pz.`
     });
   } catch (err) {
@@ -581,17 +679,28 @@ router.get('/junior/academy/rbu', verificarJunior, async (req, res) => {
     const cantidad = RBU_DIARIO;
 
     // Transferencia real desde la Fundación → cuenta del junior
-    const juniorAccountId = junior.cuenta_banco || junior.dip;
+    const cuentaJuniorId = juniorAccountId(junior);
+    let saldoBancoTrasRbu = null;
     try {
       if (!esDemo) {
-        await apiBancoPost('transferir', {
-          from: AGLDP, to: juniorAccountId, cantidad,
+        const resultadoBanco = await apiBancoPost('transferir', {
+          from: FOUNDATION_RBU, to: cuentaJuniorId, cantidad,
           concepto: `RBU día ${streak} — Placeta Junior`, juniorDip: junior.dip, tutorDip: junior.tutor_dip, ip
         });
+        if (!resultadoBanco?.success) {
+          return res.status(400).json({
+            success: false,
+            error: resultadoBanco?.error || 'No se pudo confirmar la RBU en el Banco de La Placeta.'
+          });
+        }
+        saldoBancoTrasRbu = Number(resultadoBanco.toBalance ?? NaN);
       }
-    } catch (e) { console.warn('[RBU Oficial] Banco:', e.message); }
+    } catch (e) {
+      console.warn('[RBU Oficial] Banco:', e.message);
+      return res.status(502).json({ success: false, error: 'Banco de La Placeta no disponible para confirmar la RBU.' });
+    }
 
-    const nuevoSaldo = (junior.placetas_saldo || 0) + cantidad;
+    const nuevoSaldo = Number.isFinite(saldoBancoTrasRbu) ? saldoBancoTrasRbu : (junior.placetas_saldo || 0) + cantidad;
     await sbUpdatePlacetaBalance(junior.id, nuevoSaldo);
     await sbCreatePlacetaTransaction({
       junior_id: junior.id, tipo: 'rbu',
@@ -650,48 +759,38 @@ router.get('/junior/monedero', async (req, res) => {
       tiempo_uso: 60, requiere_aprobacion: true, categorias_bloqueadas: []
     };
 
-    const historial = await sbListJuniorTransactions(junior.id, 30);
     const hoy = new Date().toISOString().slice(0, 10);
     const inicioSemana = new Date();
     inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
     const semStr = inicioSemana.toISOString().slice(0, 10);
 
-    const gastoHoy = (historial || [])
-      .filter(t => t.tipo === 'gastar' && (t.creado_en || '').slice(0, 10) === hoy)
-      .reduce((s, t) => s + (t.cantidad || 0), 0);
-    const gastoSemana = (historial || [])
-      .filter(t => t.tipo === 'gastar' && (t.creado_en || '') >= semStr)
-      .reduce((s, t) => s + (t.cantidad || 0), 0);
-    const ingresos = (historial || [])
-      .filter(t => t.tipo === 'ganar' || t.tipo === 'bonus')
-      .reduce((s, t) => s + (t.cantidad || 0), 0);
-
     // Cuenta REAL del banco (MongoDB)
-    let cuentaBanco = {
-      id: junior.cuenta_banco || `u-${junior.dip?.toLowerCase().replace(/-/g, '')}`,
-      tipo: 'Child', iban: '', sendLimitPz: limitesEfectivos.gasto_diario, saldo_real: 0
-    };
-    try {
-      const bankState = await apiBancoGetState();
-      if (bankState?.accounts) {
-        const accountId = junior.cuenta_banco || `u-${junior.dip?.toLowerCase().replace(/-/g, '')}`;
-        const realAccount = bankState.accounts.find(a => a.id === accountId);
-        if (realAccount) {
-          cuentaBanco = {
-            id: realAccount.id || accountId,
-            tipo: realAccount.type || 'Child',
-            iban: realAccount.iban || '',
-            sendLimitPz: realAccount.sendLimitPz || limitesEfectivos.gasto_diario,
-            saldo_real: realAccount.balancePz || 0
-          };
-        }
-      }
-    } catch (bankErr) {
-      console.warn('[Monedero Oficial] Error consultando banco:', bankErr.message);
-    }
+    const bankState = await apiBancoGetState().catch(() => null);
+    const cuentaBanco = resolveJuniorBankAccount(bankState, junior, limitesEfectivos);
+    const bankTransactions = bankTransactionsForAccount(bankState, cuentaBanco.id, 500);
+    const historialCache = bankTransactions.length ? [] : await sbListJuniorTransactions(junior.id, 30);
+    const historial = bankTransactions.length
+      ? bankTransactions.slice(0, 30).map((tx, index) => bankTxToJuniorTransaction(tx, cuentaBanco.id, junior.id, index))
+      : (historialCache || []);
+
+    const gastoHoy = bankTransactions.length
+      ? sumJuniorOutgoingsSince(bankTransactions, cuentaBanco.id, hoy)
+      : (historial || [])
+        .filter(t => ['gastar', 'transferencia'].includes(t.tipo) && (t.creado_en || '').slice(0, 10) === hoy)
+        .reduce((s, t) => s + Math.abs(t.cantidad || 0), 0);
+    const gastoSemana = bankTransactions.length
+      ? sumJuniorOutgoingsSince(bankTransactions, cuentaBanco.id, semStr)
+      : (historial || [])
+        .filter(t => ['gastar', 'transferencia'].includes(t.tipo) && (t.creado_en || '') >= semStr)
+        .reduce((s, t) => s + Math.abs(t.cantidad || 0), 0);
+    const ingresos = bankTransactions.length
+      ? sumJuniorIncomings(bankTransactions, cuentaBanco.id)
+      : (historial || [])
+        .filter(t => ['ganar', 'bonus', 'rbu', 'ingreso'].includes(t.tipo) || (t.cantidad || 0) > 0)
+        .reduce((s, t) => s + Math.max(0, t.cantidad || 0), 0);
 
     res.json({
-      saldo_actual: cuentaBanco.saldo_real || junior.placetas_saldo || 0,
+      saldo_actual: cuentaBanco.saldo_real,
       ingresos_totales: ingresos,
       gasto_hoy: gastoHoy,
       gasto_semana: gastoSemana,
@@ -908,23 +1007,30 @@ router.post('/junior/academy/transferir', verificarJunior, async (req, res) => {
     const destino = await sbFindJuniorByDip(destinoDip);
     if (!destino) return res.status(404).json({ error: 'No hay ningún junior con ese DIP.' });
 
-    const saldo = junior.placetas_saldo || 0;
+    const bankState = await apiBancoGetState().catch(() => null);
+    const cuentaOrigen = resolveJuniorBankAccount(bankState, junior, { gasto_diario: 10 });
+    const cuentaDestino = resolveJuniorBankAccount(bankState, destino, { gasto_diario: 10 });
+    const saldo = cuentaOrigen.saldo_real;
     if (saldo < cantidad) return res.status(400).json({ error: `Saldo insuficiente (tienes ${saldo} Pz).` });
 
     const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
 
     // Movimiento real en el Banco de La Placeta
-    try {
-      await apiBancoPost('transferir', {
-        from: junior.cuenta_banco || junior.dip,
-        to: destino.cuenta_banco || destinoDip,
+    const resultadoBanco = await apiBancoPost('transferir', {
+        from: cuentaOrigen.id,
+        to: cuentaDestino.id,
         cantidad, concepto, juniorDip: junior.dip, tutorDip: junior.tutor_dip, ip
       });
-    } catch (e) { console.warn('[Transferir] Banco:', e.message); }
+    if (!resultadoBanco?.success) {
+      return res.status(400).json({
+        success: false,
+        error: resultadoBanco?.error || 'No se pudo confirmar la transferencia en el Banco de La Placeta.'
+      });
+    }
 
     // Saldos e historial de ambos juniors
-    const saldoOrigen = saldo - cantidad;
-    const saldoDestino = (destino.placetas_saldo || 0) + cantidad;
+    const saldoOrigen = Number(resultadoBanco.fromBalance ?? (saldo - cantidad));
+    const saldoDestino = Number(resultadoBanco.toBalance ?? ((cuentaDestino.saldo_real || 0) + cantidad));
     await sbUpdatePlacetaBalance(junior.id, saldoOrigen);
     await sbCreatePlacetaTransaction({
       junior_id: junior.id, tipo: 'transferencia',
@@ -939,7 +1045,12 @@ router.post('/junior/academy/transferir', verificarJunior, async (req, res) => {
     });
     await sbCreateJuniorLog({ junior_id: junior.id, accion: 'transferencia_enviada', detalle: `-${cantidad} Pz a ${destinoDip}`, ip }).catch(() => {});
 
-    res.json({ success: true, mensaje: `Transferencia de ${cantidad} Pz a ${destinoDip} realizada.`, saldo_actual: saldoOrigen });
+    res.json({
+      success: true,
+      mensaje: `Transferencia de ${cantidad} Pz a ${destinoDip} realizada.`,
+      saldo_actual: saldoOrigen,
+      transactionId: resultadoBanco.transactionId
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

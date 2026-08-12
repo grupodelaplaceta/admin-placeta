@@ -1,21 +1,27 @@
-<%- include('../parciales/guia-rol', { entidad_actual: 'banco', roles }) %>
+<%- include('../parciales/hero', {
+  icono: '🏦',
+  titulo: 'Banco de La Placeta',
+  subtitulo: 'Gestión bancaria, cuentas, operaciones y cumplimiento normativo',
+  stats: [
+    { label: 'Cuentas', value: totalCuentas },
+    { label: 'Activas', value: cuentasActivas },
+    { label: 'Masa monetaria', value: saldoTotal.toLocaleString() + ' Pz' }
+  ],
+  grad: 'linear-gradient(135deg,#1f005f 0%,#3702b3 55%,#6a2be0 100%)'
+}) %>
 
-<div class="stats-grid">
-  <div class="stat-card"><span class="stat-value"><%= totalCuentas %></span><span class="stat-label">Total Cuentas</span></div>
-  <div class="stat-card"><span class="stat-value"><%= cuentasActivas %></span><span class="stat-label">Cuentas Activas</span></div>
-  <div class="stat-card"><span class="stat-value"><%= saldoTotal.toLocaleString() %></span><span class="stat-label">Masa Monetaria (Pz)</span></div>
-  <% if (typeof totalUsuarios !== 'undefined') { %>
-  <div class="stat-card"><span class="stat-value"><%= totalUsuarios %></span><span class="stat-label">Usuarios</span></div>
-  <div class="stat-card"><span class="stat-value"><%= totalTransacciones %></span><span class="stat-label">Operaciones</span></div>
-  <div class="stat-card"><span class="stat-value"><%= totalTarjetas %></span><span class="stat-label">Tarjetas</span></div>
-  <% } %>
-</div>
+<%- include('../parciales/kpis', { kpis: [
+  { icono: '📋', valor: totalCuentas, label: 'Total cuentas', color: 'rgba(124,58,237,.12)' },
+  { icono: '✅', valor: cuentasActivas, label: 'Activas', color: 'rgba(34,197,94,.12)' },
+  { icono: '💰', valor: saldoTotal.toLocaleString() + ' Pz', label: 'Masa monetaria', color: 'rgba(249,115,22,.12)' },
+  { icono: '👥', valor: typeof totalUsuarios !== 'undefined' ? totalUsuarios : '—', label: 'Usuarios', color: 'rgba(59,130,246,.12)' },
+  { icono: '🔄', valor: typeof totalTransacciones !== 'undefined' ? totalTransacciones : '—', label: 'Operaciones', color: 'rgba(6,182,212,.12)' },
+  { icono: '💳', valor: typeof totalTarjetas !== 'undefined' ? totalTarjetas : '—', label: 'Tarjetas', color: 'rgba(234,179,8,.12)' }
+] }) %>
 
 <div class="flex-between mb-16">
-  <h3 style="font-size:16px;font-weight:700">Últimas cuentas</h3>
-  <div class="flex gap-8">
-    <a href="/banco/cuentas" class="btn-link">Ver todas →</a>
-  </div>
+  <div class="rsp-section-title" style="margin-bottom:0">🕘 Últimas cuentas</div>
+  <a href="/banco/cuentas" class="btn-link">Ver todas →</a>
 </div>
 
 <div class="table-container">
@@ -36,10 +42,11 @@
   </table>
 </div>
 
-<div class="flex gap-8 mt-16">
-  <a href="/banco/cuentas/nueva/gestor" class="btn btn-primary">➕ Nueva Cuenta</a>
-  <a href="/banco/operaciones" class="btn btn-secondary">🔄 Operaciones</a>
-  <a href="/banco/control-cumplimiento" class="btn btn-secondary">🛡️ Cumplimiento</a>
-  <a href="/banco/tarjetas" class="btn btn-secondary">💳 Tarjetas</a>
-  <a href="/banco/nominas" class="btn btn-secondary">📄 Nóminas</a>
+<div class="rsp-acciones mt-16" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">
+  <a href="/banco/cuentas/nueva/gestor" class="rsp-btn rsp-btn-primary"><span class="rsp-btn-icon">➕</span><span class="rsp-btn-text">Nueva Cuenta</span></a>
+  <a href="/banco/operaciones" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🔄</span><span class="rsp-btn-text">Operaciones</span></a>
+  <a href="/banco/control-cumplimiento" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🛡️</span><span class="rsp-btn-text">Cumplimiento</span></a>
+  <a href="/banco/tarjetas" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">💳</span><span class="rsp-btn-text">Tarjetas</span></a>
+  <a href="/banco/nominas" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📄</span><span class="rsp-btn-text">Nóminas</span></a>
 </div>
+

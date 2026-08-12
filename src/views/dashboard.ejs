@@ -1,34 +1,80 @@
-<div class="info-card mb-16">
-  <h4>🏛️ Panel de Administración de La Placeta</h4>
-  <p>Bienvenido, <strong><%= usuario.nombre %></strong>. Selecciona una entidad para comenzar a gestionar. Tus roles determinan qué acciones puedes realizar en cada entidad.</p>
+<!-- ═══ DASHBOARD PRINCIPAL — RSP ═══ -->
+<div class="rsp-hero">
+  <div class="rsp-hero-content">
+    <div style="width:84px;height:84px;border-radius:20px;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:42px;box-shadow:0 6px 20px rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.2)">🏛️</div>
+    <div style="flex:1;min-width:260px">
+      <h1 class="rsp-hero-title">Hola, <%= usuario.nombre %></h1>
+      <p class="rsp-hero-sub">Red de Servicios de La Placeta · Panel de administración unificada del ecosistema</p>
+      <div class="rsp-hero-stats">
+        <span>DIP: <strong><%= usuario.dip %></strong></span>
+        <span>Roles: <strong><%= (roles || []).slice(0, 2).join(', ') || 'usuario' %></strong></span>
+        <span>Entidades: <strong><%= (entidades_permitidas || []).length %></strong></span>
+      </div>
+    </div>
+  </div>
 </div>
 
+<!-- ═══ ALERTAS RSP CORE ═══ -->
+<div class="rsp-kpis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(139,92,246,.12)">📜</div>
+    <div><div class="rsp-kpi-value"><%= stats.cnicVigentes %></div><div class="rsp-kpi-label">CNIC vigentes</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(220,38,38,.12)">⚠️</div>
+    <div><div class="rsp-kpi-value" style="color:<%= stats.incidenciasAbiertas > 0 ? '#dc2626' : 'inherit' %>"><%= stats.incidenciasAbiertas %></div><div class="rsp-kpi-label">Incidencias abiertas</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(34,197,94,.12)">🗂️</div>
+    <div><div class="rsp-kpi-value"><%= stats.expedientes %></div><div class="rsp-kpi-label">Expedientes</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(59,130,246,.12)">🔔</div>
+    <div><div class="rsp-kpi-value" style="color:<%= stats.notificaciones > 0 ? '#2563eb' : 'inherit' %>"><%= stats.notificaciones %></div><div class="rsp-kpi-label">No leídas</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(249,115,22,.12)">⚙️</div>
+    <div><div class="rsp-kpi-value" style="color:<%= stats.operacionesRetenidas > 0 ? '#ea580c' : 'inherit' %>"><%= stats.operacionesRetenidas %></div><div class="rsp-kpi-label">Op. retenidas</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(214,40,40,.12)">🔒</div>
+    <div><div class="rsp-kpi-value" style="color:<%= stats.bloqueos500k > 0 ? '#b91c1c' : 'inherit' %>"><%= stats.bloqueos500k %></div><div class="rsp-kpi-label">Bloqueos 500k</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(6,182,212,.12)">📄</div>
+    <div><div class="rsp-kpi-value"><%= stats.nominas %></div><div class="rsp-kpi-label">Nóminas</div></div>
+  </div>
+  <div class="rsp-kpi">
+    <div class="rsp-kpi-icon" style="background:rgba(234,179,8,.12)">🧾</div>
+    <div><div class="rsp-kpi-value"><%= stats.facturas %></div><div class="rsp-kpi-label">Facturas</div></div>
+  </div>
+</div>
+
+<!-- ═══ ACCESO A ENTIDADES ═══ -->
+<div class="rsp-section-title">🚀 Acceso a entidades</div>
 <div class="dashboard-grid">
-  <!-- Entidades -->
   <% if (entidades_permitidas && entidades_permitidas.includes('banco')) { %>
-  <a href="/banco" class="entidad-card banco">
+  <a href="/banco" class="entidad-card banco" style="--card-glow:rgba(124,58,237,.14)">
     <div class="entidad-icon">🏦</div>
     <div class="entidad-info">
       <h3>Banco de La Placeta</h3>
-      <p>Gestión bancaria, cuentas, operaciones y cumplimiento normativo</p>
+      <p>Cuentas, operaciones, cumplimiento y nóminas bancarias</p>
     </div>
     <span class="entidad-arrow">→</span>
   </a>
   <% } %>
-
   <% if (entidades_permitidas && entidades_permitidas.includes('tributos')) { %>
-  <a href="/tributos" class="entidad-card tributos">
+  <a href="/tributos" class="entidad-card tributos" style="--card-glow:rgba(34,197,94,.14)">
     <div class="entidad-icon">📊</div>
     <div class="entidad-info">
       <h3>Tributos de La Placeta</h3>
-      <p>Declaraciones, inspección, regímenes y gestión de contribuyentes</p>
+      <p>Declaraciones, inspección, regímenes y contribuyentes</p>
     </div>
     <span class="entidad-arrow">→</span>
   </a>
   <% } %>
-
   <% if (entidades_permitidas && entidades_permitidas.includes('junta')) { %>
-  <a href="/junta" class="entidad-card junta">
+  <a href="/junta" class="entidad-card junta" style="--card-glow:rgba(107,114,128,.14)">
     <div class="entidad-icon">⚖️</div>
     <div class="entidad-info">
       <h3>Junta de La Placeta</h3>
@@ -37,48 +83,74 @@
     <span class="entidad-arrow">→</span>
   </a>
   <% } %>
-
   <% if (entidades_permitidas && entidades_permitidas.includes('administracion')) { %>
-  <a href="/administracion" class="entidad-card administracion">
+  <a href="/administracion" class="entidad-card administracion" style="--card-glow:rgba(217,119,6,.14)">
     <div class="entidad-icon">📋</div>
     <div class="entidad-info">
-      <h3>Administración de La Placeta</h3>
+      <h3>Administración</h3>
       <p>Trámites, actas, PlacetaID y gestión ciudadana</p>
     </div>
     <span class="entidad-arrow">→</span>
   </a>
   <% } %>
-
   <% if (entidades_permitidas && entidades_permitidas.includes('rsp')) { %>
-  <a href="/rsp" class="entidad-card rsp" style="border-left:4px solid #0891b2">
+  <a href="/rsp" class="entidad-card rsp" style="--card-glow:rgba(6,182,212,.14)">
     <div class="entidad-icon">🌐</div>
     <div class="entidad-info">
-      <h3>Red de Servicios de La Placeta</h3>
-      <p>Conexiones, facturación y fondos de la RSP</p>
+      <h3>Red de Servicios (RSP)</h3>
+      <p>Núcleo transversal: normativa, expedientes, contabilidad, fundación…</p>
     </div>
     <span class="entidad-arrow">→</span>
   </a>
   <% } %>
-
   <% if (entidades_permitidas && entidades_permitidas.includes('junior')) { %>
-  <a href="/junior" class="entidad-card junior" style="border-left:4px solid #e91e63">
+  <a href="/junior" class="entidad-card junior" style="--card-glow:rgba(219,39,119,.14)">
     <div class="entidad-icon">🧒</div>
     <div class="entidad-info">
       <h3>Placeta Junior</h3>
-      <p>Gestión de menores, tutores y cuentas infantiles</p>
+      <p>Menores, tutores, academia, premios y economía junior</p>
     </div>
     <span class="entidad-arrow">→</span>
   </a>
   <% } %>
 </div>
 
-<!-- Info de sesión -->
-<div class="session-info">
-  <div class="info-card">
-    <h4>👤 Tu Sesión</h4>
-    <p><strong><%= usuario.nombre %></strong> · DIP: <code><%= usuario.dip %></code></p>
-    <p>Roles: <strong><%= (roles || []).join(', ') || 'Sin roles asignados' %></strong></p>
-    <p>Entidades: <strong><%= (entidades_permitidas || []).join(', ') || 'Ninguna' %></strong></p>
-    <p class="info-footer">💡 Si no ves todas las entidades, solicita los permisos adecuados a la Junta Directiva.</p>
+<!-- ═══ ACCESO RÁPIDO RSP CORE ═══ -->
+<% if (entidades_permitidas && entidades_permitidas.includes('rsp')) { %>
+<div class="rsp-section-title" style="margin-top:8px">🧠 Centro RSP</div>
+<div class="rsp-acciones">
+  <a href="/rsp/normativo" class="rsp-btn rsp-btn-primary"><span class="rsp-btn-icon">📜</span><span class="rsp-btn-text">Centro Normativo (CNIC)</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/expedientes" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🗂️</span><span class="rsp-btn-text">Expedientes</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/incidencias" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">⚠️</span><span class="rsp-btn-text">Incidencias</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/contabilidad" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📒</span><span class="rsp-btn-text">Contabilidad</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/facturas" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🧾</span><span class="rsp-btn-text">Facturas</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/fundacion" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🏛️</span><span class="rsp-btn-text">Fundación</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/operaciones" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">⚙️</span><span class="rsp-btn-text">Operation Engine</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/comprobacion" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🔍</span><span class="rsp-btn-text">Comprobación ecosistema</span><span class="rsp-btn-arrow">→</span></a>
+  <a href="/rsp/fiscalidad" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🧮</span><span class="rsp-btn-text">Fiscalidad ampliada</span><span class="rsp-btn-arrow">→</span></a>
+</div>
+<% } %>
+
+<!-- ═══ INFO DE SESIÓN ═══ -->
+<div class="rsp-card">
+  <div class="rsp-card-header"><span>👤 Tu sesión</span><span class="rsp-link" onclick="var d=document.getElementById('sesionDetalle');d.style.display=d.style.display==='none'?'block':'none'">ver detalle ▾</span></div>
+  <div style="padding:18px 22px;display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+    <div class="user-avatar" style="width:48px;height:48px;font-size:18px;background:var(--grad)"><%= (usuario.nombre || 'U').charAt(0).toUpperCase() %></div>
+    <div>
+      <div style="font-weight:800"><%= usuario.nombre %></div>
+      <div style="font-size:12px;color:var(--tm)">DIP: <code><%= usuario.dip %></code></div>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+      <% (roles || []).forEach(function(r) { %><span class="badge badge-purple"><%= r %></span><% }); %>
+    </div>
+  </div>
+  <div id="sesionDetalle" style="display:none;padding:0 22px 18px">
+    <div class="rsp-info-grid">
+      <div class="rsp-info-card"><strong>Entidades permitidas</strong><p><%= (entidades_permitidas || []).join(', ') || 'Ninguna' %></p></div>
+      <div class="rsp-info-card"><strong>Cargos</strong><p><%= (typeof cargos !== 'undefined' && cargos ? cargos : []).map(c => c.cargo || c.nombre).join(', ') || '—' %></p></div>
+      <div class="rsp-info-card"><strong>Permisos almacenados</strong><p><%= (typeof permisos_almacenados !== 'undefined' ? permisos_almacenados : []).length %> registro(s)</p></div>
+    </div>
+    <p style="font-size:12px;color:var(--tq);margin-top:10px">💡 Si no ves todas las entidades, solicita los permisos adecuados a la Junta Directiva.</p>
   </div>
 </div>
+

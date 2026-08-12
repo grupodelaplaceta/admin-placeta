@@ -1,18 +1,27 @@
-<%- include('../parciales/guia-rol', { entidad_actual: 'junta', roles }) %>
+<%- include('../parciales/hero', {
+  icono: '⚖️',
+  titulo: 'Junta de La Placeta',
+  subtitulo: 'Gobierno, votaciones, cargos, reclamaciones y recursos',
+  stats: [
+    { label: 'Ciudadanos', value: totalCiudadanos },
+    { label: 'Registros PlacetaID', value: placetaidStats?.total || '—' }
+  ],
+  grad: 'linear-gradient(135deg,#1a1a2e 0%,#3f3f5a 55%,#6b7280 100%)'
+}) %>
 
-<div class="stats-grid">
-  <div class="stat-card"><span class="stat-value"><%= totalCiudadanos %></span><span class="stat-label">Ciudadanos</span></div>
-  <div class="stat-card"><span class="stat-value"><%= placetaidStats?.total || '—' %></span><span class="stat-label">Registros PlacetaID</span></div>
-</div>
+<%- include('../parciales/kpis', { kpis: [
+  { icono: '👥', valor: totalCiudadanos, label: 'Ciudadanos', color: 'rgba(107,114,128,.12)' },
+  { icono: '🔑', valor: placetaidStats?.total || '—', label: 'Registros PlacetaID', color: 'rgba(59,130,246,.12)' }
+] }) %>
 
-<div class="flex gap-8" style="flex-wrap:wrap">
-  <a href="/junta/ciudadanos" class="btn btn-primary">👥 Ciudadanos</a>
-  <a href="/junta/placetaid" class="btn btn-secondary">🔑 PlacetaID</a>
-  <a href="/junta/reclamaciones" class="btn btn-secondary">📨 Reclamaciones</a>
-  <a href="/junta/reuniones" class="btn btn-secondary">🤝 Reuniones</a>
-  <a href="/junta/votaciones" class="btn btn-secondary">🗳️ Votaciones</a>
-  <a href="/junta/cargos" class="btn btn-secondary">👤 Cargos</a>
-  <a href="/junta/departamentos" class="btn btn-secondary">🏢 Departamentos</a>
-  <a href="/junta/recursos" class="btn btn-secondary">📦 Recursos</a>
-  <a href="/junta/junior" class="btn btn-secondary">🧒 Junior</a>
+<div class="rsp-acciones">
+  <a href="/junta/ciudadanos" class="rsp-btn rsp-btn-primary"><span class="rsp-btn-icon">👥</span><span class="rsp-btn-text">Ciudadanos</span></a>
+  <a href="/junta/placetaid" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🔑</span><span class="rsp-btn-text">PlacetaID</span></a>
+  <a href="/junta/reclamaciones" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📨</span><span class="rsp-btn-text">Reclamaciones</span></a>
+  <a href="/junta/reuniones" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🤝</span><span class="rsp-btn-text">Reuniones</span></a>
+  <a href="/junta/votaciones" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🗳️</span><span class="rsp-btn-text">Votaciones</span></a>
+  <a href="/junta/cargos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">👤</span><span class="rsp-btn-text">Cargos</span></a>
+  <a href="/junta/departamentos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🏢</span><span class="rsp-btn-text">Departamentos</span></a>
+  <a href="/junta/recursos" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">📦</span><span class="rsp-btn-text">Recursos</span></a>
+  <a href="/junta/junior" class="rsp-btn rsp-btn-secondary"><span class="rsp-btn-icon">🧒</span><span class="rsp-btn-text">Junior</span></a>
 </div>

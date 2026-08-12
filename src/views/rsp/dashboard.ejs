@@ -175,6 +175,15 @@
     <p>Las conexiones aparecerán automáticamente al usar las APIs.</p>
   </div>
   <% } else { %>
+  <div class="rsp-table-wrap">
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Tipo</th><th>Endpoint</th><th>Coste</th><th>Fecha</th></tr>
+      </thead>
+      <tbody>
+        <% conexionesRecientes.forEach(function(c) { %>
+        <tr>
+          <td class="text-mono"><%= c.id %></td>
           <td>
             <span class="badge <%= c.tipo === 'modificacion' ? 'badge-warning' : 'badge-info' %>">
               <%= c.tipo === 'modificacion' ? '✏️ MOD' : '👁️ CON' %>

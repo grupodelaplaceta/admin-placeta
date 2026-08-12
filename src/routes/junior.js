@@ -18,11 +18,19 @@ import { TABLA_CANJE_PUNTOS_VERDES, TABLA_CANJE_PUNTOS_ROJOS, IVA_PERCENT, RECOM
 const router = Router();
 const CRM_URL = (process.env.CRM_BASE_URL || 'https://grupodelaplaceta.vercel.app').replace(/\/+$/, '');
 
-// Helper: proxy fetch al CRM
-async function proxyCRM(path) {
+// Helper: proxy fetch al CRM (soporta GET con query y POST con body JSON)
+async function proxyCRM(path, options = {}) {
+  const { method = 'GET', body = null, params = {} } = options;
+  let url = `${CRM_URL}/api${path}`;
+  const qs = new URLSearchParams(params).toString();
+  if (qs) url += (url.includes('?') ? '&' : '?') + qs;
+  const headers = { 'x-api-key': process.env.CRM_READ_KEY || 'crm-gdlp-shared-key-2026' };
+  if (body) headers['Content-Type'] = 'application/json';
   try {
-    const r = await fetch(`${CRM_URL}/api${path}`, {
-      headers: { 'x-api-key': process.env.CRM_READ_KEY || 'crm-gdlp-shared-key-2026' },
+    const r = await fetch(url, {
+      method,
+      headers,
+      body: body ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
       signal: AbortSignal.timeout(8000)
     });
     if (!r.ok) return null;

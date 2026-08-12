@@ -3,6 +3,9 @@ import { apiBancoGetState, sbListDeclaraciones, sbGetDeclaracion, sbCreateDeclar
 import { verificarPermiso } from '../middleware/auth.js';
 import { calcularPatrimonioMedio, calcularIA, calcularIRM, calcularIGF, calcularCotizaciones } from '../config/normativa.js';
 import { generarPDF } from '../config/documentos.js';
+import { generarExpedienteDeclaracion } from '../config/expediente-fiscal.js';
+import { supabase } from '../config/supabase.js';
+import { listarTitularidades } from '../config/patrimonio.js';
 
 const router = Router();
 
@@ -522,6 +525,14 @@ router.put('/api/declaraciones/:id/emit', verificarPermiso('tributos', 'crear_de
       transaction_id_blp: transactionId
     });
 
+    // Generar/actualizar el expediente fiscal completo (DFM + anexos + cierre)
+    // para que quede constancia digital del cierre y la conciliación.
+    try {
+      const dFinal = await sbGetDeclaracion(req.params.id);
+      const ctx = await contextoExpediente(dFinal);
+      await generarExpedienteDeclaracion(dFinal, { ...ctx, estadoFinal: true });
+    } catch (e) { console.error('[Tributos] Error generando expediente tras emitir:', e.message); }
+
     res.json({ success: true, message: transactionId ? 'Declaración emitida y cobrada' : 'Declaración emitida (pendiente de cobro)', transactionId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -586,10 +597,125 @@ router.put('/api/declaraciones/bulk/:accion', verificarPermiso('tributos', 'crea
         id_permiso_junta: r.transactionId ? `COBRADO-${r.transactionId}` : `EMITIDO-${Date.now()}`,
         transaction_id_blp: r.transactionId
       });
+      // Regenerar el expediente con el certificado de cierre (no bloquea)
+      try {
+        const dFinal = await sbGetDeclaracion(r.id);
+        const ctx = await contextoExpediente(dFinal);
+        const { generarExpedienteDeclaracion } = await import('../config/expediente-fiscal.js');
+        await generarExpedienteDeclaracion(dFinal, { ...ctx, estadoFinal: true });
+      } catch (e) { console.error('[Tributos] Error regenerando expediente en lote:', e.message); }
     }
   }
 
   res.json({ success: true, results });
+});
+
+// ── REGENERAR declaraciones (borra las anteriores y recalcula con datos reales) ─
+// Body: { mesPeriodo? } — elimina TODAS las declaraciones anteriores (ya no
+// valen) y recalcula el periodo indicado para TODOS los contribuyentes reales
+// (personas + empresas) con: % de cuentas compartidas (cotitularidad), % de
+// empresas (participaciones), subvenciones recibidas (ingresos) e inversiones
+// (patrimonio). Usa la misma reconciliación real saldo-a-saldo del banco.
+router.post('/api/declaraciones/regenerar', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
+  try {
+    const { mesPeriodo } = req.body;
+    const periodo = mesPeriodo || new Date().toISOString().slice(0, 7);
+    const state = await apiBancoGetState();
+    if (!state) return res.status(400).json({ error: 'Sin conexión con el banco: no se pueden regenerar las declaraciones' });
+
+    // 1) Borrar TODAS las declaraciones anteriores (no valen)
+    const todas = await sbListDeclaraciones(10000);
+    const eliminadas = [];
+    for (const d of todas) { await sbDeleteDeclaracion(d.id); eliminadas.push(d.id); }
+
+    // 2) Titularidades (%) reales de cuentas compartidas
+    const titularidades = await listarTitularidades();
+    const titularidadPorCuenta = {};
+    for (const t of titularidades) {
+      if (!titularidadPorCuenta[t.cuenta_id]) titularidadPorCuenta[t.cuenta_id] = {};
+      const clave = t.titular_dip || t.titular_eip;
+      titularidadPorCuenta[t.cuenta_id][clave] = t.porcentaje;
+    }
+
+    // 3) Subvenciones reales (rsp_subvenciones) concedidas/cobradas en el periodo
+    let subvenciones = [];
+    try {
+      const { data } = await supabase.from('rsp_subvenciones').select('*');
+      if (data) subvenciones = data;
+    } catch { /* sin subvenciones */ }
+    const subvencionesEnMes = subvenciones.filter(sv => {
+      const fc = String(sv.fecha_concesion || sv.created_at || '');
+      return fc.startsWith(periodo);
+    });
+
+    // 4) Inversiones reales (cartera del banco)
+    const inversiones = (state.investmentHoldings || []).map(h => ({
+      eip: h.eip || null, placetaId: h.placetaId || null,
+      valorActual: h.valorActual || h.valor || h.balancePz || 0
+    }));
+
+    const cuentas = state.accounts || [];
+    const users = state.users || [];
+    const transacciones = state.transactions || [];
+    const userPorPlaceta = new Map(users.map(u => [u.placetaId, u]));
+
+    // Contribuyentes reales: personas (placetaId) + empresas (EIP)
+    const personas = new Map();
+    const empresas = new Map();
+    for (const a of cuentas) {
+      const esEmpresa = a.type === 'Business' || a.type === 'State';
+      if (esEmpresa) {
+        if (a.eip) {
+          if (!empresas.has(a.eip)) empresas.set(a.eip, { eip: a.eip, cuentas: [] });
+          empresas.get(a.eip).cuentas.push(a);
+        }
+      } else if (a.placetaId && a.placetaId !== 'CAPITALIA-BANK' && a.type !== 'Child') {
+        if (!personas.has(a.placetaId)) personas.set(a.placetaId, { placetaId: a.placetaId, cuentas: [] });
+        personas.get(a.placetaId).cuentas.push(a);
+      }
+    }
+
+    const resultados = [];
+    const procesarContribuyente = async (clave, cuentasContrib, esEIP, nombreLegal) => {
+      if (!cuentasContrib.length) return;
+      const attrib = {};
+      const cuentasEfectivas = [];
+      for (const c of cuentasContrib) {
+        const titular = titularidadPorCuenta[c.id];
+        if (!titular) { attrib[c.id] = { pct: 100 }; cuentasEfectivas.push(c); continue; }
+        if (esEIP) { attrib[c.id] = { pct: 100 }; cuentasEfectivas.push(c); continue; }
+        const pct = titular[clave];
+        if (pct == null) continue; // cuenta compartida sin % de este titular → no atribuir
+        attrib[c.id] = { pct };
+        cuentasEfectivas.push(c);
+      }
+      if (!cuentasEfectivas.length) return;
+      const subv = subvencionesEnMes.filter(sv =>
+        esEIP
+          ? String(sv.receptor_eip || '').toUpperCase() === String(clave).toUpperCase()
+          : (sv.receptor_dip === clave || sv.receptor_placeta_id === clave));
+      const invs = inversiones.filter(inv => esEIP ? inv.eip === clave : inv.placetaId === clave);
+      const res = await reconciliarCuentaMes(cuentasEfectivas, transacciones, clave, periodo, {
+        cuotaAnterior: 0, atribucion: attrib, subvenciones: subv, inversiones: invs, nombreLegal
+      });
+      if (res.error) { resultados.push({ clave, esEIP, error: res.error }); return; }
+      resultados.push({
+        clave, esEIP, patrimonio: res.patrimonioMedio, cuotaIRM: res.cuotaIRM,
+        cuotaIGF: res.cuotaIGF, id: res.declaracion?.id
+      });
+    };
+
+    for (const [eip, e] of empresas) await procesarContribuyente(eip, e.cuentas, true, e.cuentas[0]?.displayName || eip);
+    for (const [placetaId, p] of personas) {
+      const u = userPorPlaceta.get(placetaId);
+      await procesarContribuyente(placetaId, p.cuentas, false, u?.displayName || placetaId);
+    }
+
+    res.json({
+      success: true, mesPeriodo: periodo, eliminadas: eliminadas.length,
+      generadas: resultados.filter(r => r.id).length, resultados
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── PDF de declaración ─────────────────────────────────────────────────────
@@ -613,6 +739,59 @@ router.get('/api/declaraciones/:id/pdf', verificarPermiso('tributos', 'crear_dec
     res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename=DEC-${d.id.slice(-8)}.pdf` });
     res.send(buffer);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Contexto del contribuyente para el expediente fiscal ─────────────────
+// Resuelve nombre legal, tipo de sujeto, esJunior y pagaCapitalia de una
+// declaración (por placeta_id = DIP o EIP), usando el mismo agrupamiento y
+// registro tributario real que el resto del módulo.
+async function contextoExpediente(decl) {
+  try {
+    const state = await apiBancoGetState().catch(() => null);
+    const registro = await cargarRegistroTributario();
+    const mapa = agruparContribuyentes(state || {}, registro);
+    const placetaId = decl?.placeta_id || '';
+    const contrib = [...mapa.values()].find(c =>
+      c.eip === placetaId || c.dip === placetaId || c.clave === placetaId);
+    if (!contrib) return {
+      state: state || {},
+      nombreLegal: placetaId, identificador: placetaId,
+      tipoSujeto: /^EIP-/i.test(placetaId) ? 'Empresa' : 'Persona Física',
+      esJunior: false, pagaCapitalia: false, eip: /^EIP-/i.test(placetaId) ? placetaId : null
+    };
+    const esEmpresa = contrib.tipo === 'Empresa';
+    return {
+      state: state || {},
+      nombreLegal: contrib.displayName || placetaId,
+      identificador: esEmpresa ? contrib.eip : contrib.dip,
+      tipoSujeto: esEmpresa ? 'Empresa' : 'Persona Física',
+      esJunior: contrib.esJunior || false,
+      pagaCapitalia: contrib.pagaCapitalia || false,
+      eip: contrib.eip || null
+    };
+  } catch {
+    return {
+      state: {}, nombreLegal: decl?.placeta_id || '—',
+      identificador: decl?.placeta_id || '—',
+      tipoSujeto: 'Persona Física', esJunior: false, pagaCapitalia: false, eip: null
+    };
+  }
+}
+
+// ── Generar / regenerar el EXPEDIENTE FISCAL completo de una declaración ──
+// Crea (o actualiza) la DFM + Anexo + IRM + IGF + IVA + Bonificación + Cierre
+// vinculados a la declaración, listos para imprimir en PDF.
+router.post('/api/declaraciones/:id/expediente', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
+  try {
+    const d = await sbGetDeclaracion(req.params.id);
+    if (!d) return res.status(404).json({ error: 'No encontrada' });
+    const ctx = await contextoExpediente(d);
+    const resultado = await generarExpedienteDeclaracion(d, ctx);
+    res.json(resultado);
+  } catch (e) {
+    console.error('[Tributos] Error generando expediente:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -678,6 +857,14 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
   const ids = new Set(cuentas.map(c => c.id));
   const trans = (transacciones || []).filter(t => ids.has(t.fromAccountId) || ids.has(t.toAccountId));
 
+  // Factor de atribución por cuenta (% de titularidad real de cuentas compartidas).
+  // Una cuenta compartida A 60% / B 40% atribuye SOLO su % a cada titular (nunca
+  // el 100% para todos). Si no hay % registrado → 100% (cuenta propia).
+  const factorDe = (id) => {
+    const pct = opts.atribucion?.[id]?.pct;
+    return pct != null ? Number(pct) / 100 : 1;
+  };
+
   await sbClearDailyBalances(placetaId, mesPeriodo);
 
   // ── Reconstrucción REAL del saldo diario desde las transacciones ──
@@ -698,11 +885,11 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     return d.getFullYear() > anio || (d.getFullYear() === anio && d.getMonth() + 1 >= mes);
   });
   const deltaDesdeInicio = movDesdeInicio.reduce((s, t) => {
-    if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
-    if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
+    if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0) * factorDe(t.toAccountId);
+    if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0) * factorDe(t.fromAccountId);
     return s;
   }, 0);
-  const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0), 0);
+  const saldoActual = cuentas.reduce((s, c) => s + (c.balancePz || 0) * factorDe(c.id), 0);
   // La declaración del mes ANTERIOR ya se pagó (Art. 4.11: cargo día 5 del mes
   // siguiente). Para calcular el patrimonio de este mes como si ese pago ya se
   // hubiera hecho, restamos la cuota acumulada de meses anteriores.
@@ -718,8 +905,8 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
       return dt.getFullYear() === anio && dt.getMonth() + 1 === mes && dt.getDate() <= d;
     });
     const delta = hastaDia.reduce((s, t) => {
-      if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0);
-      if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0);
+      if (ids.has(t.toAccountId)) s += Number(t.amountPz || 0) * factorDe(t.toAccountId);
+      if (ids.has(t.fromAccountId)) s -= Number(t.amountPz || 0) * factorDe(t.fromAccountId);
       return s;
     }, 0);
     const saldoDia = Math.max(0, saldoBase + delta);
@@ -727,12 +914,15 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     balances.push(Math.round(saldoDia));
   }
 
-  // Patrimonio medio del mes (Art. 4.8)
-  const patrimonioMedio = calcularPatrimonioMedio(balances);
+  // Patrimonio medio del mes (Art. 4.8) + inversiones reales (cartera)
+  const patrimonioMedio = calcularPatrimonioMedio(balances) +
+    (opts.inversiones || []).reduce((s, inv) => s + (inv.valorActual || inv.valor || 0), 0);
 
   // IA = (media ingresos - media pagos) / patrimonio medio (Art. 4.9)
-  const ingresosMes = movMes.filter(t => ids.has(t.toAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
-  const pagosMes = movMes.filter(t => ids.has(t.fromAccountId)).reduce((s, t) => s + Number(t.amountPz || 0), 0);
+  // Las subvenciones cobradas en el mes suman a los ingresos del contribuyente.
+  const ingresosMes = movMes.filter(t => ids.has(t.toAccountId)).reduce((s, t) => s + Number(t.amountPz || 0) * factorDe(t.toAccountId), 0)
+    + (opts.subvenciones || []).reduce((s, sv) => s + (sv.importeCobrado || sv.importe || 0), 0);
+  const pagosMes = movMes.filter(t => ids.has(t.fromAccountId)).reduce((s, t) => s + Number(t.amountPz || 0) * factorDe(t.fromAccountId), 0);
   const mediaIngresos = diasEnMes ? ingresosMes / diasEnMes : 0;
   const mediaPagos = diasEnMes ? pagosMes / diasEnMes : 0;
   const ia = calcularIA(mediaIngresos, mediaPagos, patrimonioMedio);
@@ -768,6 +958,21 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     eip: eipVinculado ? cuentas.find(c => c.eip)?.eip : null,
     iva_exento_empresa: esEmpresaPequeña || eipVinculado || false
   });
+
+  // Generar el expediente fiscal (DFM + anexos) del borrador para que quede
+  // constancia automática de la declaración del periodo. No bloquea el flujo
+  // si la generación de documentos falla.
+  try {
+    const { generarExpedienteDeclaracion } = await import('../config/expediente-fiscal.js');
+    await generarExpedienteDeclaracion(decl, {
+      state: { accounts: cuentas, transactions: transacciones },
+      nombreLegal: opts.nombreLegal || placetaId,
+      identificador: placetaId,
+      tipoSujeto, esJunior, pagaCapitalia,
+      eip: eipVinculado ? cuentas.find(c => c.eip)?.eip : null,
+      estadoFinal: false
+    });
+  } catch (e) { console.error('[Tributos] Error generando expediente en reconciliación:', e.message); }
 
   return {
     success: true,
@@ -856,7 +1061,8 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
           const r = await reconciliarCuentaMes(cuentasContrib, transacciones, placetaId, mes, {
             esJunior: contrib.esJunior,
             pagaCapitalia: contrib.pagaCapitalia,
-            cuotaAnterior: cuotaAcumulada
+            cuotaAnterior: cuotaAcumulada,
+            nombreLegal: contrib.displayName || placetaId
           });
           if (r.success) {
             creadas++;

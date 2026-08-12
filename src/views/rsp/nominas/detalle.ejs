@@ -1,0 +1,91 @@
+<div style="margin-bottom:14px"><a href="/rsp/nominas" class="btn btn-sm btn-ghost">← Nóminas</a></div>
+<div class="rsp-hero" style="background:linear-gradient(135deg,#1c005f 0%,#3702b3 100%)">
+  <div class="rsp-hero-content">
+    <div style="width:80px;height:80px;border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:38px">📄</div>
+    <div style="flex:1">
+      <div class="rsp-hero-title"><%= nomina.id %></div>
+      <div class="rsp-hero-sub" style="font-size:17px;opacity:.95"><%= nomina.trabajador_nombre || nomina.trabajador_dip %> · <%= nomina.periodo %></div>
+      <div class="rsp-hero-stats">
+        <span>Bruto: <strong><%= (nomina.bruto||0).toLocaleString() %> Pz</strong></span>
+        <span>Retenciones: <strong><%= (nomina.total_retenciones||0).toLocaleString() %> Pz</strong></span>
+        <span>Neto: <strong><%= (nomina.neto||0).toLocaleString() %> Pz</strong></span>
+        <span>Estado: <strong><%= nomina.estado %></strong></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap">
+  <% if (esAdmin && ['calculada','documentada'].includes(nomina.estado)) { %>
+  <button class="btn btn-sm btn-warning" onclick="orden()">💳 Generar orden bancaria</button>
+  <% } %>
+  <% if (esAdmin && nomina.estado === 'ordenada') { %>
+  <button class="btn btn-sm btn-success" onclick="pagar()">✅ Confirmar pago</button>
+  <% } %>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <div class="table-container">
+    <div style="padding:12px 16px;font-weight:700;font-size:13px;border-bottom:1px solid #e8e4f0">💰 Devengo</div>
+    <table>
+      <tbody>
+        <tr><th style="width:200px">Salario base</th><td><%= (nomina.salario_base||0).toLocaleString() %> Pz</td></tr>
+        <% (nomina.complementos||[]).forEach(function(c) { %>
+        <tr><th><%= c.concepto %></th><td>+ <%= c.importe.toLocaleString() %> Pz</td></tr>
+        <% }); %>
+        <tr style="background:#faf8ff;font-weight:700"><th>Bruto</th><td><%= (nomina.bruto||0).toLocaleString() %> Pz</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="table-container">
+    <div style="padding:12px 16px;font-weight:700;font-size:13px;border-bottom:1px solid #e8e4f0">🧾 Retenciones y deducciones</div>
+    <table>
+      <tbody>
+        <tr><th style="width:200px">Cotización trabajador</th><td>− <%= (nomina.cotizacion_trabajador||0).toLocaleString() %> Pz</td></tr>
+        <tr><th>Cotización empresa</th><td><%= (nomina.cotizacion_empresa||0).toLocaleString() %> Pz (a cargo de la entidad)</td></tr>
+        <tr><th>Retención IRM</th><td>− <%= (nomina.retencion_irm||0).toLocaleString() %> Pz</td></tr>
+        <% (nomina.deducciones||[]).forEach(function(d) { %>
+        <tr><th><%= d.concepto %></th><td>− <%= d.importe.toLocaleString() %> Pz</td></tr>
+        <% }); %>
+        <tr style="background:#faf8ff;font-weight:700"><th>Total retenciones</th><td style="color:#b82929"><%= (nomina.total_retenciones||0).toLocaleString() %> Pz</td></tr>
+        <tr style="background:#e6f7ed;font-weight:700"><th>NETO A PAGAR</th><td style="color:#1a7a4a"><%= (nomina.neto||0).toLocaleString() %> Pz</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="table-container" style="margin-top:16px">
+  <div style="padding:12px 16px;font-weight:700;font-size:13px;border-bottom:1px solid #e8e4f0">💳 Orden bancaria</div>
+  <% if (nomina.orden_bancaria) { %>
+  <table>
+    <tbody>
+      <tr><th style="width:200px">Orden</th><td><%= nomina.orden_bancaria.orden_id %></td></tr>
+      <tr><th>Concepto</th><td><%= nomina.orden_bancaria.concepto %></td></tr>
+      <tr><th>Cuenta origen</th><td><%= nomina.orden_bancaria.cuenta_origen %></td></tr>
+      <tr><th>Cuenta destino</th><td><%= nomina.orden_bancaria.cuenta_destino %></td></tr>
+      <tr><th>Importe</th><td><strong><%= (nomina.orden_bancaria.importe||0).toLocaleString() %> Pz</strong></td></tr>
+      <tr><th>Generada por</th><td><%= nomina.orden_bancaria.generada_por %></td></tr>
+      <tr><th>Estado</th><td><%= nomina.orden_bancaria.estado %></td></tr>
+    </tbody>
+  </table>
+  <% } else { %>
+  <div style="padding:20px;text-align:center;color:#999">Sin orden bancaria generada todavía.</div>
+  <% } %>
+</div>
+
+<script>
+async function orden(){
+  if(!confirm('¿Generar la orden bancaria de esta nómina? (Nómina → Orden → Banco)')) return;
+  const r = await fetch('/rsp/nominas/api/nominas/<%= nomina.id %>/orden', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+  const j = await r.json();
+  if(!j.success){ alert('Error: ' + j.error); return; }
+  window.location.reload();
+}
+async function pagar(){
+  if(!confirm('¿Confirmar el pago de la nómina?')) return;
+  const r = await fetch('/rsp/nominas/api/nominas/<%= nomina.id %>/pagar', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({}) });
+  const j = await r.json();
+  if(!j.success){ alert('Error: ' + j.error); return; }
+  window.location.reload();
+}
+</script>

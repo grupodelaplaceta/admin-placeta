@@ -1,0 +1,58 @@
+<!-- ═══ NOTIFICACIONES ═══ -->
+<div class="rsp-hero" style="background:linear-gradient(135deg,#023047 0%,#0891b2 100%)">
+  <div class="rsp-hero-content">
+    <div style="width:80px;height:80px;border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:38px">🔔</div>
+    <div>
+      <h1 class="rsp-hero-title">Centro de Notificaciones</h1>
+      <p class="rsp-hero-sub">🔴 Requiere acción · 🟡 Pendiente · 🔵 Información · 🟢 Completado · Eventos de todos los servicios</p>
+      <div class="rsp-hero-stats">
+        <span>Total: <strong><%= estado.total %></strong></span>
+        <span>No leídas: <strong><%= estado.noLeidas %></strong></span>
+        <span>🔴 Acción: <strong><%= estado.requiereAccion %></strong></span>
+        <span>🟡 Pendientes: <strong><%= estado.pendientes %></strong></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0;flex-wrap:wrap;gap:10px">
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="/rsp/notificaciones" class="btn btn-sm <%= !filtroNivel?'btn-primary':'btn-secondary' %>">Todas</a>
+    <% Object.keys(NIVELES_NOTIF).forEach(function(k) { %>
+    <a href="/rsp/notificaciones?nivel=<%= k %>" class="btn btn-sm <%= filtroNivel===k?'btn-primary':'btn-secondary' %>"><%= NIVELES_NOTIF[k] %> <%= k %></a>
+    <% }); %>
+  </div>
+  <button class="btn btn-sm btn-secondary" onclick="marcarTodas()">✅ Marcar todas leídas</button>
+</div>
+
+<div style="display:grid;gap:8px">
+  <% if (!notificaciones || notificaciones.length === 0) { %>
+  <div style="text-align:center;color:#999;padding:28px">No hay notificaciones.</div>
+  <% } %>
+  <% (notificaciones||[]).forEach(function(n) { %>
+  <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;border:1px solid #e8e4f0;background:<%= n.leida ? '#fbfaff' : '#f0ecff' %>;cursor:pointer" onclick="marcarLeida('<%= n.id %>')">
+    <span style="font-size:22px"><%= NIVELES_NOTIF[n.nivel] || '🔵' %></span>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:700;font-size:14px"><%= n.titulo %></div>
+      <% if (n.mensaje) { %><div style="font-size:12px;color:#666"><%= n.mensaje %></div><% } %>
+      <div style="font-size:11px;color:#999;margin-top:2px">
+        <%= n.servicio %> · <%= n.fecha ? n.fecha.slice(0,16).replace('T',' ') : '' %>
+        <% if (n.objeto_id) { %> · <%= n.objeto_tipo %> <%= n.objeto_id %><% } %>
+        <% if (n.enlace) { %> · <a href="<%= n.enlace %>" style="color:#3702b3">ver →</a><% } %>
+      </div>
+    </div>
+    <% if (!n.leida) { %><span class="badge badge-dot active">nueva</span><% } %>
+  </div>
+  <% }); %>
+</div>
+
+<script>
+async function marcarLeida(id){
+  await fetch('/rsp/notificaciones/api/notificaciones/' + id + '/leida', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ leida: true }) });
+  window.location.reload();
+}
+async function marcarTodas(){
+  await fetch('/rsp/notificaciones/api/notificaciones/marcar-todas', { method:'POST', headers:{'Content-Type':'application/json'} });
+  window.location.reload();
+}
+</script>

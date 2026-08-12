@@ -62,6 +62,31 @@ async function apiBanco(action, data = {}) {
   return r.json();
 }
 
+async function apiBancoGetState() {
+  const r = await fetch(`${BANCO_API}/api/crm-state`, {
+    method: 'GET',
+    headers: { 'X-CRM-Key': CRM_KEY },
+    signal: AbortSignal.timeout(10000)
+  });
+  if (!r.ok) return null;
+  return r.json();
+}
+
+function juniorAccountId(junior = {}) {
+  return junior.cuenta_banco || `u-${String(junior.dip || '').toLowerCase().replace(/-/g, '')}`;
+}
+
+async function saldoBancarioJunior(junior) {
+  const bankState = await apiBancoGetState().catch(() => null);
+  const account = (bankState?.accounts || []).find(a => a.id === juniorAccountId(junior));
+  if (!account) return junior.placetas_saldo || 0;
+  const saldo = Number(account.balancePz) || 0;
+  if (saldo !== (junior.placetas_saldo || 0)) {
+    await sbUpdateJunior(junior.id, { placetas_saldo: saldo }).catch(() => {});
+  }
+  return saldo;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  REGISTRO — Placeta Junior (menores de 16 años)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -309,6 +334,7 @@ router.post('/login', async (req, res) => {
 
     const junior = await sbFindJuniorByDip(usuario.dip);
     if (!junior) return res.status(403).json({ error: 'Esta cuenta no tiene acceso a Placeta Junior.' });
+    const saldoReal = await saldoBancarioJunior(junior);
 
     if (junior.estado === 'pendiente_firma_tutor') {
       const esDemo = junior.tutor_dip === '11111111D';
@@ -366,7 +392,7 @@ router.post('/login', async (req, res) => {
               nombre: junior.nombre, apellidos: junior.apellidos,
               alias: usuario.alias, edad: junior.edad,
               modalidad: junior.modalidad,
-              placetas_saldo: junior.placetas_saldo,
+              placetas_saldo: saldoReal,
               nivel_academia: junior.nivel_academia, estado: junior.estado
             }
           });
@@ -390,7 +416,7 @@ router.post('/login', async (req, res) => {
         id: junior.id, solicitante_id: usuario.id, dip: usuario.dip,
         nombre: junior.nombre, apellidos: junior.apellidos,
         alias: usuario.alias, edad: junior.edad, modalidad: junior.modalidad,
-        placetas_saldo: junior.placetas_saldo, nivel_academia: junior.nivel_academia,
+        placetas_saldo: saldoReal, nivel_academia: junior.nivel_academia,
         estado: junior.estado, tutor_nombre: junior.tutor_nombre || '',
         tutor_dip: junior.tutor_dip || ''
       };
@@ -404,7 +430,7 @@ router.post('/login', async (req, res) => {
         id: junior.id, solicitante_id: usuario.id, dip: usuario.dip,
         nombre: junior.nombre, apellidos: junior.apellidos,
         alias: usuario.alias, edad: junior.edad, modalidad: junior.modalidad,
-        placetas_saldo: junior.placetas_saldo, nivel_academia: junior.nivel_academia,
+        placetas_saldo: saldoReal, nivel_academia: junior.nivel_academia,
         estado: junior.estado
       }
     });

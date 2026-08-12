@@ -1,0 +1,50 @@
+<!-- ═══ AUDITORÍA ═══ -->
+<div class="rsp-hero" style="background:linear-gradient(135deg,#1a1a2e 0%,#3f3f5a 100%)">
+  <div class="rsp-hero-content">
+    <div style="width:80px;height:80px;border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:38px">🛡️</div>
+    <div>
+      <h1 class="rsp-hero-title">Auditoría Central</h1>
+      <p class="rsp-hero-sub">Audit Log del ecosistema · usuario, acción, objeto, valor anterior/nuevo, motivo, autorización</p>
+      <div class="rsp-hero-stats">
+        <span>Total: <strong><%= stats.total %></strong></span>
+        <% Object.keys(stats.porAccion||{}).slice(0,6).forEach(function(a){ %>
+        <span><%= a %>: <strong><%= stats.porAccion[a] %></strong></span>
+        <% }); %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin:14px 0">
+  <form method="get" style="display:flex;gap:8px;flex-wrap:wrap">
+    <input name="servicio" class="form-input" style="max-width:150px" placeholder="Servicio" value="<%= filtroServicio %>">
+    <input name="accion" class="form-input" style="max-width:150px" placeholder="Acción" value="<%= filtroAccion %>">
+    <input name="usuario_dip" class="form-input" style="max-width:150px" placeholder="DIP" value="<%= filtroUsuario %>">
+    <button class="btn btn-primary">Filtrar</button>
+    <a href="/rsp/auditoria" class="btn btn-secondary">Limpiar</a>
+  </form>
+</div>
+
+<div class="table-container">
+  <table>
+    <thead><tr><th>ID</th><th>Fecha</th><th>Usuario</th><th>Servicio</th><th>Acción</th><th>Objeto</th><th>Valor anterior</th><th>Valor nuevo</th><th>Motivo</th></tr></thead>
+    <tbody>
+      <% if (!logs || logs.length === 0) { %>
+      <tr><td colspan="9" style="text-align:center;color:#999;padding:28px">Sin registros de auditoría.</td></tr>
+      <% } %>
+      <% (logs||[]).forEach(function(l) { %>
+      <tr>
+        <td style="font-size:11px"><%= l.id %></td>
+        <td style="font-size:11px"><%= l.fecha ? l.fecha.slice(0,16).replace('T',' ') : '—' %></td>
+        <td><%= l.usuario_nombre || l.usuario_dip || '—' %></td>
+        <td><span class="badge badge-purple"><%= l.servicio %></span></td>
+        <td><span class="badge <%= l.accion==='crear'?'badge-success':(l.accion==='editar'?'badge-info':(l.accion==='aprobar'?'badge-warning':(l.accion==='pagar'?'badge-gold':'badge-outline'))) %>"><%= l.accion %></span></td>
+        <td style="font-size:12px"><%= l.objeto_tipo %> <strong><%= l.objeto_id %></strong></td>
+        <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= l.valor_anterior ? JSON.stringify(l.valor_anterior) : '—' %></td>
+        <td style="font-size:11px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><%= l.valor_nuevo ? JSON.stringify(l.valor_nuevo) : '—' %></td>
+        <td style="font-size:11px"><%= l.motivo || '—' %></td>
+      </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,40 @@
+<div style="margin-bottom:14px"><a href="/rsp/contabilidad" class="btn btn-sm btn-ghost">← Contabilidad</a></div>
+<div class="rsp-hero" style="background:linear-gradient(135deg,#3e2723 0%,#795548 100%)">
+  <div class="rsp-hero-content">
+    <div style="width:80px;height:80px;border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:38px">📕</div>
+    <div style="flex:1">
+      <div class="rsp-hero-title"><%= asiento.id %> <span style="font-size:14px;opacity:.7">nº <%= asiento.numero %></span></div>
+      <div class="rsp-hero-sub" style="font-size:16px;opacity:.95"><%= asiento.concepto %></div>
+      <div class="rsp-hero-stats">
+        <span>Entidad: <strong><%= asiento.entidad_eip %></strong></span>
+        <span>Fecha: <strong><%= asiento.fecha %></strong></span>
+        <span>Origen: <strong><%= asiento.origen %></strong></span>
+        <span>Debe: <strong><%= asiento.total_debe %></strong> = Haber: <strong><%= asiento.total_haber %></strong></span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="table-container" style="margin-top:16px">
+  <table>
+    <thead><tr><th>Cuenta</th><th>Nombre</th><th>Concepto</th><th style="text-align:right">Debe</th><th style="text-align:right">Haber</th></tr></thead>
+    <tbody>
+      <% (asiento.lineas||[]).forEach(function(l) { %>
+      <tr>
+        <td><strong><%= l.cuenta %></strong></td>
+        <td><%= l.nombre %></td>
+        <td style="font-size:12px"><%= l.concepto || '' %></td>
+        <td style="text-align:right;color:#1a7a4a"><%= l.debe %></td>
+        <td style="text-align:right;color:#b82929"><%= l.haber %></td>
+      </tr>
+      <% }); %>
+      <tr style="background:#faf8ff;font-weight:700">
+        <td colspan="3">TOTALES</td>
+        <td style="text-align:right;color:#1a7a4a"><%= asiento.total_debe %></td>
+        <td style="text-align:right;color:#b82929"><%= asiento.total_haber %></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<% if (asiento.referencia_id) { %>
+<div style="margin-top:10px;font-size:12px;color:#888">Referencia: <%= asiento.referencia_tipo %> <strong><%= asiento.referencia_id %></strong></div>
+<% } %>

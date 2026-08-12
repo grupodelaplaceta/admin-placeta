@@ -122,8 +122,9 @@
 <% } %>
 
 <style>
-  .grid-2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
-  .form-row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:6px; }
+  .grid-2 { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr)); gap:14px; }
+  .form-row-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:6px; }
+  @media(max-width:600px){ .grid-2{grid-template-columns:1fr} .form-row-3{grid-template-columns:1fr} }
   .form-row-3 input, .form-row-3 select { padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px; width:100%; box-sizing:border-box; }
   .check { display:flex; align-items:center; gap:4px; font-size:12px; }
   .academia-detalle summary { list-style:none; }
