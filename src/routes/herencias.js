@@ -10,7 +10,7 @@ import {
   listarTestamentos, crearTestamento,
   listarHerencias, getHerencia, iniciarHerencia, transmitirBien,
   aplicarSustitucion, fondosSinHerederoAFundacion, participacionSinHeredero, cerrarHerencia,
-  estadoHerencias,
+  repartirPatrimonioAutomatico, estadoHerencias,
 } from '../config/herencias.js';
 import { registrarAuditoria } from '../config/auditoria.js';
 
@@ -71,6 +71,14 @@ router.post('/api/herencias', verificarSesion, verificarAccesoEntidad('rsp'), ve
 router.post('/api/herencias/:id/transmitir', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_comprobacion'), async (req, res) => {
   try {
     const h = await transmitirBien(req.params.id, req.body.bienIndex, req.body.herederoDip, actor(req));
+    res.json({ success: true, herencia: h });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
+// FASE 10.2/10.3 — Reparto automático de patrimonio + certificado + notificaciones
+router.post('/api/herencias/:id/repartir', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_comprobacion'), async (req, res) => {
+  try {
+    const h = await repartirPatrimonioAutomatico(req.params.id, actor(req));
     res.json({ success: true, herencia: h });
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });

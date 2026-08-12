@@ -39,6 +39,7 @@ import { supabase } from './supabase.js';
 import { generarIdentificador } from './identificadores.js';
 import { crearNotificacion } from './notificaciones.js';
 import { registrarAuditoria } from './auditoria.js';
+import { setParticipacion } from './patrimonio.js';
 
 const T_BAJAS = 'rsp_bajas';
 const T_TESTAMENTOS = 'rsp_testamentos';
@@ -396,6 +397,78 @@ export async function cerrarHerencia(herenciaId, autor = {}) {
   return h;
 }
 
+/** FASE 10.2/10.3 — Reparto automático del patrimonio del causante entre
+ *  los herederos ACTIVOS según su % (reusa setParticipacion con dedupe).
+ *  Genera certificado DOC y notifica a cada heredero. */
+export async function repartirPatrimonioAutomatico(herenciaId, autor = {}) {
+  const h = await getHerencia(herenciaId);
+  if (!h) throw new Error('Herencia no encontrada');
+  if (h.estado === 'cerrada') throw new Error('La herencia ya está cerrada');
+
+  const herederos = (h.herederos || []).filter(x => x.situacion === 'activo');
+  if (herederos.length === 0) throw new Error('No hay herederos activos para repartir');
+  const sumaPct = herederos.reduce((s, x) => s + (x.porcentaje || 0), 0);
+  if (sumaPct <= 0) throw new Error('Los herederos no tienen porcentajes asignados');
+
+  const reparto = [];
+  const ahora = new Date().toISOString();
+
+  // Participaciones empresariales del causante → herederos (reparto proporcional)
+  for (const part of (h.participaciones || [])) {
+    if (part.estado === 'repartida' || part.estado === 'transmitida') continue;
+    for (const heredero of herederos) {
+      const pctHer = (part.porcentaje || 0) * (heredero.porcentaje / sumaPct);
+      try {
+        await setParticipacion({
+          titular_dip: heredero.dip,
+          titular_nombre: heredero.nombre || '',
+          entidad_eip: part.entidad_eip,
+          entidad_nombre: part.entidad_nombre || '',
+          porcentaje: Math.round(pctHer * 100) / 100,
+          patrimonio_neto_entidad: part.valor_economico || 0,
+        }, { nombre: autor.nombre || 'RSP', motivo: `Sucesión ${h.id} → ${heredero.nombre}` });
+      } catch (e) { /* entidad inválida: se ignora */ }
+    }
+    part.estado = 'repartida';
+  }
+
+  // Bienes → reparto por % (registro informativo)
+  for (const heredero of herederos) {
+    const importe = Math.round((h.bienes || []).reduce((s, b) => s + (b.valor || 0), 0) * (heredero.porcentaje / sumaPct) * 100) / 100;
+    reparto.push({ herederoDip: heredero.dip, herederoNombre: heredero.nombre || heredero.dip, porcentaje: heredero.porcentaje, importe, estado: 'repartido', en: ahora });
+  }
+  h.reparto = reparto;
+
+  // Certificado de sucesión (FASE 10.3)
+  h.certificado = {
+    id: await generarIdentificador('DOC'),
+    titulo: 'Certificado de sucesión',
+    herenciaId: h.id,
+    causante: h.causante_nombre || h.causante_dip,
+    herederos: reparto.map(r => ({ dip: r.herederoDip, nombre: r.herederoNombre, porcentaje: r.porcentaje })),
+    emitidoEn: ahora,
+    emitidoPor: autor.nombre || autor.dip || 'RSP',
+  };
+  h.historial = [...(h.historial || []), { estado: 'reparto_automatico', fecha: ahora, quien: autor.nombre || 'RSP', nota: `Reparto automático entre ${herederos.length} herederos. Certificado ${h.certificado.id}` }];
+  h.updated_at = ahora;
+
+  // Notificar a cada heredero (FASE 10.3)
+  for (const heredero of herederos) {
+    try {
+      await crearNotificacion({
+        nivel: 'accion',
+        titulo: `Sucesión ${h.id}: patrimonio repartido`, mensaje: `Recibes un ${heredero.porcentaje}% de la herencia de ${h.causante_nombre || h.causante_dip}. Certificado: ${h.certificado.id}`,
+        servicio: 'rsp', destinatario_dip: heredero.dip, objeto_tipo: 'HERENCIA', objeto_id: h.id,
+        enlace: `/rsp/herencias/${h.id}`
+      });
+    } catch { /* silencioso */ }
+  }
+
+  await upsertDB(T_HERENCIAS, h);
+  await registrarAuditoria({ usuario: autor, servicio: 'rsp', accion: 'administrar', objeto_tipo: 'HERENCIA', objeto_id: h.id, valor_nuevo: { reparto, certificado: h.certificado.id }, motivo: 'Reparto automático de patrimonio' });
+  return h;
+}
+
 /** Estado del módulo */
 export async function estadoHerencias() {
   const [bajas, testamentos, herencias] = await Promise.all([listarBajas(), listarTestamentos(), listarHerencias()]);
@@ -417,5 +490,5 @@ export default {
   listarTestamentos, crearTestamento,
   listarHerencias, getHerencia, iniciarHerencia, transmitirBien,
   aplicarSustitucion, fondosSinHerederoAFundacion, participacionSinHeredero, cerrarHerencia,
-  estadoHerencias,
+  repartirPatrimonioAutomatico, estadoHerencias,
 };
