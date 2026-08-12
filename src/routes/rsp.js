@@ -487,4 +487,33 @@ router.get('/api/ciudadanos-maestros', verificarSesion, verificarPermiso('rsp', 
   }
 });
 
+// ── API: Borrador fiscal (FASE 9.1) ───────────────────────────────────────
+// GET /rsp/api/borrador-fiscal/:dip — borrador calculado desde el Contexto Único
+router.get('/api/borrador-fiscal/:dip', verificarSesion, verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
+  try {
+    const { calcularBorrador } = await import('../config/borrador-fiscal.js');
+    const b = await calcularBorrador(req.params.dip, req.query.periodo);
+    return res.json(b);
+  } catch (err) { return res.status(500).json({ error: err.message }); }
+});
+
+// POST /rsp/api/borrador-fiscal/:dip/estado — confirmar/corregir/presentar
+router.post('/api/borrador-fiscal/:dip/estado', verificarSesion, verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
+  try {
+    const { setBorradorEstado } = await import('../config/borrador-fiscal.js');
+    const r = await setBorradorEstado(req.params.dip, req.body?.estado, { periodo: req.body?.periodo, contenido: req.body?.contenido });
+    return res.json({ success: true, ...r });
+  } catch (err) { return res.status(400).json({ success: false, error: err.message }); }
+});
+
+// ── API: Auditoría ciudadana (FASE 9.2) ───────────────────────────────────
+// GET /rsp/api/auditoria/:dip — quién vio o alteró mis datos
+router.get('/api/auditoria/:dip', verificarSesion, verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
+  try {
+    const { auditoriaDe } = await import('../config/borrador-fiscal.js');
+    const lista = await auditoriaDe(req.params.dip, Number(req.query.limit) || 100);
+    return res.json({ dip: req.params.dip, total: lista.length, registros: lista });
+  } catch (err) { return res.status(500).json({ error: err.message }); }
+});
+
 export default router;

@@ -55,20 +55,27 @@ export function getSnapshotMeta(clave) {
 export function snapshotListo() { return snapshotCargado; }
 
 // ── Catálogo RSP → CNIC (5.2) ────────────────────────────────────────────
-// Cada valor hoy hardcodeado tiene su código CNIC. Si el CNIC aún no existe
-// en el BOP se usa `def` (fallback seguro = valor actual).
+// Códigos reales de `bop_cnic` en producción (verificado 12/08). Si un CNIC
+// aún no existe en el BOP se usa `def` (fallback seguro = valor actual).
 export const CATALOGO = {
-  IVA:                    { codigo: 'CNIC-4.4',   def: 0.12,   tipo: 'porcentaje' },
-  TASA_TRANSFERENCIA:     { codigo: 'CNIC-4.3',   def: 0.12,   tipo: 'porcentaje' },
-  RBU_SEMANAL:            { codigo: 'CNIC-4.6',   def: 5,      tipo: 'placeta' },
-  EXENCION_IGF_EMPRESA:   { codigo: 'CNIC-4.15',  def: 20000,  tipo: 'placeta' },
-  LIMITE_EMISION_USUARIO: { codigo: 'CNIC-9-1',   def: 7500,   tipo: 'placeta' },
-  LIMITE_PERSONAL:        { codigo: 'CNIC-4.1',   def: 500000, tipo: 'placeta' },
-  LIMITE_EMPRESA:         { codigo: 'CNIC-4.1',   def: 10000000, tipo: 'placeta' },
-  MAX_RETRIBUCION_MENSUAL:{ codigo: 'CNIC-4.12-01', def: 250,  tipo: 'placeta' },
-  SMI:                    { codigo: 'CNIC-4.7',   def: 150,    tipo: 'placeta' },
-  SALARIO_MAXIMO:         { codigo: 'CNIC-4.7',   def: 1750,   tipo: 'placeta' },
-  // Plazos de trámites (días) — FASE 3 usa estos mismos códigos
+  IVA:                    { codigo: 'CNIC-IVA',                    def: 0.12,    tipo: 'porcentaje' },
+  TASA_TRANSFERENCIA:     { codigo: 'CNIC-TASA-TRANSFERENCIA-MAXIMA', def: 0.12, tipo: 'porcentaje' },
+  RBU_SEMANAL:            { codigo: 'CNIC-RBU-SEMANAL',            def: 5,       tipo: 'placeta' },
+  EXENCION_IGF_EMPRESA:   { codigo: 'CNIC-IGF-EMPRESA-REDUCIDA-UMBRAL', def: 20000, tipo: 'placeta' },
+  LIMITE_EMISION_USUARIO: { codigo: 'CNIC-EMISION-ORDINARIA-MAXIMA', def: 7500,  tipo: 'placeta' },
+  LIMITE_PERSONAL:        { codigo: 'CNIC-LIMITE-CAPITAL-PERSONAL',  def: 500000,  tipo: 'placeta' },
+  LIMITE_EMPRESA:         { codigo: 'CNIC-LIMITE-CAPITAL-INSTITUCIONAL', def: 10000000, tipo: 'placeta' },
+  MAX_RETRIBUCION_MENSUAL:{ codigo: 'CNIC-4.12-01',                def: 250,     tipo: 'placeta' },
+  SMI:                    { codigo: 'CNIC-SMI-MENSUAL',            def: 150,     tipo: 'placeta' },
+  SALARIO_MAXIMO:         { codigo: 'CNIC-SALARIO-MAXIMO-MENSUAL', def: 1750,    tipo: 'placeta' },
+  CUENTA_CIUDADANA_SALDO: { codigo: 'CNIC-CUENTA-CIUDADANA-SALDO', def: 500000,  tipo: 'placeta' },
+  CUENTA_INSTITUCIONAL_SALDO: { codigo: 'CNIC-CUENTA-INSTITUCIONAL-SALDO', def: 10000000, tipo: 'placeta' },
+  CUENTA_JUNIOR_BASICA_SALDO: { codigo: 'CNIC-CUENTA-JUNIOR-BASICA-SALDO', def: 500, tipo: 'placeta' },
+  CUENTA_JUNIOR_SENIOR_SALDO:{ codigo: 'CNIC-CUENTA-JUNIOR-SENIOR-SALDO', def: 1000, tipo: 'placeta' },
+  SANCION_NEGATIVO_DIA6:  { codigo: 'CNIC-SANCION-SALDO-NEGATIVO-DIA-6', def: 25000, tipo: 'placeta' },
+  SANCION_NEGATIVO_DIA30: { codigo: 'CNIC-SANCION-SALDO-NEGATIVO-DIA-30', def: 125000, tipo: 'placeta' },
+  SANCION_EXCESO_PERSONAL:{ codigo: 'CNIC-SANCION-SALDO-EXCESO-PERSONAL', def: 10000, tipo: 'placeta' },
+  // Plazos de trámites (días) — FASE 3 usa estos mismos códigos (aún sin publicar)
   PLAZO_REVISION:         { codigo: 'CNIC-PLAZO-REVISION',     def: 15, tipo: 'entero' },
   PLAZO_SUBSANACION:      { codigo: 'CNIC-PLAZO-SUBSANACION',  def: 10, tipo: 'entero' },
   PLAZO_FIRMA:            { codigo: 'CNIC-PLAZO-FIRMA',        def: 7,  tipo: 'entero' },
@@ -76,11 +83,16 @@ export const CATALOGO = {
 };
 
 // ── Tipado ───────────────────────────────────────────────────────────────
+// NOTA (12/08): en `bop_cnic` los `porcentaje` están en PUNTOS porcentuales
+// (12 = 12%), por lo que se normalizan a fracción (/100) para los cálculos.
 function tipar(cnic) {
   const tipo = cnic.tipo_valor || 'texto';
   const raw = String(cnic.valor ?? '');
   switch (tipo) {
-    case 'porcentaje':
+    case 'porcentaje': {
+      const n = Number(raw.replace(',', '.'));
+      return Number.isFinite(n) ? n / 100 : null;
+    }
     case 'placeta':
     case 'entero': {
       const n = Number(raw.replace(/[^0-9.,-]/g, '').replace(',', '.'));

@@ -361,7 +361,7 @@ export function getTarifas() {
     consulta: { precio: TARIFA_CONSULTA, iva: TARIFA_CONSULTA * iva, total: TARIFA_CONSULTA * (1 + iva), descripcion: 'Conexión para consulta de datos' },
     modificacion: { precio: TARIFA_MODIFICACION, iva: TARIFA_MODIFICACION * iva, total: TARIFA_MODIFICACION * (1 + iva), descripcion: 'Conexión para modificación de datos' },
     iva: iva * 100 + '%',
-    nota: 'Tarifas según normativa RSP aprobada. IVA dinámico desde el BOP (CNIC-4.4).'
+    nota: 'Tarifas según normativa RSP aprobada. IVA dinámico desde el BOP (CNIC-IVA).'
   };
 }
 

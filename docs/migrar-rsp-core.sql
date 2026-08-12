@@ -615,3 +615,17 @@ ALTER TABLE rsp_notificaciones ADD COLUMN IF NOT EXISTS canal TEXT DEFAULT 'emai
 ALTER TABLE rsp_notificaciones ADD COLUMN IF NOT EXISTS acuse_recibido BOOLEAN DEFAULT FALSE;
 ALTER TABLE rsp_notificaciones ADD COLUMN IF NOT EXISTS leida_en TEXT;
 ALTER TABLE rsp_notificaciones ADD COLUMN IF NOT EXISTS acuse_en TEXT;
+
+-- ── 24. BORRADOR FISCAL (FASE 9) ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS rsp_tributos_borradores (
+  dip TEXT NOT NULL,
+  periodo TEXT NOT NULL DEFAULT '2026',
+  estado TEXT DEFAULT 'borrador',      -- borrador | confirmada | corregida | presentada
+  contenido JSONB DEFAULT '{}',
+  cnic_version JSONB DEFAULT '{}',
+  confirmada_en TEXT,
+  presentada_en TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (dip, periodo)
+);
