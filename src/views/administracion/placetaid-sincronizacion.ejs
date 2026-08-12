@@ -1,0 +1,123 @@
+<% const padron = locals.padron; const resultado = locals.resultado; const error = locals.error; %>
+
+<div class="page-header">
+  <h2>🏛️ Alta automática PlacetaID + Ciudadanos</h2>
+  <p class="text-muted">Da de alta como PlacetaID y como ciudadano (censo tributario) a todos los DIPs con cuenta bancaria, con su nombre. Cada alta lleva una <strong>contraseña temporal recuperable</strong> que podrás enviar al ciudadano.</p>
+</div>
+
+<% if (error) { %>
+  <div class="info-card mt-16" style="border-left:4px solid #e11;">
+    <h4>⚠️ Error</h4>
+    <p><%= error %></p>
+  </div>
+<% } %>
+
+<div class="stats-grid mt-16">
+  <div class="stat-card"><span class="stat-value"><%= padron ? padron.totalDip : '—' %></span><span class="stat-label">DIPs con cuenta bancaria</span></div>
+  <div class="stat-card"><span class="stat-value"><%= padron ? padron.yaRegistrados.length : '—' %></span><span class="stat-label">Ya en PlacetaID</span></div>
+  <div class="stat-card"><span class="stat-value"><%= padron ? padron.pendientes.length : '—' %></span><span class="stat-label">Pendientes de alta</span></div>
+</div>
+
+<% if (resultado) { %>
+  <div class="info-card mt-16" style="border-left:4px solid #2a6;">
+    <h4>✅ Resultado de la sincronización</h4>
+    <p>
+      <strong><%= resultado.creadosPlacetaid %></strong> dados de alta en PlacetaID ·
+      <strong><%= resultado.yaRegistradosPlacetaid %></strong> ya registrados ·
+      <strong><%= resultado.altasCiudadano %></strong> altas como ciudadano (censo) ·
+      <strong><%= resultado.erroresPlacetaid %></strong> errores PlacetaID ·
+      <strong><%= resultado.erroresCiudadano %></strong> errores ciudadano.
+    </p>
+  </div>
+
+  <% if (resultado.creados.length > 0) { %>
+    <div class="info-card mt-16" style="border-left:4px solid #e90;">
+      <h4>🔑 Contraseñas temporales (envíalas de forma segura y pide que las cambien)</h4>
+      <div class="table-container" style="margin-top:10px;">
+        <table>
+          <thead><tr><th>DIP</th><th>Nombre</th><th>PlacetaID</th><th>Contraseña temporal</th><th>Acción</th></tr></thead>
+          <tbody>
+            <% resultado.creados.forEach(c => { %>
+            <tr>
+              <td class="text-mono"><%= c.dip %></td>
+              <td><%= c.nombre %></td>
+              <td class="text-mono"><%= c.placeid %></td>
+              <td class="text-mono"><strong style="color:#b00;"><%= c.passwordTemporal %></strong></td>
+              <td>
+                <button class="btn-sm btn-primary" onclick='copiarContrasena("<%= c.passwordTemporal %>")'>📋 Copiar</button>
+                <button class="btn-sm btn-outline" onclick='recuperarContrasena("<%= c.dip %>", this)'>🔁 Recuperar</button>
+              </td>
+            </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  <% } %>
+
+  <% if (resultado.errores.length > 0) { %>
+    <div class="table-container mt-16">
+      <table>
+        <thead><tr><th>DIP</th><th>Nombre</th><th>Error</th></tr></thead>
+        <tbody>
+          <% resultado.errores.forEach(e => { %>
+          <tr><td class="text-mono"><%= e.dip %></td><td><%= e.nombre %></td><td><span class="badge badge-danger"><%= e.error %></span></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <% if (resultado.ciudadanosAltas.length > 0) { %>
+    <div class="table-container mt-16">
+      <table>
+        <thead><tr><th>DIP</th><th>Nombre</th><th>EIP</th></tr></thead>
+        <tbody>
+          <% resultado.ciudadanosAltas.forEach(c => { %>
+          <tr><td class="text-mono"><%= c.dip %></td><td><%= c.nombre %></td><td class="text-mono"><%= c.eip || '—' %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+<% } %>
+
+<% if (padron && padron.pendientes.length > 0) { %>
+  <div class="table-container mt-16">
+    <table>
+      <thead><tr><th>DIP</th><th>Nombre</th><th>PlacetaID</th><th>Cuentas</th></tr></thead>
+      <tbody>
+        <% padron.pendientes.slice(0, 60).forEach(p => { %>
+        <tr><td class="text-mono"><%= p.dip %></td><td><%= p.nombre %></td><td class="text-mono">PLID-<%= p.dip %></td><td><%= p.cuentas %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% if (padron.pendientes.length > 60) { %><p class="text-muted">… y <%= padron.pendientes.length - 60 %> más.</p><% } %>
+  </div>
+<% } %>
+
+<div class="info-card mt-16">
+  <h4>⚙️ Ejecutar</h4>
+  <p>Al ejecutar se crean las cuentas PlacetaID pendientes con contraseña temporal y se da de alta en el censo tributario a los que falten.</p>
+  <form method="post" action="/administracion/placetaid/sincronizacion/ejecutar" onsubmit="return confirm('¿Dar de alta a todos los DIPs pendientes como PlacetaID y ciudadanos?')">
+    <button type="submit" class="btn btn-primary">🚀 Ejecutar alta automática</button>
+  </form>
+</div>
+
+<script>
+function copiarContrasena(pass) {
+  navigator.clipboard.writeText(pass).then(() => mostrarToast('📋 Contraseña copiada', 'success')).catch(() => mostrarToast('No se pudo copiar', 'error'));
+}
+async function recuperarContrasena(dip, btn) {
+  try {
+    const r = await apiFetch('/administracion/placetaid/sincronizacion/password', { method: 'POST', body: JSON.stringify({ dip }) });
+    if (r.ok && r.passwordTemporal) {
+      mostrarToast('🔑 ' + dip + ' → ' + r.passwordTemporal, 'success');
+    } else {
+      mostrarToast('⚠️ ' + (r.error || 'Sin contraseña temporal (ya fue cambiada)'), 'warning');
+    }
+  } catch {
+    mostrarToast('⚠️ No se pudo recuperar', 'warning');
+  }
+}
+</script>

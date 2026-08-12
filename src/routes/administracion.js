@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { sbListSolicitantes, apiPlacetaidRegistros } from '../config/db.js';
+import { construirPadron, sincronizar, recuperarPasswordTemporal } from '../config/placetaid-sincronizacion.js';
 import { verificarPermiso } from '../middleware/auth.js';
 
 const router = Router();
@@ -73,6 +74,46 @@ router.get('/placetaid', verificarPermiso('administracion', 'gestion_placetid_co
     entidad_actual: 'administracion',
     registros, total: registros.length
   });
+});
+
+// ── Alta automática PlacetaID + Ciudadanos (padrón del banco) ──────────────
+router.get('/placetaid/sincronizacion', verificarPermiso('administracion', 'gestion_placetid_completa'), async (req, res) => {
+  let padron = null;
+  let error = null;
+  try {
+    padron = await construirPadron();
+  } catch (err) {
+    error = err.message || 'Error al construir el padrón';
+  }
+  res.render('administracion/placetaid-sincronizacion', {
+    titulo: 'PlacetaID - Alta automática desde el Banco',
+    entidad_actual: 'administracion',
+    padron, error, resultado: null
+  });
+});
+
+router.post('/placetaid/sincronizacion/ejecutar', verificarPermiso('administracion', 'gestion_placetid_completa'), async (req, res) => {
+  let padron = null;
+  let resultado = null;
+  let error = null;
+  try {
+    resultado = await sincronizar();
+    try { padron = await construirPadron(); } catch { padron = null; }
+  } catch (err) {
+    error = err.message || 'Error durante la sincronización';
+  }
+  res.render('administracion/placetaid-sincronizacion', {
+    titulo: 'PlacetaID - Alta automática desde el Banco',
+    entidad_actual: 'administracion',
+    padron, error, resultado
+  });
+});
+
+router.post('/placetaid/sincronizacion/password', verificarPermiso('administracion', 'gestion_placetid_completa'), async (req, res) => {
+  const { dip } = req.body || {};
+  if (!dip) return res.status(400).json({ ok: false, error: 'DIP requerido' });
+  const r = await recuperarPasswordTemporal(dip);
+  return res.json(r.ok ? { ok: true, ...r.data } : { ok: false, error: (r.data && r.data.error) || 'No se pudo recuperar la contraseña' });
 });
 
 // ── Documentación ─────────────────────────────────────────────────────────
