@@ -98,6 +98,28 @@ app.use((req, res, next) => {
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
+
+// ── FASE 11.2 — Observabilidad: request-id + logs JSON + métricas 5xx ─────
+const metricas = { total: 0, errores5xx: 0, ultimos5xx: [] };
+app.use((req, res, next) => {
+  req.id = crypto.randomUUID();
+  res.setHeader('X-Request-Id', req.id);
+  const inicio = process.hrtime.bigint();
+  res.on('finish', () => {
+    const durMs = Number((process.hrtime.bigint() - inicio) / 1000000n).toFixed(1);
+    metricas.total++;
+    if (res.statusCode >= 500) {
+      metricas.errores5xx++;
+      metricas.ultimos5xx.push({ id: req.id, status: res.statusCode, path: req.path, method: req.method, ms: durMs, en: new Date().toISOString() });
+      if (metricas.ultimos5xx.length > 20) metricas.ultimos5xx.shift();
+    }
+    if (res.statusCode >= 400 || process.env.LOG_REQUESTS === '1') {
+      console.log(JSON.stringify({ ts: new Date().toISOString(), id: req.id, method: req.method, path: req.path, status: res.statusCode, ms: durMs, ip: req.ip }));
+    }
+  });
+  next();
+});
+export function getMetricas() { return { ...metricas, ultimos5xx: [...metricas.ultimos5xx] }; }
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -147,7 +169,39 @@ app.use((req, res, next) => {
 
 // ── Health Check ───────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', version: '1.0.0', app: 'RSP', timestamp: new Date().toISOString() });
+  const m = getMetricas();
+  const status = m.errores5xx > 0 ? 'degradado' : 'ok';
+  res.json({ status, version: '1.0.0', app: 'RSP', metricas: { total: m.total, errores5xx: m.errores5xx }, timestamp: new Date().toISOString() });
+});
+
+// ── Métricas de observabilidad (FASE 11.2) ────────────────────────────────
+app.get('/api/metricas', verificarSesion, verificarPermiso('rsp', 'ver_dashboard'), (req, res) => {
+  res.json(getMetricas());
+});
+
+// ── Portal de transparencia público (FASE 11.1) — sin datos personales ───
+app.get('/api/transparencia', async (req, res) => {
+  try {
+    const { supabase } = await import('./src/config/supabase.js');
+    let cnic = [];
+    if (supabase) {
+      const { data } = await supabase.from('bop_cnic').select('codigo,etiqueta,tipo_valor,valor,unidad,vigente').eq('vigente', true).limit(200);
+      cnic = (data || []).map(c => ({ codigo: c.codigo, etiqueta: c.etiqueta, tipo_valor: c.tipo_valor, valor: c.valor, unidad: c.unidad }));
+    }
+    const { getTarifas } = await import('./src/config/rsp.js');
+    let subvenciones = { total: 0, concedidas: 0 };
+    if (supabase) {
+      const { data } = await supabase.from('rsp_fundacion_solicitudes').select('estado').limit(500);
+      subvenciones = {
+        total: (data || []).length,
+        concedidas: (data || []).filter(s => s.estado === 'concedida' || s.estado === 'pagada').length
+      };
+    }
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.json({ ok: true, normativaVigente: { documentos: 0, cnic }, tarifas: getTarifas(), subvenciones, actualizado: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Middleware RSP: registra conexiones en rutas de entidad ──────────────

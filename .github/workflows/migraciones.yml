@@ -1,0 +1,30 @@
+# FASE 11.4 — Migraciones automáticas en CI
+# Se ejecuta en cada push a master: aplica las migraciones SQL a Supabase
+# usando la cadena de conexión (secret) y ejecuta los tests de seguridad.
+name: RSP migraciones y tests
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  migrar-y-testear:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Aplicar migraciones a Supabase
+        env:
+          SUPABASE_DB_CONNECTION: ${{ secrets.SUPABASE_DB_CONNECTION }}
+        run: node scripts/aplicar-migraciones.mjs
+
+      - name: Tests de seguridad (scoping)
+        run: npm test
