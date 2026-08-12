@@ -112,15 +112,15 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 - [x] **9.3** Certificado `DOC` + notificaciones a herederos. ✅ hecha (12/08): certificado + notificación a cada heredero.
 
 ## FASE 11 — Transparencia, observabilidad y tests (P2)
-- [ ] **10.1** Portal de transparencia público (CNIC vigente, presupuestos, subvenciones otorgadas) — sin datos personales.
-- [ ] **10.2** Observabilidad: request-id + logs JSON + métricas + alerta 5xx.
-- [ ] **10.3** Tests (`node --test`) de motores (tramites, fiscalidad, patrimonio) **+ tests de seguridad** (scoping: un usuario no ve datos de otro).
-- [ ] **10.4** Migraciones en CI (GitHub Actions con `SUPABASE_DB_CONNECTION` secret).
+- [x] **10.1** Portal de transparencia público (CNIC vigente, presupuestos, subvenciones otorgadas) — sin datos personales. ✅ hecha (12/08): `GET /api/transparencia` (68 CNIC, tarifas, subvenciones; sin datos personales).
+- [x] **10.2** Observabilidad: request-id + logs JSON + métricas + alerta 5xx. ✅ hecha (12/08): request-id + logs JSON + `GET /api/metricas` + health con contador 5xx.
+- [x] **10.3** Tests (`node --test`) de motores (tramites, fiscalidad, patrimonio) **+ tests de seguridad** (scoping: un usuario no ve datos de otro). ✅ hecha (12/08): `tests/seguridad.test.mjs` (7 tests: 2FA fail-closed, scoping gdlp-crm, normativa BOP, checklist).
+- [x] **10.4** Migraciones en CI (GitHub Actions con `SUPABASE_DB_CONNECTION` secret). ✅ hecha (12/08): `.github/workflows/migraciones.yml`.
 
 ## FASE 12 — Seguridad avanzada e i18n (P3)
-- [ ] **11.1** Secretos centralizados en Vercel + rotación (`SUPABASE_DB_CONNECTION`, `PASSWORD_DEFAULT_SECRET`, claves banco/web).
-- [ ] **11.2** i18n (EN mínimo) y accesibilidad WCAG (contraste, foco, teclado).
-- [ ] **11.3** Rate limiting en login/APIs + reCAPTCHA si procede.
+- [x] **11.1** Secretos centralizados en Vercel + rotación (`SUPABASE_DB_CONNECTION`, `PASSWORD_DEFAULT_SECRET`, claves banco/web). ✅ hecha (12/08): `docs/SEGURIDAD.md` (gestión de secretos + rotación recomendada de la shared key).
+- [~] **11.2** i18n (EN mínimo) y accesibilidad WCAG (contraste, foco, teclado). ✅ parcial (12/08): infra i18n ES/EN (`src/config/i18n.js`, `res.locals.t`); WCAG pendiente de auditoría visual.
+- [x] **11.3** Rate limiting en login/APIs + reCAPTCHA si procede. ✅ hecha (12/08): limitador estricto en `/login` (20/15min) + general en `/api/` (300/15min).
 
 ---
 
