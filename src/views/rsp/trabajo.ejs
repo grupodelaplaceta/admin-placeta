@@ -53,6 +53,8 @@
             <td><span class="v-status" style="color:<%= x.color %>"><span class="ms" style="font-size:15px"><%= x.label === 'En revisión' ? 'manage_search' : (x.color === '#fbbf24' ? 'schedule' : 'sync') %></span> <%= x.label %></span></td>
             <td style="font-size:12px;color:var(--tm)"><%= x.accion ? x.accion.label : t.siguiente_accion %></td>
             <td class="v-cell-right">
+              <% var venc = t.fecha_limite && new Date(t.fecha_limite) < new Date(); %>
+              <% if (venc && t.estado !== 'cerrado' && t.estado !== 'rechazado') { %><span class="v-chip v-chip--error"><span class="ms" style="font-size:13px">warning</span> Vencido</span><% } %>
               <% if (t.prioridad === 'alta') { %><span class="v-chip v-chip--error"><span class="ms" style="font-size:13px">priority_high</span> Alta</span><% } else { %><span class="v-chip">Normal</span><% } %>
             </td>
             <td class="v-cell-right"><a class="btn-accent" style="padding:6px 12px;font-size:12px" href="/rsp/tramites/<%= t.id %>">ABRIR</a></td>

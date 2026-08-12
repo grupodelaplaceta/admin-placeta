@@ -23,6 +23,13 @@ const accionesAdmin = acciones.filter(a => a.rol === 'admin');
       <p class="v-sub"><span class="v-chip v-chip--indigo"><%= t.id %></span>
         <% if (t.expediente_id) { %><a class="v-chip" href="/rsp/expedientes/<%= t.expediente_id %>"><span class="ms" style="font-size:13px">folder</span> <%= t.expediente_id %></a><% } %>
         <% if (t.fecha_presentacion) { %><span class="v-chip">Presentado el <%= new Date(t.fecha_presentacion).toLocaleDateString('es-ES') %></span><% } %>
+        <% if (t.fecha_limite && t.estado !== 'cerrado' && t.estado !== 'rechazado') { %>
+          <% var vencido = new Date(t.fecha_limite) < new Date(); %>
+          <span class="v-chip <%= vencido ? 'v-chip--error' : 'v-chip--amber' %>">
+            <%= vencido ? '⚠️ Vencido' : 'Vence el' %> <%= new Date(t.fecha_limite).toLocaleDateString('es-ES') %>
+            <% if (t.silencio && t.silencio !== 'negativo') { %> · silencio: <%= t.silencio.replace(/_/g,' ') %><% } %>
+          </span>
+        <% } %>
       </p>
     </div>
     <div class="v-page-actions">

@@ -454,4 +454,25 @@ router.get('/api/contexto/:dip', verificarSesion, verificarPermiso('rsp', 'ver_t
   }
 });
 
+// ── API: Refresh normativa desde el BOP (FASE 5.4) ─────────────────────────
+// POST /rsp/api/normativa/refresh — invalida la caché de CNIC y recarga el
+// snapshot. El BOP (bop-editor) lo llama al publicar/editar un CNIC.
+router.post('/api/normativa/refresh', async (req, res) => {
+  const docsKey = process.env.DOCS_API_KEY || 'docs-shared-key-2026';
+  const normKey = process.env.NORMA_WEBHOOK_KEY || docsKey;
+  const key = req.query.key || req.headers['x-webhook-key'] || req.headers['x-api-key'];
+  const esAdmin = req.session?.usuario && (req.session.roles?.includes('superadmin') || req.session.roles?.includes('rsp_admin'));
+  if (!esAdmin && key !== normKey) {
+    return res.status(401).json({ error: 'No autorizado' });
+  }
+  try {
+    const mod = await import('../config/normativa-dinamica.js');
+    await mod.refreshNormativa();
+    const snapshot = await mod.cargarSnapshot();
+    return res.json({ ok: true, refrescado: new Date().toISOString(), snapshot });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

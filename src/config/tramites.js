@@ -70,6 +70,119 @@ export const ESTADO_UI = {
 };
 
 /* ── Catálogo de trámites ──────────────────────────────────────── */
+
+/* ── FASE 3 — SLA y plazos configurables ──────────────────────────
+ * Plazos por estado (días) con fallback. Los valores pueden venir de
+ * la normativa dinámica del BOP (FASE 5: CNIC-PLAZO-*).
+ * `silencio` por procedimiento: qué pasa al vencer sin actuación.
+ *   - negativo (defecto, sin silencio positivo): no hay efecto automático
+ *   - silencio_positivo: el vencimiento aprueba el trámite
+ *   - escalado: se escala a la intervención de un responsable superior
+ *   - prorroga: se prorroga automáticamente un plazo más
+ *   - intervencion: requiere intervención manual obligatoria
+ */
+export const PLAZOS_DEFECTO = { revision: 15, subsanacion: 10, firma: 7, justificacion: 20 };
+export const SILENCIOS = ['silencio_positivo', 'negativo', 'escalado', 'prorroga', 'intervencion'];
+
+export function getPlazosTipo(tipo) {
+  const cfg = TRAMITES[tipo];
+  return { ...PLAZOS_DEFECTO, ...(cfg?.plazos || {}) };
+}
+
+export function getSilencioTipo(tipo) {
+  return TRAMITES[tipo]?.silencio || 'negativo';
+}
+
+async function plazosConNormativa(tipo) {
+  const base = getPlazosTipo(tipo);
+  try {
+    const { getParametroValor } = await import('./normativa-dinamica.js');
+    const mapa = {
+      revision: 'PLAZO_REVISION', subsanacion: 'PLAZO_SUBSANACION',
+      firma: 'PLAZO_FIRMA', justificacion: 'PLAZO_JUSTIFICACION'
+    };
+    const out = { ...base };
+    for (const [estado, clave] of Object.entries(mapa)) {
+      const v = await getParametroValor(clave);
+      if (v != null && Number.isFinite(Number(v))) out[estado] = Number(v);
+    }
+    return out;
+  } catch {
+    return base;
+  }
+}
+
+function calcularFechaLimite(dias) {
+  const d = new Date();
+  d.setDate(d.getDate() + (Number(dias) || 0));
+  return d.toISOString();
+}
+
+function estadoConPlazo(estado) {
+  return ['revision', 'subsanacion', 'firma', 'justificacion', 'resolucion'].includes(estado);
+}
+
+/** Aplica (o limpia) el plazo del estado actual del trámite. */
+async function aplicarPlazo(t) {
+  if (!estadoConPlazo(t.estado)) {
+    t.fecha_limite = null;
+    t.plazo_desde = null;
+    t.vencido = false;
+    return;
+  }
+  const plazos = await plazosConNormativa(t.tipo);
+  const dias = plazos[t.estado] ?? plazos.revision;
+  t.plazos = plazos;
+  t.plazo_desde = t.plazo_desde || new Date().toISOString();
+  t.fecha_limite = calcularFechaLimite(dias);
+  t.vencido = new Date(t.fecha_limite) < new Date();
+}
+
+/** Revisa vencimientos y aplica el efecto de silencio configurado (FASE 3.4). */
+export async function revisarVencimientos() {
+  const todos = await listarTodos();
+  const ahora = new Date();
+  const tocados = [];
+  for (const t of todos) {
+    if (!estadoConPlazo(t.estado) || !t.fecha_limite) continue;
+    if (t.vencido) continue;
+    if (new Date(t.fecha_limite) < ahora) {
+      t.vencido = true;
+      t.silencio = t.silencio || getSilencioTipo(t.tipo);
+      const efecto = t.silencio;
+      if (efecto === 'silencio_positivo') {
+        t.estado = 'resolucion';
+        t.resolucion = { estado: 'aprobado_por_silencio', fecha: new Date().toISOString(), nota: 'Aprobado por silencio administrativo positivo' };
+        t.siguiente_accion = 'Emitir resolución y solicitar firma';
+      } else if (efecto === 'escalado') {
+        t.siguiente_accion = 'Escalado: requiere intervención de responsable superior';
+      } else if (efecto === 'prorroga') {
+        const plazos = t.plazos || getPlazosTipo(t.tipo);
+        t.fecha_limite = calcularFechaLimite(plazos[t.estado] ?? 15);
+        t.vencido = false;
+        t.prorrogado = (t.prorrogado || 0) + 1;
+      } else {
+        t.siguiente_accion = t.siguiente_accion || 'Actuación requerida (plazo vencido)';
+      }
+      t.historial = [...(t.historial || []), { fecha: nowIso(), quien: 'Sistema', accion: `Plazo vencido (${t.fecha_limite}) · silencio: ${t.silencio}` }];
+      t.updated_at = nowIso();
+      memTramites.set(t.id, t);
+      await upsertDB(t);
+      tocados.push(t.id);
+    }
+  }
+  return { revisados: todos.length, vencidosTocados: tocados };
+}
+
+function nowIso() { return new Date().toISOString(); }
+
+async function listarTodos() {
+  const db = await listarDB({});
+  if (db) return db;
+  return [...memTramites.values()];
+}
+
+/* ── Catálogo de trámites ──────────────────────────────────────── */
 export const TRAMITES = {
   subvencion: {
     id: 'subvencion', nombre: 'Solicitud de subvención', icono: '💸',
@@ -413,6 +526,8 @@ export async function crearTramite(datos, autor = {}) {
     siguiente_accion: 'Presentar la solicitud',
     fecha_presentacion: null,
     fecha_limite: datos.fecha_limite || null,
+    plazos: getPlazosTipo(datos.tipo),
+    silencio: getSilencioTipo(datos.tipo),
     resolucion: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -552,6 +667,9 @@ export async function avanzarTramite(id, { accion, nota = '', datos = {} }, auto
 
   if (!cambio[accion]) throw new Error(`Acción "${accion}" no implementada`);
   const msj = await cambio[accion]();
+
+  // FASE 3: aplicar el plazo del nuevo estado (fecha límite / vencido)
+  await aplicarPlazo(t);
 
   // Historial + comunicación
   t.historial = [...(t.historial || []), { fecha: new Date().toISOString(), quien: autor.nombre || autor.dip || 'Sistema', accion: accionDef.label, nota: nota || '' }];

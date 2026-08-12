@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { verificarSesion, verificarAccesoEntidad, verificarPermiso } from '../middleware/auth.js';
 import {
   listarTramites, getTramite, crearTramite, avanzarTramite, anadirComunicacion,
-  actualizarTramite, estadoTramites, bandejaDe, trabajoPendiente, TRAMITES, ESTADOS, ESTADO_UI, verificarFirma,
+  actualizarTramite, estadoTramites, bandejaDe, trabajoPendiente, TRAMITES, ESTADOS, ESTADO_UI, verificarFirma, revisarVencimientos,
 } from '../config/tramites.js';
 import { apiBancoGetState } from '../config/db.js';
 import { registrarAuditoria } from '../config/auditoria.js';
@@ -131,6 +131,14 @@ tramitesRouter.get('/api/ciudadano', verificarSesion, verificarAccesoEntidad('rs
 
 tramitesRouter.get('/api/estado', verificarSesion, verificarAccesoEntidad('rsp'), async (req, res) => {
   res.json(await estadoTramites());
+});
+
+// FASE 3.4 — Revisión manual de vencimientos (silencio configurable)
+tramitesRouter.post('/api/revisar-vencimientos', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_tramites'), async (req, res) => {
+  try {
+    const resultado = await revisarVencimientos();
+    res.json({ success: true, ...resultado });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
 /* ═══ MI BANDEJA ═════════════════════════════════════════════ */

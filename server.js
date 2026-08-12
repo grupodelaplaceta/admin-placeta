@@ -468,6 +468,21 @@ async function startServer() {
     .then(m => m.initBundleTables())
     .catch(e => console.warn('[Bundles] init:', e.message));
 
+  // Warm de la normativa dinámica desde el BOP (FASE 5)
+  import('./src/config/normativa-dinamica.js')
+    .then(m => m.cargarSnapshot())
+    .then(() => console.log('  📜 Normativa BOP: snapshot cargado'))
+    .catch(e => console.warn('[Normativa BOP] warm:', e.message));
+
+  // FASE 3.4 — revisión periódica de vencimientos de trámites (cada 15 min)
+  import('./src/config/tramites.js')
+    .then(async (m) => {
+      setInterval(() => {
+        m.revisarVencimientos().catch(() => {});
+      }, 15 * 60 * 1000);
+    })
+    .catch(e => console.warn('[Vencimientos] init:', e.message));
+
   // Iniciar generación automática de documentos
   autoDocsTimer = setInterval(generarDocumentosAutomaticos, AUTO_DOCS_INTERVAL);
   // Primera generación a los 30 segundos de iniciar

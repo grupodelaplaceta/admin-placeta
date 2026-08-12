@@ -20,9 +20,11 @@
 
 import { supabase } from './supabase.js';
 import { pagarFacturaBanco, pagarSancionBanco } from './pagos.js';
+import { getSnapshot } from './normativa-dinamica.js';
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────
-const IVA = 0.12;
+// IVA dinámico desde el BOP (FASE 5): CNIC-4.4, fallback 0.12 si aún no se carga
+function ivaActual() { return getSnapshot('IVA'); }
 const TARIFA_CONSULTA = 0.001;   // Pz por conexión de consulta
 const TARIFA_MODIFICACION = 0.1;  // Pz por conexión de modificación
 const FONDOS_INICIALES = 18309.83;
@@ -57,7 +59,7 @@ export const TIPO_CONEXION = {
 // ── REGISTRAR CONEXIÓN ───────────────────────────────────────────────────
 export function registrarConexion({ entidad, tipo, endpoint, usuario, dip, detalle = '' }) {
   const tarifa = tipo === TIPO_CONEXION.MODIFICACION ? TARIFA_MODIFICACION : TARIFA_CONSULTA;
-  const iva = tarifa * IVA;
+  const iva = tarifa * ivaActual();
   const total = tarifa + iva;
 
   const conexion = {
@@ -107,7 +109,7 @@ export function generarFactura({ entidad, periodoInicio, periodoFin, conexiones 
   const baseConsultas = consultas.reduce((s, c) => s + c.tarifa, 0);
   const baseModificaciones = modificaciones.reduce((s, c) => s + c.tarifa, 0);
   const baseTotal = baseConsultas + baseModificaciones;
-  const ivaTotal = baseTotal * IVA;
+  const ivaTotal = baseTotal * ivaActual();
   const totalFactura = baseTotal + ivaTotal;
 
   const factura = {
@@ -151,7 +153,7 @@ export function generarFacturaPorIds({ entidad, conexionIds = [] }) {
   const baseConsultas = consultas.reduce((s, c) => s + c.tarifa, 0);
   const baseModificaciones = modificaciones.reduce((s, c) => s + c.tarifa, 0);
   const baseTotal = baseConsultas + baseModificaciones;
-  const ivaTotal = baseTotal * IVA;
+  const ivaTotal = baseTotal * ivaActual();
   const totalFactura = baseTotal + ivaTotal;
 
   const factura = {
@@ -352,11 +354,12 @@ export function getFacturas(filtros = {}) {
 
 // ── TARIFAS ────────────────────────────────────────────────────────────────
 export function getTarifas() {
+  const iva = ivaActual();
   return {
-    consulta: { precio: TARIFA_CONSULTA, iva: TARIFA_CONSULTA * IVA, total: TARIFA_CONSULTA * (1 + IVA), descripcion: 'Conexión para consulta de datos' },
-    modificacion: { precio: TARIFA_MODIFICACION, iva: TARIFA_MODIFICACION * IVA, total: TARIFA_MODIFICACION * (1 + IVA), descripcion: 'Conexión para modificación de datos' },
-    iva: IVA * 100 + '%',
-    nota: 'Tarifas según normativa RSP aprobada. IVA estándar de La Placeta al 12%.'
+    consulta: { precio: TARIFA_CONSULTA, iva: TARIFA_CONSULTA * iva, total: TARIFA_CONSULTA * (1 + iva), descripcion: 'Conexión para consulta de datos' },
+    modificacion: { precio: TARIFA_MODIFICACION, iva: TARIFA_MODIFICACION * iva, total: TARIFA_MODIFICACION * (1 + iva), descripcion: 'Conexión para modificación de datos' },
+    iva: iva * 100 + '%',
+    nota: 'Tarifas según normativa RSP aprobada. IVA dinámico desde el BOP (CNIC-4.4).'
   };
 }
 
