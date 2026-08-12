@@ -441,4 +441,17 @@ export function registrarConexionPublica(req, res) {
   res.json({ success: true, conexion });
 }
 
+// ── API: Contexto Único del ciudadano (FASE 0.4 / 2.6) ────────────────────
+// GET /rsp/api/contexto/:dip — agrega Identidad + Bancario + Fiscalidad +
+// Patrimonio + Expedientes + Notificaciones de forma federada (vía APIs).
+router.get('/api/contexto/:dip', verificarSesion, verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
+  try {
+    const { getContextoCiudadano } = await import('../config/contexto.js');
+    const contexto = await getContextoCiudadano(req.params.dip);
+    return res.json(contexto);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
