@@ -56,6 +56,7 @@ import nominasRoutes from './src/routes/nominas.js';
 import facturacionRoutes from './src/routes/facturacion.js';
 import economicoRoutes from './src/routes/economico.js';
 import herenciasRoutes from './src/routes/herencias.js';
+import tramitesRoutes, { bandejaRouter, trabajoRouter } from './src/routes/tramites.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -302,6 +303,9 @@ app.use('/rsp/facturas', verificarSesion, verificarAccesoEntidad('rsp'), rspBill
 app.use('/rsp/economico', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), economicoRoutes);
 // Bajas / Altas / Herencias / Testamento digital (puntos 17-21)
 app.use('/rsp/herencias', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), herenciasRoutes);
+app.use('/rsp/tramites', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), tramitesRoutes);
+app.use('/rsp/bandeja', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), bandejaRouter);
+app.use('/rsp/trabajo', verificarSesion, verificarAccesoEntidad('rsp'), rspBillingMiddleware('rsp'), trabajoRouter);
 
 // ═══ CAMPANA DE NOTIFICACIONES (cualquier usuario autenticado) ═══════
 app.get('/api/notificaciones/mis', verificarSesion, async (req, res) => {

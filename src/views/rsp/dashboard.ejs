@@ -1,19 +1,22 @@
-<!-- ═══ HEADER RSP ═══ -->
-<div class="rsp-hero">
-  <div class="rsp-hero-content">
-    <img src="/img/rsp-logo.png" alt="RSP" class="rsp-hero-logo">
+<!-- ═══ PAGE HEADER (Vivid Infrastructure) ═══ -->
+<div class="v-page">
+  <div class="v-page-header">
     <div>
-      <h1 class="rsp-hero-title">Red de Servicios de La Placeta</h1>
-      <p class="rsp-hero-sub">Plataforma centralizada de datos · <strong>GDLP-AP64-583</strong></p>
-      <div class="rsp-hero-stats">
-        <span>💰 Fondos: <strong><%= stats.saldoActual.toFixed(2) %> Pz</strong></span>
-        <span>⚡ Conexiones: <strong><%= stats.totalConexiones %></strong></span>
-        <span>📊 Facturas: <strong><%= stats.facturasEmitidas %></strong></span>
-        <span>🗳️ Votaciones: <strong><%= votaciones ? votaciones.total : 0 %></strong></span>
+      <h1 class="v-title">Red de Servicios de La Placeta</h1>
+      <p class="v-sub">Plataforma centralizada de datos e infraestructura</p>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <span class="v-chip v-chip--indigo">IBAN GDLP-AP64-583</span>
+        <span class="v-chip">💰 Fondos: <%= stats.saldoActual.toFixed(2) %> Pz</span>
+        <span class="v-chip">⚡ Conexiones: <%= stats.totalConexiones %></span>
+        <span class="v-chip">🗳️ Votaciones: <%= votaciones ? votaciones.total : 0 %></span>
       </div>
     </div>
+    <div class="v-page-actions">
+      <a class="btn btn-secondary" href="/rsp/conexiones"><span class="ms" style="font-size:17px">download</span> Exportar Log</a>
+      <a class="btn btn-secondary" href="/administracion/placetaid/sincronizacion"><span class="ms" style="font-size:17px" data-weight="fill">verified</span> Verificar PlacetaID</a>
+      <a class="btn-accent" href="/rsp/conexiones"><span class="ms" style="font-size:17px">add</span> Nueva Conexión</a>
+    </div>
   </div>
-</div>
 
 <!-- ═══ COMMAND CENTER ═══ -->
 <div class="rsp-command">
@@ -57,68 +60,93 @@
 })();
 </script>
 
-<!-- ═══ KPIs ═══ -->
-<div class="rsp-kpis">
-  <div class="rsp-kpi">
-    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">📡</div>
-    <div>
-      <div class="rsp-kpi-value"><%= stats.totalConexiones.toLocaleString() %></div>
-      <div class="rsp-kpi-label">Total Conexiones</div>
-    </div>
+<!-- ═══ BENTO KPIs (Vivid) ═══ -->
+<div class="v-bento">
+  <div class="v-stat v-col-3 v-stat--violet">
+    <div class="v-stat-head"><span class="v-stat-label">Total Conexiones</span><span class="v-stat-ico ms">hub</span></div>
+    <div class="v-stat-value"><%= stats.totalConexiones.toLocaleString() %></div>
+    <div class="v-stat-meta"><span class="ms" style="font-size:15px">bolt</span> <%= stats.conexionesHoy %> hoy</div>
   </div>
-  <div class="rsp-kpi">
-    <div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">⚡</div>
-    <div>
-      <div class="rsp-kpi-value"><%= stats.conexionesHoy %></div>
-      <div class="rsp-kpi-label">Hoy</div>
-    </div>
+  <div class="v-stat v-col-3 v-stat--indigo">
+    <div class="v-stat-head"><span class="v-stat-label">Saldo (Pz)</span><span class="v-stat-ico ms">account_balance_wallet</span></div>
+    <div class="v-stat-value"><%= stats.saldoActual.toFixed(2) %></div>
+    <div class="v-stat-meta"><span class="ms" style="font-size:15px">savings</span> Fondos disponibles</div>
   </div>
-  <div class="rsp-kpi">
-    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">💰</div>
-    <div>
-      <div class="rsp-kpi-value"><%= stats.saldoActual.toFixed(2) %></div>
-      <div class="rsp-kpi-label">Saldo (Pz)</div>
-    </div>
+  <div class="v-stat v-col-3 v-stat--success">
+    <div class="v-stat-head"><span class="v-stat-label">Ingresos del Mes</span><span class="v-stat-ico ms">trending_up</span></div>
+    <div class="v-stat-value"><%= stats.ingresosEsteMes.toFixed(3) %></div>
+    <div class="v-stat-meta"><span class="up ms" style="font-size:15px">arrow_upward</span> Flujo entrante</div>
   </div>
-  <div class="rsp-kpi">
-    <div class="rsp-kpi-icon" style="background:rgba(255,109,0,.12)">📈</div>
-    <div>
-      <div class="rsp-kpi-value"><%= stats.ingresosEsteMes.toFixed(3) %></div>
-      <div class="rsp-kpi-label">Ingresos del Mes</div>
-    </div>
-  </div>
-  <div class="rsp-kpi">
-    <div class="rsp-kpi-icon" style="background:rgba(41,121,255,.12)">📄</div>
-    <div>
-      <div class="rsp-kpi-value"><%= stats.facturasEmitidas %></div>
-      <div class="rsp-kpi-label">Facturas</div>
-    </div>
-  </div>
-  <div class="rsp-kpi">
-    <div class="rsp-kpi-icon" style="background:<%= stats.facturasPendientes > 0 ? 'rgba(255,214,0,.18)' : 'rgba(0,200,83,.12)' %>">
-      <%= stats.facturasPendientes > 0 ? '⏳' : '✅' %>
-    </div>
-    <div>
-      <div class="rsp-kpi-value" style="color:<%= stats.facturasPendientes > 0 ? '#e65100' : '#00c853' %>"><%= stats.facturasPendientes %></div>
-      <div class="rsp-kpi-label">Pendientes</div>
+  <div class="v-stat v-col-3 v-stat--warning">
+    <div class="v-stat-head"><span class="v-stat-label">Facturas</span><span class="v-stat-ico ms">receipt_long</span></div>
+    <div class="v-stat-value"><%= stats.facturasEmitidas %></div>
+    <div class="v-stat-meta">
+      <% if (stats.facturasPendientes > 0) { %><span class="down ms" style="font-size:15px">pending</span> <%= stats.facturasPendientes %> pendientes
+      <% } else { %><span class="up ms" style="font-size:15px">check_circle</span> Al corriente<% } %>
     </div>
   </div>
   <% if (votaciones) { %>
-  <div class="rsp-kpi">
-    <div class="rsp-kpi-icon" style="background:rgba(124,58,237,.12)">🗳️</div>
-    <div>
-      <div class="rsp-kpi-value"><%= votaciones.activas %></div>
-      <div class="rsp-kpi-label">Votaciones activas</div>
-    </div>
+  <div class="v-stat v-col-3 v-stat--blue">
+    <div class="v-stat-head"><span class="v-stat-label">Votaciones activas</span><span class="v-stat-ico ms">how_to_vote</span></div>
+    <div class="v-stat-value"><%= votaciones.activas %></div>
+    <div class="v-stat-meta"><span class="ms" style="font-size:15px">group</span> <%= votaciones.total %> en total</div>
   </div>
-  <div class="rsp-kpi">
-    <div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">📊</div>
-    <div>
-      <div class="rsp-kpi-value"><%= votaciones.totalVotos %></div>
-      <div class="rsp-kpi-label">Votos emitidos</div>
-    </div>
+  <div class="v-stat v-col-3 v-stat--pink">
+    <div class="v-stat-head"><span class="v-stat-label">Votos emitidos</span><span class="v-stat-ico ms">how_to_vote</span></div>
+    <div class="v-stat-value"><%= votaciones.totalVotos %></div>
+    <div class="v-stat-meta"><span class="ms" style="font-size:15px">fact_check</span> Participación PlacetaID</div>
   </div>
   <% } %>
+</div>
+
+<!-- ═══ DIRECTORIO DE ENTIDADES (Vivid) ═══ -->
+<%
+const ENTIDADES_DIR = [
+  { nombre:'Banco de La Placeta', id:'GDLP-AP98-605', tipo:'Banco', vol:null, nivel:'N3' },
+  { nombre:'Tributos de La Placeta', id:'GDLP-TRBX-001', tipo:'Tributos', vol:null, nivel:'N3' },
+  { nombre:'Junta de La Placeta', id:'GDLP-AP00-001', tipo:'Gobierno', vol:null, nivel:'N3' },
+  { nombre:'Red de Servicios de La Placeta', id:'GDLP-AP64-583', tipo:'RSP', vol:stats.saldoActual, nivel:'N3' },
+  { nombre:'Placeta Junior', id:'GDLP-AP76-179', tipo:'Infancia', vol:null, nivel:'N2' }
+];
+%>
+<div class="v-card">
+  <div class="v-card-head">
+    <div>
+      <div class="v-card-title">Directorio de Entidades</div>
+      <div class="v-card-sub">Visión general del ecosistema conectado</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;width:100%;max-width:340px">
+      <div class="v-search" style="flex:1"><span class="ms">search</span><input id="dirSearch" placeholder="Buscar entidad..."></div>
+      <button class="btn-icon" title="Filtrar"><span class="ms" style="font-size:18px">filter_list</span></button>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="v-table" id="dirTable">
+      <thead>
+        <tr><th>Entidad</th><th>Tipo</th><th>Volumen (Pz)</th><th>Estado Fiscal</th><th>Nivel Identidad</th><th class="v-cell-right">Acción</th></tr>
+      </thead>
+      <tbody>
+        <% ENTIDADES_DIR.forEach(function(e) { %>
+        <tr>
+          <td>
+            <div class="v-entity-name"><%= e.nombre %></div>
+            <div class="v-entity-id">ID: <%= e.id %></div>
+          </td>
+          <td><span class="v-chip"><%= e.tipo %></span></td>
+          <td class="v-cell-mono"><%= e.vol != null ? e.vol.toFixed(2) : '—' %></td>
+          <td><span class="v-status v-status--ok"><span class="ms" style="font-size:15px">check_circle</span> Regular</span></td>
+          <td>
+            <div class="v-level">
+              <div class="v-level-track"><div class="v-level-fill" style="width:<%= e.nivel === 'N3' ? '100%' : '66%' %>"></div></div>
+              <span class="v-level-label"><%= e.nivel %></span>
+            </div>
+          </td>
+          <td class="v-cell-right"><button class="v-more" title="Acciones"><span class="ms">more_vert</span></button></td>
+        </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <!-- ═══ TARIFAS ═══ -->
@@ -269,24 +297,43 @@
 <% } %>
 
 <!-- Info normativa -->
-<div class="info-card mt-16">
-  <h4>📜 Resumen Normativo — RSP</h4>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">
-    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
-      <strong style="color:var(--p);font-size:12px">💰 Transferencia Inicial</strong>
-      <p style="font-size:11px;color:#666;margin-top:3px">18,309.83 Pz transferidos desde "Red del Grupo de La Placeta"</p>
+<div class="v-card mt-16">
+  <div class="v-card-head">
+    <div>
+      <div class="v-card-title">📜 Resumen Normativo — RSP</div>
+      <div class="v-card-sub">Estado del marco regulatorio y obligaciones</div>
     </div>
-    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
-      <strong style="color:var(--p);font-size:12px">🚫 Facturas Anuladas</strong>
-      <p style="font-size:11px;color:#666;margin-top:3px">Facturas pendientes por cambios bancarios quedan anuladas. Más de 20,000 Pz liberados.</p>
+  </div>
+  <div class="v-card-body" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+    <div style="padding:14px;background:var(--vs-low);border:1px solid var(--vs-stroke);border-radius:12px">
+      <strong style="color:#a5b4fc;font-size:12px">💰 Transferencia Inicial</strong>
+      <p style="font-size:11px;color:var(--tm);margin-top:3px">18,309.83 Pz transferidos desde "Red del Grupo de La Placeta"</p>
     </div>
-    <div style="padding:12px;background:#fff8e6;border-radius:10px;border:1px solid #fcd34d">
-      <strong style="color:#92400e;font-size:12px">⚠️ Sanción IVA Pendiente</strong>
-      <p style="font-size:11px;color:#666;margin-top:3px">2,461.77 Pz por IVA no abonado a la administración. <a href="/rsp/fondos" class="btn-link">Gestionar →</a></p>
+    <div style="padding:14px;background:var(--vs-low);border:1px solid var(--vs-stroke);border-radius:12px">
+      <strong style="color:#a5b4fc;font-size:12px">🚫 Facturas Anuladas</strong>
+      <p style="font-size:11px;color:var(--tm);margin-top:3px">Facturas pendientes por cambios bancarios quedan anuladas. Más de 20,000 Pz liberados.</p>
     </div>
-    <div style="padding:12px;background:#f6f3ff;border-radius:10px">
-      <strong style="color:var(--p);font-size:12px">🏛️ Entidades Conectadas</strong>
-      <p style="font-size:11px;color:#666;margin-top:3px">Banco, Tributos, Junta, Administración y entidades públicas de GDLP</p>
+    <div style="padding:14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:12px">
+      <strong style="color:#fbbf24;font-size:12px">⚠️ Sanción IVA Pendiente</strong>
+      <p style="font-size:11px;color:var(--tm);margin-top:3px">2,461.77 Pz por IVA no abonado a la administración. <a href="/rsp/fondos" class="btn-link">Gestionar →</a></p>
+    </div>
+    <div style="padding:14px;background:var(--vs-low);border:1px solid var(--vs-stroke);border-radius:12px">
+      <strong style="color:#a5b4fc;font-size:12px">🏛️ Entidades Conectadas</strong>
+      <p style="font-size:11px;color:var(--tm);margin-top:3px">Banco, Tributos, Junta, Administración y entidades públicas de GDLP</p>
     </div>
   </div>
 </div>
+</div>
+<script>
+(function () {
+  const input = document.getElementById('dirSearch');
+  const table = document.getElementById('dirTable');
+  if (!input || !table) return;
+  input.addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    table.querySelectorAll('tbody tr').forEach(function (row) {
+      row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+})();
+</script>

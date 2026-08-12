@@ -42,6 +42,9 @@ export const PREFIJOS_ID = {
   DEC: 'DEC',   // Declaración tributaria
   INC: 'INC',   // Incidencia
   CNIC: 'CNIC', // Regla normativa (CNIC-FISC-001)
+  TRAM: 'TRAM', // Trámite (RSP-2026-000001 vía tipo 'RSP')
+  RSP: 'RSP',   // Trámite general RSP-2026-000001
+  OP: 'OP',     // Operación económica
 };
 
 function contadorMemoria(prefijo, anio) {

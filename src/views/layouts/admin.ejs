@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= titulo || 'RSP — Red de Servicios de La Placeta' %></title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/admin-v5.css">
+  <link rel="stylesheet" href="/css/rsp-vivid.css">
   <link rel="icon" href="/img/favicon-rsp.png" type="image/png">
 </head>
-<body class="<%= workspaceActivo ? 'workspace-active' : '' %>">
+<body class="<%= workspaceActivo ? 'workspace-active' : '' %><%= workspaceActivo && workspaceActivo.id === 'rsp' ? ' rsp-theme' : '' %>">
   <% if (usuario) { %>
   <!-- ═══ SIDEBAR ═══ -->
   <aside class="sidebar" id="sidebar"

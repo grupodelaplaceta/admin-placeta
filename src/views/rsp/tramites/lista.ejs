@@ -1,0 +1,115 @@
+<!-- ═══ TRÁMITES — LISTA (Vivid) ═══ -->
+<div class="v-page">
+  <div class="v-page-header">
+    <div>
+      <h1 class="v-title">📋 Mis trámites</h1>
+      <p class="v-sub">El RSP te guía paso a paso: nunca tendrás que preguntarte qué toca ahora.</p>
+    </div>
+    <div class="v-page-actions">
+      <a class="btn btn-secondary" href="/rsp/tramites"><span class="ms" style="font-size:17px">refresh</span> Refrescar</a>
+      <a class="btn-accent" href="/rsp/tramites/nuevo"><span class="ms" style="font-size:17px">add</span> Nuevo trámite</a>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="v-bento">
+    <div class="v-stat v-col-3 v-stat--warning">
+      <div class="v-stat-head"><span class="v-stat-label">Pendientes</span><span class="v-stat-ico ms">pending_actions</span></div>
+      <div class="v-stat-value"><%= estado.pendientes %></div>
+      <div class="v-stat-meta"><span class="ms" style="font-size:15px">schedule</span> presentados / validación</div>
+    </div>
+    <div class="v-stat v-col-3 v-stat--indigo">
+      <div class="v-stat-head"><span class="v-stat-label">En curso</span><span class="v-stat-ico ms">sync</span></div>
+      <div class="v-stat-value"><%= estado.enCurso %></div>
+      <div class="v-stat-meta"><span class="ms" style="font-size:15px">swap_calls</span> proceso activo</div>
+    </div>
+    <div class="v-stat v-col-3 v-stat--violet">
+      <div class="v-stat-head"><span class="v-stat-label">Requieren acción</span><span class="v-stat-ico ms">notifications_active</span></div>
+      <div class="v-stat-value"><%= estado.requierenAccion %></div>
+      <div class="v-stat-meta"><span class="ms" style="font-size:15px">warning</span> subsanación / firma / revisión</div>
+    </div>
+    <div class="v-stat v-col-3 v-stat--success">
+      <div class="v-stat-head"><span class="v-stat-label">Finalizados</span><span class="v-stat-ico ms">task_alt</span></div>
+      <div class="v-stat-value"><%= estado.finalizados %></div>
+      <div class="v-stat-meta"><span class="ms" style="font-size:15px">archive</span> completados + rechazados</div>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <a class="v-chip v-chip--dot <%= !filtroEstado ? 'v-chip--violet' : '' %>" href="/rsp/tramites">Todos</a>
+    <a class="v-chip v-chip--dot <%= filtroEstado === 'presentado' ? 'v-chip--violet' : '' %>" href="/rsp/tramites?estado=presentado">Pendientes</a>
+    <a class="v-chip v-chip--dot <%= filtroEstado === 'revision' ? 'v-chip--violet' : '' %>" href="/rsp/tramites?estado=revision">En curso</a>
+    <a class="v-chip v-chip--dot v-chip--warning <%= ['subsanacion','firma','justificacion'].includes(filtroEstado) ? 'v-chip--violet' : '' %>" href="/rsp/tramites?estado=subsanacion">Requieren acción</a>
+    <a class="v-chip v-chip--dot v-chip--success <%= filtroEstado === 'cerrado' ? 'v-chip--violet' : '' %>" href="/rsp/tramites?estado=cerrado">Completados</a>
+    <a class="v-chip v-chip--dot v-chip--error <%= filtroEstado === 'rechazado' ? 'v-chip--violet' : '' %>" href="/rsp/tramites?estado=rechazado">Rechazados</a>
+    <span style="flex:1"></span>
+    <select class="form-input" style="max-width:220px" onchange="if(this.value) location='/rsp/tramites?tipo='+this.value">
+      <option value="">Todos los tipos</option>
+      <% Object.values(TRAMITES).forEach(function(c) { %>
+      <option value="<%= c.id %>" <%= filtroTipo === c.id ? 'selected' : '' %>><%= c.icono %> <%= c.nombre %></option>
+      <% }); %>
+    </select>
+  </div>
+
+  <!-- Tabla de trámites -->
+  <div class="v-card">
+    <div class="v-card-head">
+      <div>
+        <div class="v-card-title">Listado de trámites</div>
+        <div class="v-card-sub"><%= tramites.length %> resultado<%= tramites.length !== 1 ? 's' : '' %></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;width:100%;max-width:320px">
+        <div class="v-search" style="flex:1"><span class="ms">search</span><input id="tramitesSearch" placeholder="Buscar trámite..."></div>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="v-table" id="tramitesTable">
+        <thead>
+          <tr><th>Trámite</th><th>Tipo</th><th>Estado</th><th>Próximo paso</th><th>Fecha</th><th class="v-cell-right">Acción</th></tr>
+        </thead>
+        <tbody>
+          <% if (!tramites || tramites.length === 0) { %>
+          <tr><td colspan="6" style="text-align:center;color:var(--tq);padding:34px">
+            <div style="font-size:40px;margin-bottom:8px">🗂️</div>
+            Sin trámites <%= filtroEstado ? 'en este estado' : '' %>. Crea el primero con <strong>+ Nuevo trámite</strong>.
+          </td></tr>
+          <% } %>
+          <% (tramites||[]).forEach(function(t) { %>
+          <% var est = ESTADO_UI[t.estado] || ESTADO_UI.borrador; %>
+          <% var cfg = TRAMITES[t.tipo] || {}; %>
+          <tr style="cursor:pointer" onclick="location='/rsp/tramites/<%= t.id %>'">
+            <td>
+              <div class="v-entity-name"><%= t.titulo %></div>
+              <div class="v-entity-id"><%= t.id %></div>
+            </td>
+            <td><span class="v-chip"><%= cfg.icono %> <%= cfg.nombre %></span></td>
+            <td>
+              <span class="v-status" style="color:<%= est.color %>"><span class="ms" style="font-size:15px"><%= est.icono %></span> <%= est.label %></span>
+            </td>
+            <td style="max-width:220px"><span style="font-size:12px;color:var(--tm)"><%= t.siguiente_accion || '—' %></span></td>
+            <td class="v-cell-mono"><%= (t.fecha_presentacion || t.created_at || '').slice(0,10) %></td>
+            <td class="v-cell-right">
+              <a class="btn-accent" style="padding:7px 14px;font-size:12px" href="/rsp/tramites/<%= t.id %>"><span class="ms" style="font-size:16px">open_in_new</span> Abrir</a>
+            </td>
+          </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const input = document.getElementById('tramitesSearch');
+  const table = document.getElementById('tramitesTable');
+  if (!input || !table) return;
+  input.addEventListener('input', function () {
+    const q = this.value.trim().toLowerCase();
+    table.querySelectorAll('tbody tr').forEach(function (row) {
+      row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+})();
+</script>

@@ -1,0 +1,59 @@
+<!-- ═══ MI BANDEJA (Vivid) ═══ -->
+<div class="v-page">
+  <div class="v-page-header">
+    <div>
+      <h1 class="v-title">📥 Mi bandeja</h1>
+      <p class="v-sub">Todas tus acciones pendientes del ecosistema, en un solo sitio. No importa de qué servicio vengan.</p>
+    </div>
+    <div class="v-page-actions">
+      <a class="btn-accent" href="/rsp/tramites/nuevo"><span class="ms" style="font-size:17px">add</span> Nuevo trámite</a>
+    </div>
+  </div>
+
+  <div class="v-bento">
+    <div class="v-stat v-col-4 v-stat--violet">
+      <div class="v-stat-head"><span class="v-stat-label">Acciones pendientes</span><span class="v-stat-ico ms">inbox</span></div>
+      <div class="v-stat-value"><%= acciones.length %></div>
+      <div class="v-stat-meta"><span class="ms" style="font-size:15px">todo</span> requieren tu atención</div>
+    </div>
+    <div class="v-stat v-col-4 v-stat--indigo">
+      <div class="v-stat-head"><span class="v-stat-label">Trámites en curso</span><span class="v-stat-ico ms">swap_calls</span></div>
+      <div class="v-stat-value"><%= estado.enCurso %></div>
+      <div class="v-stat-meta"><span class="ms" style="font-size:15px">sync</span> en proceso</div>
+    </div>
+    <div class="v-stat v-col-4 v-stat--success">
+      <div class="v-stat-head"><span class="v-stat-label">Finalizados</span><span class="v-stat-ico ms">task_alt</span></div>
+      <div class="v-stat-value"><%= estado.finalizados %></div>
+      <div class="v-stat-meta"><span class="ms" style="font-size:15px">archive</span> completados</div>
+    </div>
+  </div>
+
+  <div class="v-card">
+    <div class="v-card-head">
+      <div><div class="v-card-title">Acciones para ti</div><div class="v-card-sub">Ordenadas por prioridad</div></div>
+    </div>
+    <div class="v-card-body">
+      <% if (!acciones || acciones.length === 0) { %>
+      <div class="v-banner v-banner--ok">
+        <span class="ms">check_circle</span>
+        <div><div class="v-banner-title">Todo correcto</div><div class="v-banner-sub">No tienes ninguna acción pendiente.</div></div>
+      </div>
+      <% } %>
+      <% acciones.forEach(function(a) { %>
+      <a href="/rsp/tramites/<%= a.tramite.id %>" style="text-decoration:none;display:block">
+        <div class="v-doc" style="cursor:pointer">
+          <div class="v-doc-ico" style="color:<%= a.color %>"><span class="ms"><%= a.accion ? a.accion.icono : 'chevron_right' %></span></div>
+          <div style="flex:1;min-width:0">
+            <div class="v-entity-name" style="color:<%= a.color %>"><%= a.accion ? a.accion.label : a.label %></div>
+            <div style="font-size:13px;color:var(--t);font-weight:600;margin-top:2px"><%= a.tramite.titulo %></div>
+            <div style="font-size:12px;color:var(--tm);margin-top:2px">
+              <span class="v-entity-id"><%= a.tramite.id %></span> · <%= (TRAMITES[a.tramite.tipo]||{}).icono %> <%= (TRAMITES[a.tramite.tipo]||{}).nombre %>
+            </div>
+          </div>
+          <span class="ms" style="color:var(--tq)">chevron_right</span>
+        </div>
+      </a>
+      <% }); %>
+    </div>
+  </div>
+</div>

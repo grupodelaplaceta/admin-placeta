@@ -61,6 +61,41 @@ CREATE INDEX IF NOT EXISTS idx_exp_persona ON rsp_expedientes(persona_dip);
 CREATE INDEX IF NOT EXISTS idx_exp_entidad ON rsp_expedientes(entidad_eip);
 CREATE INDEX IF NOT EXISTS idx_exp_estado ON rsp_expedientes(estado);
 
+-- ── 2b. TRÁMITES / WORKFLOW (motor de trámites) ──────────────────────────
+CREATE TABLE IF NOT EXISTS rsp_tramites (
+  id TEXT PRIMARY KEY,                -- RSP-2026-000001
+  tipo TEXT NOT NULL,                 -- subvencion | alta-entidad | cambio-datos | cambio-titularidad | solicitud-pago
+  titulo TEXT NOT NULL,
+  solicitante_dip TEXT,
+  solicitante_nombre TEXT,
+  entidad_eip TEXT,
+  entidad_nombre TEXT,
+  estado TEXT DEFAULT 'borrador',     -- borrador|presentado|validacion|revision|subsanacion|resolucion|firma|ejecucion|justificacion|cerrado|rechazado
+  paso INTEGER DEFAULT 0,
+  prioridad TEXT DEFAULT 'normal',    -- baja | normal | alta
+  responsable_dip TEXT,
+  responsable_nombre TEXT,
+  datos JSONB DEFAULT '{}',
+  documentos JSONB DEFAULT '[]',      -- [{nombre, estado:'validado'|'pendiente', fecha}]
+  validaciones JSONB DEFAULT '[]',    -- [{id, nombre, ok}]
+  historial JSONB DEFAULT '[]',       -- [{fecha, quien, accion, nota}]
+  comunicaciones JSONB DEFAULT '[]',  -- [{fecha, remitente, texto}]
+  expediente_id TEXT,                 -- EXP-2026-000001 (se crea al presentar)
+  siguiente_accion TEXT,
+  fecha_presentacion TEXT,
+  fecha_limite TEXT,
+  resolucion JSONB,
+  firmas JSONB DEFAULT '[]',
+  operaciones JSONB DEFAULT '[]',
+  hash TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_tram_estado ON rsp_tramites(estado);
+CREATE INDEX IF NOT EXISTS idx_tram_solicitante ON rsp_tramites(solicitante_dip);
+CREATE INDEX IF NOT EXISTS idx_tram_tipo ON rsp_tramites(tipo);
+CREATE INDEX IF NOT EXISTS idx_tram_expediente ON rsp_tramites(expediente_id);
+
 -- ── 3. INCIDENCIAS (FASE 18) ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS rsp_incidencias (
   id TEXT PRIMARY KEY,                -- INC-2026-000001

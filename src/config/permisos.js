@@ -110,14 +110,17 @@ const PERMISOS_ENTIDAD = {
       'ver_fundacion', 'gestionar_fundacion',
       'ver_patrimonio', 'gestionar_patrimonio',
       'ver_comprobacion', 'gestionar_comprobacion',
-      'ver_operaciones', 'gestionar_operaciones'
+      'ver_operaciones', 'gestionar_operaciones',
+      // ── Trámites / workflow ──
+      'ver_tramites', 'gestionar_tramites', 'gestionar_bandeja'
     ],
     operador: [
       'ver_dashboard', 'ver_conexiones', 'ver_facturas',
       'ver_fondos', 'ver_tarifas',
       'ver_normativa', 'ver_expedientes', 'ver_incidencias',
       'ver_auditoria', 'ver_notificaciones', 'ver_contabilidad',
-      'ver_fundacion', 'ver_patrimonio', 'ver_comprobacion', 'ver_operaciones'
+      'ver_fundacion', 'ver_patrimonio', 'ver_comprobacion', 'ver_operaciones',
+      'ver_tramites'
     ]
   }
 };

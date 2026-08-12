@@ -1,125 +1,146 @@
-<!-- ═══ PATRIMONIO ═══ -->
-<div class="rsp-hero" style="background:linear-gradient(135deg,#263238 0%,#546e7a 100%)">
-  <div class="rsp-hero-content">
-    <div style="width:80px;height:80px;border-radius:16px;background:rgba(255,255,255,.13);display:flex;align-items:center;justify-content:center;font-size:38px">💎</div>
-    <div>
-      <h1 class="rsp-hero-title">Patrimonio y Activos</h1>
-      <p class="rsp-hero-sub">Titularidades de cuentas compartidas · Participaciones empresariales · Activos · Patrimonio neto</p>
-      <div class="rsp-hero-stats">
-        <span>Titularidades: <strong><%= titularidades.length %></strong></span>
-        <span>Participaciones: <strong><%= participaciones.length %></strong></span>
-        <span>Activos: <strong><%= activos.length %></strong></span>
+<!-- ═══ PATRIMONIO (Vivid) ═══ -->
+<div class="v-page">
+  <div class="v-page-header">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div style="width:52px;height:52px;border-radius:14px;background:var(--vs-bright);border:1px solid var(--vs-stroke);display:flex;align-items:center;justify-content:center;font-size:26px">💎</div>
+      <div>
+        <h1 class="v-title">Patrimonio y Activos</h1>
+        <p class="v-sub">Titularidades · Participaciones · Activos · Patrimonio neto</p>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <span class="v-chip v-chip--violet">👥 Titularidades: <strong><%= titularidades.length %></strong></span>
+          <span class="v-chip v-chip--indigo">🏢 Participaciones: <strong><%= participaciones.length %></strong></span>
+          <span class="v-chip v-chip--success">📦 Activos: <strong><%= activos.length %></strong></span>
+        </div>
       </div>
     </div>
+    <div class="v-page-actions">
+      <% if (esAdmin) { %>
+      <button class="btn-accent" onclick="calcularPatrimonioAuto()"><span class="ms" style="font-size:17px">auto_awesome</span> Registrar patrimonio automático</button>
+      <button class="btn btn-secondary" onclick="abrirModalTit()"><span class="ms" style="font-size:17px">groups</span> Titularidad</button>
+      <button class="btn btn-secondary" onclick="abrirModalPart()"><span class="ms" style="font-size:17px">business</span> Participación</button>
+      <button class="btn btn-secondary" onclick="abrirModalAct()"><span class="ms" style="font-size:17px">inventory_2</span> Activo</button>
+      <% } %>
+    </div>
+  </div>
+  <span id="autoResult" style="font-size:12px;font-weight:700"></span>
+
+  <!-- Patrimonio neto (por DIP) -->
+  <form method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <input name="dip" class="form-input" style="max-width:200px" placeholder="DIP (23749931M)" value="<%= dipFiltro %>">
+    <button class="btn btn-primary"><span class="ms" style="font-size:16px">calculate</span> Calcular patrimonio neto</button>
+    <% if (dipFiltro) { %><a href="/rsp/patrimonio" class="btn btn-secondary">Limpiar</a><% } %>
+  </form>
+
+  <% if (patrimonio) { %>
+  <div class="v-bento">
+    <div class="v-stat v-col-4 v-stat--success"><div class="v-stat-head"><span class="v-stat-label">Cuentas (por %)</span><span class="v-stat-ico ms">account_balance</span></div><div class="v-stat-value"><%= patrimonio.patrimonioCuentas.toLocaleString() %></div><div class="v-stat-meta"><span class="ms" style="font-size:15px">percent</span> Titularidades</div></div>
+    <div class="v-stat v-col-4 v-stat--violet"><div class="v-stat-head"><span class="v-stat-label">Participaciones</span><span class="v-stat-ico ms">business</span></div><div class="v-stat-value"><%= patrimonio.patrimonioParticipaciones.toLocaleString() %></div><div class="v-stat-meta"><span class="ms" style="font-size:15px">corporate_fare</span> Empresas EIP</div></div>
+    <div class="v-stat v-col-4 v-stat--indigo"><div class="v-stat-head"><span class="v-stat-label">Activos</span><span class="v-stat-ico ms">inventory_2</span></div><div class="v-stat-value"><%= patrimonio.valorActivos.toLocaleString() %></div><div class="v-stat-meta"><span class="ms" style="font-size:15px">category</span> Valoración</div></div>
+    <div class="v-stat v-col-6 v-stat--warning"><div class="v-stat-head"><span class="v-stat-label">Deudas reconocidas</span><span class="v-stat-ico ms">remove</span></div><div class="v-stat-value"><%= patrimonio.deudasReconocidas.toLocaleString() %></div><div class="v-stat-meta"><span class="ms" style="font-size:15px">trending_down</span> Pasivo</div></div>
+    <div class="v-stat v-col-6 v-stat--pink"><div class="v-stat-head"><span class="v-stat-label">Patrimonio neto</span><span class="v-stat-ico ms">calculate</span></div><div class="v-stat-value"><%= patrimonio.patrimonioNeto.toLocaleString() %> <span style="font-size:15px">Pz</span></div><div class="v-stat-meta"><span class="ms" style="font-size:15px">verified</span> Neto</div></div>
+  </div>
+  <% if (patrimonio.cuentasTitularidadIndeterminada && patrimonio.cuentasTitularidadIndeterminada.length > 0) { %>
+  <div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:12px;padding:12px 16px;font-size:13px;color:#fbbf24">
+    ⚠️ Cuentas compartidas con titularidad indeterminada (sin % registrado): <strong><%= patrimonio.cuentasTitularidadIndeterminada.join(', ') %></strong> — deben registrarse los % antes de liquidar impuestos.
+  </div>
+  <% } %>
+  <% } %>
+
+<!-- TITULARIDADES -->
+<div class="v-card">
+  <div class="v-card-head">
+    <div>
+      <div class="v-card-title">👥 Titularidades de cuentas compartidas</div>
+      <div class="v-card-sub">Cuentas con % de titularidad registrado</div>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="v-table">
+      <thead><tr><th>Cuenta</th><th>Titular</th><th>%</th><th>Tipo</th><th>Fuente</th><th>Vigente</th></tr></thead>
+      <tbody>
+        <% if (!titularidades || titularidades.length === 0) { %>
+        <tr><td colspan="6" style="text-align:center;color:var(--tq);padding:22px">Sin titularidades registradas.</td></tr>
+        <% } %>
+        <% (titularidades||[]).forEach(function(t) { %>
+        <tr>
+          <td><span class="v-entity-id"><%= t.cuenta_id %></span></td>
+          <td class="v-entity-name"><%= t.titular_dip || t.titular_eip %></td>
+          <td><span class="v-chip v-chip--violet"><%= t.porcentaje %>%</span></td>
+          <td><span class="v-chip"><%= t.tipo %></span></td>
+          <td class="v-cell-mono"><%= t.fuente %></td>
+          <td><span class="v-status <%= t.vigente ? 'v-status--ok' : 'v-status--err' %>"><span class="ms" style="font-size:15px"><%= t.vigente ? 'check_circle' : 'cancel' %></span><%= t.vigente ? 'Vigente' : 'Baja' %></span></td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
   </div>
 </div>
 
-<!-- Patrimonio neto -->
-<form method="get" style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;align-items:center">
-  <input name="dip" class="form-input" style="max-width:200px" placeholder="DIP (23749931M)" value="<%= dipFiltro %>">
-  <button class="btn btn-primary">Calcular patrimonio neto</button>
-  <% if (dipFiltro) { %><a href="/rsp/patrimonio" class="btn btn-secondary">Limpiar</a><% } %>
-</form>
-
-<% if (patrimonio) { %>
-<div class="rsp-kpis" style="margin-top:0">
-  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(0,200,83,.12)">🏦</div><div><div class="rsp-kpi-value"><%= patrimonio.patrimonioCuentas.toLocaleString() %></div><div class="rsp-kpi-label">Cuentas (por %)</div></div></div>
-  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(55,2,179,.12)">🏢</div><div><div class="rsp-kpi-value"><%= patrimonio.patrimonioParticipaciones.toLocaleString() %></div><div class="rsp-kpi-label">Participaciones</div></div></div>
-  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(41,121,255,.12)">📦</div><div><div class="rsp-kpi-value"><%= patrimonio.valorActivos.toLocaleString() %></div><div class="rsp-kpi-label">Activos</div></div></div>
-  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:rgba(255,80,80,.12)">➖</div><div><div class="rsp-kpi-value"><%= patrimonio.deudasReconocidas.toLocaleString() %></div><div class="rsp-kpi-label">Deudas reconocidas</div></div></div>
-  <div class="rsp-kpi"><div class="rsp-kpi-icon" style="background:linear-gradient(135deg,#3702b3,#6a2be0)">🧮</div><div><div class="rsp-kpi-value" style="color:#3702b3"><%= patrimonio.patrimonioNeto.toLocaleString() %> Pz</div><div class="rsp-kpi-label">PATRIMONIO NETO</div></div></div>
-</div>
-<% if (patrimonio.cuentasTitularidadIndeterminada && patrimonio.cuentasTitularidadIndeterminada.length > 0) { %>
-<div style="background:#fff8e6;border:1px solid #fcd34d;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13px">
-  ⚠️ Cuentas compartidas con titularidad indeterminada (sin % registrado): <strong><%= patrimonio.cuentasTitularidadIndeterminada.join(', ') %></strong> — deben registrarse los % antes de liquidar impuestos.
-</div>
-<% } %>
-<% } %>
-
-<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;align-items:center">
-  <% if (esAdmin) { %>
-  <button class="btn btn-primary" onclick="calcularPatrimonioAuto()">⚙️ Registrar patrimonio automático</button>
-  <button class="btn btn-primary" onclick="abrirModalTit()">👥 Registrar titularidad</button>
-  <button class="btn btn-primary" onclick="abrirModalPart()">🏢 Registrar participación</button>
-  <button class="btn btn-primary" onclick="abrirModalAct()">📦 Registrar activo</button>
-  <% } %>
-  <span id="autoResult" style="font-size:12px;font-weight:700"></span>
-</div>
-
-<!-- TITULARIDADES -->
-<h2 class="rsp-section-title">👥 Titularidades de cuentas compartidas</h2>
-<div class="table-container">
-  <table>
-    <thead><tr><th>Cuenta</th><th>Titular</th><th>%</th><th>Tipo</th><th>Fuente</th><th>Vigente</th></tr></thead>
-    <tbody>
-      <% if (!titularidades || titularidades.length === 0) { %>
-      <tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Sin titularidades registradas.</td></tr>
-      <% } %>
-      <% (titularidades||[]).forEach(function(t) { %>
-      <tr>
-        <td><strong><%= t.cuenta_id %></strong></td>
-        <td><%= t.titular_dip || t.titular_eip %></td>
-        <td><strong><%= t.porcentaje %>%</strong></td>
-        <td><span class="badge badge-purple"><%= t.tipo %></span></td>
-        <td style="font-size:12px"><%= t.fuente %></td>
-        <td><%= t.vigente ? '✅' : '❌' %></td>
-      </tr>
-      <% }); %>
-    </tbody>
-  </table>
-</div>
-
 <!-- PARTICIPACIONES -->
-<h2 class="rsp-section-title" style="margin-top:20px">🏢 Participaciones empresariales</h2>
-<div class="table-container">
-  <table>
-    <thead><tr><th>Titular</th><th>Entidad</th><th>%</th><th>Patrimonio entidad</th><th>Atribuible</th><th>Deudas</th><th>Vigente</th></tr></thead>
-    <tbody>
-      <% if (!participaciones || participaciones.length === 0) { %>
-      <tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin participaciones registradas.</td></tr>
-      <% } %>
-      <% (participaciones||[]).forEach(function(p) { %>
-      <tr>
-        <td><%= p.titular_nombre || p.titular_dip %></td>
-        <td><%= p.entidad_nombre || p.entidad_eip %></td>
-        <td><strong><%= p.porcentaje %>%</strong></td>
-        <td><%= (p.patrimonio_neto_entidad||0).toLocaleString() %></td>
-        <td style="color:#3702b3;font-weight:700"><%= (p.patrimonio_atribuible||0).toLocaleString() %> Pz</td>
-        <td><%= (p.deudas_reconocidas||0).toLocaleString() %></td>
-        <td><%= p.vigente ? '✅' : '❌' %></td>
-      </tr>
-      <% }); %>
-    </tbody>
-  </table>
+<div class="v-card" style="margin-top:20px">
+  <div class="v-card-head">
+    <div>
+      <div class="v-card-title">🏢 Participaciones empresariales</div>
+      <div class="v-card-sub">Cuotas en entidades con EIP y patrimonio atribuible</div>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="v-table">
+      <thead><tr><th>Titular</th><th>Entidad</th><th>%</th><th>Patrimonio entidad</th><th>Atribuible</th><th>Deudas</th><th>Vigente</th></tr></thead>
+      <tbody>
+        <% if (!participaciones || participaciones.length === 0) { %>
+        <tr><td colspan="7" style="text-align:center;color:var(--tq);padding:22px">Sin participaciones registradas.</td></tr>
+        <% } %>
+        <% (participaciones||[]).forEach(function(p) { %>
+        <tr>
+          <td class="v-entity-name"><%= p.titular_nombre || p.titular_dip %></td>
+          <td><span class="v-entity-id"><%= p.entidad_nombre || p.entidad_eip %></span></td>
+          <td><span class="v-chip v-chip--indigo"><%= p.porcentaje %>%</span></td>
+          <td class="v-cell-mono"><%= (p.patrimonio_neto_entidad||0).toLocaleString() %></td>
+          <td class="v-cell-mono" style="color:#c4b5fd;font-weight:600"><%= (p.patrimonio_atribuible||0).toLocaleString() %> Pz</td>
+          <td class="v-cell-mono"><%= (p.deudas_reconocidas||0).toLocaleString() %></td>
+          <td><span class="v-status <%= p.vigente ? 'v-status--ok' : 'v-status--err' %>"><span class="ms" style="font-size:15px"><%= p.vigente ? 'check_circle' : 'cancel' %></span><%= p.vigente ? 'Vigente' : 'Baja' %></span></td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <!-- ACTIVOS -->
-<h2 class="rsp-section-title" style="margin-top:20px">📦 Activos</h2>
-<div class="table-container">
-  <table>
-    <thead><tr><th>Activo</th><th>Propietario</th><th>Tipo</th><th>Valor</th><th>%</th><th>Valor fiscal</th><th>Deuda asociada</th></tr></thead>
-    <tbody>
-      <% if (!activos || activos.length === 0) { %>
-      <tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Sin activos registrados.</td></tr>
-      <% } %>
-      <% (activos||[]).forEach(function(a) { %>
-      <tr>
-        <td><strong><%= a.nombre %></strong></td>
-        <td><%= a.propietario_dip || a.propietario_eip %></td>
-        <td><span class="badge badge-info"><%= a.tipo %></span></td>
-        <td><%= (a.valor||0).toLocaleString() %></td>
-        <td><%= a.porcentaje_titularidad %>%</td>
-        <td style="color:#3702b3;font-weight:700"><%= (a.valor_fiscal||0).toLocaleString() %></td>
-        <td><%= (a.deuda_asociada||0).toLocaleString() %></td>
-      </tr>
-      <% }); %>
-    </tbody>
-  </table>
+<div class="v-card" style="margin-top:20px">
+  <div class="v-card-head">
+    <div>
+      <div class="v-card-title">📦 Activos</div>
+      <div class="v-card-sub">Bienes y cuentas valoradas en el patrimonio</div>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="v-table">
+      <thead><tr><th>Activo</th><th>Propietario</th><th>Tipo</th><th>Valor</th><th>%</th><th>Valor fiscal</th><th>Deuda asociada</th></tr></thead>
+      <tbody>
+        <% if (!activos || activos.length === 0) { %>
+        <tr><td colspan="7" style="text-align:center;color:var(--tq);padding:22px">Sin activos registrados.</td></tr>
+        <% } %>
+        <% (activos||[]).forEach(function(a) { %>
+        <tr>
+          <td class="v-entity-name"><%= a.nombre %></td>
+          <td><span class="v-entity-id"><%= a.propietario_dip || a.propietario_eip %></span></td>
+          <td><span class="v-chip v-chip--success"><%= a.tipo %></span></td>
+          <td class="v-cell-mono"><%= (a.valor||0).toLocaleString() %></td>
+          <td><span class="v-chip"><%= a.porcentaje_titularidad %>%</span></td>
+          <td class="v-cell-mono" style="color:#c4b5fd;font-weight:600"><%= (a.valor_fiscal||0).toLocaleString() %></td>
+          <td class="v-cell-mono"><%= (a.deuda_asociada||0).toLocaleString() %></td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <!-- MODALES -->
-<div id="modalTit" style="display:none;position:fixed;inset:0;background:rgba(10,5,30,.55);z-index:200;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:16px;max-width:520px;width:92%;padding:24px">
+<div id="modalTit" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,.68);z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--vs-high);border:1px solid var(--vs-stroke);border-radius:16px;max-width:520px;width:92%;padding:24px;color:var(--t)">
     <h3 style="margin:0 0 16px">👥 Registrar titularidad</h3>
     <div style="display:grid;gap:10px">
       <div><label class="form-label">Cuenta *</label><input id="tit_cuenta" class="form-input" placeholder="acct-xxx o ACC-2026-..."></div>
@@ -136,8 +157,8 @@
   </div>
 </div>
 
-<div id="modalPart" style="display:none;position:fixed;inset:0;background:rgba(10,5,30,.55);z-index:200;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:16px;max-width:520px;width:92%;padding:24px">
+<div id="modalPart" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,.68);z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--vs-high);border:1px solid var(--vs-stroke);border-radius:16px;max-width:520px;width:92%;padding:24px;color:var(--t)">
     <h3 style="margin:0 0 16px">🏢 Registrar participación</h3>
     <div style="display:grid;gap:10px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -161,8 +182,8 @@
   </div>
 </div>
 
-<div id="modalAct" style="display:none;position:fixed;inset:0;background:rgba(10,5,30,.55);z-index:200;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:16px;max-width:520px;width:92%;padding:24px">
+<div id="modalAct" style="display:none;position:fixed;inset:0;background:rgba(2,6,23,.68);z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--vs-high);border:1px solid var(--vs-stroke);border-radius:16px;max-width:520px;width:92%;padding:24px;color:var(--t)">
     <h3 style="margin:0 0 16px">📦 Registrar activo</h3>
     <div style="display:grid;gap:10px">
       <div><label class="form-label">Nombre *</label><input id="act_nombre" class="form-input"></div>
@@ -181,6 +202,7 @@
       <button class="btn btn-primary" onclick="guardarAct()">Guardar</button>
     </div>
   </div>
+</div>
 </div>
 
 <script>

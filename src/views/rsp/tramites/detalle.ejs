@@ -1,0 +1,247 @@
+<!-- ═══ TRÁMITE — DETALLE (Vivid) ═══ -->
+<%
+const est = ESTADO_UI[t.estado] || ESTADO_UI.borrador;
+const ahora = new Date();
+let banner = { tipo: 'process', icono: 'sync', titulo: 'Estamos revisando tu solicitud', sub: 'No tienes que hacer nada por ahora.' };
+if (t.estado === 'borrador') { banner = { tipo: 'info', icono: 'draft', titulo: 'Trámite en borrador', sub: 'Completa los datos y preséntalo para iniciar el proceso.' }; }
+else if (t.estado === 'subsanacion') { banner = { tipo: 'action', icono: 'published_with_changes', titulo: 'Necesitamos algo de ti', sub: 'Falta aportar la documentación requerida para continuar.' }; }
+else if (t.estado === 'firma') { banner = { tipo: 'action', icono: 'draw', titulo: 'Documento listo para firmar', sub: 'Tu firma es el siguiente paso para resolver el trámite.' }; }
+else if (t.estado === 'cerrado') { banner = { tipo: 'ok', icono: 'check_circle', titulo: 'Trámite completado', sub: 'No tienes ninguna acción pendiente.' }; }
+else if (t.estado === 'rechazado') { banner = { tipo: 'error', icono: 'cancel', titulo: 'Solicitud rechazada', sub: (t.resolucion && t.resolucion.nota) || 'Motivo: documentación insuficiente.' }; }
+const accionesSolicitante = acciones.filter(a => a.rol === 'solicitante');
+const accionesAdmin = acciones.filter(a => a.rol === 'admin');
+%>
+<div class="v-page">
+  <!-- Cabecera -->
+  <div class="v-page-header">
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:26px"><%= cfg.icono %></span>
+        <h1 class="v-title" style="font-size:24px"><%= t.titulo %></h1>
+        <span class="v-chip v-chip--dot" style="color:<%= est.color %>;border-color:<%= est.color %>"><%= est.label %></span>
+      </div>
+      <p class="v-sub"><span class="v-chip v-chip--indigo"><%= t.id %></span>
+        <% if (t.expediente_id) { %><a class="v-chip" href="/rsp/expedientes/<%= t.expediente_id %>"><span class="ms" style="font-size:13px">folder</span> <%= t.expediente_id %></a><% } %>
+        <% if (t.fecha_presentacion) { %><span class="v-chip">Presentado el <%= new Date(t.fecha_presentacion).toLocaleDateString('es-ES') %></span><% } %>
+      </p>
+    </div>
+    <div class="v-page-actions">
+      <a class="btn btn-secondary" href="/rsp/tramites"><span class="ms" style="font-size:17px">arrow_back</span> Volver</a>
+    </div>
+  </div>
+
+  <!-- Stepper -->
+  <div class="v-card">
+    <div class="v-card-body" style="padding:20px 22px">
+      <div class="v-stepper">
+        <% progreso.forEach(function(p, i) { %>
+        <div class="v-step <%= p.hecho ? 'done' : '' %><%= p.activo ? ' active' : '' %><%= p.rechazado ? ' rejected' : '' %>">
+          <div class="v-step-dot"><%= p.hecho ? '✓' : (p.activo ? '●' : (i + 1)) %></div>
+          <div class="v-step-label"><%= p.titulo %></div>
+        </div>
+        <% }); %>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banner de acción -->
+  <div class="v-banner v-banner--<%= banner.tipo %>">
+    <span class="ms"><%= banner.icono %></span>
+    <div style="flex:1">
+      <div class="v-banner-title"><%= banner.titulo %></div>
+      <div class="v-banner-sub"><%= banner.sub %></div>
+      <% if (accionesSolicitante.length && (t.estado === 'borrador' || t.estado === 'subsanacion' || t.estado === 'firma' || t.estado === 'justificacion')) { %>
+      <div class="v-banner-actions">
+        <% accionesSolicitante.forEach(function(a) { %>
+        <button class="btn-accent" onclick="ejecutarAccion('<%= a.id %>')"><span class="ms" style="font-size:16px"><%= a.icono %></span> <%= a.label %></button>
+        <% }); %>
+      </div>
+      <% } %>
+    </div>
+    <div style="text-align:right;font-family:var(--mono);font-size:11px;color:var(--tq);white-space:nowrap">
+      <% if (t.prioridad === 'alta') { %><span class="v-chip v-chip--error">Prioridad alta</span><% } %>
+    </div>
+  </div>
+
+  <!-- Tabs + contenido -->
+  <div class="v-card">
+    <div class="v-card-head" style="border-bottom:none;padding-bottom:0">
+      <div class="v-tabs" style="border-bottom:none;margin-bottom:0;width:100%">
+        <button class="v-tab active" data-tab="resumen">Resumen</button>
+        <button class="v-tab" data-tab="datos">Datos</button>
+        <% if (cfg.documentos && cfg.documentos.length) { %><button class="v-tab" data-tab="documentos">Documentos</button><% } %>
+        <% if (t.validaciones && t.validaciones.length) { %><button class="v-tab" data-tab="validaciones">Validaciones</button><% } %>
+        <button class="v-tab" data-tab="comunicaciones">Comunicaciones</button>
+        <button class="v-tab" data-tab="historial">Historial</button>
+      </div>
+    </div>
+
+    <div class="v-card-body" style="padding-top:16px">
+      <!-- RESUMEN -->
+      <div class="tab-panel" id="tab-resumen">
+        <div class="v-bento" style="gap:12px">
+          <div class="v-field"><span class="v-field-label">Estado actual</span><span class="v-field-value" style="color:<%= est.color %>"><span class="ms" style="font-size:15px;vertical-align:-2px"><%= est.icono %></span> <%= est.label %></span></div>
+          <div class="v-field"><span class="v-field-label">Solicitante</span><span class="v-field-value"><%= t.solicitante_nombre || t.solicitante_dip || '—' %></span></div>
+          <div class="v-field"><span class="v-field-label">Próxima acción</span><span class="v-field-value"><%= t.siguiente_accion || '—' %></span></div>
+          <div class="v-field"><span class="v-field-label">Última actualización</span><span class="v-field-value"><%= new Date(t.updated_at).toLocaleString('es-ES') %></span></div>
+          <div class="v-field"><span class="v-field-label">Responsable</span><span class="v-field-value"><%= t.responsable_nombre || 'Sin asignar' %></span></div>
+          <div class="v-field"><span class="v-field-label">Tipo</span><span class="v-field-value"><%= cfg.icono %> <%= cfg.nombre %></span></div>
+        </div>
+      </div>
+
+      <!-- DATOS -->
+      <div class="tab-panel" id="tab-datos" style="display:none">
+        <% if (!t.datos || Object.keys(t.datos).length === 0) { %>
+        <div style="text-align:center;color:var(--tq);padding:30px">No se han registrado datos adicionales.</div>
+        <% } else { %>
+        <div class="v-bento" style="gap:12px">
+          <% Object.entries(t.datos).forEach(function(e) { %>
+          <div class="v-field"><span class="v-field-label"><%= e[0].replace(/_/g,' ') %></span><span class="v-field-value"><%= e[1] %></span></div>
+          <% }); %>
+        </div>
+        <% } %>
+      </div>
+
+      <!-- DOCUMENTOS -->
+      <div class="tab-panel" id="tab-documentos" style="display:none">
+        <% if (!t.documentos || t.documentos.length === 0) { %>
+        <div style="text-align:center;color:var(--tq);padding:30px">Este trámite no requiere documentación adicional.</div>
+        <% } else { %>
+        <% (t.documentos||[]).forEach(function(d) { %>
+        <div class="v-doc">
+          <div class="v-doc-ico"><span class="ms">description</span></div>
+          <div>
+            <div class="v-doc-name"><%= d.nombre %></div>
+            <% if (d.fecha) { %><div class="v-entity-id"><%= new Date(d.fecha).toLocaleDateString('es-ES') %></div><% } %>
+          </div>
+          <span class="v-doc-state v-status <%= d.estado === 'validado' ? 'v-status--ok' : (d.estado === 'pendiente' ? 'v-status--warn' : 'v-status--err') %>">
+            <span class="ms" style="font-size:15px"><%= d.estado === 'validado' ? 'check_circle' : (d.estado === 'pendiente' ? 'schedule' : 'error') %></span>
+            <%= d.estado === 'validado' ? 'Validado' : (d.estado === 'pendiente' ? 'Pendiente' : 'Requiere revisión') %>
+          </span>
+        </div>
+        <% }); %>
+        <% } %>
+      </div>
+
+      <!-- VALIDACIONES -->
+      <div class="tab-panel" id="tab-validaciones" style="display:none">
+        <% if (!t.validaciones || t.validaciones.length === 0) { %>
+        <div style="text-align:center;color:var(--tq);padding:30px">Aún no se han ejecutado validaciones automáticas.</div>
+        <% } else { %>
+        <% (t.validaciones||[]).forEach(function(v) { %>
+        <div class="v-doc">
+          <div class="v-doc-ico"><span class="ms" style="color:<%= v.ok ? '#34d399' : '#f87171' %>"><%= v.ok ? 'verified' : 'error' %></span></div>
+          <div class="v-doc-name"><%= v.nombre %></div>
+          <span class="v-doc-state v-status <%= v.ok ? 'v-status--ok' : 'v-status--err' %>"><span class="ms" style="font-size:15px"><%= v.ok ? 'check_circle' : 'cancel' %></span><%= v.ok ? 'OK' : 'No' %></span>
+        </div>
+        <% }); %>
+        <% } %>
+      </div>
+
+      <!-- COMUNICACIONES -->
+      <div class="tab-panel" id="tab-comunicaciones" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input id="comTexto" class="form-input" placeholder="Escribe un mensaje oficial…">
+          <button class="btn-accent" onclick="enviarComunicacion()"><span class="ms" style="font-size:16px">send</span> Enviar</button>
+        </div>
+        <% if (!t.comunicaciones || t.comunicaciones.length === 0) { %>
+        <div style="text-align:center;color:var(--tq);padding:24px">Sin comunicaciones todavía.</div>
+        <% } else { %>
+        <% [...(t.comunicaciones||[])].reverse().forEach(function(c) { %>
+        <div class="v-doc" style="align-items:flex-start">
+          <div class="v-doc-ico"><span class="ms">forum</span></div>
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+              <span class="v-entity-name" style="font-size:13px"><%= c.remitente %></span>
+              <span class="v-tl-time"><%= new Date(c.fecha).toLocaleString('es-ES') %></span>
+            </div>
+            <div style="font-size:13px;color:var(--tm);margin-top:4px"><%= c.texto %></div>
+          </div>
+        </div>
+        <% }); %>
+        <% } %>
+      </div>
+
+      <!-- HISTORIAL -->
+      <div class="tab-panel" id="tab-historial" style="display:none">
+        <div class="v-timeline">
+          <% [...(t.historial||[])].reverse().forEach(function(h) { %>
+          <div class="v-tl-item">
+            <div class="v-tl-time"><%= new Date(h.fecha).toLocaleString('es-ES') %></div>
+            <div class="v-tl-title"><%= h.accion %> <span style="font-weight:400;color:var(--tm)">— <%= h.quien %></span></div>
+            <% if (h.nota) { %><div class="v-tl-note"><%= h.nota %></div><% } %>
+          </div>
+          <% }); %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel lateral fijo de acciones (admin) -->
+<% if (esAdmin && accionesAdmin.length) { %>
+<div style="position:fixed;right:22px;bottom:22px;width:280px;max-width:calc(100vw - 40px);z-index:90">
+  <div class="v-card" style="box-shadow:0 18px 50px rgba(2,6,23,.65)">
+    <div class="v-card-head" style="padding:14px 18px"><div class="v-card-title" style="font-size:15px"><span class="ms" style="font-size:18px;vertical-align:-3px">bolt</span> ACCIONES</div></div>
+    <div class="v-card-body" style="padding:12px 14px">
+      <div class="v-actions">
+        <% accionesAdmin.forEach(function(a) { %>
+        <button class="v-action-btn <%= a.nivel === 'accion' ? 'v-action-btn--primary' : (a.id === 'rechazar' ? 'v-action-btn--danger' : '') %>" onclick="abrirAccion('<%= a.id %>','<%= a.label %>')">
+          <span class="ms"><%= a.icono %></span> <%= a.label %>
+        </button>
+        <% }); %>
+        <button class="v-action-btn" onclick="asignarResponsable()"><span class="ms">person_add</span> Asignar responsable</button>
+      </div>
+    </div>
+  </div>
+</div>
+<% } %>
+
+<script>
+  const TRAMITE_ID = '<%= t.id %>';
+  function escHTML(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  document.querySelectorAll('.v-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('.v-tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(x => x.style.display = 'none');
+      this.classList.add('active');
+      document.getElementById('tab-' + this.dataset.tab).style.display = '';
+    });
+  });
+  async function ejecutarAccion(accion) {
+    const nota = accion === 'subsanar' || accion === 'rechazar' ? (prompt('Motivo / nota:') || '') : '';
+    const r = await fetch('/rsp/tramites/api/tramites/' + TRAMITE_ID + '/accion', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accion, nota })
+    });
+    const j = await r.json();
+    if (!j.success) { alert('Error: ' + j.error); return; }
+    toast(j.mensaje, 'success');
+    setTimeout(() => location.reload(), 800);
+  }
+  function abrirAccion(accion, label) {
+    const nota = ['subsanar','rechazar'].includes(accion) ? (prompt('Nota para el solicitante:') || '') : '';
+    ejecutarAccion(accion, nota);
+  }
+  async function enviarComunicacion() {
+    const texto = document.getElementById('comTexto').value.trim();
+    if (!texto) return;
+    const r = await fetch('/rsp/tramites/api/tramites/' + TRAMITE_ID + '/comunicacion', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto })
+    });
+    const j = await r.json();
+    if (!j.success) { alert('Error: ' + j.error); return; }
+    location.reload();
+  }
+  async function asignarResponsable() {
+    const dip = prompt('DIP del responsable:');
+    if (!dip) return;
+    const r = await fetch('/rsp/tramites/api/tramites/' + TRAMITE_ID, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ responsable_dip: dip })
+    });
+    const j = await r.json();
+    if (!j.success) { alert('Error: ' + j.error); return; }
+    toast('Responsable asignado', 'success');
+    setTimeout(() => location.reload(), 800);
+  }
+</script>

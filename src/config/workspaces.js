@@ -183,6 +183,14 @@ const WORKSPACES = {
         ]
       },
       {
+        titulo: '📥 Bandeja y trámites',
+        enlaces: [
+          { texto: 'Mi bandeja', url: '/rsp/bandeja', icono: '📥' },
+          { texto: 'Trámites', url: '/rsp/tramites', icono: '📋' },
+          { texto: 'Bandeja de trabajo', url: '/rsp/trabajo', icono: '🗂️' },
+        ]
+      },
+      {
         titulo: '🧮 Hacienda y economía',
         enlaces: [
           { texto: 'Dashboard Económico', url: '/rsp/economico', icono: '📈' },
