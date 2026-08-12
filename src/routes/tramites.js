@@ -141,6 +141,17 @@ tramitesRouter.post('/api/revisar-vencimientos', verificarSesion, verificarAcces
   } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
+// FASE 6.4 — Mi bandeja ciudadana: acciones pendientes de un DIP
+// GET /rsp/tramites/api/bandeja/:dip — consumido por el Banco web / portal
+tramitesRouter.get('/api/bandeja/:dip', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
+  try {
+    const dip = String(req.params.dip || '').trim().toUpperCase();
+    if (!dip) return res.json({ success: false, error: 'DIP requerido' });
+    const acciones = await bandejaDe(dip);
+    res.json({ success: true, dip, acciones });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
+
 /* ═══ MI BANDEJA ═════════════════════════════════════════════ */
 bandejaRouter.get('/', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
   const dip = req.session?.usuario?.dip;

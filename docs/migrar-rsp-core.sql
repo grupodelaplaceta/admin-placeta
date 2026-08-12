@@ -609,3 +609,9 @@ CREATE TABLE IF NOT EXISTS rsp_ciudadanos (
 );
 CREATE INDEX IF NOT EXISTS idx_ciud_placeta ON rsp_ciudadanos(placeta_id);
 CREATE INDEX IF NOT EXISTS idx_ciud_nivel ON rsp_ciudadanos(nivel);
+
+-- ── 23. NOTIFICACIONES: canal + acuse (FASE 7) ─────────────────────────────
+ALTER TABLE rsp_notificaciones ADD COLUMN IF NOT EXISTS canal TEXT DEFAULT 'email';
+ALTER TABLE rsp_notificaciones ADD COLUMN IF NOT EXISTS acuse_recibido BOOLEAN DEFAULT FALSE;
+ALTER TABLE rsp_notificaciones ADD COLUMN IF NOT EXISTS leida_en TEXT;
+ALTER TABLE rsp_notificaciones ADD COLUMN IF NOT EXISTS acuse_en TEXT;
