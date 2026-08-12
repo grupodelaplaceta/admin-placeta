@@ -808,3 +808,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
 .page-hero p{margin:3px 0 0;font-size:12px;opacity:.82}
 .page-hero .hero-meta{display:flex;gap:10px;flex-wrap:wrap}
 .page-hero .hero-chip{font-size:11px;font-weight:700;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.14);padding:5px 12px;border-radius:50px}
+
+/* ── WCAG (FASE 12.2): foco visible global (todos los workspaces) ───────── */
+:focus-visible{outline:3px solid #6366f1 !important;outline-offset:2px !important;border-radius:6px}
+.skip-link{position:absolute;left:-9999px;top:0;z-index:1000;background:#4f46e5;color:#fff;padding:10px 16px;border-radius:0 0 10px 0;font-weight:700;text-decoration:none}
+.skip-link:focus{left:0;outline:3px solid #22d3ee}

@@ -185,7 +185,7 @@ async function listarTodos() {
 /* ── Catálogo de trámites ──────────────────────────────────────── */
 export const TRAMITES = {
   subvencion: {
-    id: 'subvencion', nombre: 'Solicitud de subvención', icono: '💸',
+    id: 'subvencion', nombre: 'Solicitud de subvención', icono: '💸', servicio: 'subvenciones',
     descripcion: 'Solicita una ayuda o subvención para tu entidad o proyecto.',
     color: '#8b5cf6',
     pasos: [
@@ -228,7 +228,7 @@ export const TRAMITES = {
     },
   },
   'alta-entidad': {
-    id: 'alta-entidad', nombre: 'Alta de entidad', icono: '🏢',
+    id: 'alta-entidad', nombre: 'Alta de entidad', icono: '🏢', servicio: 'entidades',
     descripcion: 'Registra una nueva entidad u organización en el ecosistema.',
     color: '#6366f1',
     pasos: [
@@ -263,7 +263,7 @@ export const TRAMITES = {
     },
   },
   'cambio-datos': {
-    id: 'cambio-datos', nombre: 'Cambio de datos', icono: '✏️',
+    id: 'cambio-datos', nombre: 'Cambio de datos', icono: '✏️', servicio: 'identidad',
     descripcion: 'Solicita la modificación de tus datos personales o de tu entidad.',
     color: '#22d3ee',
     pasos: [
@@ -291,7 +291,7 @@ export const TRAMITES = {
     },
   },
   'cambio-titularidad': {
-    id: 'cambio-titularidad', nombre: 'Cambio de titularidad', icono: '🔄',
+    id: 'cambio-titularidad', nombre: 'Cambio de titularidad', icono: '🔄', servicio: 'identidad',
     descripcion: 'Transfiere la titularidad de una cuenta o entidad a otra persona.',
     color: '#f472b6',
     pasos: [
@@ -327,7 +327,7 @@ export const TRAMITES = {
     },
   },
   'solicitud-pago': {
-    id: 'solicitud-pago', nombre: 'Solicitud de pago', icono: '💰',
+    id: 'solicitud-pago', nombre: 'Solicitud de pago', icono: '💰', servicio: 'economico',
     descripcion: 'Solicita un pago u operación económica (factura, retribución, ayuda).',
     color: '#10b981',
     pasos: [
@@ -550,6 +550,7 @@ export async function crearTramite(datos, autor = {}) {
   const t = {
     id,
     tipo: datos.tipo,
+    servicio: cfg.servicio || null,
     titulo: datos.titulo,
     solicitante_dip: datos.solicitante_dip || autor.dip || null,
     solicitante_nombre: datos.solicitante_nombre || autor.nombre || null,

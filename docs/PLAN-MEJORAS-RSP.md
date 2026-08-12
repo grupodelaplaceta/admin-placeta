@@ -12,9 +12,9 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 ---
 
 ## FASE 0 — Fundamento: Modelo de expediente + fuentes de verdad (P0 transversal)
-- [ ] **0.1 Modelo de 4 niveles**: `SERVICIO → TRÁMITE → EXPEDIENTE → ACTUACIONES` (`tramites.js` + `expedientes.js`). Cada trámite declara su `servicio`; al presentar se crea `EXP` con `actuaciones[]`.
-- [ ] **0.2 Expediente = objeto central**: enlaza `documentos`, `actuaciones`, `firmas`, `notificaciones`, `pagos`, `validaciones`, `auditoría` (referencias, no duplicar).
-- [ ] **0.3 Fuentes de verdad por dominio** (`docs/`): PlacetaID=identidad · **backend-banco (MongoDB)=cuentas/operaciones** · Supabase RSP=expedientes/patrimonio/fiscalidad · **Banco web=interfaz ciudadano (lee API)** · gdlp-crm=portal público (sin datos).
+- [x] **0.1 Modelo de 4 niveles**: `SERVICIO → TRÁMITE → EXPEDIENTE → ACTUACIONES` (`tramites.js` + `expedientes.js`). Cada trámite declara su `servicio`; al presentar se crea `EXP` con `actuaciones[]`. ✅ hecha (12/08): campo `servicio` en cada tipo de `TRAMITES` y adjuntado al trámite.
+- [x] **0.2 Expediente = objeto central**: enlaza `documentos`, `actuaciones`, `firmas`, `notificaciones`, `pagos`, `validaciones`, `auditoría` (referencias, no duplicar). ✅ hecha (12/08): `crearExpediente` + `vincularObjeto` + `relacion_ids`.
+- [x] **0.3 Fuentes de verdad por dominio** (`docs/`): PlacetaID=identidad · **backend-banco (MongoDB)=cuentas/operaciones** · Supabase RSP=expedientes/patrimonio/fiscalidad · **Banco web=interfaz ciudadano (lee API)** · gdlp-crm=portal público (sin datos). ✅ documentada.
 - [x] **0.4 "Contexto Único" del ciudadano (federado)**: `GET /rsp/api/contexto/:dip` agrega Identidad+Bancario+Fiscalidad+Patrimonio+Expedientes+Documentos+Firmas+Notificaciones vía APIs (sin mega-DB). ✅ hecha (12/08): `src/config/contexto.js` + `src/routes/rsp.js`; verificado con producción (todas las fuentes OK, saldo correcto).
 
 ## FASE 1 — SEGURIDAD DE DATOS (P0, transversal) 🔴
