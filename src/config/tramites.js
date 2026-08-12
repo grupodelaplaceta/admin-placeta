@@ -21,9 +21,36 @@ import { apiBancoGetState } from './db.js';
 import { crearNotificacion } from './notificaciones.js';
 import { crearExpediente, vincularObjeto } from './expedientes.js';
 import { crearYEnviarFirma, estadoFirma, enviarAPlacetaID } from './firma-placetid.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const TABLA = 'rsp_tramites';
 const memTramites = new Map();
+
+/* Fallback de persistencia a archivo (duradero sin Supabase) */
+const FILE_TRAM = path.join(__dirname, '../../data/rsp_tramites.json');
+function cargarArchivo() {
+  try {
+    if (!fs.existsSync(FILE_TRAM)) return;
+    const arr = JSON.parse(fs.readFileSync(FILE_TRAM, 'utf8'));
+    (Array.isArray(arr) ? arr : []).forEach(t => memTramites.set(t.id, t));
+  } catch (e) { /* ignorar */ }
+}
+let _persistTimer = null;
+function persistirArchivo() {
+  if (_persistTimer) return;
+  _persistTimer = setTimeout(() => {
+    _persistTimer = null;
+    try {
+      fs.mkdirSync(path.dirname(FILE_TRAM), { recursive: true });
+      fs.writeFileSync(FILE_TRAM, JSON.stringify([...memTramites.values()], null, 2));
+    } catch (e) { /* ignorar (read-only en serverless) */ }
+  }, 120);
+}
+cargarArchivo();
 
 /* ── Estados genéricos ─────────────────────────────────────────── */
 export const ESTADOS = ['borrador','presentado','validacion','revision','subsanacion','resolucion','firma','ejecucion','justificacion','cerrado','rechazado'];
@@ -228,6 +255,7 @@ async function listarDB(filtros = {}) {
 }
 
 async function upsertDB(t) {
+  persistirArchivo(); // espejo local duradero (sobrevive reinicios aunque no exista la tabla)
   if (!supabase) return false;
   try {
     await supabase.from(TABLA).upsert(t, { onConflict: 'id' });
