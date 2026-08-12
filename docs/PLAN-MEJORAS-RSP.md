@@ -1,155 +1,134 @@
-# PLAN DE IMPLEMENTACIÓN — Mejoras RSP (todas las fases)
-### De la comparativa con la República de Valdoria → a ejecución
+# PLAN DE IMPLEMENTACIÓN — RSP (revisado)
+### De la comparativa con la República de Valdoria → ejecución, con la arquitectura acordada
 
-> Este plan convierte el documento `RSP-vs-pais-inventado.md` en pasos ejecutables.
-> Orden = dependencias primero. Cada paso tiene **archivos/rutas**, **qué hacer** y
-> **criterio de aceptación**. Se marca `[x]` cuando está hecho.
+> Reemplaza la versión anterior. Incorpora los redlines del equipo (sección 8 de `RSP-vs-pais-inventado.md`):
+> **gdlp-crm = Administración Pública (ciudadano/entidad)** · **RSP = solo admin** ·
+> **Contexto Único federado** (cada dominio es dueño de sus datos) ·
+> **SERVICIO → TRÁMITE → EXPEDIENTE → ACTUACIONES** (expediente central) ·
+> **silencio administrativo configurable** (no regla general) ·
+> **sin biometría**: PlacetaID + 2FA + firma + niveles N1–N3 ·
+> **P0 transversal primero**: modelo de expediente + fuentes de verdad.
+
+Cada paso tiene **archivos/rutas**, **qué hacer** y **criterio de aceptación`. Se marca `[x]` al completar.
 
 ---
 
-## FASE 1 — Plazos y SLA en el motor de trámites (P0)
-**Objetivo:** todo trámite tiene plazo máximo por estado, vencimiento visible y silencio administrativo.
+## FASE 0 — Fundamento: Modelo de expediente + fuentes de verdad (P0 transversal) 🔴
+**Objetivo:** definir el modelo antes de ampliar funcionalidades. Es la base de SLA, bandeja, notificaciones, firma múltiple y nuevos trámites.
 
-- [ ] **1.1 Configurar plazos por estado/tipo**
-  - Archivo: `admin-placeta/src/config/tramites.js` (catálogo `TRAMITES` + `ESTADO_UI`)
-  - Añadir a cada tipo: `plazos: { revision: 15, subsanacion: 10, firma: 7, justificacion: 20 }` (días).
-  - Criterio: cada tipo tiene `plazos` y un `plazo_default` global.
-- [ ] **1.2 Fecha límite por estado**
-  - En `avanzarTramite()`: al entrar en un estado con plazo, fijar `t.fecha_limite = now + N días` y `t.plazo_estado = estado`.
-  - Criterio: al avanzar a `revision` el trámite tiene `fecha_limite` calculada.
-- [ ] **1.3 Visibilidad del plazo (UI)**
-  - `detalle.ejs`: en Resumen mostrar "Vence en X días" / "⚠️ Vencido".
-  - `lista.ejs` y `trabajo.ejs`: chip de plazo por fila; ordenar vencidos arriba.
-  - Criterio: el plazo se ve en lista, detalle y bandeja de trabajo.
-- [ ] **1.4 Silencio administrativo**
-  - Regla configurable en `tramites.js`: al vencer `revision` sin acción → opción auto-avanzar a `resolucion` (silencio positivo) o marcar `vencido`.
-  - Criterio: un trámite vencido en revisión avanza o se marca, según config.
-- [ ] **1.5 Recordatorios y escalado**
-  - En `estadoTramites()`/función `revisarVencimientos()`: al 70% del plazo → notificación; al vencer → subir prioridad + notificar al admin (bandeja "Urgentes").
-  - Disparador: cron ligero (o al abrir la bandeja) que llama a `revisarVencimientos()`.
-  - Criterio: trámite al 70% recibe notificación; vencido pasa a Urgentes.
+- [ ] **0.1 Modelo de 4 niveles**
+  - En `src/config/tramites.js` + `src/config/expedientes.js`: representar `SERVICIO → TRÁMITE → EXPEDIENTE → ACTUACIONES`.
+  - Cada trámite declara su `servicio`; al presentar se crea `EXP`; el expediente agrupa `actuaciones[]` (presentación, validación, requerimiento, subsanación, informe, resolución, firma, pago, justificación, cierre).
+  - Criterio: un trámite subvención crea su `EXP` y registra cada actuación con fecha/responsable.
+- [ ] **0.2 Expediente = objeto central**
+  - `expedientes.js`: el expediente enlaza `documentos`, `actuaciones`, `firmas`, `notificaciones`, `pagos`, `validaciones`, `auditoría` (referencias, no duplicar datos).
+  - Criterio: el detalle de expediente muestra todos los bloques enlazados.
+- [ ] **0.3 Fuentes de verdad por dominio**
+  - Documentar (en `docs/`) y respetar: PlacetaID=identidad · Banco(MongoDB)=cuentas/operaciones · Supabase RSP=expedientes/patrimonio/fiscalidad · Tributos=censo/declaraciones · gdlp-crm=portal ciudadano/entidad.
+  - Criterio: ningún módulo escribe en datos de otro dominio; solo lee vía API.
+- [ ] **0.4 "Contexto Único" del ciudadano (federado)**
+  - En RSP (admin): endpoint `GET /rsp/api/contexto/:dip` que **agrega** Identidad (PlacetaID) + Banco (cuentas) + Fiscalidad (declaraciones/obligaciones) + Patrimonio (titularidades/participaciones) + Expedientes (activos/históricos) + Documentos + Firmas + Notificaciones, **consultando a cada dominio** (sin mega-DB).
+  - Ficha del ciudadano en el panel (ya existe el buscador) pasa a mostrar este contexto completo.
+  - Criterio: abrir un ciudadano muestra los 8 bloques con datos reales de cada dominio.
 
-## FASE 2 — Bandeja ciudadana (API) + Mi bandeja (P0)
-**Objetivo:** el ciudadano ve en su app las acciones que le tocan, con plazos.
+## FASE 1 — SLA y plazos configurables (P0) 🔴
+**Objetivo:** todo expediente tiene plazo por estado y vencimiento con efecto configurable.
 
-- [ ] **2.1 Endpoint público de bandeja por DIP**
-  - `admin-placeta/src/routes/tramites.js`: `GET /rsp/tramites/api/bandeja/:dip` → acciones pendientes del DIP (subsanación, firma, justificación, borradores) con `fecha_limite`, `vence_en`, `prioridad`, `tipo`, `id_trámite`.
-  - Criterio: devuelve JSON con las acciones pendientes y su plazo para cualquier DIP.
-- [ ] **2.2 Bandeja transversal (multi-servicio)**
-  - Consolidar pendientes de Banco (documentos por firmar), Tributos (declaraciones pendientes) y RSP (trámites) en el mismo endpoint.
-  - Criterio: un DIP con pendientes de 2 servicios los ve agrupados.
-- [ ] **2.3 Contrato documentado para la app**
-  - Añadir a `docs/` el esquema del endpoint (para `placetaid-mobil`).
-  - Criterio: documento con ejemplo de request/response.
-- [ ] **2.4 (App, opcional) Pantalla "Mi bandeja" en placetaid-mobil**
-  - Archivo: `placetaid-mobil` (repo raíz) — nueva pantalla consumiendo 2.1.
-  - Criterio: la app lista acciones pendientes con "Abrir trámite".
+- [ ] **1.1 Plazos por estado/tipo**
+  - En `tramites.js`: `plazos: { revision: 15, subsanacion: 10, firma: 7, justificacion: 20 }` por tipo + `plazo_default`.
+  - Criterio: cada tipo define plazos.
+- [ ] **1.2 Fecha límite + efecto de vencimiento configurable**
+  - Al entrar en un estado: `t.fecha_limite`. Añadir `vencimiento: { modo: 'silencio_positivo' | 'silencio_negativo' | 'escalado' | 'prorroga' | 'intervencion' }` por tipo/estado.
+  - **Sin silencio positivo por defecto**; cada procedimiento configura su efecto.
+  - Criterio: el motor aplica el efecto configurado al vencer (no una regla global).
+- [ ] **1.3 Visibilidad del plazo (UI admin)**
+  - `detalle.ejs` (Resumen "Vence en X / ⚠️ vencido") + `trabajo.ejs` (chips de plazo; vencidos arriba).
+  - Criterio: plazo visible en detalle y bandeja.
+- [ ] **1.4 Recordatorios y escalado**
+  - `revisarVencimientos()`: al 70% → notificación; al vencer → aplicar efecto configurado (escalar prioridad, prórroga o notificar).
+  - Disparo: cron ligero o al abrir la bandeja.
+  - Criterio: expediente al 70% recibe aviso; vencido ejecuta su efecto.
 
-## FASE 3 — Registro maestro único (P0)
-**Objetivo:** una única fuente de verdad de ciudadanos/entidades.
+## FASE 2 — Registro maestro de identidad (P0) 🔴
+**Objetivo:** una sola fuente de identidad; verificación por niveles, sin biometría.
 
-- [ ] **3.1 Canon de ciudadano en Supabase**
-  - Tabla `rsp_ciudadanos` (id, dip, placetaId, nombre, estado, nivel_identidad, cuenta_principal, created_at). Migración en `docs/migrar-rsp-core.sql`.
-  - Criterio: tabla creada (vía `scripts/aplicar-migraciones.mjs`).
-- [ ] **3.2 Sincronización event-driven**
-  - En `placetaid-sincronizacion.js`: al crear PlacetaID o banco_user → `upsertCiudadanoMaestro(dip)`.
+- [ ] **2.1 Canon de ciudadano en Supabase**
+  - Tabla `rsp_ciudadanos` (dip, placetaId, nombre, estado, nivel_identidad N1–N3, cuenta_principal, canal_preferido). Migración en `docs/migrar-rsp-core.sql`.
+  - Criterio: tabla creada vía `scripts/aplicar-migraciones.mjs`.
+- [ ] **2.2 Sincronización event-driven**
+  - En `placetaid-sincronizacion.js`: alta en PlacetaID/banco → `upsertCiudadanoMaestro(dip)`.
   - Criterio: alta en PlacetaID ⇒ aparece en `rsp_ciudadanos`.
-- [ ] **3.3 Resolver centralizado**
-  - Helper `resolverCiudadano(dip)` que usen trámites, patrimonio, fiscalidad, bandeja (deja de leer de 3 sitios).
-  - Criterio: todos los módulos resuelven el ciudadano con el mismo helper.
-- [ ] **3.4 Deprecar lecturas dispersas**
-  - Sustituir usos de `solicitantes`/censo sueltos por el maestro.
-  - Criterio: sin consultas duplicadas de identidad en el código.
+- [ ] **2.3 Resolver centralizado**
+  - Helper `resolverCiudadano(dip)` usado por trámites, patrimonio, fiscalidad, contexto (0.4).
+  - Criterio: todos los módulos resuelven identidad con el mismo helper.
+- [ ] **2.4 Niveles de verificación**
+  - N1 (registrado) → N2 (datos verificados) → N3 (firma/2FA). Beneficios por nivel (límites, firma, subvenciones).
+  - Criterio: el ciudadano puede subir de nivel; los límites cambian con el nivel.
 
-## FASE 4 — Notificaciones multicanal + acuse (P1)
-**Objetivo:** notificaciones con canal preferido y acuse que abre plazos.
+## FASE 3 — Interfaces separadas: gdlp-crm como Administración Pública (P0) 🔴
+**Objetivo:** el ciudadano/entidad operan en gdlp-crm; RSP queda admin-only.
 
-- [ ] **4.1 Modelo ampliado**
-  - `notificaciones.js`: añadir `canal` (app|email|push), `acuse_recibido`, `leida_en`.
-  - Criterio: crearNotificacion acepta canal; las notificaciones guardan acuse.
-- [ ] **4.2 Envío email (SendGrid/SMTP)**
-  - Módulo `src/config/notificaciones-email.js` con plantillas y envío asíncrono (fallback silencioso).
-  - Criterio: notificación con `canal:'email'` se envía (en dev, log).
-- [ ] **4.3 Acuse abre plazos**
-  - En trámites: `fecha_limite` empieza a contar al notificar/acusar (FASE 1).
-  - Criterio: plazo de firma empieza tras el acuse.
-- [ ] **4.4 Preferencias de canal**
-  - Campo `canal_preferido` en `rsp_ciudadanos`; crearNotificacion lo respeta.
-  - Criterio: ciudadano con email preferido recibe por email.
+- [ ] **3.1 API ciudadana en gdlp-crm**
+  - gdlp-crm consume las APIs RSP (trámites, expedientes, documentos, notificaciones) para las 2 interfaces:
+    - 👤 Ciudadano: Inicio → Mi bandeja → Trámites → Documentos → Perfil.
+    - 🏢 Entidad: Inicio → Expedientes → Obligaciones → Contabilidad → Documentos → Representantes → Notificaciones.
+  - Criterio: desde gdlp-crm se inicia/consulta un trámite y se ve "¿tengo que hacer algo?".
+- [ ] **3.2 Mi bandeja ciudadana (en gdlp-crm)**
+  - `GET /rsp/tramites/api/bandeja/:dip` (acciones con plazo, prioridad, tipo, vence_en) consumida por gdlp-crm.
+  - Criterio: un DIP ve sus acciones pendientes con plazos.
+- [ ] **3.3 RSP admin-only**
+  - Revisar rutas/permisos para que la UI de trámites del panel RSP no exponga flujo ciudadano (solo bandeja de trabajo + expedientes + contexto).
+  - Criterio: no hay botones de "firmar/presentar" ciudadanos en el panel (ya se quitó el de firma).
 
-## FASE 5 — Subsanación guiada + firma múltiple (P1)
-**Objetivo:** el solicitante sabe exactamente qué falta; las firmas múltiples se coordinan.
+## FASE 4 — Notificaciones multicanal + acuse (P1) 🟠
+- [ ] **4.1 Modelo ampliado** — `notificaciones.js`: `canal` (app|email|push), `acuse_recibido`, `leida_en`.
+- [ ] **4.2 Email (SendGrid/SMTP)** — módulo `notificaciones-email.js` con plantillas y fallback silencioso.
+- [ ] **4.3 Acuse abre plazos** — `fecha_limite` del trámite empieza al acusar (integra FASE 1).
+- [ ] **4.4 Preferencias de canal** — `canal_preferido` en `rsp_ciudadanos` (FASE 2).
+- Criterio: notificación con canal email se envía; el acuse arranca el plazo.
 
-- [ ] **5.1 Subsanación con lista exacta**
-  - En estado `subsanacion`: `t.requisitos_pendientes[]` (docs/errores concretos).
-  - `detalle.ejs`: mostrar checklist; al aportar, validar contra la lista.
-  - Criterio: subsanación muestra "falta: presupuesto actualizado, estatutos".
-- [ ] **5.2 Firma múltiple**
-  - Modelo `firmantes[]` (dip, rol, firmado) en trámites de `cambio-titularidad` (cedente+cesionario).
-  - `firma-placetid.js` + webhook: esperar a todos; `confirmar_firma` avanza al completarse; progreso "1/2 firmas".
-  - Criterio: con 2 firmantes, el trámite solo avanza al firmar ambos.
+## FASE 5 — Subsanación guiada + firma múltiple + 2FA (P1) 🟠
+- [ ] **5.1 Subsanación guiada** — `requisitos_pendientes[]` (lista exacta) en estado subsanación; checklist en el detalle; validar contra la lista al aportar.
+- [ ] **5.2 Firma múltiple** — `firmantes[]` (dip, rol, firmado) en cambio-titularidad (cedente+cesionario); webhook espera a todos; "1/2 firmas".
+- [ ] **5.3 2FA admin en acciones críticas** — confirmación con segundo factor (PlacetaID/código) para pagar, resolver, anular.
+- Criterio: subsanación indica exactamente qué falta; con 2 firmantes solo avanza al firmar ambos; acción crítica exige 2FA.
 
-## FASE 6 — Borrador de declaración ciudadano (P1)
-**Objetivo:** el contribuyente confirma su declaración desde la app.
+## FASE 6 — Borrador fiscal + auditoría ciudadana (P1) 🟠
+- [ ] **6.1 Borrador de declaración** — `GET /rsp/tributos/api/borrador/:dip` (datos reales reconciliados) + estado `borrador|confirmada|corregida|presentada`; confirmar desde gdlp-crm.
+- [ ] **6.2 Auditoría ciudadana** — endpoint por DIP de "quién vio/alteró mis datos"; visible en la ficha del ciudadano (0.4) y en gdlp-crm.
+- Criterio: el ciudadano confirma su declaración; puede ver quién accedió a sus datos.
 
-- [ ] **6.1 Endpoint borrador por DIP**
-  - En `tributos`/API: `GET /rsp/tributos/api/borrador/:dip` con datos reales reconciliados (ingresos, patrimonio, subvenciones, inversiones) + `importe_estimado`.
-  - Criterio: devuelve el borrador con origen de cada dato.
-- [ ] **6.2 Confirmar / corregir**
-  - Estado `borrador|confirmada|corregida|presentada` en la declaración; endpoint para confirmar.
-  - Criterio: confirmar desde la app fija la declaración como presentada.
-- [ ] **6.3 Botón admin**
-  - En `declaraciones.ejs`: regenerar borrador por contribuyente (reusar `reconciliarCuentaMes`).
-  - Criterio: el admin puede regenerar un borrador individual.
+## FASE 7 — Sucesiones automáticas (P2) 🟢
+- [ ] **7.1 Herederos y %** en `herencias.js` (testamento o ley).
+- [ ] **7.2 Reparto automático de patrimonio** — al cerrar, recalcular participaciones/titularidades por heredero (reusa `setParticipacion` dedupe).
+- [ ] **7.3 Certificado + notificaciones** — `DOC` de herederos enlazado al expediente; notificar a cada heredero.
+- Criterio: heredero recibe su participación actualizada y certificado.
 
-## FASE 7 — Sucesión automática (P2)
-**Objetivo:** la herencia recalcula el patrimonio de los herederos sin teclear.
+## FASE 8 — Transparencia, observabilidad y tests (P2) 🟢
+- [ ] **8.1 Portal de transparencia** (público, sin login): normativa CNIC vigente, presupuestos, subvenciones otorgadas.
+- [ ] **8.2 Observabilidad** — request-id + logs JSON, métricas por endpoint, alerta 5xx.
+- [ ] **8.3 Tests de motores** — `node --test` para tramites, fiscalidad, patrimonio (dedupe, plazos, validaciones).
+- [ ] **8.4 Migraciones en CI** — GitHub Actions ejecuta `scripts/aplicar-migraciones.mjs` con secret.
+- Criterio: `npm test` verde; push a main corre migración.
 
-- [ ] **7.1 Herederos y % en herencias**
-  - En `herencias.js`: lista de herederos con % (testamento o ley).
-  - Criterio: herencia registra herederos.
-- [ ] **7.2 Reparto automático de patrimonio**
-  - Al cerrar la herencia: recalcular participaciones (reusar `setParticipacion` dedupe) y titularidades para cada heredero según %; registrar como activos.
-  - Criterio: al cerrar, cada heredero tiene su participación/activo actualizado.
-- [ ] **7.3 Certificado + notificaciones**
-  - Generar `DOC` de certificado de herederos; notificar a cada heredero.
-  - Criterio: certificado enlazado al expediente y notificación enviada.
-
-## FASE 8 — Transparencia + observabilidad + tests (P2)
-- [ ] **8.1 Portal de transparencia público**
-  - Rutas públicas: normativa vigente (CNIC), presupuestos, subvenciones otorgadas (sin datos personales).
-  - Criterio: URL pública sin login lista los 3 bloques.
-- [ ] **8.2 Observabilidad**
-  - Middleware de request-id + logs estructurados (JSON) en rutas críticas; métricas de endpoint; alerta si 5xx>umbral.
-  - Criterio: cada request logueado con id, duración, status.
-- [ ] **8.3 Tests de motores**
-  - `node --test` para `tramites.js`, `fiscalidad-ampliada.js`, `patrimonio.js` (casos: dedupe, plazos, validaciones).
-  - Criterio: `npm test` en verde.
-- [ ] **8.4 Migraciones en CI**
-  - Workflow GitHub Actions que ejecute `scripts/aplicar-migraciones.mjs` con `SUPABASE_DB_CONNECTION` (secret).
-  - Criterio: push a main corre la migración.
-
-## FASE 9 — Seguridad y calidad (P3)
-- [ ] **9.1 Secretos y rotación**
-  - Centralizar `SUPABASE_DB_CONNECTION`, `PASSWORD_DEFAULT_SECRET` en Vercel; aviso de rotación.
-  - Criterio: sin secretos en repo; `.env.example` documentado.
-- [ ] **9.2 2FA admin en acciones críticas**
-  - Confirmación con segundo factor (código/PlacetaID) para pagar, resolver, anular.
-  - Criterio: acción crítica requiere doble confirmación.
-- [ ] **9.3 i18n + accesibilidad**
-  - Diccionario EN mínimo; auditoría WCAG del tema Vivid (contraste, foco, teclado).
-  - Criterio: etiquetas clave traducidas; foco visible.
+## FASE 9 — Seguridad y calidad (P3) 🟢
+- [ ] **9.1 Secretos** — `SUPABASE_DB_CONNECTION`, `PASSWORD_DEFAULT_SECRET` en Vercel + rotación.
+- [ ] **9.2 i18n** — diccionario EN mínimo.
+- [ ] **9.3 Accesibilidad** — auditoría WCAG del tema Vivid (contraste, foco, teclado).
+- Criterio: sin secretos en repo; etiquetas clave traducidas; foco visible.
 
 ---
 
 ## Orden de ejecución (resumen)
-1. **FASE 1** (plazos) → base de todo lo que depende del tiempo.
-2. **FASE 2** (bandeja ciudadana API) → expone los plazos al ciudadano.
-3. **FASE 4.1–4.3** (notificaciones + acuse) → alimenta plazos/recordatorios.
-4. **FASE 3** (registro maestro) → deja de duplicar identidad.
-5. **FASE 5–6** (subsanación, firma múltiple, borrador) → UX de trámites y tributos.
-6. **FASE 7** (sucesión) → cierra el ciclo patrimonial.
-7. **FASE 8** (transparencia/observabilidad/tests) → calidad.
-8. **FASE 9** (seguridad/i18n) → endurecimiento.
+1. **FASE 0** (modelo de expediente + fuentes de verdad + Contexto Único) — fundamento.
+2. **FASE 1** (SLA configurable) — tiempo.
+3. **FASE 2** (registro maestro) — identidad.
+4. **FASE 3** (interfaces: gdlp-crm ciudadano/entidad + RSP admin + bandeja).
+5. **FASE 4–6** (notificaciones, subsanación/firma/2FA, borrador fiscal + auditoría ciudadana).
+6. **FASE 7** (sucesiones).
+7. **FASE 8** (transparencia/observabilidad/tests).
+8. **FASE 9** (seguridad/i18n).
 
-**Regla:** cada fase se commitea y pushea por separado con su `docs/` actualizado. Los cambios que tocan el motor de trámites o la BD llevan **test y migración** antes del push.
+**Regla:** cada fase se commitea y pushea por separado con `docs/` actualizado; los cambios de motor/BD llevan **test y migración** antes del push. La FASE 0 es requisito de las demás.
+
+**Fuentes:** `RSP-vs-pais-inventado.md` (sección 8 = redlines) · `PLAN-MEJORAS-RSP.md` (este plan).

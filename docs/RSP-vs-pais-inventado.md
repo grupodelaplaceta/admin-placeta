@@ -206,4 +206,82 @@ Las mejoras P0 (plazos en trámites, bandeja ciudadana, registro maestro único)
 
 ---
 
-*Documento generado a partir del estado real del RSP (admin-placeta + backend-banco + PlacetaID). El país comparado (República de Valdoria) es imaginario y sirve exclusivamente como referencia de mejores prácticas.*
+## 8. Correcciones de arquitectura (redlines del equipo)
+
+Este documento se revisó y se adoptaron estas decisiones que **matizan o sustituyen** partes anteriores.
+
+### 8.1 Tres interfaces, no una
+- **gdlp-crm es la web principal** (NO un CRM): actúa como **Administración Pública** donde **ciudadanos y entidades** acceden y realizan trámites.
+  - 👤 **Ciudadano**: Inicio → Mi bandeja → Trámites → Documentos → Perfil. La única pregunta que responde: **"¿Tengo que hacer algo?"**
+  - 🏢 **Entidad**: Inicio → Expedientes → Obligaciones → Contabilidad → Documentos → Representantes → Notificaciones.
+- **RSP es solo para admins**: Inicio → Bandeja de trabajo → Expedientes → Ciudadanos → Entidades → Operaciones → Auditoría → Configuración (filtros avanzados, acciones masivas, asignación, escalado, validaciones, resolución).
+- El panel RSP **no debe exponer UI ciudadana**; la bandeja ciudadana vive en gdlp-crm.
+
+### 8.2 "Contexto Único" del ciudadano (federado, sin mega-DB)
+Cuando Administración abre un expediente, ve un **contexto único del ciudadano**:
+```
+👤 Identidad (PlacetaID verificado)
+💰 Banco (2 cuentas)
+🧾 Fiscalidad (declaraciones, obligaciones, retenciones)
+🏠 Patrimonio (titularidades, participaciones)
+📋 Expedientes (4 activos, 12 históricos)
+📄 Documentos (28)
+✍️ Firmas (3 pendientes)
+🔔 Notificaciones (2 pendientes)
+```
+**Cada dominio sigue siendo dueño de sus datos** (PlacetaID=identidad, Banco=MongoDB, RSP/Supabase=expedientes/patrimonio, Tributos=censo/declaraciones, gdlp-crm=portal). El "Contexto Único" es una **vista agregada vía APIs**, no una base central. Eso convierte al RSP en **ventanilla única federada**.
+
+### 8.3 El trámite tiene 4 niveles
+```
+SERVICIO (Subvenciones)
+   ↓
+TRÁMITE (Solicitar subvención)
+   ↓
+EXPEDIENTE (EXP-2026-000184)   ← objeto central del RSP
+   ↓
+ACTUACIONES (presentación, validación, requerimiento, subsanación, informe, resolución, firma, pago, justificación, cierre)
+```
+El expediente pasa a ser el **objeto central** que agrupa documentos, actuaciones, firmas, notificaciones, pagos, validaciones y auditoría.
+
+### 8.4 Silencio administrativo configurable (no regla general)
+No se establece "silencio positivo" por defecto. El motor permite configurar **por procedimiento**:
+```
+plazo: 15 días
+si vence → silencio positivo | silencio negativo | escalado | prórroga | requiere intervención
+```
+
+### 8.5 Sin biometría/video generalizada
+PlacetaID ya da identidad y firma. Se prioriza **PlacetaID + 2FA + firma + niveles de verificación (N1→N3)** antes que biometría en todos los procesos.
+
+### 8.6 Ranking de propuestas (valoración)
+| Propuesta | Valoración |
+|---|---|
+| Motor de trámites configurable | ⭐⭐⭐⭐⭐ |
+| Mi bandeja ciudadana | ⭐⭐⭐⭐⭐ |
+| SLA y plazos | ⭐⭐⭐⭐⭐ |
+| Subsanación guiada | ⭐⭐⭐⭐⭐ |
+| Registro maestro de identidad | ⭐⭐⭐⭐⭐ |
+| Fuentes de verdad por dominio | ⭐⭐⭐⭐⭐ |
+| Notificaciones multicanal | ⭐⭐⭐⭐½ |
+| Firma múltiple | ⭐⭐⭐⭐½ |
+| Borrador fiscal | ⭐⭐⭐⭐½ |
+| Auditoría ciudadana | ⭐⭐⭐⭐½ |
+| Sucesiones automáticas | ⭐⭐⭐⭐ |
+| Portal de transparencia | ⭐⭐⭐⭐ |
+| Observabilidad/tests | ⭐⭐⭐⭐⭐ (técnicamente) |
+| Biometría/video | ⭐⭐½ |
+
+### 8.7 Roadmap revisado: P0 transversal primero
+Antes de ampliar funcionalidades, se define **P0 previa/transversal: "Modelo de expediente + fuentes de verdad"**:
+```
+IDENTIDAD → SERVICIO → TRÁMITE → EXPEDIENTE
+  ├── Documentos ├── Actuaciones ├── Firmas ├── Notificaciones
+  ├── Pagos ├── Validaciones └── Auditoría
+```
+Cada cosa tiene un **propietario**. Si esto queda bien diseñado, SLA, Mi bandeja, notificaciones, firma múltiple, auditoría y nuevos trámites salen mucho más fácil.
+
+> **Visión final:** el RSP es una **plataforma de procedimiento administrativo configurable** donde cada trámite es un expediente con estado, plazos, documentos, responsables, firmas, comunicaciones, operaciones y auditoría; y la UI esconde la complejidad al ciudadano: *"esto es lo que está pasando, esto es lo que falta y esto es lo que tienes que hacer ahora"* → **un sistema operativo administrativo de todo el ecosistema**.
+
+---
+
+*Documento generado a partir del estado real del RSP (admin-placeta + backend-banco + PlacetaID + gdlp-crm). El país comparado (República de Valdoria) es imaginario y sirve exclusivamente como referencia de mejores prácticas.*
