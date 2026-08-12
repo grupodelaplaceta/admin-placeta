@@ -1,134 +1,127 @@
-# PLAN DE IMPLEMENTACIÓN — RSP (revisado)
-### De la comparativa con la República de Valdoria → ejecución, con la arquitectura acordada
+# PLAN DE IMPLEMENTACIÓN — RSP (v3)
+### Con Seguridad de datos, el nuevo Banco de La Placeta web, y gdlp-crm como portal público
 
-> Reemplaza la versión anterior. Incorpora los redlines del equipo (sección 8 de `RSP-vs-pais-inventado.md`):
-> **gdlp-crm = Administración Pública (ciudadano/entidad)** · **RSP = solo admin** ·
-> **Contexto Único federado** (cada dominio es dueño de sus datos) ·
-> **SERVICIO → TRÁMITE → EXPEDIENTE → ACTUACIONES** (expediente central) ·
-> **silencio administrativo configurable** (no regla general) ·
-> **sin biometría**: PlacetaID + 2FA + firma + niveles N1–N3 ·
-> **P0 transversal primero**: modelo de expediente + fuentes de verdad.
+> Reemplaza versiones anteriores. Base: `RSP-vs-pais-inventado.md` (sección 8 = redlines).
+> **Novedades de esta versión (seguridad):**
+> - **Incidente de exposición de datos resuelto**: la web del banco con la brecha (todas las cuentas visibles desde un perfil vía "inspeccionar elemento") **ya fue eliminada**.
+> - **gdlp-crm = solo portal público del RSP**: NO tendrá APIs con datos sensibles ni almacenará datos bancarios/fiscales. Solo contenido público y enlaces a los servicios reales.
+> - **Nuevo: Banco de La Placeta web** — banco en línea ciudadano, seguro y funcional, **igualito a la app** (banco-app Android).
 
-Cada paso tiene **archivos/rutas**, **qué hacer** y **criterio de aceptación`. Se marca `[x]` al completar.
+Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]` = hecho.
 
 ---
 
-## FASE 0 — Fundamento: Modelo de expediente + fuentes de verdad (P0 transversal) 🔴
-**Objetivo:** definir el modelo antes de ampliar funcionalidades. Es la base de SLA, bandeja, notificaciones, firma múltiple y nuevos trámites.
+## FASE 0 — Fundamento: Modelo de expediente + fuentes de verdad (P0 transversal)
+- [ ] **0.1 Modelo de 4 niveles**: `SERVICIO → TRÁMITE → EXPEDIENTE → ACTUACIONES` (`tramites.js` + `expedientes.js`). Cada trámite declara su `servicio`; al presentar se crea `EXP` con `actuaciones[]`.
+- [ ] **0.2 Expediente = objeto central**: enlaza `documentos`, `actuaciones`, `firmas`, `notificaciones`, `pagos`, `validaciones`, `auditoría` (referencias, no duplicar).
+- [ ] **0.3 Fuentes de verdad por dominio** (`docs/`): PlacetaID=identidad · **backend-banco (MongoDB)=cuentas/operaciones** · Supabase RSP=expedientes/patrimonio/fiscalidad · **Banco web=interfaz ciudadano (lee API)** · gdlp-crm=portal público (sin datos).
+- [ ] **0.4 "Contexto Único" del ciudadano (federado)**: `GET /rsp/api/contexto/:dip` agrega Identidad+Bancario+Fiscalidad+Patrimonio+Expedientes+Documentos+Firmas+Notificaciones vía APIs (sin mega-DB).
 
-- [ ] **0.1 Modelo de 4 niveles**
-  - En `src/config/tramites.js` + `src/config/expedientes.js`: representar `SERVICIO → TRÁMITE → EXPEDIENTE → ACTUACIONES`.
-  - Cada trámite declara su `servicio`; al presentar se crea `EXP`; el expediente agrupa `actuaciones[]` (presentación, validación, requerimiento, subsanación, informe, resolución, firma, pago, justificación, cierre).
-  - Criterio: un trámite subvención crea su `EXP` y registra cada actuación con fecha/responsable.
-- [ ] **0.2 Expediente = objeto central**
-  - `expedientes.js`: el expediente enlaza `documentos`, `actuaciones`, `firmas`, `notificaciones`, `pagos`, `validaciones`, `auditoría` (referencias, no duplicar datos).
-  - Criterio: el detalle de expediente muestra todos los bloques enlazados.
-- [ ] **0.3 Fuentes de verdad por dominio**
-  - Documentar (en `docs/`) y respetar: PlacetaID=identidad · Banco(MongoDB)=cuentas/operaciones · Supabase RSP=expedientes/patrimonio/fiscalidad · Tributos=censo/declaraciones · gdlp-crm=portal ciudadano/entidad.
-  - Criterio: ningún módulo escribe en datos de otro dominio; solo lee vía API.
-- [ ] **0.4 "Contexto Único" del ciudadano (federado)**
-  - En RSP (admin): endpoint `GET /rsp/api/contexto/:dip` que **agrega** Identidad (PlacetaID) + Banco (cuentas) + Fiscalidad (declaraciones/obligaciones) + Patrimonio (titularidades/participaciones) + Expedientes (activos/históricos) + Documentos + Firmas + Notificaciones, **consultando a cada dominio** (sin mega-DB).
-  - Ficha del ciudadano en el panel (ya existe el buscador) pasa a mostrar este contexto completo.
-  - Criterio: abrir un ciudadano muestra los 8 bloques con datos reales de cada dominio.
+## FASE 1 — SEGURIDAD DE DATOS (P0, transversal) 🔴
+**Objetivo:** ningún dato sensible fuera de su dominio; nada de "todas las cuentas" en el DOM ni en APIs de un usuario normal.
 
-## FASE 1 — SLA y plazos configurables (P0) 🔴
-**Objetivo:** todo expediente tiene plazo por estado y vencimiento con efecto configurable.
+- [ ] **1.1 gdlp-crm = portal público (sin datos sensibles)**
+  - Eliminar en gdlp-crm: `bancario-proxy.js` y cualquier endpoint/`SELECT *` de `cuentas_bancarias`, `transacciones`, `solicitantes` con datos sensibles; no guardar `CRM_READ_KEY`/claves del banco.
+  - Quedar solo: contenido público (normativa, convocatorias, noticias), redirecciones a **Banco web**, **PlacetaID**, **RSP admin**.
+  - Criterio: desde gdlp-crm NO se puede obtener cuentas/usuarios/transacciones; el código no contiene la key del banco.
+- [ ] **1.2 Regla global: scoping por propietario**
+  - Todo endpoint que devuelva cuentas/expedientes/documentos filtra **server-side por `req.session.usuario`** (nunca filtro client-side de un dataset completo).
+  - Criterio: auditoría automática de endpoints con "SELECT sin WHERE de propietario" → se corrigen.
+- [ ] **1.3 Nada de bulk data en el DOM**
+  - Prohibido embeber listados completos (JSON, datalist, selects) de datos de terceros en páginas de usuario; solo lo del usuario.
+  - Criterio: "inspeccionar elemento" en una sesión normal solo muestra datos propios.
+- [ ] **1.4 RBAC y 2FA**
+  - Revisar `verificarRol`/permisos en todos los repos (fallar-cerrado). **2FA** (PlacetaID) para acciones críticas.
+  - Criterio: un rol sin permiso recibe 403; acción crítica exige 2FA.
+- [ ] **1.5 Cabeceras y cache**
+  - `CSP`, `X-Content-Type-Options`, `no-store` en respuestas sensibles; `Cache-Control` en APIs.
+  - Criterio: respuestas sensibles sin cache; cabeceras presentes.
+- [ ] **1.6 Auditoría de acceso a datos personales**
+  - Registrar quién accede/consulta datos de un tercero; consultable por el propio interesado.
+  - Criterio: toda lectura de datos ajenos queda en auditoría.
 
-- [ ] **1.1 Plazos por estado/tipo**
-  - En `tramites.js`: `plazos: { revision: 15, subsanacion: 10, firma: 7, justificacion: 20 }` por tipo + `plazo_default`.
-  - Criterio: cada tipo define plazos.
-- [ ] **1.2 Fecha límite + efecto de vencimiento configurable**
-  - Al entrar en un estado: `t.fecha_limite`. Añadir `vencimiento: { modo: 'silencio_positivo' | 'silencio_negativo' | 'escalado' | 'prorroga' | 'intervencion' }` por tipo/estado.
-  - **Sin silencio positivo por defecto**; cada procedimiento configura su efecto.
-  - Criterio: el motor aplica el efecto configurado al vencer (no una regla global).
-- [ ] **1.3 Visibilidad del plazo (UI admin)**
-  - `detalle.ejs` (Resumen "Vence en X / ⚠️ vencido") + `trabajo.ejs` (chips de plazo; vencidos arriba).
-  - Criterio: plazo visible en detalle y bandeja.
-- [ ] **1.4 Recordatorios y escalado**
-  - `revisarVencimientos()`: al 70% → notificación; al vencer → aplicar efecto configurado (escalar prioridad, prórroga o notificar).
-  - Disparo: cron ligero o al abrir la bandeja.
-  - Criterio: expediente al 70% recibe aviso; vencido ejecuta su efecto.
+## FASE 2 — BANCO DE LA PLACETA WEB (nuevo, P0) 🔴
+**Objetivo:** banco en línea ciudadano, seguro y funcional, **igualito a la app** (banco-app Android).
 
-## FASE 2 — Registro maestro de identidad (P0) 🔴
-**Objetivo:** una sola fuente de identidad; verificación por niveles, sin biometría.
+- [ ] **2.1 Nuevo proyecto `banco-web`**
+  - App web standalone (Express/Vite + backend en Vercel) que consume **solo la API real** `api.banco.laplaceta.org` (backend-banco, fuente de verdad).
+  - Criterio: proyecto creado con estructura y arranque local.
+- [ ] **2.2 Autenticación PlacetaID + 2FA**
+  - Login con PlacetaID (verificar JWT con `PLACETA_ID_JWT_SECRET`) + segundo factor; sesión segura con token corto y `no-store`.
+  - Criterio: solo el titular (o autorizado) accede; el JWT se valida y expira.
+- [ ] **2.3 APIs scoped del banco (para el web)**
+  - Añadir al backend-banco endpoints **por DIP autenticado**: `GET /web/cuenta`, `GET /web/movimientos`, `GET /web/tarjetas`, `GET /web/gestores`, `POST /web/transferencia` (firmada).
+  - **Nunca** devuelven datos de otros usuarios; el backend valida que el `placetaId` del token = dueño.
+  - Criterio: un usuario solo recibe sus cuentas/movimientos/tarjetas.
+- [ ] **2.4 Funcionalidades = a la app**
+  - Cuentas y saldo · Movimientos · Transferencias (con confirmación/2FA) · Tarjetas (ver/bloquear) · Gestores y cotitulares (asignar %, ver ciudadanos) · Cumplimiento (estado del titular) · Perfil.
+  - Criterio: cada pantalla de la app tiene su equivalente web.
+- [ ] **2.5 Sin datos ajenos en el DOM**
+  - El web solo pinta lo del usuario autenticado; sin selects/datalists con cuentas de otros; IBAN/datos enmascarados donde aplique.
+  - Criterio: inspeccionar elemento no muestra datos de terceros.
+- [ ] **2.6 Integración con RSP (Contexto Único)**
+  - El `contexto/:dip` del RSP (0.4) lee del Banco web/API para el bloque "Bancario" de cada ciudadano.
+  - Criterio: el admin RSP ve el bloque bancario vía la API del banco (no duplicada).
 
-- [ ] **2.1 Canon de ciudadano en Supabase**
-  - Tabla `rsp_ciudadanos` (dip, placetaId, nombre, estado, nivel_identidad N1–N3, cuenta_principal, canal_preferido). Migración en `docs/migrar-rsp-core.sql`.
-  - Criterio: tabla creada vía `scripts/aplicar-migraciones.mjs`.
-- [ ] **2.2 Sincronización event-driven**
-  - En `placetaid-sincronizacion.js`: alta en PlacetaID/banco → `upsertCiudadanoMaestro(dip)`.
-  - Criterio: alta en PlacetaID ⇒ aparece en `rsp_ciudadanos`.
-- [ ] **2.3 Resolver centralizado**
-  - Helper `resolverCiudadano(dip)` usado por trámites, patrimonio, fiscalidad, contexto (0.4).
-  - Criterio: todos los módulos resuelven identidad con el mismo helper.
-- [ ] **2.4 Niveles de verificación**
-  - N1 (registrado) → N2 (datos verificados) → N3 (firma/2FA). Beneficios por nivel (límites, firma, subvenciones).
-  - Criterio: el ciudadano puede subir de nivel; los límites cambian con el nivel.
+## FASE 3 — SLA y plazos configurables (P0)
+- [ ] **3.1 Plazos por estado/tipo** en `tramites.js` (`plazos: { revision:15, subsanacion:10, firma:7, justificacion:20 }`).
+- [ ] **3.2 Fecha límite + efecto de vencimiento configurable** (`silencio_positivo|negativo|escalado|prorroga|intervencion`) por procedimiento — **sin silencio positivo por defecto**.
+- [ ] **3.3 UI de plazo** en `detalle.ejs` ("Vence en X/vencido") y `trabajo.ejs` (chips; vencidos arriba).
+- [ ] **3.4 Recordatorios y escalado** (`revisarVencimientos()` al 70% y al vencer).
 
-## FASE 3 — Interfaces separadas: gdlp-crm como Administración Pública (P0) 🔴
-**Objetivo:** el ciudadano/entidad operan en gdlp-crm; RSP queda admin-only.
+## FASE 4 — Registro maestro de identidad (P0)
+- [ ] **4.1** Tabla `rsp_ciudadanos` (dip, placetaId, nombre, estado, nivel N1–N3, cuenta_principal, canal_preferido) en `docs/migrar-rsp-core.sql`.
+- [ ] **4.2** Sincronización event-driven (`upsertCiudadanoMaestro(dip)` al crear PlacetaID/banco_user).
+- [ ] **4.3** Helper `resolverCiudadano(dip)` usado por trámites, patrimonio, fiscalidad, contexto.
+- [ ] **4.4** Niveles de verificación N1→N3 con beneficios (límites, firma, subvenciones) — **sin biometría**.
 
-- [ ] **3.1 API ciudadana en gdlp-crm**
-  - gdlp-crm consume las APIs RSP (trámites, expedientes, documentos, notificaciones) para las 2 interfaces:
-    - 👤 Ciudadano: Inicio → Mi bandeja → Trámites → Documentos → Perfil.
-    - 🏢 Entidad: Inicio → Expedientes → Obligaciones → Contabilidad → Documentos → Representantes → Notificaciones.
-  - Criterio: desde gdlp-crm se inicia/consulta un trámite y se ve "¿tengo que hacer algo?".
-- [ ] **3.2 Mi bandeja ciudadana (en gdlp-crm)**
-  - `GET /rsp/tramites/api/bandeja/:dip` (acciones con plazo, prioridad, tipo, vence_en) consumida por gdlp-crm.
-  - Criterio: un DIP ve sus acciones pendientes con plazos.
-- [ ] **3.3 RSP admin-only**
-  - Revisar rutas/permisos para que la UI de trámites del panel RSP no exponga flujo ciudadano (solo bandeja de trabajo + expedientes + contexto).
-  - Criterio: no hay botones de "firmar/presentar" ciudadanos en el panel (ya se quitó el de firma).
+## FASE 5 — Interfaces separadas (P0)
+- [ ] **5.1** 👤 **Ciudadano** → usa **Banco web** (FASE 2) + PlacetaID + portal público (gdlp-crm, sin datos). Pregunta: "¿Tengo que hacer algo?"
+- [ ] **5.2** 🏢 **Entidad** → sección entidad en el Banco web / portal: Expedientes, Obligaciones, Contabilidad, Documentos, Representantes, Notificaciones.
+- [ ] **5.3** 🛠️ **RSP admin-only**: Bandeja de trabajo → Expedientes → Ciudadanos → Entidades → Operaciones → Auditoría → Configuración.
+- [ ] **5.4** **Mi bandeja ciudadana** (`GET /rsp/tramites/api/bandeja/:dip`) consumida por el Banco web/portal.
 
-## FASE 4 — Notificaciones multicanal + acuse (P1) 🟠
-- [ ] **4.1 Modelo ampliado** — `notificaciones.js`: `canal` (app|email|push), `acuse_recibido`, `leida_en`.
-- [ ] **4.2 Email (SendGrid/SMTP)** — módulo `notificaciones-email.js` con plantillas y fallback silencioso.
-- [ ] **4.3 Acuse abre plazos** — `fecha_limite` del trámite empieza al acusar (integra FASE 1).
-- [ ] **4.4 Preferencias de canal** — `canal_preferido` en `rsp_ciudadanos` (FASE 2).
-- Criterio: notificación con canal email se envía; el acuse arranca el plazo.
+## FASE 6 — Notificaciones multicanal + acuse (P1)
+- [ ] **6.1** Modelo ampliado (`canal`, `acuse_recibido`, `leida_en`) en `notificaciones.js`.
+- [ ] **6.2** Email (SendGrid/SMTP) con fallback silencioso.
+- [ ] **6.3** Acuse abre plazos (integra FASE 3).
+- [ ] **6.4** Preferencias de canal en `rsp_ciudadanos`.
 
-## FASE 5 — Subsanación guiada + firma múltiple + 2FA (P1) 🟠
-- [ ] **5.1 Subsanación guiada** — `requisitos_pendientes[]` (lista exacta) en estado subsanación; checklist en el detalle; validar contra la lista al aportar.
-- [ ] **5.2 Firma múltiple** — `firmantes[]` (dip, rol, firmado) en cambio-titularidad (cedente+cesionario); webhook espera a todos; "1/2 firmas".
-- [ ] **5.3 2FA admin en acciones críticas** — confirmación con segundo factor (PlacetaID/código) para pagar, resolver, anular.
-- Criterio: subsanación indica exactamente qué falta; con 2 firmantes solo avanza al firmar ambos; acción crítica exige 2FA.
+## FASE 7 — Subsanación guiada + firma múltiple + 2FA (P1)
+- [ ] **7.1** Subsanación con `requisitos_pendientes[]` (checklist exacta).
+- [ ] **7.2** Firma múltiple (`firmantes[]`; webhook espera a todos; "1/2 firmas").
+- [ ] **7.3** 2FA admin en acciones críticas (pagar, resolver, anular).
 
-## FASE 6 — Borrador fiscal + auditoría ciudadana (P1) 🟠
-- [ ] **6.1 Borrador de declaración** — `GET /rsp/tributos/api/borrador/:dip` (datos reales reconciliados) + estado `borrador|confirmada|corregida|presentada`; confirmar desde gdlp-crm.
-- [ ] **6.2 Auditoría ciudadana** — endpoint por DIP de "quién vio/alteró mis datos"; visible en la ficha del ciudadano (0.4) y en gdlp-crm.
-- Criterio: el ciudadano confirma su declaración; puede ver quién accedió a sus datos.
+## FASE 8 — Borrador fiscal + auditoría ciudadana (P1)
+- [ ] **8.1** `GET /rsp/tributos/api/borrador/:dip` + estado `borrador|confirmada|corregida|presentada`; confirmar desde el Banco web/portal.
+- [ ] **8.2** Auditoría ciudadana (quién vio/alteró mis datos) visible en la ficha (0.4).
 
-## FASE 7 — Sucesiones automáticas (P2) 🟢
-- [ ] **7.1 Herederos y %** en `herencias.js` (testamento o ley).
-- [ ] **7.2 Reparto automático de patrimonio** — al cerrar, recalcular participaciones/titularidades por heredero (reusa `setParticipacion` dedupe).
-- [ ] **7.3 Certificado + notificaciones** — `DOC` de herederos enlazado al expediente; notificar a cada heredero.
-- Criterio: heredero recibe su participación actualizada y certificado.
+## FASE 9 — Sucesiones automáticas (P2)
+- [ ] **9.1** Herederos y % en `herencias.js`.
+- [ ] **9.2** Reparto automático de patrimonio (reusa `setParticipacion` dedupe).
+- [ ] **9.3** Certificado `DOC` + notificaciones a herederos.
 
-## FASE 8 — Transparencia, observabilidad y tests (P2) 🟢
-- [ ] **8.1 Portal de transparencia** (público, sin login): normativa CNIC vigente, presupuestos, subvenciones otorgadas.
-- [ ] **8.2 Observabilidad** — request-id + logs JSON, métricas por endpoint, alerta 5xx.
-- [ ] **8.3 Tests de motores** — `node --test` para tramites, fiscalidad, patrimonio (dedupe, plazos, validaciones).
-- [ ] **8.4 Migraciones en CI** — GitHub Actions ejecuta `scripts/aplicar-migraciones.mjs` con secret.
-- Criterio: `npm test` verde; push a main corre migración.
+## FASE 10 — Transparencia, observabilidad y tests (P2)
+- [ ] **10.1** Portal de transparencia público (CNIC vigente, presupuestos, subvenciones otorgadas) — sin datos personales.
+- [ ] **10.2** Observabilidad: request-id + logs JSON + métricas + alerta 5xx.
+- [ ] **10.3** Tests (`node --test`) de motores (tramites, fiscalidad, patrimonio) **+ tests de seguridad** (scoping: un usuario no ve datos de otro).
+- [ ] **10.4** Migraciones en CI (GitHub Actions con `SUPABASE_DB_CONNECTION` secret).
 
-## FASE 9 — Seguridad y calidad (P3) 🟢
-- [ ] **9.1 Secretos** — `SUPABASE_DB_CONNECTION`, `PASSWORD_DEFAULT_SECRET` en Vercel + rotación.
-- [ ] **9.2 i18n** — diccionario EN mínimo.
-- [ ] **9.3 Accesibilidad** — auditoría WCAG del tema Vivid (contraste, foco, teclado).
-- Criterio: sin secretos en repo; etiquetas clave traducidas; foco visible.
+## FASE 11 — Seguridad avanzada e i18n (P3)
+- [ ] **11.1** Secretos centralizados en Vercel + rotación (`SUPABASE_DB_CONNECTION`, `PASSWORD_DEFAULT_SECRET`, claves banco/web).
+- [ ] **11.2** i18n (EN mínimo) y accesibilidad WCAG (contraste, foco, teclado).
+- [ ] **11.3** Rate limiting en login/APIs + reCAPTCHA si procede.
 
 ---
 
-## Orden de ejecución (resumen)
-1. **FASE 0** (modelo de expediente + fuentes de verdad + Contexto Único) — fundamento.
-2. **FASE 1** (SLA configurable) — tiempo.
-3. **FASE 2** (registro maestro) — identidad.
-4. **FASE 3** (interfaces: gdlp-crm ciudadano/entidad + RSP admin + bandeja).
-5. **FASE 4–6** (notificaciones, subsanación/firma/2FA, borrador fiscal + auditoría ciudadana).
-6. **FASE 7** (sucesiones).
-7. **FASE 8** (transparencia/observabilidad/tests).
-8. **FASE 9** (seguridad/i18n).
+## Orden de ejecución
+1. **FASE 1 (Seguridad)** — cerrar la brecha de datos y dejar gdlp-crm como portal. **Primero**, porque es un incidente.
+2. **FASE 2 (Banco web)** — el nuevo banco en línea seguro del ciudadano.
+3. **FASE 0 (modelo expediente)** — fundamento del RSP.
+4. **FASE 3–4** (SLA, registro maestro).
+5. **FASE 5** (interfaces) → depende de 2.
+6. **FASE 6–9** (notificaciones, subsanación/firma/2FA, borrador, sucesiones).
+7. **FASE 10** (transparencia/observabilidad/tests).
+8. **FASE 11** (seguridad avanzada/i18n).
 
-**Regla:** cada fase se commitea y pushea por separado con `docs/` actualizado; los cambios de motor/BD llevan **test y migración** antes del push. La FASE 0 es requisito de las demás.
-
-**Fuentes:** `RSP-vs-pais-inventado.md` (sección 8 = redlines) · `PLAN-MEJORAS-RSP.md` (este plan).
+**Regla:** cada fase = commit+push separado, con **test de seguridad** (scoping) y migración antes del push si toca motor/BD. La FASE 1 es **urgente** (incidente de datos).

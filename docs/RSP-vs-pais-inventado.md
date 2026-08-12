@@ -282,6 +282,17 @@ Cada cosa tiene un **propietario**. Si esto queda bien diseñado, SLA, Mi bandej
 
 > **Visión final:** el RSP es una **plataforma de procedimiento administrativo configurable** donde cada trámite es un expediente con estado, plazos, documentos, responsables, firmas, comunicaciones, operaciones y auditoría; y la UI esconde la complejidad al ciudadano: *"esto es lo que está pasando, esto es lo que falta y esto es lo que tienes que hacer ahora"* → **un sistema operativo administrativo de todo el ecosistema**.
 
+### 8.8 Seguridad de datos y el nuevo Banco de La Placeta web 🔴
+- **Incidente**: la web del banco anterior expuso **todas las cuentas y datos de todos** desde el perfil de un usuario normal (visible con "inspeccionar elemento"). Esa web **ya fue eliminada**.
+- **gdlp-crm = SOLO portal público del RSP**: **no tendrá APIs con datos sensibles ni almacenará datos bancarios/fiscales** (nada de `cuentas_bancarias`/`transacciones`/`solicitantes` sensibles, ni la key del banco). Solo contenido público y enlaces a los servicios reales.
+- **Nuevo: Banco de La Placeta web** — banco en línea ciudadano, **seguro y funcional, igualito a la app** (banco-app Android). Lee exclusivamente de la API real del backend-banco (MongoDB, fuente de verdad), con:
+  - Autenticación **PlacetaID (JWT) + 2FA** y sesión segura.
+  - **APIs scoped por titular** (el backend valida que el `placetaId` del token = dueño; nunca datos de terceros).
+  - **Nada de bulk data en el DOM** (ni selects/datalists con cuentas ajenas; IBAN/datos enmascarados).
+  - Funciones = las de la app: cuentas/saldo, movimientos, transferencias firmadas, tarjetas, gestores/cotitulares, cumplimiento, perfil.
+- **Regla de oro de seguridad (transversal)**: todo endpoint filtra **server-side por propietario**; ningún listado masivo en páginas de usuario; fallo-cerrado en roles; auditoría de acceso a datos ajenos; cabeceras/cache seguras.
+- **P0 urgente**: FASE 1 (Seguridad de datos: gdlp-crm → portal, scoping, sin bulk en DOM) antes de cualquier otra ampliación.
+
 ---
 
 *Documento generado a partir del estado real del RSP (admin-placeta + backend-banco + PlacetaID + gdlp-crm). El país comparado (República de Valdoria) es imaginario y sirve exclusivamente como referencia de mejores prácticas.*
