@@ -396,37 +396,62 @@ async function upsertDB(t) {
 /* ── Utilidades ────────────────────────────────────────────────── */
 function esAdmin(autor) { return autor?.rol === 'admin' || ['superadmin', 'rsp_admin'].includes(autor?.rol); }
 
-/** Confirma la firma de un trámite (desde PlacetaID Móvil) y avanza el workflow */
-async function confirmarFirma(t, autor = {}) {
+/** Confirma la firma de un firmante (FASE 8.2). Avanza solo cuando TODOS firman. */
+async function confirmarFirma(t, autor = {}, { dip } = {}) {
   if (t.estado !== 'firma') throw new Error('El trámite no está en estado de firma');
-  const firma = {
-    id: await generarIdentificador('SIG'),
-    fecha: new Date().toISOString(),
-    firmante: autor.nombre || 'PlacetaID Móvil',
-    dip: t.solicitante_dip,
-    docId: t.firmaDocId || null,
-  };
-  t.firmas = [...(t.firmas || []), firma];
-  t.estado = t.tipo === 'alta-entidad' ? 'cerrado' : 'ejecucion';
-  t.siguiente_accion = t.estado === 'cerrado' ? 'Trámite completado' : 'Ejecutar el trámite';
-  await crearNotificacion({ nivel: 'completado', titulo: `${t.id}: firma registrada`, mensaje: 'El documento se firmó desde PlacetaID Móvil', servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
+  const firmantes = (t.firmantes && t.firmantes.length) ? t.firmantes : [{ dip: t.solicitante_dip, nombre: t.solicitante_nombre || 'Solicitante' }];
+  const dipObjetivo = dip || autor.dip || firmantes[0].dip;
+  const f = firmantes.find(x => x.dip === dipObjetivo);
+  if (!f) throw new Error('El firmante indicado no está en la lista de firmas');
+  if (f.estado === 'firmado') return `${firmadosCount(firmantes)}/${firmantes.length} firmas`;
+  f.estado = 'firmado';
+  f.fecha = new Date().toISOString();
+  f.docId = f.docId || t.firmaDocId;
+  t.firmas = [...(t.firmas || []), { id: await generarIdentificador('SIG'), fecha: new Date().toISOString(), firmante: autor.nombre || 'PlacetaID Móvil', dip: dipObjetivo, docId: f.docId }];
+  const firmados = firmantes.filter(x => x.estado === 'firmado').length;
+  const total = firmantes.length;
+  if (firmados >= total) {
+    t.estado = t.tipo === 'alta-entidad' ? 'cerrado' : 'ejecucion';
+    t.siguiente_accion = t.estado === 'cerrado' ? 'Trámite completado' : 'Ejecutar el trámite';
+    await crearNotificacion({ nivel: 'completado', titulo: `${t.id}: todas las firmas registradas`, mensaje: `${firmados}/${total} firmas completadas`, servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
+  } else {
+    t.siguiente_accion = `Esperando firmas: ${firmados}/${total}`;
+    await crearNotificacion({ nivel: 'pendiente', titulo: `${t.id}: firma registrada (${firmados}/${total})`, mensaje: `Se espera la firma de los demás firmantes`, servicio: 'rsp', objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
+  }
+  return `${firmados}/${total} firmas`;
 }
 
-/** Comprueba el estado de firma en PlacetaID y avanza si está firmado */
+function firmadosCount(firmantes) { return firmantes.filter(x => x.estado === 'firmado').length; }
+
+/** Comprueba el estado de las firmas en PlacetaID y avanza cuando todas están firmadas */
 export async function verificarFirma(id, autor = {}) {
   const t = await getTramite(id);
   if (!t) throw new Error('Trámite no encontrado');
   if (t.estado !== 'firma') throw new Error('El trámite no está en estado de firma');
-  if (!t.firmaDocId) throw new Error('No se ha enviado documento de firma todavía');
-  const st = await estadoFirma(t.firmaDocId, 'rsp');
-  if (!st.encontrado) return { tramite: t, firmado: false, mensaje: 'No se encuentra el documento de firma' };
-  if (!st.firmado) return { tramite: t, firmado: false, mensaje: 'Aún sin firmar en PlacetaID Móvil' };
-  await confirmarFirma(t, autor);
-  t.historial = [...(t.historial || []), { fecha: new Date().toISOString(), quien: autor.nombre || autor.dip || 'Sistema', accion: 'Firma verificada en PlacetaID' }];
-  t.updated_at = new Date().toISOString();
-  memTramites.set(t.id, t);
-  await upsertDB(t);
-  return { tramite: t, firmado: true, mensaje: 'Firma verificada y trámite avanzado' };
+  const firmantes = (t.firmantes && t.firmantes.length) ? t.firmantes : [{ dip: t.solicitante_dip, nombre: t.solicitante_nombre || 'Solicitante', docId: t.firmaDocId, estado: 'pendiente' }];
+  if (!firmantes.length) throw new Error('No se ha enviado documento de firma todavía');
+  let cambios = 0;
+  for (const f of firmantes) {
+    if (f.estado === 'firmado' || !f.docId) continue;
+    const st = await estadoFirma(f.docId, 'rsp');
+    if (st.firmado) { f.estado = 'firmado'; f.fecha = new Date().toISOString(); cambios++; }
+  }
+  const firmados = firmantes.filter(x => x.estado === 'firmado').length;
+  const total = firmantes.length;
+  if (cambios > 0) {
+    if (firmados >= total) {
+      t.estado = t.tipo === 'alta-entidad' ? 'cerrado' : 'ejecucion';
+      t.siguiente_accion = t.estado === 'cerrado' ? 'Trámite completado' : 'Ejecutar el trámite';
+      await crearNotificacion({ nivel: 'completado', titulo: `${t.id}: todas las firmas completadas`, mensaje: `${firmados}/${total} firmas`, servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
+    } else {
+      t.siguiente_accion = `Esperando firmas: ${firmados}/${total}`;
+    }
+    t.historial = [...(t.historial || []), { fecha: new Date().toISOString(), quien: autor.nombre || autor.dip || 'Sistema', accion: 'Verificación de firmas en PlacetaID', nota: `${firmados}/${total}` }];
+    t.updated_at = new Date().toISOString();
+    memTramites.set(t.id, t);
+    await upsertDB(t);
+  }
+  return { tramite: t, firmado: firmados >= total, firmados, total, mensaje: firmados >= total ? `Firmas completadas (${firmados}/${total})` : `Firmas: ${firmados}/${total} — esperando al resto` };
 }
 
 function siguienteAccion(tramite, autor) {
@@ -622,39 +647,39 @@ export async function avanzarTramite(id, { accion, nota = '', datos = {} }, auto
     },
     emitir_firma: async () => {
       t.estado = 'firma';
-      t.siguiente_accion = 'El solicitante firma desde PlacetaID Móvil';
-      // Crear documento oficial y enviarlo a PlacetaID Móvil para firma
-      const envio = await crearYEnviarFirma({
-        titulo: `${t.id} — ${t.titulo}`,
-        tipo: 'resolucion',
-        dip: t.solicitante_dip,
-        tramiteId: t.id,
-        datos: { tramiteId: t.id, tipoTramite: t.tipo },
-      }).catch(err => { console.warn('[Trámites] Error creando firma:', err.message); return null; });
-      if (envio) {
-        t.firmaDocId = envio.docId;
-        t.firmaCsv = envio.csv;
-        t.firmaHash = envio.hash;
-        t.firmaEnviada = envio.enviado;
+      const firmantesRaw = (t.firmantes && t.firmantes.length) ? t.firmantes : [{ dip: t.solicitante_dip, nombre: t.solicitante_nombre || 'Solicitante' }];
+      t.firmantes = firmantesRaw.map(x => ({ dip: x.dip, nombre: x.nombre || x.dip, estado: 'pendiente', docId: null, enviado: false }));
+      t.siguiente_accion = `Firma de ${t.firmantes.length} ${t.firmantes.length === 1 ? 'firmante' : 'firmantes'} desde PlacetaID Móvil (0/${t.firmantes.length})`;
+      // Crear y enviar un documento de firma por firmante
+      const enviados = [];
+      for (const f of t.firmantes) {
+        const envio = await crearYEnviarFirma({
+          titulo: `${t.id} — ${t.titulo}`, tipo: 'resolucion', dip: f.dip, tramiteId: t.id,
+          datos: { tramiteId: t.id, tipoTramite: t.tipo, firmanteDip: f.dip },
+        }).catch(err => { console.warn('[Trámites] Error creando firma:', err.message); return null; });
+        if (envio) { f.docId = envio.docId; f.csv = envio.csv; f.hash = envio.hash; f.enviado = envio.enviado; enviados.push(f.dip); }
       }
-      await crearNotificacion({ nivel: 'accion', titulo: `${t.id}: documento listo para firmar`, mensaje: 'El solicitante debe firmar desde PlacetaID Móvil', servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
-      return envio?.enviado ? 'Documento enviado a PlacetaID Móvil para firma' : '⚠️ Firma creada pero no se pudo enviar a PlacetaID (modo offline) — reenvía desde el panel';
+      t.firmaDocId = t.firmantes[0]?.docId || null;
+      t.firmaEnviada = enviados.length > 0;
+      await crearNotificacion({ nivel: 'accion', titulo: `${t.id}: documentos listos para firmar`, mensaje: `${t.firmantes.length} firmante(s) deben firmar desde PlacetaID Móvil`, servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
+      return enviados.length ? `Documentos enviados a PlacetaID Móvil (${enviados.length}/${t.firmantes.length})` : '⚠️ Firma creada pero no se pudo enviar a PlacetaID (modo offline) — reenvía desde el panel';
     },
     reenviar_firma: async () => {
-      if (!t.firmaDocId) throw new Error('No hay documento de firma pendiente');
-      const ok = await enviarAPlacetaID(t.firmaDocId, `${t.id} — ${t.titulo}`, 'resolucion', 'rsp', t.firmaCsv, t.solicitante_dip, t.firmaHash);
-      t.firmaEnviada = ok;
-      return ok ? 'Reenviado a PlacetaID Móvil' : 'No se pudo reenviar (modo offline)';
+      const firmantes = (t.firmantes && t.firmantes.length) ? t.firmantes : [{ dip: t.solicitante_dip, docId: t.firmaDocId, csv: t.firmaCsv, hash: t.firmaHash }];
+      let ok = 0;
+      for (const f of firmantes) {
+        if (!f.docId) continue;
+        const r = await enviarAPlacetaID(f.docId, `${t.id} — ${t.titulo}`, 'resolucion', 'rsp', f.csv, f.dip, f.hash);
+        if (r) ok++;
+      }
+      t.firmaEnviada = ok > 0;
+      return ok ? `Reenviado a PlacetaID Móvil (${ok}/${firmantes.length})` : 'No se pudo reenviar (modo offline)';
     },
     verificar_firma: async () => {
-      if (!t.firmaDocId) throw new Error('No se ha enviado documento de firma todavía');
-      const st = await estadoFirma(t.firmaDocId, 'rsp');
-      if (!st.encontrado) return 'No se encuentra el documento de firma';
-      if (!st.firmado) return 'Aún sin firmar en PlacetaID Móvil — esperando al solicitante';
-      await confirmarFirma(t, autor);
-      return 'Firma verificada: documento firmado en PlacetaID Móvil';
+      const r = await verificarFirma(t.id, autor);
+      return r.mensaje;
     },
-    confirmar_firma: async () => { await confirmarFirma(t, autor); return 'Firma confirmada desde PlacetaID Móvil'; },
+    confirmar_firma: async () => { const msg = await confirmarFirma(t, autor, { dip: datos?.dip }); return `Firma confirmada desde PlacetaID Móvil (${msg})`; },
     emitir_pago: async () => { t.estado = 'ejecucion'; t.siguiente_accion = 'Confirmar pago emitido'; return 'Pago en emisión'; },
     firmar: async () => {
       t.estado = t.tipo === 'solicitud-pago' ? 'ejecucion' : (t.tipo === 'alta-entidad' ? 'cerrado' : 'ejecucion');

@@ -98,6 +98,15 @@ const accionesAdmin = acciones.filter(a => a.rol === 'admin');
           <div class="v-field"><span class="v-field-label">Tipo</span><span class="v-field-value"><%= cfg.icono %> <%= cfg.nombre %></span></div>
           <% if (t.firmaDocId) { %>
           <div class="v-field"><span class="v-field-label">Firma PlacetaID Móvil</span><span class="v-field-value"><span class="ms" style="font-size:15px;vertical-align:-2px">edit_document</span> <%= t.firmaDocId %> · <span class="v-status <%= t.firmaEnviada ? 'v-status--ok' : 'v-status--warn' %>"><%= t.firmaEnviada ? 'Enviada al móvil' : 'Pendiente de envío' %></span></span></div>
+          <% if (t.firmantes && t.firmantes.length) { %>
+          <div class="v-field"><span class="v-field-label">Firmantes</span><span class="v-field-value">
+            <% var firmados = t.firmantes.filter(function(f){ return f.estado === 'firmado'; }).length; %>
+            <span class="v-chip v-chip--<%= firmados >= t.firmantes.length ? 'ok' : 'amber' %>"><%= firmados %>/<%= t.firmantes.length %> firmas</span>
+            <% t.firmantes.forEach(function(f) { %>
+              <span class="v-chip <%= f.estado === 'firmado' ? 'v-chip--ok' : '' %>"><%= f.nombre %> <%= f.estado === 'firmado' ? '✅' : '⏳' %></span>
+            <% }); %>
+          </span></div>
+          <% } %>
           <% } %>
         </div>
       </div>
