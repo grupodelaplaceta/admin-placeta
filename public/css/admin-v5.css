@@ -813,3 +813,36 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
 :focus-visible{outline:3px solid #6366f1 !important;outline-offset:2px !important;border-radius:6px}
 .skip-link{position:absolute;left:-9999px;top:0;z-index:1000;background:#4f46e5;color:#fff;padding:10px 16px;border-radius:0 0 10px 0;font-weight:700;text-decoration:none}
 .skip-link:focus{left:0;outline:3px solid #22d3ee}
+
+/* ── Fix responsive: sidebar off-canvas no debe generar scroll horizontal ── */
+@media(max-width:768px){
+  body{overflow-x:hidden}
+  .main-content{min-width:0}
+}
+
+/* ── Fix responsive: header no debe desbordar en movil ───────────────────── */
+@media(max-width:860px){
+  .badge-entidad{display:none}
+  .global-search{max-width:150px}
+}
+@media(max-width:560px){
+  .content-header{flex-wrap:wrap;padding:8px 10px}
+  .content-header .hamburger{margin-right:4px}
+  .content-breadcrumb{min-width:0;flex:1}
+  .breadcrumb-current{display:none}
+  .breadcrumb-link{white-space:nowrap}
+  .header-actions{gap:6px}
+  .global-search{display:none}
+  .user-chip .uc-name{font-size:12px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .user-chip .uc-role{display:none}
+  .user-chip{padding:4px 8px 4px 4px}
+}
+@media(max-width:380px){
+  .user-chip{display:none}
+}
+
+/* ── Fix responsive: truncar breadcrumb en pantallas muy estrechas ───────── */
+@media(max-width:560px){
+  .breadcrumb-link.active{display:inline-flex;align-items:center;gap:4px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .breadcrumb-logo{flex-shrink:0}
+}

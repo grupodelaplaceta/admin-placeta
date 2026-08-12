@@ -652,3 +652,29 @@ body.rsp-theme .skip-link:focus{left:0;outline:3px solid #22d3ee}
 body.rsp-theme button:focus, body.rsp-theme a:focus, body.rsp-theme input:focus, body.rsp-theme select:focus, body.rsp-theme textarea:focus{
   box-shadow:none;
 }
+
+/* ── UI / Responsive (revisión) ─────────────────────────────────────────── */
+/* Alias de page-head para consistencia */
+.rsp-theme .v-page-head{display:flex;flex-direction:column;gap:14px}
+@media(min-width:768px){.rsp-theme .v-page-head{flex-direction:row;align-items:flex-end;justify-content:space-between}}
+.rsp-theme .v-page-head .v-title{font-size:30px;font-weight:800;letter-spacing:-.02em;color:var(--t);line-height:1.15}
+.rsp-theme .v-page-head .v-sub{font-size:15px;color:var(--tm);margin-top:4px}
+
+/* Tabletas y móvil: tarjetas con tablas se desplazan horizontalmente */
+@media(max-width:1024px){
+  .rsp-theme .v-card:has(table){overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .rsp-theme .v-card:has(table) table{min-width:520px}
+}
+@media(max-width:767px){
+  .rsp-theme .v-page-head,.rsp-theme .v-page-header{flex-direction:column;align-items:stretch}
+  .rsp-theme .v-page-actions{width:100%}
+  .rsp-theme .v-page-actions .btn-accent,.rsp-theme .v-page-actions .btn-secondary,
+  .rsp-theme .v-page-actions a.btn-accent{flex:1;justify-content:center;min-width:0}
+  .rsp-theme .v-field-value{overflow-wrap:anywhere}
+  .rsp-theme .v-entity-id{overflow-wrap:anywhere}
+  .rsp-theme .v-type-card .v-type-desc{display:none}
+  .rsp-theme .v-bento .v-field{margin:0!important}
+}
+@media(min-width:768px) and (max-width:1100px){
+  .rsp-theme .v-bento{gap:14px}
+}
