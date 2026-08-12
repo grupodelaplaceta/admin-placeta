@@ -193,10 +193,18 @@ const ESCALA_IGF_EMPRESA = [
   { max: Infinity, tipo: 0.85, label: 'Más de 500.000 Pz', base: 500000 },
 ];
 
-export function calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña = false) {
-  // Art. 4.15: Empresas pequeñas (< 20.000 Pz) exentas
-  if (tipoCuenta === 'Business' && esEmpresaPequeña) {
-    return { total: 0, exento: true, motivo: 'Empresa reducida dimensión (< 20.000 Pz)' };
+export function calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña = false, facturaIVA = false) {
+  // Art. 4.15: exención de IGF para empresas (el IRM NUNCA se exime):
+  //  - Empresa reducida dimensión (< 20.000 Pz), o
+  //  - Empresa que FACTURA IVA (actividad económica real).
+  // En ambos casos SOLO queda exenta de IGF; el IRM se sigue aplicando.
+  if (tipoCuenta === 'Business' && (esEmpresaPequeña || facturaIVA)) {
+    return {
+      total: 0, exento: true,
+      motivo: facturaIVA
+        ? 'Empresa con facturación de IVA: exenta de IGF (Art. 4.15); el IRM no es exento y se aplica'
+        : 'Empresa reducida dimensión (< 20.000 Pz): exenta de IGF (Art. 4.15); el IRM no es exento y se aplica'
+    };
   }
 
   const escala = tipoCuenta === 'Business' ? ESCALA_IGF_EMPRESA : ESCALA_IGF_PERSONAL;

@@ -428,6 +428,35 @@ CREATE TABLE IF NOT EXISTS rsp_facturas (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+-- Compatibilidad: si rsp_facturas ya existía con el esquema antiguo de
+-- migrar-rsp.sql (columnas `entidad` + CHECK en `estado`), se ajusta en sitio
+-- SIN perder datos, para que la facturación nueva (emisor_eip/receptor_eip)
+-- funcione correctamente.
+ALTER TABLE rsp_facturas DROP CONSTRAINT IF EXISTS rsp_facturas_estado_check;
+ALTER TABLE rsp_facturas ALTER COLUMN estado SET DEFAULT 'emitida';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+             WHERE table_schema = 'public' AND table_name = 'rsp_facturas' AND column_name = 'entidad') THEN
+    ALTER TABLE rsp_facturas ALTER COLUMN entidad DROP NOT NULL;
+  END IF;
+END $$;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'emitida';
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS emisor_eip TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS emisor_nombre TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS receptor_eip TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS receptor_nombre TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS concepto TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS lineas JSONB DEFAULT '[]';
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS base_imponible NUMERIC DEFAULT 0;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS total_iva NUMERIC DEFAULT 0;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS total_factura NUMERIC DEFAULT 0;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS fecha TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS vencimiento TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS pagos JSONB DEFAULT '[]';
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS operacion_id TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS rectifica TEXT;
+ALTER TABLE rsp_facturas ADD COLUMN IF NOT EXISTS emitida_por TEXT;
 CREATE INDEX IF NOT EXISTS idx_fac_emisor ON rsp_facturas(emisor_eip);
 CREATE INDEX IF NOT EXISTS idx_fac_receptor ON rsp_facturas(receptor_eip);
 CREATE INDEX IF NOT EXISTS idx_fac_estado ON rsp_facturas(estado);

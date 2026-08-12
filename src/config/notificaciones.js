@@ -35,7 +35,22 @@ async function listarDB(filtros = {}) {
 async function upsertDB(n) {
   if (!supabase) return false;
   try { await supabase.from(TABLA).upsert(n, { onConflict: 'id' }); return true; }
-  catch { return false; }
+  catch (e) {
+    // Tabla no creada aún → auto-crearla y reintentar (como otros módulos RSP)
+    if (e?.code === '42P01' || /could not find the table/i.test(e?.message || '')) {
+      try {
+        await supabase.rpc('exec_sql', { sql: `CREATE TABLE IF NOT EXISTS rsp_notificaciones (
+          id TEXT PRIMARY KEY, nivel TEXT DEFAULT 'info', titulo TEXT NOT NULL,
+          mensaje TEXT, servicio TEXT, destinatario_dip TEXT, destinatario_eip TEXT,
+          objeto_tipo TEXT, objeto_id TEXT, enlace TEXT, leida BOOLEAN DEFAULT FALSE,
+          fecha TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
+        );` });
+        await supabase.from(TABLA).upsert(n, { onConflict: 'id' });
+        return true;
+      } catch { /* memoria */ }
+    }
+    return false;
+  }
 }
 
 /** Crea una notificación */

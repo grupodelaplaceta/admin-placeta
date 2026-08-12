@@ -19,6 +19,8 @@
  */
 import { createHash } from 'crypto';
 import { saveDocumentoAsync, getDocumentosByEntidadAsync } from './documentos.js';
+import { calcularIRM, calcularIGF } from './normativa.js';
+import { listarDesgravaciones } from './fiscalidad-ampliada.js';
 
 // Kinds que NO son operación sujeta (no generan IRM/IVA)
 const KINDS_NO_SUJETO = new Set([
@@ -153,6 +155,38 @@ export async function generarExpedienteDeclaracion(decl, ctx = {}) {
   const otrosImpuestos = pagaCapitalia ? 0 : 0;
   const totalImpuestos = Math.round((cuotaIRM + cuotaIGF + (muestraIVA ? resultadoIVA : 0)) * 100) / 100;
 
+  // ── DESGLOSE DETALLADO (DFM extensa tipo Agencia Tributaria) ────────
+  const patrimonioMedio = decl.patrimonio_medio || 0;
+  const ia = decl.indice_acumulacion || 0;
+  const tipoCuenta = tipoSujeto === 'Empresa' ? 'Business' : 'Personal';
+  const esEmpresaPequeña = tipoCuenta === 'Business' && patrimonioMedio < 20000;
+  // ¿Factura IVA? Empresa con ventas reales con IVA → exenta SOLO de IGF (Art. 4.15);
+  // el IRM NUNCA se exime.
+  const facturaIVA = esEIP &&
+    trans.some(t => ids.has(t.toAccountId) && Number(t.ivaPz || t.taxAmount || 0) > 0);
+  const irmTipo = calcularIRM(ia, tipoCuenta);
+  const igfDetalle = calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña, facturaIVA);
+  const exencionIGFMotivo = igfDetalle.exento ? (igfDetalle.motivo || 'Exención IGF (Art. 4.15)') : null;
+
+  // Deducciones reales del ejercicio: desgravaciones 6% IVA + donaciones (RSP)
+  let desgravaciones = [];
+  try { desgravaciones = await listarDesgravaciones(); } catch { /* sin desgravaciones */ }
+  const deduccionesLista = desgravaciones.filter(d => {
+    const coincideDip = d.titular_dip && !esEIP && d.titular_dip === identificador;
+    const coincideEip = d.titular_eip && esEIP && String(d.titular_eip).toUpperCase() === String(identificador).toUpperCase();
+    return (coincideDip || coincideEip) && d.estado === 'registrada' &&
+      String(d.ejercicio || new Date().getFullYear()) === String(anio);
+  });
+  const totalDeducciones = Math.round(deduccionesLista.reduce((s, d) => s + (d.cuantia || 0), 0) * 100) / 100;
+
+  const saldoFinal = Math.round(cuentas.reduce((s, c) => s + (c.balancePz || 0), 0) * 100) / 100;
+  const diasEnMes = new Date(anio, mes, 0).getDate();
+  const mediaIngresos = Math.round((diasEnMes ? ingresosPeriodo / diasEnMes : 0) * 100) / 100;
+  const mediaPagos = Math.round((diasEnMes ? pagosPeriodo / diasEnMes : 0) * 100) / 100;
+  // Liquidación final: bruto → deducciones → bonificaciones (nunca negativo)
+  const impuestoTrasDeducciones = Math.max(0, totalImpuestos - totalDeducciones);
+  const cuotaFinal = Math.max(0, impuestoTrasDeducciones - bonificaciones);
+
   // Nº DFM del periodo
   const numeroDfm = await generarNumeroDFM(mesPeriodo);
 
@@ -165,13 +199,25 @@ export async function generarExpedienteDeclaracion(decl, ctx = {}) {
     numeroDfm, titular: nombreLegal, identificador,
     dip: esEIP ? null : identificador, eip: eip || (esEIP ? identificador : null),
     tipoSujeto, periodo: periodoLabel, esJunior, pagaCapitalia,
-    patrimonioMedio: decl.patrimonio_medio || 0,
-    indiceAcumulacion: decl.indice_acumulacion || 0,
+    patrimonioMedio: patrimonioMedio,
+    indiceAcumulacion: ia,
     ingresosPeriodo: Math.round(ingresosPeriodo * 100) / 100,
     pagosPeriodo: Math.round(pagosPeriodo * 100) / 100,
+    saldoFinal, mediaIngresos, mediaPagos, diasActivos: diasEnMes,
     cuotaIRM, cuotaIGF, cuotaIVA: Math.round(resultadoIVA * 100) / 100,
     retenciones: 0, bonificaciones: Math.round(bonificaciones * 100) / 100,
-    totalImpuestos, muestraIVA, muestraRetenciones: false,
+    totalImpuestos, totalDeducciones, cuotaFinal,
+    tipoIRM: irmTipo,
+    tramosIGF: igfDetalle.tramos || [],
+    exencionIGF: igfDetalle.exento || false,
+    exencionIGFMotivo,
+    facturaIVA,
+    esEmpresaPequeña,
+    deducciones: deduccionesLista.map(d => ({
+      id: d.id, tipo: d.tipo, base: d.base || 0, iva_pagado: d.iva_pagado || 0,
+      porcentaje: d.porcentaje || 0, cuantia: d.cuantia || 0, origen: d.origen_tipo || ''
+    })),
+    muestraIVA, muestraRetenciones: false,
     fechaCierre: esFinal ? fechaHoy : '—'
   };
 

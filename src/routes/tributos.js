@@ -6,6 +6,29 @@ import { generarPDF } from '../config/documentos.js';
 import { generarExpedienteDeclaracion } from '../config/expediente-fiscal.js';
 import { supabase } from '../config/supabase.js';
 import { listarTitularidades } from '../config/patrimonio.js';
+import { listarDesgravaciones } from '../config/fiscalidad-ampliada.js';
+
+// Las declaraciones se calculan del MES ANTERIOR al que se generan.
+const mesAnterior = () => {
+  const a = new Date();
+  const y = a.getFullYear();
+  const m = a.getMonth(); // 0-based
+  return m === 0 ? `${y - 1}-12` : `${y}-${String(m).padStart(2, '0')}`;
+};
+
+// Notifica al titular (persona o empresa) al publicar/aprobar/emitir una declaración.
+async function notificarDeclaracion(d, titulo, mensaje, nivel = 'info') {
+  try {
+    const { crearNotificacion } = await import('../config/notificaciones.js');
+    const esEIP = /^EIP-/i.test(d?.placeta_id || '');
+    await crearNotificacion({
+      nivel, titulo, mensaje, servicio: 'tributos',
+      destinatario_dip: esEIP ? null : (d?.placeta_id || null),
+      destinatario_eip: esEIP ? (d?.placeta_id || null) : null,
+      objeto_tipo: 'DECLARACION', objeto_id: d?.id, enlace: '/tributos/declaraciones',
+    });
+  } catch { /* opcional */ }
+}
 
 const router = Router();
 
@@ -275,7 +298,7 @@ router.get('/contribuyentes', verificarPermiso('tributos', 'ver_contribuyentes')
     contribuyentes: filtrados, total: filtrados.length,
     declaraciones: declPorContrib,
     totalDeclaraciones: todasDecl.length,
-    mesActual: new Date().toISOString().slice(0, 7)
+    mesActual: mesAnterior()
   });
 });
 
@@ -370,7 +393,7 @@ router.get('/declaraciones', verificarPermiso('tributos', 'crear_declaraciones')
     totalContribuyentes: contribuyentes.length,
     controlRecaudacion: control,
     esAdmin: req.session.roles?.includes('tributos_admin'),
-    mesActual: new Date().toISOString().slice(0,7)
+    mesActual: mesAnterior()
   });
 });
 
@@ -452,6 +475,7 @@ router.put('/api/declaraciones/:id/publish', verificarPermiso('tributos', 'crear
     id_permiso_junta: bypass ? `BYPASS-${Date.now()}` : `PENDIENTE_APROBACION-${Date.now()}`,
     bypass_junta_directiva: bypass || false
   });
+  await notificarDeclaracion(d, `Declaración ${d.mes_periodo} publicada`, `Tu declaración del periodo ${d.mes_periodo} ha sido publicada y enviada a aprobación de la Junta Directiva.`, 'pendiente');
   res.json({ success: true, message: bypass ? 'Aprobada directamente (bypass)' : 'Enviada a aprobación' });
 });
 
@@ -463,6 +487,7 @@ router.put('/api/declaraciones/:id/approve', verificarPermiso('tributos', 'crear
   if (!p.startsWith('PENDIENTE_APROBACION')) return res.status(400).json({ error: 'La declaración no está pendiente de aprobación' });
 
   await sbUpdateDeclaracion(req.params.id, { id_permiso_junta: `APROBADA-${Date.now()}` });
+  await notificarDeclaracion(d, `Declaración ${d.mes_periodo} aprobada`, `Tu declaración del periodo ${d.mes_periodo} ha sido APROBADA por la Junta Directiva.`, 'info');
   res.json({ success: true, message: 'Declaración aprobada' });
 });
 
@@ -512,11 +537,11 @@ router.put('/api/declaraciones/:id/emit', verificarPermiso('tributos', 'crear_de
     let transactionId = null;
     try {
       const { apiBancoPost } = await import('../config/db.js');
-      const cobro = await apiBancoPost('transfer', {
+      const cobro = await apiBancoPost('transferir', {
         from: fromAccount, to: 'TGLP',
-        amount: total, concept: concepto
+        cantidad: total, concepto
       });
-      if (cobro?.transactionId) transactionId = cobro.transactionId;
+      if (cobro?.success && cobro?.transactionId) transactionId = cobro.transactionId;
     } catch { /* fallback: marcar como emitida sin cobro */ }
 
     await sbUpdateDeclaracion(req.params.id, {
@@ -524,6 +549,9 @@ router.put('/api/declaraciones/:id/emit', verificarPermiso('tributos', 'crear_de
       id_permiso_junta: transactionId ? `COBRADO-${transactionId}` : `EMITIDO-${Date.now()}`,
       transaction_id_blp: transactionId
     });
+
+    // Notificación al titular de que su declaración ha sido emitida y cobrada
+    await notificarDeclaracion(d, `Declaración ${d.mes_periodo} emitida`, `Tu declaración del periodo ${d.mes_periodo} ha sido emitida y cobrada automáticamente (${total.toLocaleString()} Pz).`, 'info');
 
     // Generar/actualizar el expediente fiscal completo (DFM + anexos + cierre)
     // para que quede constancia digital del cierre y la conciliación.
@@ -619,7 +647,7 @@ router.put('/api/declaraciones/bulk/:accion', verificarPermiso('tributos', 'crea
 router.post('/api/declaraciones/regenerar', verificarPermiso('tributos', 'crear_declaraciones'), async (req, res) => {
   try {
     const { mesPeriodo } = req.body;
-    const periodo = mesPeriodo || new Date().toISOString().slice(0, 7);
+    const periodo = mesPeriodo || mesAnterior();
     const state = await apiBancoGetState();
     if (!state) return res.status(400).json({ error: 'Sin conexión con el banco: no se pueden regenerar las declaraciones' });
 
@@ -723,15 +751,37 @@ router.get('/api/declaraciones/:id/pdf', verificarPermiso('tributos', 'crear_dec
   try {
     const d = await sbGetDeclaracion(req.params.id);
     if (!d) return res.status(404).json({ error: 'No encontrada' });
+    const esEIP = /^EIP-[A-Z0-9]{4,}$/i.test(d.placeta_id || '');
+    const tipoCuenta = esEIP ? 'Business' : 'Personal';
+    const ejercicio = String((d.mes_periodo || '').split('-')[0]);
+    // Deducciones reales (desgravaciones 6% IVA + donaciones) del ejercicio
+    let deducciones = [];
+    try {
+      const todas = await listarDesgravaciones();
+      deducciones = todas.filter(x => x.estado === 'registrada' &&
+        String(x.ejercicio || '') === ejercicio &&
+        (esEIP
+          ? (x.titular_eip && String(x.titular_eip).toUpperCase() === String(d.placeta_id).toUpperCase())
+          : x.titular_dip === d.placeta_id));
+    } catch { /* sin desgravaciones */ }
+    const totalDeducciones = Math.round(deducciones.reduce((s, x) => s + (x.cuantia || 0), 0) * 100) / 100;
+    const cuotaBruta = (d.cuota_irm || 0) + (d.cuota_igf || 0);
+    const cuotaFinal = Math.max(0, cuotaBruta - totalDeducciones);
+    const igfDetalle = calcularIGF(d.patrimonio_medio || 0, tipoCuenta, false, false);
+    const tipoIRM = calcularIRM(d.indice_acumulacion || 0, tipoCuenta);
     const buffer = await generarPDF('tributos', {
       id: d.id, titulo: `Declaración Tributaria ${d.mes_periodo}`,
       tipo: d.estado_pago === 'Borrador' ? 'declaracion-borrador' : 'declaracion-definitiva',
       datos: {
         contribuyente: d.placeta_id, periodo: d.mes_periodo,
-        baseImponible: d.patrimonio_medio, cuota: (d.cuota_irm || 0) + (d.cuota_igf || 0),
+        baseImponible: d.patrimonio_medio, cuota: cuotaFinal,
         cuotaIRM: d.cuota_irm, cuotaIGF: d.cuota_igf,
+        cuotaBruta, totalDeducciones, bonificaciones: 0, cuotaFinal,
         estado: d._estado_semantico || d.estado_pago,
-        patrimonioMedio: d.patrimonio_medio, indiceAcumulacion: d.indice_acumulacion
+        patrimonioMedio: d.patrimonio_medio, indiceAcumulacion: d.indice_acumulacion,
+        tipoIRM, tramosIGF: igfDetalle.tramos || [], exencionIGF: d.exencion_aplicada || false,
+        facturaIVA: false, deducciones,
+        diasActivos: d.dias_activos_mes || 30
       },
       estado: d.estado_pago, createdAt: d.created_at,
       refId: d.id, refTipo: 'declaracion'
@@ -931,11 +981,16 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
   const tipoSujeto = cuentas.some(c => c.type === 'Business' || c.type === 'State') ? 'Empresa' : 'Personal';
   const tipoCuenta = tipoSujeto === 'Empresa' ? 'Business' : 'Personal';
   const esEmpresaPequeña = tipoCuenta === 'Business' && patrimonioMedio < 20000;
+  // ¿Factura IVA? Empresa con actividad económica real (ventas con IVA en el mes).
+  // Queda EXENTA SOLO de IGF (Art. 4.15); el IRM NUNCA se exime.
+  const facturaIVA = tipoCuenta === 'Business' &&
+    movMes.some(t => ids.has(t.toAccountId) && Number(t.ivaPz || t.taxAmount || 0) > 0);
 
   const irmTipo = calcularIRM(ia, tipoCuenta);
   const cuotaIRM = patrimonioMedio * irmTipo;
-  const igfResult = calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña);
+  const igfResult = calcularIGF(patrimonioMedio, tipoCuenta, esEmpresaPequeña, facturaIVA);
   const cuotaIGF = igfResult.exento ? 0 : igfResult.total;
+  const exencionIGFMotivo = igfResult.exento ? (igfResult.motivo || 'Exención IGF') : null;
 
   // Excepción de IVA a empresas: si la empresa tiene EIP registrado no se le
   // carga IVA en sus operaciones internas; el IVA lo liquida el emisor.
@@ -956,7 +1011,9 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     dias_declarados_banco: diasEnMes,
     dias_activos_mes: diasEnMes,
     eip: eipVinculado ? cuentas.find(c => c.eip)?.eip : null,
-    iva_exento_empresa: esEmpresaPequeña || eipVinculado || false
+    iva_exento_empresa: esEmpresaPequeña || eipVinculado || false,
+    factura_iva: facturaIVA,
+    exencion_igf_motivo: exencionIGFMotivo
   });
 
   // Generar el expediente fiscal (DFM + anexos) del borrador para que quede
@@ -986,6 +1043,8 @@ async function reconciliarCuentaMes(cuentas, transacciones, placetaId, mesPeriod
     igfResult,
     exencionIGF: igfResult.exento,
     iva_exento_empresa: esEmpresaPequeña || eipVinculado || false,
+    facturaIVA,
+    exencionIGFMotivo,
     esJunior,
     pagaCapitalia,
     declaracion: decl
@@ -1006,7 +1065,7 @@ router.post('/api/reconciliar-todas', verificarPermiso('tributos', 'crear_declar
     // Determinar desde qué mes declara cada contribuyente
     const MES_INICIO = '2026-07'; // julio 2026
     const ahora = new Date();
-    const mesActual = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
+    const mesActual = mesAnterior();
     const meses = [];
     let [ai, mi] = MES_INICIO.split('-').map(Number);
     const [af, mf] = mesActual.split('-').map(Number);

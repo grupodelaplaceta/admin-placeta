@@ -12,6 +12,7 @@
 import { supabase } from './supabase.js';
 import { generarIdentificador } from './identificadores.js';
 import { calcularFactura } from './normativa.js';
+import { apiBancoGetState, apiBancoPost } from './db.js';
 
 const TABLA = 'rsp_facturas';
 const memFacturas = new Map();
@@ -128,14 +129,42 @@ export async function rectificarFactura(id, motivo, autor = {}) {
   return { facturaRectificada: f, rectificativa: rect };
 }
 
-/** Registra un pago de una factura */
+/** Registra un pago de una factura (integrado con el banco) */
 export async function registrarPagoFactura(id, { importe, concepto = 'Pago de factura' }, autor = {}) {
   const f = await getFactura(id);
   if (!f) throw new Error('Factura no encontrada');
-  const pago = { importe: Number(importe) || f.total_factura, fecha: new Date().toISOString(), concepto, pagado_por: autor.nombre || autor.dip || '' };
+  const importePago = Number(importe) || f.total_factura;
+
+  // ── INTEGRACIÓN CON EL BANCO ────────────────────────────────────────
+  // Movimiento REAL del dinero: el receptor paga al emisor (por EIP) a través
+  // del banco. El emisor liquida después el IVA a TGLP. Si el banco no está
+  // disponible, se registra igualmente el pago marcado como pendiente de banco.
+  let transactionIdBanco = null;
+  try {
+    const state = await apiBancoGetState();
+    const cuentas = state?.accounts || [];
+    const eipAcc = (eip) => cuentas.find(a =>
+      String(a.eip || '').toUpperCase() === String(eip || '').toUpperCase() &&
+      (a.type === 'Business' || a.type === 'State'));
+    const emisor = eipAcc(f.emisor_eip);
+    const receptor = eipAcc(f.receptor_eip);
+    if (emisor && receptor && f.emisor_eip && f.receptor_eip) {
+      const resp = await apiBancoPost('transferir', {
+        from: receptor.id, to: emisor.id,
+        cantidad: importePago, concepto: `PAGO ${f.id} · ${concepto || 'Factura'}`, iva: 0,
+      });
+      if (resp?.success) transactionIdBanco = resp.transactionId;
+    }
+  } catch { /* el banco no responde: se registra igualmente como pendiente de banco */ }
+
+  const pago = {
+    importe: importePago, fecha: new Date().toISOString(), concepto,
+    pagado_por: autor.nombre || autor.dip || '',
+    transactionIdBanco, confirmadoEnBanco: !!transactionIdBanco,
+  };
   f.pagos = [...(f.pagos || []), pago];
   const totalPagado = f.pagos.reduce((s, p) => s + (p.importe || 0), 0);
-  if (totalPagado >= f.total_factura) f.estado = 'pagada';
+  f.estado = totalPagado >= f.total_factura ? 'pagada' : 'parcial';
   f.updated_at = new Date().toISOString();
   memFacturas.set(id, f);
   await upsertDB(f);

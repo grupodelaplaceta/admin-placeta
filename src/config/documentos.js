@@ -678,15 +678,44 @@ function generarContenidoDocumento(tipo, datos = {}) {
       sf('IMPUESTO DE GRANDES FORTUNAS (IGF) — Art. 4.12 a 4.16');
       cf('Base: Patrimonio medio', datos.patrimonioMedio!==undefined?datos.patrimonioMedio.toLocaleString()+' Pz':'—');
       cf('Exención primeros 5.000 Pz', 'Aplicada');
-      cf('Tramos aplicados', datos.tramosIGF||'Escala progresiva Art. 4.13');
-      cf('Cuota IGF', datos.cuotaIGF!==undefined?datos.cuotaIGF.toLocaleString()+' Pz':'—');
-      if (datos.exencionAplicada) L.push({nota:'Exención por reducida dimensión empresarial (Art. 4.15): Patrimonio inferior a 20.000 Pz.'});
+      if (datos.exencionIGF) {
+        cf('Exención aplicada', 'SÍ');
+        cf('Motivo', datos.exencionIGFMotivo || 'Exención (Art. 4.15)');
+        L.push({nota:'Exención de IGF: la empresa NO queda exenta del IRM, que se sigue aplicando íntegro (Art. 4.15).'});
+      } else {
+        cf('¿Factura IVA?', datos.facturaIVA ? 'SÍ' : 'NO');
+        if (datos.tramosIGF && datos.tramosIGF.length) {
+          L.push({ tabla: {
+            cabeceras: ['Tramo (Art. 4.13)', 'Base del tramo', 'Tipo', 'Cuota'],
+            filas: datos.tramosIGF.map(t => [t.label||'—', ((t.base||0).toLocaleString()+' Pz'), ((t.tipo*100).toFixed(2)+' %'), ((t.cuota||0).toLocaleString()+' Pz')]),
+            anchos: [220, 100, 80, 100], alineaciones: ['left', 'right', 'center', 'right']
+          }});
+        } else {
+          cf('Tramos aplicados', 'Escala progresiva Art. 4.13');
+        }
+        cf('Cuota IGF', datos.cuotaIGF!==undefined?datos.cuotaIGF.toLocaleString()+' Pz':'—');
+      }
+      ln();
+      sf('DEDUCCIONES Y DESGRAVACIONES');
+      if (datos.deducciones && datos.deducciones.length) {
+        L.push({ tabla: {
+          cabeceras: ['Desgravación', 'Tipo', 'Base', 'IVA pagado', '%', 'Cuantía'],
+          filas: datos.deducciones.map(x => [x.id||'—', x.tipo||'—', ((x.base||0).toLocaleString()+' Pz'), ((x.iva_pagado||0).toLocaleString()+' Pz'), ((x.porcentaje||0)+' %'), ((x.cuantia||0).toLocaleString()+' Pz')]),
+          anchos: [110, 60, 80, 80, 60, 80], alineaciones: ['left', 'center', 'right', 'right', 'center', 'right']
+        }});
+        cf('TOTAL DEDUCCIONES', '−' + (datos.totalDeducciones||0).toLocaleString() + ' Pz');
+      } else {
+        cf('Deducciones', 'Ninguna registrada en el ejercicio');
+      }
       ln();
       sf('RESUMEN DE LA LIQUIDACIÓN');
-      const total = (datos.cuotaIRM||0)+(datos.cuotaIGF||0);
+      const total = datos.cuotaBruta !== undefined ? (datos.cuotaBruta||0) : ((datos.cuotaIRM||0)+(datos.cuotaIGF||0));
       cf('Cuota IRM', (datos.cuotaIRM||0).toLocaleString()+' Pz');
       cf('Cuota IGF', (datos.cuotaIGF||0).toLocaleString()+' Pz');
-      cf('TOTAL A PAGAR', total.toLocaleString()+' Pz');
+      cf('TOTAL IMPUESTOS (bruto)', total.toLocaleString()+' Pz');
+      cf('Deducciones / desgravaciones', '−' + (datos.totalDeducciones||0).toLocaleString() + ' Pz');
+      if (datos.bonificaciones > 0) cf('Bonificaciones', '−' + (datos.bonificaciones||0).toLocaleString() + ' Pz');
+      cf('CUOTA A INGRESAR (final)', (datos.cuotaFinal !== undefined ? datos.cuotaFinal : Math.max(0, total - (datos.totalDeducciones||0) - (datos.bonificaciones||0))).toLocaleString() + ' Pz');
       cf('Moneda', 'Placeta (Pz)');
       if (datos.estado) cf('Estado de la liquidación', datos.estado);
       if (tipo==='declaracion-definitiva') {
@@ -721,66 +750,115 @@ function generarContenidoDocumento(tipo, datos = {}) {
       cf('Fecha de emisión', datos.fechaEmision || hoy);
       cf('Fecha de cierre', datos.fechaCierre || '—');
       ln();
-      sf('RESUMEN ECONÓMICO');
+      sf('RESUMEN ECONÓMICO DEL PERIODO');
       L.push({ tabla: {
         cabeceras: ['Concepto', 'Importe'],
         filas: [
           ['Patrimonio medio del periodo', fmtPz(datos.patrimonioMedio)],
           ['Ingresos del periodo', fmtPz(datos.ingresosPeriodo)],
           ['Pagos del periodo', fmtPz(datos.pagosPeriodo)],
-          ['Índice de acumulación (IA)', datos.indiceAcumulacion !== undefined ? String(datos.indiceAcumulacion) : '—'],
+          ['Media de ingresos diarios', fmtPz(datos.mediaIngresos)],
+          ['Media de pagos diarios', fmtPz(datos.mediaPagos)],
           ['Saldo final del periodo', fmtPz(datos.saldoFinal)],
+          ['Índice de acumulación (IA)', datos.indiceAcumulacion !== undefined ? String(datos.indiceAcumulacion) : '—'],
           ['Días activos del mes', datos.diasActivos !== undefined ? String(datos.diasActivos) : '—'],
         ],
         anchos: [340, 160], alineaciones: ['left', 'right']
       }});
       ln();
-      sf('LIQUIDACIÓN DE IMPUESTOS (desglosada)');
+      sf('2. IMPUESTO DE REGULACIÓN MONETARIA (IRM) — Art. 4.8 a 4.11 bis');
       L.push({ tabla: {
-        cabeceras: ['Impuesto', 'Base', 'Tipo', 'Cuota'],
+        cabeceras: ['Concepto', 'Base', 'Tipo', 'Cuota'],
         filas: [
-          ['IRM — Impuesto de Regulación Monetaria', fmtPz(datos.baseIRM !== undefined ? datos.baseIRM : datos.patrimonioMedio), pct(datos.tipoIRM), fmtPz(datos.cuotaIRM)],
-          ['IGF — Impuesto sobre Grandes Fortunas', fmtPz(datos.baseIGF !== undefined ? datos.baseIGF : datos.patrimonioMedio), datos.tipoIGF ? String(datos.tipoIGF) : 'Escala Art. 4.13', fmtPz(datos.cuotaIGF)],
+          ['Patrimonio medio del periodo', fmtPz(datos.patrimonioMedio), '—', '—'],
+          ['Índice de acumulación (IA)', String(datos.indiceAcumulacion !== undefined ? datos.indiceAcumulacion : '—'), '—', '—'],
+          ['Tipo aplicable (escala progresiva Art. 4.10)', fmtPz(datos.patrimonioMedio), pct(datos.tipoIRM), fmtPz(datos.cuotaIRM)],
+          ['CUOTA ÍNTEGRA IRM', fmtPz(datos.patrimonioMedio), pct(datos.tipoIRM), fmtPz(datos.cuotaIRM)],
         ],
-        anchos: [230, 90, 90, 90], alineaciones: ['left', 'right', 'right', 'right']
+        anchos: [220, 100, 80, 100], alineaciones: ['left', 'right', 'center', 'right'], resaltarDesde: 3
       }});
-      if (datos.muestraIVA) {
+      L.push({nota: 'El IRM se aplica SIEMPRE a todos los sujetos (personas y empresas) y NUNCA está exento. Se calcula sobre el patrimonio medio del periodo vencido; el cargo se realiza el día 5 del mes siguiente (Art. 4.11 bis).'});
+      ln();
+      sf('3. IMPUESTO DE GRANDES FORTUNAS (IGF) — Art. 4.12 a 4.16');
+      if (datos.exencionIGF) {
+        cf('Exención aplicada', 'SÍ');
+        cf('Motivo de exención', datos.exencionIGFMotivo || 'Exención (Art. 4.15)');
+        cf('Cuota IGF', '0 Pz (exento)');
+        L.push({nota: (datos.exencionIGFMotivo || 'Exención de IGF') + '. IMPORTANTE: la exención de IGF NO exime del IRM, que se sigue aplicando en su totalidad.'});
+      } else {
+        cf('Base: Patrimonio medio', fmtPz(datos.patrimonioMedio));
+        cf('Exención primeros 5.000 Pz', 'Aplicada');
+        cf('¿Factura IVA?', datos.facturaIVA ? 'SÍ' : 'NO');
         L.push({ tabla: {
-          cabeceras: ['IVA — Impuesto sobre el Valor Añadido', 'Base', 'Tipo', 'Cuota'],
-          filas: [
-            ['IVA repercutido', fmtPz(datos.baseRepercutida), '12 %', fmtPz(datos.ivaRepercutido)],
-            ['IVA soportado / deducciones', fmtPz(datos.baseSoportada), '12 %', '−' + fmtPz(datos.deduccionesIVA !== undefined ? datos.deduccionesIVA : 0)],
-            ['Rectificaciones', '—', '—', fmtPz(datos.rectificacionesIVA)],
-            ['Resultado IVA', '—', '—', fmtPz(datos.cuotaIVA)],
-          ],
-          anchos: [230, 90, 90, 90], alineaciones: ['left', 'right', 'right', 'right'], resaltarDesde: 3
+          cabeceras: ['Tramo (Art. 4.13)', 'Base del tramo', 'Tipo', 'Cuota'],
+          filas: (datos.tramosIGF || []).map(t => [t.label || '—', fmtPz(t.base), pct(t.tipo), fmtPz(t.cuota)]),
+          anchos: [220, 100, 80, 100], alineaciones: ['left', 'right', 'center', 'right']
         }});
-      }
-      if (datos.bonificaciones !== undefined && datos.bonificaciones > 0) {
-        L.push({ tabla: {
-          cabeceras: ['Bonificaciones', 'Base', 'Tipo', 'Cuota'],
-          filas: [['Bonificación aplicada (asumida por CAPITALIA)', '—', '100 %', '−' + fmtPz(datos.bonificaciones)]],
-          anchos: [230, 90, 90, 90], alineaciones: ['left', 'right', 'right', 'right']
-        }});
+        cf('CUOTA ÍNTEGRA IGF', fmtPz(datos.cuotaIGF));
       }
       ln();
-      sf('RESULTADO FISCAL');
+      sf('4. IMPUESTO SOBRE EL VALOR AÑADIDO (IVA) — Art. 4.3-4.4');
+      if (datos.muestraIVA) {
+        L.push({ tabla: {
+          cabeceras: ['Concepto', 'Base', 'Tipo', 'Cuota'],
+          filas: [
+            ['IVA repercutido', fmtPz(datos.baseRepercutida), '12 %', fmtPz(datos.ivaRepercutido)],
+            ['IVA soportado (deducible)', fmtPz(datos.baseSoportada), '12 %', '−' + fmtPz(datos.deduccionesIVA !== undefined ? datos.deduccionesIVA : 0)],
+            ['Rectificaciones', '—', '—', fmtPz(datos.rectificacionesIVA)],
+            ['RESULTADO IVA', '—', '—', fmtPz(datos.cuotaIVA)],
+          ],
+          anchos: [220, 100, 80, 100], alineaciones: ['left', 'right', 'center', 'right'], resaltarDesde: 3
+        }});
+        if (datos.facturaIVA) {
+          L.push({nota: 'La empresa factura IVA (operaciones comerciales reales). Por ello queda EXENTA SOLO del IGF (Art. 4.15), pero el IRM se sigue aplicando íntegro.'});
+        }
+      } else {
+        cf('Operaciones sujetas', 'Ninguna en el periodo');
+        cf('Resultado IVA', '0 Pz');
+      }
+      ln();
+      sf('5. DEDUCCIONES Y DESGRAVACIONES APLICADAS');
+      const filasDed = (datos.deducciones || []).map(d => [d.id, d.tipo, fmtPz(d.base), fmtPz(d.iva_pagado), pct(d.porcentaje), fmtPz(d.cuantia)]);
+      if (filasDed.length > 0) {
+        L.push({ tabla: {
+          cabeceras: ['Desgravación', 'Tipo', 'Base', 'IVA pagado', '%', 'Cuantía'],
+          filas: filasDed,
+          anchos: [110, 60, 80, 80, 60, 80], alineaciones: ['left', 'center', 'right', 'right', 'center', 'right']
+        }});
+        cf('TOTAL DEDUCCIONES APLICADAS', '−' + fmtPz(datos.totalDeducciones));
+      } else {
+        cf('Deducciones', 'Ninguna registrada en el ejercicio');
+        cf('Total deducciones', '0 Pz');
+      }
+      ln();
+      sf('6. BONIFICACIONES FISCALES');
+      if (datos.bonificaciones > 0) {
+        L.push({ tabla: {
+          cabeceras: ['Concepto', 'Importe'],
+          filas: [['Bonificación aplicada (asumida por CAPITALIA)', '−' + fmtPz(datos.bonificaciones)]],
+          anchos: [340, 160], alineaciones: ['left', 'right']
+        }});
+      } else {
+        cf('Bonificaciones', '0 Pz');
+      }
+      ln();
+      sf('7. RESULTADO DE LA LIQUIDACIÓN');
       L.push({ tabla: {
         cabeceras: ['Concepto', 'Importe'],
         filas: [
-          ['IRM', fmtPz(datos.cuotaIRM)],
-          ['IGF', fmtPz(datos.cuotaIGF)],
-          ...(datos.muestraIVA ? [['IVA', fmtPz(datos.cuotaIVA)]] : []),
-          ...(datos.bonificaciones > 0 ? [['Bonificaciones (CAPITALIA)', '−' + fmtPz(datos.bonificaciones)]] : []),
-          ['TOTAL IMPUESTOS', fmtPz(datos.totalImpuestos)],
-          ...(datos.esJunior && datos.pagaCapitalia
-            ? [['Importe asumido por CAPITALIA', fmtPz(datos.totalImpuestos)], ['Importe a cargo del titular', '0 Pz']]
-            : [['Importe a cargo del sujeto', fmtPz(datos.totalImpuestos)]]),
+          ['Cuota íntegra IRM', fmtPz(datos.cuotaIRM)],
+          ['Cuota íntegra IGF', fmtPz(datos.cuotaIGF)],
+          ...(datos.muestraIVA ? [['Resultado IVA', fmtPz(datos.cuotaIVA)]] : []),
+          ['TOTAL IMPUESTOS (bruto)', fmtPz(datos.totalImpuestos)],
+          ['Deducciones / desgravaciones', '−' + fmtPz(datos.totalDeducciones)],
+          ...(datos.bonificaciones > 0 ? [['Bonificaciones', '−' + fmtPz(datos.bonificaciones)]] : []),
+          ['CUOTA A INGRESAR (final)', fmtPz(datos.cuotaFinal)],
         ],
-        anchos: [340, 160], alineaciones: ['left', 'right'], resaltarDesde: (datos.muestraIVA ? 3 : 2) + (datos.bonificaciones > 0 ? 1 : 0)
+        anchos: [340, 160], alineaciones: ['left', 'right'], resaltarDesde: 6
       }});
-      L.push({nota: 'DFM: documento principal del expediente fiscal mensual. Cada impuesto se desglosa en base, tipo y cuota. No muestra casillas que no corresponden al sujeto (IVA o retenciones solo cuando aplican).'});
-      L.push({nota:'Firma/sello digital: este documento queda sellado digitalmente por el sistema fiscal de La Placeta al ser emitido.'});
+      L.push({nota: 'Liquidación: cuota bruta (IRM + IGF + IVA) − deducciones (desgravaciones 6% IVA y donaciones) − bonificaciones. El resultado nunca es negativo.'});
+      L.push({nota: 'Normativa aplicable (CNIC/CNI del BOP): Art. 4.3-4.4 (IVA 12%), Art. 4.8-4.11 bis (IRM), Art. 4.12-4.16 (IGF), Art. 4.15 (exención IGF empresas con facturación de IVA), Art. 5 (Placeta Junior).'});
+      L.push({nota: 'Firma/sello digital: este documento queda sellado digitalmente por el sistema fiscal de La Placeta al ser emitido. Conservar junto con el anexo de movimientos fiscales y las declaraciones específicas de IRM e IGF.'});
       break;
     }
 
@@ -1584,9 +1662,10 @@ function generarContenidoDocumento(tipo, datos = {}) {
   return L;
 }
 
-// ── GENERACIÓN DE PDF (estilo GDLP) ──────────────────────────────────────
-// Paleta: morado RSP #3702b3 como acento principal
-const A = '#3702b3', B = '#3702b3', C = '#6a2be0';
+// ── GENERACIÓN DE PDF (estilo oficial B/N) ────────────────────────────────
+// Paleta: BLANCO Y NEGRO — cabecera blanca, texto negro, acentos en negro/gris.
+// El logo va siempre sobre fondo blanco (membrete oficial en blanco y negro).
+const A = '#000000', B = '#000000', C = '#444444';
 const PDF_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FONT_DIR = path.join(PDF_DIR, '..', 'fonts');
 
@@ -1637,11 +1716,11 @@ export async function generarPDF(entidad, documento) {
         doc.save();
         const alto = esPrimera ? 85 : 42;
         const topY = esPrimera ? 14 : 8;
-        // Barra principal morada #3702b3
-        doc.rect(0, topY, doc.page.width, alto).fill('#3702b3');
-        // Barra superior fina más clara
-        doc.rect(0, 0, doc.page.width, 4).fill('#6a2be0');
-        // Logo (sobre fondo blanco para visibilidad en cabecera morada)
+        // Cabecera blanca (membrete oficial) con barra superior negra
+        doc.rect(0, topY, doc.page.width, alto).fill('#ffffff');
+        // Barra superior fina negra
+        doc.rect(0, 0, doc.page.width, 4).fill('#000000');
+        // Logo (sobre fondo blanco para visibilidad)
         const logoPath = path.join(PDF_DIR, '..', 'img', logos[entidad] || 'logo-web.png');
         const logoW = esPrimera ? 68 : 40;
         const logoH = esPrimera ? 40 : 24;
@@ -1652,7 +1731,7 @@ export async function generarPDF(entidad, documento) {
           const p2 = path.join(PDF_DIR, '..', '..', 'public', 'img', logos[entidad] || 'logo-web.png');
           const fp = fs.existsSync(p1) ? p1 : (fs.existsSync(p2) ? p2 : null);
           if (fp) {
-            // Recuadro blanco detrás del logo para que no se mezcle con fondo morado
+            // Recuadro blanco detrás del logo (membrete en blanco y negro)
             doc.save();
             doc.rect(logoX - 4, logoY - 2, logoW + 8, logoH + 4).fill('#ffffff');
             // Logo centrado HORIZONTAL y VERTICALMENTE dentro del recuadro,
@@ -1668,16 +1747,16 @@ export async function generarPDF(entidad, documento) {
         } catch {}
         if (esPrimera) {
           const tx = logoX + logoW + 18;
-          doc.font(fontBold).fontSize(17).fillColor('#ffffff').text(documento.titulo||'Documento', tx, 28);
-          doc.font(fontReg).fontSize(8.5).fillColor('#d0c0f0').text(entL, tx, 54);
-          doc.font(fontReg).fontSize(7).fillColor('#b0a0d8').text(fecha, tx, 72);
-          doc.rect(50, 105, 500, 1.5).fill('#6a2be0');
+          doc.font(fontBold).fontSize(17).fillColor('#000000').text(documento.titulo||'Documento', tx, 28);
+          doc.font(fontReg).fontSize(8.5).fillColor('#555555').text(entL, tx, 54);
+          doc.font(fontReg).fontSize(7).fillColor('#777777').text(fecha, tx, 72);
+          doc.rect(50, 105, 500, 1.5).fill('#000000');
           doc.y = 115;
         } else {
           const tx = logoX + logoW + 14;
-          doc.font(fontBold).fontSize(11).fillColor('#ffffff').text(entL, tx, 16);
-          doc.font(fontReg).fontSize(7).fillColor('#d0c0f0').text(documento.titulo||'Documento', tx, 34);
-          doc.rect(50, 54, 500, 1).fill('#6a2be0');
+          doc.font(fontBold).fontSize(11).fillColor('#000000').text(entL, tx, 16);
+          doc.font(fontReg).fontSize(7).fillColor('#555555').text(documento.titulo||'Documento', tx, 34);
+          doc.rect(50, 54, 500, 1).fill('#000000');
           doc.y = 62;
         }
         doc.restore();
@@ -1687,7 +1766,7 @@ export async function generarPDF(entidad, documento) {
       function dibujarFooter() {
         doc.save();
         doc.rect(50, doc.y, 500, 0.5).fill(C);
-        doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
+        doc.font(fontReg).fontSize(6.5).fillColor('#555555');
         doc.text('Grupo de La Placeta · Documento oficial', 50, doc.y + 4, { width: 400 });
         const pg = doc.bufferedPageRange().count;
         doc.text(`Pág. ${pg}`, doc.page.width - 90, doc.y + 4, { width: 50, align:'right' });
@@ -1718,12 +1797,12 @@ export async function generarPDF(entidad, documento) {
         const filaH = 16;
         const padX = 4;
 
-        // ── Cabecera (fondo morado, texto blanco) ──
+        // ── Cabecera (fondo negro, texto blanco) — B/N ──
         function dibujarCabeceraTabla() {
           let x = margen;
           const y = doc.y;
           doc.save();
-          doc.rect(margen, y, anchoTotal, filaH).fill('#3702b3');
+          doc.rect(margen, y, anchoTotal, filaH).fill('#222222');
           doc.font(fontBold).fontSize(7.5).fillColor('#ffffff');
           cab.forEach((c, i) => {
             const ancho = anchos[i];
@@ -1760,7 +1839,7 @@ export async function generarPDF(entidad, documento) {
           const esResaltada = resaltar.has(fi) || (t.resaltarDesde !== undefined && fi >= t.resaltarDesde);
           if (esResaltada) {
             doc.save();
-            doc.rect(margen, yFila, anchoTotal, altoFila).fill('#f3eefe');
+            doc.rect(margen, yFila, anchoTotal, altoFila).fill('#eeeeee');
             doc.restore();
           }
           let x = margen;
@@ -1770,7 +1849,7 @@ export async function generarPDF(entidad, documento) {
             const ancho = anchos[ci];
             const bold = esResaltada;
             doc.font(bold ? fontBold : fontReg).fontSize(7.5)
-              .fillColor(esResaltada ? '#3702b3' : '#1c1226');
+              .fillColor(esResaltada ? '#000000' : '#111111');
             const opts = { width: ancho - padX * 2, align: alin[ci] === 'right' ? 'right' : alin[ci] === 'center' ? 'center' : 'left', lineBreak: true };
             doc.text(String(celda), x + padX, yFila + 3, opts);
             x += ancho;
@@ -1779,7 +1858,7 @@ export async function generarPDF(entidad, documento) {
           doc.y = yFila + altoFila;
           // Línea separadora suave
           doc.save();
-          doc.moveTo(margen, doc.y).lineTo(margen + anchoTotal, doc.y).lineWidth(0.3).strokeColor('#e0daf0').stroke();
+          doc.moveTo(margen, doc.y).lineTo(margen + anchoTotal, doc.y).lineWidth(0.3).strokeColor('#cccccc').stroke();
           doc.restore();
         });
         doc.moveDown(0.3);
@@ -1794,28 +1873,28 @@ export async function generarPDF(entidad, documento) {
         if (item.seccion) {
           if (doc.y > doc.page.height - 80) nuevaPagina();
           doc.moveDown(0.2);
-          doc.font(fontBold).fontSize(11).fillColor('#3702b3').text(item.seccion.toUpperCase(), 50, doc.y, {width:500});
+          doc.font(fontBold).fontSize(11).fillColor('#000000').text(item.seccion.toUpperCase(), 50, doc.y, {width:500});
           doc.moveDown(0.2);
         } else if (item.tabla) {
           dibujarTabla(item.tabla);
         } else if (item.linea) {
-          doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(0.5).strokeColor('#e0daf0').stroke();
+          doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(0.5).strokeColor('#cccccc').stroke();
           doc.moveDown(0.3);
         } else if (item.texto) {
           if (doc.y > doc.page.height - 65) nuevaPagina();
-          doc.font(fontReg).fontSize(9).fillColor('#1c1226').text(item.texto, 50, doc.y, {width:500, align:'justify', lineGap: 1});
+          doc.font(fontReg).fontSize(9).fillColor('#111111').text(item.texto, 50, doc.y, {width:500, align:'justify', lineGap: 1});
           doc.moveDown(0.15);
         } else if (item.nota) {
           if (doc.y > doc.page.height - 55) nuevaPagina();
           const ny = doc.y;
           doc.save(); doc.rect(50, ny, 3, 3).fill(C);
-          doc.font(fontReg).fontSize(7.5).fillColor('#5c5566').text(item.nota, 58, ny, {width:482, lineGap: 0});
+          doc.font(fontReg).fontSize(7.5).fillColor('#555555').text(item.nota, 58, ny, {width:482, lineGap: 0});
           doc.y = Math.max(doc.y, ny+6)+2;
           doc.restore();
         } else if (item.campo) {
           const [k,v] = item.campo;
-          doc.font(fontBold).fontSize(9).fillColor('#1c1226').text(`${k}: `, 50, doc.y, {continued:true});
-          doc.font(fontReg).fillColor('#5c5566').text(v||'—');
+          doc.font(fontBold).fontSize(9).fillColor('#111111').text(`${k}: `, 50, doc.y, {continued:true});
+          doc.font(fontReg).fillColor('#555555').text(v||'—');
           doc.y += 1;
         }
       }
@@ -1825,22 +1904,22 @@ export async function generarPDF(entidad, documento) {
       if (doc.y > doc.page.height - 200) nuevaPagina();
 
       doc.moveDown(0.4);
-      doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(1).strokeColor('#6a2be0').stroke();
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).lineWidth(1).strokeColor('#000000').stroke();
       doc.moveDown(0.8);
-      doc.font(fontBold).fontSize(11).fillColor('#3702b3').text('CÚMPLEASE Y NOTIFÍQUESE.', {width:500, align:'center'});
+      doc.font(fontBold).fontSize(11).fillColor('#000000').text('CÚMPLEASE Y NOTIFÍQUESE.', {width:500, align:'center'});
       doc.moveDown(0.6);
-      doc.font(fontReg).fontSize(8).fillColor('#5c5566').text('Fdo.: La Administración del Grupo de La Placeta', {width:500, align:'center'});
+      doc.font(fontReg).fontSize(8).fillColor('#555555').text('Fdo.: La Administración del Grupo de La Placeta', {width:500, align:'center'});
       doc.moveDown(0.1);
-      doc.font(fontReg).fontSize(7).fillColor('#5c5566').text(entL, {width:500, align:'center'});
+      doc.font(fontReg).fontSize(7).fillColor('#555555').text(entL, {width:500, align:'center'});
 
       // ── FIRMA DEL TITULAR ──
       // Los documentos de TRIBUTOS no requieren firma del titular: se emiten
       // y sellan automáticamente por el sistema (sello digital + CSV).
       if (entidad !== 'tributos') {
         doc.moveDown(0.5);
-        doc.moveTo(100, doc.y).lineTo(500, doc.y).lineWidth(0.5).strokeColor('#c0b8d8').stroke();
+        doc.moveTo(100, doc.y).lineTo(500, doc.y).lineWidth(0.5).strokeColor('#999999').stroke();
         doc.moveDown(0.2);
-        doc.font(fontBold).fontSize(9).fillColor('#3702b3').text('FIRMA DEL TITULAR', {width:500, align:'center'});
+        doc.font(fontBold).fontSize(9).fillColor('#000000').text('FIRMA DEL TITULAR', {width:500, align:'center'});
 
         if (documento.firmado) {
           const firmaImg = documento.datos?.firma_base64 || documento.datos?.firmaImagen;
@@ -1861,7 +1940,7 @@ export async function generarPDF(entidad, documento) {
           doc.moveDown(0.2);
           // Salto de página si hace falta
           if (doc.y > doc.page.height - 50) nuevaPagina();
-          doc.font(fontReg).fontSize(8).fillColor('#5c5566');
+          doc.font(fontReg).fontSize(8).fillColor('#555555');
           doc.text(`Firmado digitalmente por: ${documento.datos?.firmadoPor || '—'}`, {width:500, align:'center'});
           if (documento.datos?.fechaFirma) {
             const fFecha = new Date(documento.datos.fechaFirma).toLocaleString('es-ES');
@@ -1895,7 +1974,7 @@ export async function generarPDF(entidad, documento) {
       // ── PIE + FOOTER ── (relativo a doc.y, SIN posiciones absolutas)
       const espacioRestante = doc.page.height - 45 - doc.y;
       if (espacioRestante < 40) nuevaPagina();
-      doc.font(fontReg).fontSize(6.5).fillColor('#5c5566');
+      doc.font(fontReg).fontSize(6.5).fillColor('#555555');
       const leyenda = esAuto ? 'Informe automático del sistema · Código Normativo Interno' : `${entL} · Documento oficial · Código Normativo Interno GDLP`;
       doc.text(leyenda, 50, doc.y, {width:500, align:'center'});
       doc.moveDown(0.1);
