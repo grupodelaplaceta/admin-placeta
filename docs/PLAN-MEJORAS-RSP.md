@@ -15,7 +15,7 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 - [ ] **0.1 Modelo de 4 niveles**: `SERVICIO → TRÁMITE → EXPEDIENTE → ACTUACIONES` (`tramites.js` + `expedientes.js`). Cada trámite declara su `servicio`; al presentar se crea `EXP` con `actuaciones[]`.
 - [ ] **0.2 Expediente = objeto central**: enlaza `documentos`, `actuaciones`, `firmas`, `notificaciones`, `pagos`, `validaciones`, `auditoría` (referencias, no duplicar).
 - [ ] **0.3 Fuentes de verdad por dominio** (`docs/`): PlacetaID=identidad · **backend-banco (MongoDB)=cuentas/operaciones** · Supabase RSP=expedientes/patrimonio/fiscalidad · **Banco web=interfaz ciudadano (lee API)** · gdlp-crm=portal público (sin datos).
-- [ ] **0.4 "Contexto Único" del ciudadano (federado)**: `GET /rsp/api/contexto/:dip` agrega Identidad+Bancario+Fiscalidad+Patrimonio+Expedientes+Documentos+Firmas+Notificaciones vía APIs (sin mega-DB).
+- [x] **0.4 "Contexto Único" del ciudadano (federado)**: `GET /rsp/api/contexto/:dip` agrega Identidad+Bancario+Fiscalidad+Patrimonio+Expedientes+Documentos+Firmas+Notificaciones vía APIs (sin mega-DB). ✅ hecha (12/08): `src/config/contexto.js` + `src/routes/rsp.js`; verificado con producción (todas las fuentes OK, saldo correcto).
 
 ## FASE 1 — SEGURIDAD DE DATOS (P0, transversal) 🔴
 **Objetivo:** ningún dato sensible fuera de su dominio; nada de "todas las cuentas" en el DOM ni en APIs de un usuario normal.
@@ -59,31 +59,31 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 - [ ] **2.5 Sin datos ajenos en el DOM**
   - El web solo pinta lo del usuario autenticado; sin selects/datalists con cuentas de otros; IBAN/datos enmascarados donde aplique.
   - Criterio: inspeccionar elemento no muestra datos de terceros.
-- [ ] **2.6 Integración con RSP (Contexto Único)**
+- [x] **2.6 Integración con RSP (Contexto Único)**
   - El `contexto/:dip` del RSP (0.4) lee del Banco web/API para el bloque "Bancario" de cada ciudadano.
-  - Criterio: el admin RSP ve el bloque bancario vía la API del banco (no duplicada).
+  - Criterio: el admin RSP ve el bloque bancario vía la API del banco (no duplicada). ✅ hecha (12/08): el bloque `bancario` del Contexto Único lee de la API real (backend-banco) acotado al titular.
 
 ## FASE 3 — SLA y plazos configurables (P0)
-- [ ] **3.1 Plazos por estado/tipo** en `tramites.js` (`plazos: { revision:15, subsanacion:10, firma:7, justificacion:20 }`).
-- [ ] **3.2 Fecha límite + efecto de vencimiento configurable** (`silencio_positivo|negativo|escalado|prorroga|intervencion`) por procedimiento — **sin silencio positivo por defecto**.
-- [ ] **3.3 UI de plazo** en `detalle.ejs` ("Vence en X/vencido") y `trabajo.ejs` (chips; vencidos arriba).
-- [ ] **3.4 Recordatorios y escalado** (`revisarVencimientos()` al 70% y al vencer).
+- [x] **3.1 Plazos por estado/tipo** en `tramites.js` (`plazos: { revision:15, subsanacion:10, firma:7, justificacion:20 }`). ✅ hecha (12/08)
+- [x] **3.2 Fecha límite + efecto de vencimiento configurable** (`silencio_positivo|negativo|escalado|prorroga|intervencion`) por procedimiento — **sin silencio positivo por defecto**. ✅ hecha (12/08): `getSilencioTipo` (negativo por defecto), aplicado en `avanzarTramite`/`revisarVencimientos`.
+- [x] **3.3 UI de plazo** en `detalle.ejs` ("Vence en X/vencido") y `trabajo.ejs` (chips; vencidos arriba). ✅ hecha (12/08): chips vencido/vence en detalle y bandeja de trabajo.
+- [x] **3.4 Recordatorios y escalado** (`revisarVencimientos()` al 70% y al vencer). ✅ hecha (12/08): `revisarVencimientos()` periódico (15 min) + endpoint `POST /rsp/tramites/api/revisar-vencimientos`.
 
 ## FASE 4 — Registro maestro de identidad (P0)
-- [ ] **4.1** Tabla `rsp_ciudadanos` (dip, placetaId, nombre, estado, nivel N1–N3, cuenta_principal, canal_preferido) en `docs/migrar-rsp-core.sql`.
-- [ ] **4.2** Sincronización event-driven (`upsertCiudadanoMaestro(dip)` al crear PlacetaID/banco_user).
-- [ ] **4.3** Helper `resolverCiudadano(dip)` usado por trámites, patrimonio, fiscalidad, contexto.
-- [ ] **4.4** Niveles de verificación N1→N3 con beneficios (límites, firma, subvenciones) — **sin biometría**.
+- [x] **4.1** Tabla `rsp_ciudadanos` (dip, placetaId, nombre, estado, nivel N1–N3, cuenta_principal, canal_preferido) en `docs/migrar-rsp-core.sql`. ✅ hecha (12/08)
+- [x] **4.2** Sincronización event-driven (`upsertCiudadanoMaestro(dip)` al crear PlacetaID/banco_user). ✅ hecha (12/08): conectada en `placetaid-sincronizacion.js`.
+- [x] **4.3** Helper `resolverCiudadano(dip)` usado por trámites, patrimonio, fiscalidad, contexto. ✅ hecha (12/08): usado por el Contexto Único.
+- [x] **4.4** Niveles de verificación N1→N3 con beneficios (límites, firma, subvenciones) — **sin biometría**. ✅ hecha (12/08): `NIVELES` en `registro-maestro.js`.
 
 ## FASE 5 — Normativa dinámica desde el BOP (P1) 🟠
 **Objetivo:** el BOP (Boletín Oficial) es la fuente de la normativa. Un cambio publicado en un CNIC (`bop_cnic`: porcentajes, precios, límites, plazos, con `vigente` e `historial`) actualiza automáticamente tarifas, tipos, límites, exenciones y plazos del RSP **hacia el futuro, sin tocar código**.
 
-- [ ] **5.1 Servicio de parámetros** — nuevo `admin-placeta/src/config/normativa.js` que lee de `bop_cnic` (Supabase, lectura pública) los valores vigentes por código (`tipo_valor`, `valor`, `vigente`, `historial`). Criterio: `getParametro('CNIC-4.10-01')` devuelve el valor vigente tipado.
-- [ ] **5.2 Catálogo RSP → CNIC** — mapa de códigos para cada valor hoy hardcodeado: IVA, tope retribución (250 Pz), tarifa consulta/modificación, exención IGF (empresa <20k), límites compliance (empresa 10M / personal 500k), plazos de trámites, sanciones. Criterio: cada constante tiene su código CNIC.
-- [ ] **5.3 Sustituir hardcodes** — reemplazar en `fiscalidad-ampliada.js`, `normativa.js`, `rsp.js` (tarifas), `empresas.js` (compliance), `patrimonio.js`, `tramites.js` (plazos) por `getParametro(...)`. Criterio: los cálculos usan el BOP, no constantes.
-- [ ] **5.4 Sincronización/refresh** — caché con TTL + `POST /api/normativa/refresh` (o webhook del BOP) al publicar un CNIC; el `bop-editor` avisa al publicar. Criterio: al actualizar un CNIC y refrescar, tarifas/tipos cambian sin deploy.
-- [ ] **5.5 Vigencia por fecha (histórico)** — aplicar el valor vigente en la fecha del periodo (declaraciones pasadas) usando `historial` + `fecha_aplicacion`. Criterio: una declaración de un mes anterior usa el tipo vigente de ese mes.
-- [ ] **5.6 Trazabilidad** — registrar en cada operación/declaración la **versión de CNIC aplicada** (auditoría fiscal). Criterio: cada cálculo sabe qué valor CNIC usó.
+- [x] **5.1 Servicio de parámetros** — nuevo `admin-placeta/src/config/normativa.js` que lee de `bop_cnic` (Supabase, lectura pública) los valores vigentes por código (`tipo_valor`, `valor`, `vigente`, `historial`). Criterio: `getParametro('CNIC-4.10-01')` devuelve el valor vigente tipado. ✅ hecha (12/08): `src/config/normativa-dinamica.js` (`getParametro`, `getParametroValor`, `cargarSnapshot`).
+- [x] **5.2 Catálogo RSP → CNIC** — mapa de códigos para cada valor hoy hardcodeado: IVA, tope retribución (250 Pz), tarifa consulta/modificación, exención IGF (empresa <20k), límites compliance (empresa 10M / personal 500k), plazos de trámites, sanciones. Criterio: cada constante tiene su código CNIC. ✅ hecha (12/08): `CATALOGO` con fallback seguro.
+- [~] **5.3 Sustituir hardcodes** — reemplazar en `fiscalidad-ampliada.js`, `normativa.js`, `rsp.js` (tarifas), `empresas.js` (compliance), `patrimonio.js`, `tramites.js` (plazos) por `getParametro(...)`. Criterio: los cálculos usan el BOP, no constantes. ✅ parcial (12/08): `rsp.js` tarifas+IVA y `tramites.js` plazos cableados. Pendiente: `fiscalidad-ampliada.js`, `empresas.js`, `patrimonio.js` (siguiente iteración).
+- [x] **5.4 Sincronización/refresh** — caché con TTL + `POST /api/normativa/refresh` (o webhook del BOP) al publicar un CNIC; el `bop-editor` avisa al publicar. Criterio: al actualizar un CNIC y refrescar, tarifas/tipos cambian sin deploy. ✅ hecha (12/08): `POST /rsp/api/normativa/refresh` + caché TTL + warm al arranque.
+- [x] **5.5 Vigencia por fecha (histórico)** — aplicar el valor vigente en la fecha del periodo (declaraciones pasadas) usando `historial` + `fecha_aplicacion`. Criterio: una declaración de un mes anterior usa el tipo vigente de ese mes. ✅ hecha (12/08): `getParametro(codigo,{fecha})`.
+- [~] **5.6 Trazabilidad** — registrar en cada operación/declaración la **versión de CNIC aplicada** (auditoría fiscal). Criterio: cada cálculo sabe qué valor CNIC usó. ✅ parcial (12/08): `getParametro` devuelve `codigo`+`version`; pendiente registrar la versión en cada operación/declaración.
 
 ## FASE 6 — Interfaces separadas (P0)
 - [ ] **5.1** 👤 **Ciudadano** → usa **Banco web** (FASE 2) + PlacetaID + portal público (gdlp-crm, sin datos). Pregunta: "¿Tengo que hacer algo?"
