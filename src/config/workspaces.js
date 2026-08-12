@@ -183,11 +183,10 @@ const WORKSPACES = {
         ]
       },
       {
-        titulo: '📥 Bandeja y trámites',
+        titulo: '📥 Trámites y bandeja',
         enlaces: [
-          { texto: 'Mi bandeja', url: '/rsp/bandeja', icono: '📥' },
-          { texto: 'Trámites', url: '/rsp/tramites', icono: '📋' },
           { texto: 'Bandeja de trabajo', url: '/rsp/trabajo', icono: '🗂️' },
+          { texto: 'Trámites', url: '/rsp/tramites', icono: '📋' },
         ]
       },
       {

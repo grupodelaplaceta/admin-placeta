@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { verificarSesion, verificarAccesoEntidad, verificarPermiso } from '../middleware/auth.js';
 import {
   listarTramites, getTramite, crearTramite, avanzarTramite, anadirComunicacion,
-  actualizarTramite, estadoTramites, bandejaDe, trabajoPendiente, TRAMITES, ESTADOS, ESTADO_UI,
+  actualizarTramite, estadoTramites, bandejaDe, trabajoPendiente, TRAMITES, ESTADOS, ESTADO_UI, verificarFirma,
 } from '../config/tramites.js';
 import { apiBancoGetState } from '../config/db.js';
 import { registrarAuditoria } from '../config/auditoria.js';
@@ -59,6 +59,15 @@ tramitesRouter.get('/:id', verificarSesion, verificarAccesoEntidad('rsp'), verif
     t, cfg, progreso, ESTADO_UI, esAdmin: esAdmin(req),
     acciones: (cfg.acciones || {})[t.estado] || [],
   });
+});
+
+// Verificar firma en PlacetaID Móvil (admin)
+tramitesRouter.post('/api/tramites/:id/firma/verificar', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_tramites'), async (req, res) => {
+  try {
+    const r = await verificarFirma(req.params.id, actor(req));
+    await registrarAuditoria({ usuario: actor(req), servicio: 'rsp', accion: 'verificar_firma', objeto_tipo: 'TRAMITE', objeto_id: req.params.id, valor_nuevo: { firmado: r.firmado }, motivo: r.mensaje });
+    res.json({ success: true, ...r });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
 });
 
 /* ═══ API ═════════════════════════════════════════════════════ */

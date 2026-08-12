@@ -20,6 +20,7 @@ import { generarIdentificador, hashIntegridad } from './identificadores.js';
 import { apiBancoGetState } from './db.js';
 import { crearNotificacion } from './notificaciones.js';
 import { crearExpediente, vincularObjeto } from './expedientes.js';
+import { crearYEnviarFirma, estadoFirma, enviarAPlacetaID } from './firma-placetid.js';
 
 const TABLA = 'rsp_tramites';
 const memTramites = new Map();
@@ -76,8 +77,12 @@ export const TRAMITES = {
         { id: 'rechazar', label: 'Rechazar', icono: 'cancel', rol: 'admin' },
       ],
       subsanacion: [{ id: 'aportar_documentos', label: 'Aportar documentación', icono: 'upload_file', rol: 'solicitante', nivel: 'accion' }],
-      resolucion: [{ id: 'emitir_firma', label: 'Solicitar firma', icono: 'draw', rol: 'admin' }],
-      firma:      [{ id: 'firmar', label: 'Firmar resolución', icono: 'edit_document', rol: 'solicitante', nivel: 'accion' }],
+      resolucion: [{ id: 'emitir_firma', label: 'Enviar a firma (PlacetaID Móvil)', icono: 'draw', rol: 'admin', nivel: 'accion' }],
+      firma:      [
+        { id: 'verificar_firma', label: 'Comprobar firma en PlacetaID', icono: 'sync', rol: 'admin' },
+        { id: 'reenviar_firma', label: 'Reenviar a PlacetaID Móvil', icono: 'send', rol: 'admin' },
+        { id: 'confirmar_firma', label: 'Confirmar firma', icono: 'verified', rol: 'sistema' },
+      ],
       ejecucion:  [{ id: 'ejecutar', label: 'Registrar ejecución / pago', icono: 'payments', rol: 'admin' }],
       justificacion: [{ id: 'justificar', label: 'Presentar justificación', icono: 'task_alt', rol: 'solicitante', nivel: 'accion' }],
     },
@@ -109,8 +114,12 @@ export const TRAMITES = {
         { id: 'rechazar', label: 'Rechazar', icono: 'cancel', rol: 'admin' },
       ],
       subsanacion: [{ id: 'aportar_documentos', label: 'Aportar documentación', icono: 'upload_file', rol: 'solicitante', nivel: 'accion' }],
-      resolucion: [{ id: 'emitir_firma', label: 'Solicitar firma', icono: 'draw', rol: 'admin' }],
-      firma: [{ id: 'firmar', label: 'Firmar alta', icono: 'edit_document', rol: 'solicitante', nivel: 'accion' }],
+      resolucion: [{ id: 'emitir_firma', label: 'Enviar a firma (PlacetaID Móvil)', icono: 'draw', rol: 'admin', nivel: 'accion' }],
+      firma: [
+        { id: 'verificar_firma', label: 'Comprobar firma en PlacetaID', icono: 'sync', rol: 'admin' },
+        { id: 'reenviar_firma', label: 'Reenviar a PlacetaID Móvil', icono: 'send', rol: 'admin' },
+        { id: 'confirmar_firma', label: 'Confirmar firma', icono: 'verified', rol: 'sistema' },
+      ],
     },
   },
   'cambio-datos': {
@@ -168,8 +177,12 @@ export const TRAMITES = {
         { id: 'rechazar', label: 'Rechazar', icono: 'cancel', rol: 'admin' },
       ],
       subsanacion: [{ id: 'aportar_documentos', label: 'Aportar documentación', icono: 'upload_file', rol: 'solicitante', nivel: 'accion' }],
-      resolucion: [{ id: 'emitir_firma', label: 'Solicitar firmas', icono: 'draw', rol: 'admin' }],
-      firma: [{ id: 'firmar', label: 'Firmar traspaso', icono: 'edit_document', rol: 'solicitante', nivel: 'accion' }],
+      resolucion: [{ id: 'emitir_firma', label: 'Enviar a firma (PlacetaID Móvil)', icono: 'draw', rol: 'admin', nivel: 'accion' }],
+      firma: [
+        { id: 'verificar_firma', label: 'Comprobar firma en PlacetaID', icono: 'sync', rol: 'admin' },
+        { id: 'reenviar_firma', label: 'Reenviar a PlacetaID Móvil', icono: 'send', rol: 'admin' },
+        { id: 'confirmar_firma', label: 'Confirmar firma', icono: 'verified', rol: 'sistema' },
+      ],
       ejecucion: [{ id: 'ejecutar', label: 'Ejecutar cambio', icono: 'swap_horiz', rol: 'admin' }],
     },
   },
@@ -241,6 +254,39 @@ async function upsertDB(t) {
 
 /* ── Utilidades ────────────────────────────────────────────────── */
 function esAdmin(autor) { return autor?.rol === 'admin' || ['superadmin', 'rsp_admin'].includes(autor?.rol); }
+
+/** Confirma la firma de un trámite (desde PlacetaID Móvil) y avanza el workflow */
+async function confirmarFirma(t, autor = {}) {
+  if (t.estado !== 'firma') throw new Error('El trámite no está en estado de firma');
+  const firma = {
+    id: await generarIdentificador('SIG'),
+    fecha: new Date().toISOString(),
+    firmante: autor.nombre || 'PlacetaID Móvil',
+    dip: t.solicitante_dip,
+    docId: t.firmaDocId || null,
+  };
+  t.firmas = [...(t.firmas || []), firma];
+  t.estado = t.tipo === 'alta-entidad' ? 'cerrado' : 'ejecucion';
+  t.siguiente_accion = t.estado === 'cerrado' ? 'Trámite completado' : 'Ejecutar el trámite';
+  await crearNotificacion({ nivel: 'completado', titulo: `${t.id}: firma registrada`, mensaje: 'El documento se firmó desde PlacetaID Móvil', servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
+}
+
+/** Comprueba el estado de firma en PlacetaID y avanza si está firmado */
+export async function verificarFirma(id, autor = {}) {
+  const t = await getTramite(id);
+  if (!t) throw new Error('Trámite no encontrado');
+  if (t.estado !== 'firma') throw new Error('El trámite no está en estado de firma');
+  if (!t.firmaDocId) throw new Error('No se ha enviado documento de firma todavía');
+  const st = await estadoFirma(t.firmaDocId, 'rsp');
+  if (!st.encontrado) return { tramite: t, firmado: false, mensaje: 'No se encuentra el documento de firma' };
+  if (!st.firmado) return { tramite: t, firmado: false, mensaje: 'Aún sin firmar en PlacetaID Móvil' };
+  await confirmarFirma(t, autor);
+  t.historial = [...(t.historial || []), { fecha: new Date().toISOString(), quien: autor.nombre || autor.dip || 'Sistema', accion: 'Firma verificada en PlacetaID' }];
+  t.updated_at = new Date().toISOString();
+  memTramites.set(t.id, t);
+  await upsertDB(t);
+  return { tramite: t, firmado: true, mensaje: 'Firma verificada y trámite avanzado' };
+}
 
 function siguienteAccion(tramite, autor) {
   const cfg = TRAMITES[tramite.tipo];
@@ -411,10 +457,39 @@ export async function avanzarTramite(id, { accion, nota = '', datos = {} }, auto
     },
     emitir_firma: async () => {
       t.estado = 'firma';
-      t.siguiente_accion = 'Firmar la resolución';
-      await crearNotificacion({ nivel: 'accion', titulo: `${t.id}: documento listo para firmar`, mensaje: 'Tienes un documento pendiente de firma', servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
-      return 'Firma solicitada';
+      t.siguiente_accion = 'El solicitante firma desde PlacetaID Móvil';
+      // Crear documento oficial y enviarlo a PlacetaID Móvil para firma
+      const envio = await crearYEnviarFirma({
+        titulo: `${t.id} — ${t.titulo}`,
+        tipo: 'resolucion',
+        dip: t.solicitante_dip,
+        tramiteId: t.id,
+        datos: { tramiteId: t.id, tipoTramite: t.tipo },
+      }).catch(err => { console.warn('[Trámites] Error creando firma:', err.message); return null; });
+      if (envio) {
+        t.firmaDocId = envio.docId;
+        t.firmaCsv = envio.csv;
+        t.firmaHash = envio.hash;
+        t.firmaEnviada = envio.enviado;
+      }
+      await crearNotificacion({ nivel: 'accion', titulo: `${t.id}: documento listo para firmar`, mensaje: 'El solicitante debe firmar desde PlacetaID Móvil', servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
+      return envio?.enviado ? 'Documento enviado a PlacetaID Móvil para firma' : '⚠️ Firma creada pero no se pudo enviar a PlacetaID (modo offline) — reenvía desde el panel';
     },
+    reenviar_firma: async () => {
+      if (!t.firmaDocId) throw new Error('No hay documento de firma pendiente');
+      const ok = await enviarAPlacetaID(t.firmaDocId, `${t.id} — ${t.titulo}`, 'resolucion', 'rsp', t.firmaCsv, t.solicitante_dip, t.firmaHash);
+      t.firmaEnviada = ok;
+      return ok ? 'Reenviado a PlacetaID Móvil' : 'No se pudo reenviar (modo offline)';
+    },
+    verificar_firma: async () => {
+      if (!t.firmaDocId) throw new Error('No se ha enviado documento de firma todavía');
+      const st = await estadoFirma(t.firmaDocId, 'rsp');
+      if (!st.encontrado) return 'No se encuentra el documento de firma';
+      if (!st.firmado) return 'Aún sin firmar en PlacetaID Móvil — esperando al solicitante';
+      await confirmarFirma(t, autor);
+      return 'Firma verificada: documento firmado en PlacetaID Móvil';
+    },
+    confirmar_firma: async () => { await confirmarFirma(t, autor); return 'Firma confirmada desde PlacetaID Móvil'; },
     emitir_pago: async () => { t.estado = 'ejecucion'; t.siguiente_accion = 'Confirmar pago emitido'; return 'Pago en emisión'; },
     firmar: async () => {
       t.estado = t.tipo === 'solicitud-pago' ? 'ejecucion' : (t.tipo === 'alta-entidad' ? 'cerrado' : 'ejecucion');

@@ -28,6 +28,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { verificarSesion, verificarAccesoEntidad, verificarPermiso } from '../middleware/auth.js';
 import { saveDocumentoAsync, getDocumentosByEntidadAsync, getDocumentoByIdAsync, generarPDF, ETIQUETAS_DOC, TIPOS_DOCUMENTO } from '../config/documentos.js';
+import { enviarAPlacetaID } from '../config/firma-placetid.js';
+import { avanzarTramite } from '../config/tramites.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = Router();
@@ -240,6 +242,16 @@ router.post('/api/webhook', async (req, res) => {
     // Persistir cambios
     await saveDocumentoAsync(entidadDoc, docEncontrado);
 
+    // Si el documento pertenece a un trámite, avanzar el workflow automáticamente
+    const tramiteId = docEncontrado.datos?.tramiteId;
+    if (tramiteId) {
+      try {
+        await avanzarTramite(tramiteId, { accion: 'confirmar_firma', nota: 'Firmado desde PlacetaID Móvil' }, { rol: 'admin', nombre: 'PlacetaID Móvil' });
+      } catch (e) {
+        console.warn('[Firmas] No se pudo avanzar el trámite ' + tramiteId + ':', e.message);
+      }
+    }
+
     res.json({
       success: true,
       estado: 'firmado',
@@ -327,34 +339,6 @@ router.get('/api/estado/:docId', async (req, res) => {
 // HELPER: Enviar documento a PlacetaID Móvil
 // ═══════════════════════════════════════════════════════════════════════════
 
-async function enviarAPlacetaID(docId, titulo, tipo, entidad, csv, dip, hash) {
-  try {
-    const resp = await fetch(`${PLACETAID_API}/admin/documentos`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': PLACETAID_KEY
-      },
-      body: JSON.stringify({
-        id: docId,
-        titulo,
-        tipo,
-        entidad,
-        csv,
-        destinatariosDIP: dip ? [dip] : [],
-        contenido: `Documento oficial de ${entidad}: ${titulo}. ` +
-                   `Firme desde PlacetaID Móvil para dar validez al trámite.\n\n` +
-                   `CSV: ${csv}\nHash: ${hash?.slice(0, 16)}`
-      }),
-      signal: AbortSignal.timeout(8000)
-    });
-    return resp.ok;
-  } catch (err) {
-    console.warn('[Firmas] Error enviando a PlacetaID:', err.message);
-    return false;
-  }
-}
-
 /**
  * POST /api/firmas/:docId/reenviar — Reenviar documento a PlacetaID
  */
@@ -377,4 +361,3 @@ router.post('/api/reenviar/:docId', async (req, res) => {
 });
 
 export default router;
-export { enviarAPlacetaID };
