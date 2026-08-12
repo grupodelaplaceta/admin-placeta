@@ -70,6 +70,9 @@ function limpiarNombreCuenta(raw) {
   return n.replace(/\s{2,}/g, ' ').trim();
 }
 
+// Nombres genéricos que NO identifican a una persona (no usar como nombre legal).
+const NOMBRE_GENERICO = /^(cuenta principal|cuenta personal|personal|ahorro|hucha|fondos|inversiones?|vault|—|-)$|fundación|fundacion|banco de la placeta|banco del grupo/i;
+
 /** Lee el censo tributario actual (contribuyentes dados de alta). */
 export async function leerCensoTributario() {
   try {
@@ -95,6 +98,7 @@ export async function construirPadron() {
   const users = state.users || [];
   const accounts = state.accounts || [];
   const userPorPlaceta = new Map(users.map(u => [u.placetaId, u]));
+  const userPorDip = new Map(users.map(u => [String(u.dip || '').toUpperCase().trim(), u]));
 
   // Registros PlacetaID existentes.
   const registradosSet = new Set();
@@ -110,21 +114,32 @@ export async function construirPadron() {
     if (!c.placetaId && !c.eip) continue;
     if (SISTEMA_ACCOUNTS.has(c.id) || SISTEMA_ACCOUNTS.has(c.placetaId)) continue;
     if (c.kind === 'OperationalFee') continue;
+    if (c.kind === 'TGLP' || c.kind === 'AGLDP') continue; // fondos del sistema
     const u = userPorPlaceta.get(c.placetaId);
-    const dip = String(u?.dip || '').toUpperCase().trim();
+    // El DIP del titular es el placetaId de la cuenta (DNI/NIE) o el del user si existe.
+    const dip = String(u?.dip || c.placetaId || '').toUpperCase().trim();
     if (!ES_DIP(dip)) continue; // Solo DIPs reales con formato DNI/NIE.
+    const tieneUsuario = Boolean(u) || userPorDip.has(dip);
+    const rawNombre = u?.displayName || limpiarNombreCuenta(c.displayName) || dip;
+    const nombre = NOMBRE_GENERICO.test(rawNombre) ? dip : rawNombre;
     if (!porDip.has(dip)) {
-      const rawNombre = u?.displayName || limpiarNombreCuenta(c.displayName) || dip;
       porDip.set(dip, {
         dip,
         placetaId: u?.placetaId || c.placetaId,
-        nombre: rawNombre,
+        nombre,
         cuentas: 0,
-        esEmpresa: c.type === 'Business' || c.type === 'State'
+        esEmpresa: c.type === 'Business' || c.type === 'State',
+        tieneUsuario
       });
     }
-    porDip.get(dip).cuentas += 1;
-    if (c.type === 'Business' || c.type === 'State') porDip.get(dip).esEmpresa = true;
+    const entry = porDip.get(dip);
+    entry.cuentas += 1;
+    if (c.type === 'Business' || c.type === 'State') entry.esEmpresa = true;
+    if (tieneUsuario) entry.tieneUsuario = true;
+    // Preferir el nombre más completo.
+    if (!NOMBRE_GENERICO.test(rawNombre) && rawNombre.length > entry.nombre.length) {
+      entry.nombre = rawNombre;
+    }
   }
 
   const padron = [...porDip.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
@@ -177,7 +192,13 @@ export async function sincronizar() {
   // 2) Alta como ciudadano en el censo tributario de los que falten.
   const censo = await leerCensoTributario();
   const objetivosCiudadanos = padron.padron.filter(p => !censo.set.has(p.dip));
+  const sinUsuarioBanco = [];
   for (const p of objetivosCiudadanos) {
+    // alta-tributos necesita un bank_user; si no existe, no se puede censar aún.
+    if (!p.tieneUsuario) {
+      sinUsuarioBanco.push({ dip: p.dip, nombre: p.nombre });
+      continue;
+    }
     const res = await apiBancoPost('alta-tributos', { placetaId: p.placetaId });
     if (res && (res.eip || res.tributosCensusDate || res.message)) {
       ciudadanosAltas.push({ dip: p.dip, nombre: p.nombre, eip: res.eip || null });
@@ -197,7 +218,9 @@ export async function sincronizar() {
     altasCiudadano: ciudadanosAltas.length,
     ciudadanosAltas,
     erroresCiudadano: ciudadanosErrores.length,
-    ciudadanosErrores
+    ciudadanosErrores,
+    sinUsuarioBanco,
+    sinUsuarioBancoCount: sinUsuarioBanco.length
   };
 }
 
