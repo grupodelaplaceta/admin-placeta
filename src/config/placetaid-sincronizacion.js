@@ -26,8 +26,9 @@ const SISTEMA_ACCOUNTS = new Set([
   'sys-bank', 'sys-state', 'DIP-ADMIN', 'DIP-DIGITAL'
 ]);
 
-// DIP válido: DNI (8 dígitos + letra) o NIE (X/Y/Z + dígitos + letra).
-const ES_DIP = (d) => /^[XYZ0-9][0-9]{7,8}[A-Z]$/.test(String(d || '').toUpperCase().trim());
+// DIP válido: DNI (8 dígitos + letra) o NIE (X/Y/Z + 7-8 dígitos + letra).
+// Se alinea con el schema de PlacetaID (^\d{8}[A-Z]$) para no generar altas inválidas.
+const ES_DIP = (d) => /^(\d{8}[A-Z]|[XYZ]\d{7,8}[A-Z])$/.test(String(d || '').toUpperCase().trim());
 
 /** Llama a un endpoint admin de PlacetaID. */
 export async function apiPlacetaidAdmin(path, { method = 'GET', body } = {}) {
@@ -125,7 +126,9 @@ export async function construirPadron() {
     if (!porDip.has(dip)) {
       porDip.set(dip, {
         dip,
-        placetaId: u?.placetaId || c.placetaId,
+        // Para el censo tributario (alta-tributos) se usa el placetaId de la CUENTA,
+        // que es como el banco localiza la cuenta.
+        placetaId: c.placetaId,
         nombre,
         cuentas: 0,
         esEmpresa: c.type === 'Business' || c.type === 'State',

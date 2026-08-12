@@ -163,6 +163,12 @@
         <span class="badge-entidad">🏛️ RSP</span>
         <% } %>
 
+        <!-- Buscador global de ciudadanos (estilo agente bancario) -->
+        <div class="global-search" id="globalSearch">
+          <input type="text" class="global-search-input" id="globalSearchInput" placeholder="🔍 Buscar ciudadano: DIP, PlacetaID, nombre…" autocomplete="off">
+          <div class="global-search-dd" id="globalSearchDD"></div>
+        </div>
+
         <!-- Campana de notificaciones -->
         <div class="bell-wrap">
           <button class="bell-btn" onclick="toggleBell(event)" title="Notificaciones">
@@ -279,6 +285,87 @@
         document.getElementById('bellCount').textContent = j.estado.noLeidas;
       }
     }).catch(() => {});
+
+    // ── Buscador global de ciudadanos (estilo agente bancario) ──────
+    function escHTML(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    const gsInput = document.getElementById('globalSearchInput');
+    if (gsInput) {
+      let gsTimer = null;
+      gsInput.addEventListener('input', function () {
+        clearTimeout(gsTimer);
+        const q = this.value.trim();
+        if (q.length < 2) { document.getElementById('globalSearchDD').classList.remove('open'); return; }
+        gsTimer = setTimeout(function () { buscarCiudadanos(q); }, 350);
+      });
+      gsInput.addEventListener('focus', function () { if (this.value.trim().length >= 2) document.getElementById('globalSearchDD').classList.add('open'); });
+      gsInput.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); buscarCiudadanos(this.value.trim()); } });
+      document.addEventListener('click', function (ev) {
+        const box = document.getElementById('globalSearch');
+        if (!box.contains(ev.target)) document.getElementById('globalSearchDD').classList.remove('open');
+      });
+    }
+    async function buscarCiudadanos(q, ddId) {
+      const dd = document.getElementById(ddId || 'globalSearchDD');
+      if (!dd || !q || q.length < 2) return;
+      dd.innerHTML = '<div class="gs-loading">Buscando…</div>';
+      dd.classList.add('open');
+      try {
+        const r = await fetch('/api/buscar-ciudadanos?q=' + encodeURIComponent(q));
+        const j = await r.json();
+        if (!j.success || !j.results || !j.results.length) {
+          dd.innerHTML = '<div class="gs-empty">Sin resultados para «' + escHTML(q) + '»</div>';
+          return;
+        }
+        dd.innerHTML = '<div class="gs-header">' + j.total + ' coincidencia' + (j.total !== 1 ? 's' : '') + '</div>' +
+          j.results.map(function (m) {
+            const badge = m.enPlacetaID ? '<span class="gs-badge gs-badge-ok">✔ PlacetaID</span>' : '<span class="gs-badge gs-badge-warn">· Sin PlacetaID</span>';
+            const cuentas = m.cuentas.length ? m.cuentas.length + ' cuenta' + (m.cuentas.length !== 1 ? 's' : '') : '0 cuentas';
+            return '<a class="gs-item" href="javascript:void(0)" onclick="verFichaCiudadano(\'' + escHTML(m.dip) + '\')">' +
+              '<div class="gs-item-main"><span class="gs-item-name">' + escHTML(m.nombre) + '</span>' + badge + '</div>' +
+              '<div class="gs-item-sub">' + escHTML(m.dip) + (m.placetaId && m.placetaId !== m.dip ? ' · ' + escHTML(m.placetaId) : '') + '</div>' +
+              '<div class="gs-item-meta">' + cuentas + (m.esEmpresa ? ' · 🏢 empresa' : '') + (m.declaraciones ? ' · 📄 ' + m.declaraciones + ' declarac.' : '') + '</div>' +
+              '</a>';
+          }).join('');
+      } catch (e) {
+        dd.innerHTML = '<div class="gs-empty">Error de búsqueda</div>';
+      }
+    }
+    function verFichaCiudadano(dip) {
+      ['globalSearchDD', 'rspHeroSearchDD'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('open');
+      });
+      abrirModal(
+        '<div style="text-align:left">' +
+        '<div class="modal-title-row"><h3 style="margin:0">👤 Ficha ciudadano</h3><button class="modal-close-btn" onclick="cerrarModal()">✕</button></div>' +
+        '<div id="fichaCiudadano" style="min-height:120px;margin-top:12px">Cargando…</div>' +
+        '</div>'
+      );
+      fetch('/api/buscar-ciudadanos?q=' + encodeURIComponent(dip))
+        .then(r => r.json())
+        .then(j => {
+          const m = (j.results || []).find(x => x.dip === dip);
+          const box = document.getElementById('fichaCiudadano');
+          if (!m) { box.innerHTML = 'No encontrado'; return; }
+          const cuentas = m.cuentas.map(c => '<tr><td class="text-mono">' + escHTML(c.id) + '</td><td>' + escHTML(c.type) + '</td><td class="text-mono">' + escHTML(c.eip || '—') + '</td></tr>').join('');
+          box.innerHTML =
+            '<p style="font-size:15px"><strong>' + escHTML(m.nombre) + '</strong> · <span class="text-mono">' + escHTML(m.dip) + '</span>' +
+            (m.placetaId && m.placetaId !== m.dip ? ' · <span class="text-mono">' + escHTML(m.placetaId) + '</span>' : '') + '</p>' +
+            '<p style="font-size:13px">' + (m.enPlacetaID ? '✅ Registrado en PlacetaID' : '⚠️ Sin registro PlacetaID (usa el alta automática)') +
+            (m.esEmpresa ? ' · 🏢 Tiene empresas' : '') + (m.declaraciones ? ' · 📄 ' + m.declaraciones + ' declaraciones' : '') + '</p>' +
+            (m.cuentas.length ? '<div class="table-container" style="border:none;padding:0"><table><thead><tr><th>Cuenta</th><th>Tipo</th><th>EIP</th></tr></thead><tbody>' + cuentas + '</tbody></table></div>' : '<p>Sin cuentas</p>') +
+            '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">' +
+            '<a class="btn-sm btn-primary" href="/tributos/contribuyentes">👤 Contribuyentes</a>' +
+            '<a class="btn-sm btn-primary" href="/tributos/declaraciones">📄 Declaraciones</a>' +
+            '<a class="btn-sm btn-primary" href="/administracion/placetaid">🪪 PlacetaID</a>' +
+            '<a class="btn-sm btn-primary" href="/administracion/empresas">🏢 Empresas</a>' +
+            '<a class="btn-sm btn-primary" href="/administracion/placetaid/sincronizacion">🔄 Alta PlacetaID</a>' +
+            '</div>';
+        })
+        .catch(() => { document.getElementById('fichaCiudadano').innerHTML = 'Error'; });
+    }
   </script>
   <% } else { %>
   <%- body %>

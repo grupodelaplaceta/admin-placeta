@@ -1,9 +1,88 @@
 import { Router } from 'express';
-import { apiBancoGetState, apiBancoPost, apiPlacetaidRegistros, apiPlacetaidStats, apiPlacetaidDesbloquear, sbFindSolicitanteByDip, sbListSolicitantes } from '../config/db.js';
+import { apiBancoGetState, apiBancoPost, apiPlacetaidRegistros, apiPlacetaidStats, apiPlacetaidDesbloquear, sbFindSolicitanteByDip, sbListSolicitantes, sbListDeclaraciones } from '../config/db.js';
 import { verificarSesion } from '../middleware/auth.js';
 import { initDocsTable } from '../config/documentos.js';
 
 const router = Router();
+
+// ── Buscador de ciudadanos (panel RSP / administración) ─────────────────
+// Busca por DIP, PlacetaID, IBAN, EIP o nombre entre los usuarios y cuentas
+// del banco, y enriquece con estado PlacetaID y nº de declaraciones.
+router.get('/buscar-ciudadanos', verificarSesion, async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json({ success: true, query: q, total: 0, results: [] });
+  const up = q.toUpperCase();
+  const ql = q.toLowerCase();
+  try {
+    const [state, registros, declaraciones] = await Promise.all([
+      apiBancoGetState(),
+      apiPlacetaidRegistros(),
+      sbListDeclaraciones(400)
+    ]);
+    const users = state?.users || [];
+    const accounts = state?.accounts || [];
+    const userPorPlaceta = new Map(users.map(u => [u.placetaId, u]));
+    const userPorDip = new Map(users.map(u => [String(u.dip || '').toUpperCase().trim(), u]));
+    const placetaidPorDip = new Map(registros.map(r => [String(r.dip || '').toUpperCase().trim(), r]));
+
+    const matches = new Map(); // dip → ficha consolidada
+    const addMatch = (dip) => {
+      if (!matches.has(dip)) {
+        matches.set(dip, { dip, nombre: '', placetaId: '', cuentas: [], esEmpresa: false, enPlacetaID: false, declaraciones: 0 });
+      }
+      return matches.get(dip);
+    };
+    const esDIPValido = (d) => /^[XYZ0-9][0-9]{7,8}[A-Z]$/.test(String(d || ''));
+
+    // Coincidencias por usuario
+    for (const u of users) {
+      const dip = String(u.dip || '').toUpperCase().trim();
+      const nombre = String(u.displayName || '');
+      if (!dip) continue;
+      if (dip.includes(up) || String(u.placetaId || '').toUpperCase().includes(up) || nombre.toLowerCase().includes(ql)) {
+        const m = addMatch(dip);
+        m.nombre = m.nombre || nombre;
+        m.placetaId = m.placetaId || u.placetaId || dip;
+      }
+    }
+
+    // Coincidencias por cuenta (DIP = placetaId de la cuenta si es DNI válido)
+    for (const a of accounts) {
+      const dip = String((userPorPlaceta.get(a.placetaId)?.dip) || a.placetaId || '').toUpperCase().trim();
+      const nombre = String(a.displayName || '');
+      const esBusiness = a.type === 'Business' || a.type === 'State';
+      const hit = dip.includes(up) || String(a.id || '').toUpperCase().includes(up) ||
+        String(a.placetaId || '').toUpperCase().includes(up) || String(a.eip || '').toUpperCase().includes(up) ||
+        nombre.toLowerCase().includes(ql);
+      if (!hit) continue;
+      if (!esDIPValido(dip)) continue; // solo ciudadanos con DIP formato DNI/NIE
+      const m = addMatch(dip);
+      m.placetaId = m.placetaId || a.placetaId;
+      if (!m.nombre && nombre && !/cuenta principal|cuenta personal|personal|ahorro|hucha|vault|fundaci|banco de la placeta/i.test(nombre)) {
+        m.nombre = nombre;
+      }
+      m.cuentas.push({ id: a.id, type: a.type, eip: a.eip || null });
+      if (esBusiness) m.esEmpresa = true;
+    }
+
+    // Nº de declaraciones por ciudadano
+    for (const d of declaraciones) {
+      const dip = String(d.placeta_id || '').toUpperCase().trim();
+      if (esDIPValido(dip) && matches.has(dip)) matches.get(dip).declaraciones++;
+    }
+
+    // Estado PlacetaID + nombre final
+    for (const m of matches.values()) {
+      m.enPlacetaID = placetaidPorDip.has(m.dip);
+      m.nombre = m.nombre || m.dip;
+    }
+
+    const results = [...matches.values()].slice(0, 20);
+    res.json({ success: true, query: q, total: matches.size, results });
+  } catch (e) {
+    res.status(500).json({ error: 'Error en la búsqueda', detail: e.message });
+  }
+});
 
 // ── API Banco ──────────────────────────────────────────────────────────────
 router.get('/banco/state', verificarSesion, async (req, res) => {

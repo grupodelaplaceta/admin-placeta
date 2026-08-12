@@ -15,6 +15,48 @@
   </div>
 </div>
 
+<!-- ═══ COMMAND CENTER ═══ -->
+<div class="rsp-command">
+  <div class="rsp-command-search">
+    <span class="rsp-command-ico">🔍</span>
+    <input type="text" id="rspHeroSearch" placeholder="Buscar ciudadano por DIP, PlacetaID, IBAN, EIP o nombre…" autocomplete="off">
+    <span class="rsp-command-hint">↵ Enter para buscar</span>
+    <div class="global-search-dd" id="rspHeroSearchDD"></div>
+  </div>
+  <div class="rsp-command-quick">
+    <a href="/rsp/conexiones" class="rsp-command-chip">📡 Conexiones</a>
+    <a href="/rsp/facturacion" class="rsp-command-chip">📄 Facturación</a>
+    <a href="/rsp/fondos" class="rsp-command-chip">💰 Fondos</a>
+    <a href="/rsp/normativo" class="rsp-command-chip">📜 Normativo</a>
+    <a href="/rsp/apis" class="rsp-command-chip">🔌 APIs</a>
+    <a href="/administracion/placetaid" class="rsp-command-chip">🪪 PlacetaID</a>
+    <a href="/administracion/placetaid/sincronizacion" class="rsp-command-chip">🔄 Alta PlacetaID</a>
+    <a href="/tributos/declaraciones" class="rsp-command-chip">📄 Declaraciones</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  const hero = document.getElementById('rspHeroSearch');
+  if (!hero) return;
+  let t = null;
+  hero.addEventListener('input', function () {
+    clearTimeout(t);
+    const q = this.value.trim();
+    const dd = document.getElementById('rspHeroSearchDD');
+    if (q.length < 2) { dd.classList.remove('open'); return; }
+    t = setTimeout(function () { buscarCiudadanos(q, 'rspHeroSearchDD'); }, 300);
+  });
+  hero.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); buscarCiudadanos(this.value.trim(), 'rspHeroSearchDD'); }
+  });
+  document.addEventListener('click', function (ev) {
+    const box = hero.closest('.rsp-command-search');
+    if (!box.contains(ev.target)) document.getElementById('rspHeroSearchDD').classList.remove('open');
+  });
+})();
+</script>
+
 <!-- ═══ KPIs ═══ -->
 <div class="rsp-kpis">
   <div class="rsp-kpi">
