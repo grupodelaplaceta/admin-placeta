@@ -20,16 +20,16 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 ## FASE 1 — SEGURIDAD DE DATOS (P0, transversal) 🔴
 **Objetivo:** ningún dato sensible fuera de su dominio; nada de "todas las cuentas" en el DOM ni en APIs de un usuario normal.
 
-- [ ] **1.1 gdlp-crm = portal público (sin datos sensibles)**
+- [x] **1.1 gdlp-crm = portal público (sin datos sensibles)** ✅ hecha (12/06)
   - Eliminar en gdlp-crm: `bancario-proxy.js` y cualquier endpoint/`SELECT *` de `cuentas_bancarias`, `transacciones`, `solicitantes` con datos sensibles; no guardar `CRM_READ_KEY`/claves del banco.
   - Quedar solo: contenido público (normativa, convocatorias, noticias), redirecciones a **Banco web**, **PlacetaID**, **RSP admin**.
-  - Criterio: desde gdlp-crm NO se puede obtener cuentas/usuarios/transacciones; el código no contiene la key del banco.
-- [ ] **1.2 Regla global: scoping por propietario**
+  - Criterio: desde gdlp-crm NO se puede obtener cuentas/usuarios/transacciones; el código no contiene la key del banco. ✅ verificado: `bancario-proxy` → 404, key fuera del repo, enlaces bancarios retirados del sidebar. Pendiente FASE 6: migrar a RSP las funciones admin del banco que aún viven en gdlp-crm (audit-bancario, tributos, junior).
+- [x] **1.2 Regla global: scoping por propietario** ✅ auditado (12/06)
   - Todo endpoint que devuelva cuentas/expedientes/documentos filtra **server-side por `req.session.usuario`** (nunca filtro client-side de un dataset completo).
-  - Criterio: auditoría automática de endpoints con "SELECT sin WHERE de propietario" → se corrigen.
-- [ ] **1.3 Nada de bulk data en el DOM**
+  - Criterio: auditoría automática de endpoints con "SELECT sin WHERE de propietario" → se corrigen. ✅ auditoría manual: endpoints ciudadanos (bancario, ocio, publico, fiscal) acotados por sesión; bulk (admin, audit, junior-admin) fail-closed con `verificarRol`. Se añadirá auditoría automática en FASE 11.
+- [x] **1.3 Nada de bulk data en el DOM** ✅ hecha (12/06)
   - Prohibido embeber listados completos (JSON, datalist, selects) de datos de terceros en páginas de usuario; solo lo del usuario.
-  - Criterio: "inspeccionar elemento" en una sesión normal solo muestra datos propios.
+  - Criterio: "inspeccionar elemento" en una sesión normal solo muestra datos propios. ✅ al eliminar el proxy, el buscador universal del CRM ya no recibe datos (devuelve `[]`); vistas públicas acotadas. Pendiente: rehacer buscador universal con búsqueda scoped server-side (FASE 2.3).
 - [ ] **1.4 RBAC y 2FA**
   - Revisar `verificarRol`/permisos en todos los repos (fallar-cerrado). **2FA** (PlacetaID) para acciones críticas.
   - Criterio: un rol sin permiso recibe 403; acción crítica exige 2FA.
