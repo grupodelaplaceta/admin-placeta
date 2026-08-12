@@ -636,3 +636,19 @@ body.rsp-theme .skeleton{background:linear-gradient(90deg,#171f33,#222a3e,#171f3
   .rsp-theme .v-tabs{gap:0}
   .rsp-theme .v-tab{padding:9px 11px;font-size:12px}
 }
+
+/* ── WCAG (FASE 12.2): foco visible y skip-link ─────────────────────────── */
+body.rsp-theme :focus-visible{
+  outline:3px solid #22d3ee !important;
+  outline-offset:2px !important;
+  border-radius:6px;
+}
+body.rsp-theme .skip-link{
+  position:absolute;left:-9999px;top:0;z-index:1000;
+  background:var(--vivid-violet);color:#fff;padding:10px 16px;
+  border-radius:0 0 10px 0;font-weight:700;text-decoration:none;
+}
+body.rsp-theme .skip-link:focus{left:0;outline:3px solid #22d3ee}
+body.rsp-theme button:focus, body.rsp-theme a:focus, body.rsp-theme input:focus, body.rsp-theme select:focus, body.rsp-theme textarea:focus{
+  box-shadow:none;
+}

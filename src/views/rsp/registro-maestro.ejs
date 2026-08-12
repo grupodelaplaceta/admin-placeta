@@ -1,0 +1,67 @@
+<div class="v-page">
+  <div class="v-page-head">
+    <div>
+      <h1 class="v-title">🪪 Registro maestro de identidad</h1>
+      <p class="v-sub">Niveles N1–N3 (sin biometría) · fuente única derivada para RSP</p>
+    </div>
+  </div>
+
+  <form class="v-card v-card-body" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap" method="GET">
+    <label style="display:flex;flex-direction:column;font-size:12px;color:var(--tm)">Nivel
+      <select name="nivel" class="v-search-input" style="padding:8px 10px">
+        <option value="">Todos</option>
+        <% Object.keys(NIVELES).forEach(function(n){ %><option value="<%= n %>" <%= filtroNivel === n ? 'selected' : '' %>><%= n %></option><% }); %>
+      </select>
+    </label>
+    <label style="display:flex;flex-direction:column;font-size:12px;color:var(--tm)">Estado
+      <select name="estado" class="v-search-input" style="padding:8px 10px">
+        <option value="">Todos</option>
+        <option value="activo" <%= filtroEstado === 'activo' ? 'selected' : '' %>>Activo</option>
+        <option value="baja" <%= filtroEstado === 'baja' ? 'selected' : '' %>>Baja</option>
+      </select>
+    </label>
+    <button class="btn-accent" type="submit">Filtrar</button>
+  </form>
+
+  <div class="v-card">
+    <div class="v-card-head"><div class="v-card-title"><%= ciudadanos.length %> ciudadanos en el registro</div></div>
+    <div style="overflow-x:auto">
+      <table class="v-table">
+        <thead>
+          <tr><th>DIP</th><th>Nombre</th><th>PlacetaID</th><th>Nivel</th><th>Cuenta principal</th><th>Canal</th><th>Estado</th><th>Censo</th><th></th></tr>
+        </thead>
+        <tbody>
+          <% ciudadanos.forEach(function(c) { %>
+            <tr style="cursor:pointer" onclick="location='/rsp/contexto/<%= c.dip %>'">
+              <td><div class="v-entity-name"><%= c.dip %></div></td>
+              <td><%- c.nombre || '—' %></td>
+              <td class="v-entity-id"><%= c.placeta_id || '—' %></td>
+              <td><span class="v-chip v-chip--<%= c.nivel === 'N3' ? 'error' : (c.nivel === 'N2' ? 'amber' : 'indigo') %>"><%= c.nivel %></span></td>
+              <td class="v-entity-id"><%= c.cuenta_principal || '—' %></td>
+              <td class="v-entity-id"><%= c.canal_preferido || '—' %></td>
+              <td><span class="v-chip v-chip--<%= c.estado === 'activo' ? 'ok' : 'error' %>"><%= c.estado %></span></td>
+              <td><%= c.tributos_censado ? '✅' : '—' %></td>
+              <td class="v-cell-right"><a class="btn-accent" style="padding:6px 12px;font-size:12px" href="/rsp/contexto/<%= c.dip %>">CONTEXTO</a></td>
+            </tr>
+          <% }) %>
+          <% if (!ciudadanos.length) { %>
+            <tr><td colspan="9" class="v-empty">Sin ciudadanos en el registro. Usa la sincronización PlacetaID–Banco para poblarlo.</td></tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="v-card">
+    <div class="v-card-head"><div class="v-card-title">Niveles de verificación</div></div>
+    <div class="v-bento" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px">
+      <% Object.entries(NIVELES).forEach(function(e) { var n = e[0]; var v = e[1]; %>
+        <div class="v-field" style="margin:0">
+          <span class="v-field-label"><%= v.label %></span>
+          <span class="v-field-value" style="font-size:12px;white-space:normal"><strong>Requisitos:</strong> <%= v.requisitos.join(' · ') %></span>
+          <span class="v-field-value" style="font-size:12px;white-space:normal;color:var(--tm)"><strong>Beneficios:</strong> <%= v.beneficios.join(' · ') %></span>
+        </div>
+      <% }); %>
+    </div>
+  </div>
+</div>

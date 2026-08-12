@@ -12,6 +12,7 @@
   <link rel="icon" href="/img/favicon-rsp.png" type="image/png">
 </head>
 <body class="<%= workspaceActivo ? 'workspace-active' : '' %><%= workspaceActivo && workspaceActivo.id === 'rsp' ? ' rsp-theme' : '' %>">
+  <a class="skip-link" href="#contenido-principal">Saltar al contenido</a>
   <% if (usuario) { %>
   <!-- ═══ SIDEBAR ═══ -->
   <aside class="sidebar" id="sidebar"
@@ -132,7 +133,7 @@
   </aside>
 
   <!-- ═══ MAIN CONTENT ═══ -->
-  <main class="main-content" id="mainContent">
+  <main class="main-content" id="contenido-principal">
     <div class="content-header">
       <button class="hamburger" onclick="toggleSidebar()">☰</button>
       <div class="content-breadcrumb">

@@ -441,6 +441,32 @@ export function registrarConexionPublica(req, res) {
   res.json({ success: true, conexion });
 }
 
+// ── Página: Registro maestro de identidad (FASE 4) ────────────────────────
+router.get('/ciudadanos-maestros', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
+  try {
+    const { listarCiudadanosMaestros, NIVELES } = await import('../config/registro-maestro.js');
+    const lista = await listarCiudadanosMaestros({ nivel: req.query.nivel || '', estado: req.query.estado || '' });
+    res.render('rsp/registro-maestro', {
+      titulo: 'Registro maestro de identidad', entidad_actual: 'rsp',
+      ciudadanos: lista, NIVELES,
+      filtroNivel: req.query.nivel || '', filtroEstado: req.query.estado || ''
+    });
+  } catch (e) { res.status(500).send(e.message); }
+});
+
+// ── Página: Contexto Único del ciudadano (FASE 0.4) ───────────────────────
+router.get('/contexto', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tramites'), (req, res) => {
+  res.render('rsp/contexto', { titulo: 'Contexto Único del ciudadano', entidad_actual: 'rsp', contexto: null, dip: '' });
+});
+
+router.get('/contexto/:dip', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
+  try {
+    const { getContextoCiudadano } = await import('../config/contexto.js');
+    const contexto = await getContextoCiudadano(req.params.dip);
+    res.render('rsp/contexto', { titulo: 'Contexto Único del ciudadano', entidad_actual: 'rsp', contexto, dip: String(req.params.dip).toUpperCase() });
+  } catch (e) { res.status(500).send(e.message); }
+});
+
 // ── API: Contexto Único del ciudadano (FASE 0.4 / 2.6) ────────────────────
 // GET /rsp/api/contexto/:dip — agrega Identidad + Bancario + Fiscalidad +
 // Patrimonio + Expedientes + Notificaciones de forma federada (vía APIs).

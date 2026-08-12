@@ -204,6 +204,8 @@ const WORKSPACES = {
       {
         titulo: '👥 Personas y herencias',
         enlaces: [
+          { texto: 'Registro maestro', url: '/rsp/ciudadanos-maestros', icono: '🪪' },
+          { texto: 'Contexto ciudadano', url: '/rsp/contexto', icono: '🔎' },
           { texto: 'Bajas y Herencias', url: '/rsp/herencias', icono: '📜' },
           { texto: 'Expedientes', url: '/rsp/expedientes', icono: '🗂️' },
           { texto: 'Incidencias', url: '/rsp/incidencias', icono: '⚠️' },
