@@ -13,6 +13,7 @@
 
 import { supabase } from './supabase.js';
 import { generarIdentificador, hashIntegridad } from './identificadores.js';
+import { apiBancoGetState } from './db.js';
 
 const T_TITULARIDADES = 'rsp_titularidades';
 const T_PARTICIPACIONES = 'rsp_participaciones';
@@ -112,18 +113,21 @@ export async function listarParticipaciones(filtros = {}) {
   return lista;
 }
 
-/** Registra/actualiza una participación empresarial */
+/** Registra/actualiza una participación empresarial (deduplicada por titular+entidad) */
 export async function setParticipacion({ titular_dip, titular_nombre, entidad_eip, entidad_nombre, porcentaje, patrimonio_neto_entidad, deudas_reconocidas = 0, valoracion = 'patrimonio_neto' }, autor = {}) {
   if (!titular_dip || !entidad_eip) throw new Error('Titular (DIP) y entidad (EIP) son obligatorios');
   if (porcentaje < 0 || porcentaje > 100) throw new Error('El porcentaje debe estar entre 0 y 100');
+  // Una participación por (titular, entidad): si ya existe se actualiza (no se duplica).
+  const existentes = await listarParticipaciones({ titular_dip, entidad_eip });
+  const existente = existentes.find(p => p.vigente !== false);
   const patrimonioAtribuible = Math.round(patrimonio_neto_entidad * (porcentaje / 100) * 100) / 100;
-  const historial = [];
+  const historial = existente?.historial || [];
   const datos = {
-    id: `PART-${Date.now().toString(36)}`,
+    id: existente?.id || `PART-${Date.now().toString(36)}`,
     titular_dip,
-    titular_nombre: titular_nombre || '',
+    titular_nombre: titular_nombre || existente?.titular_nombre || '',
     entidad_eip,
-    entidad_nombre: entidad_nombre || '',
+    entidad_nombre: entidad_nombre || existente?.entidad_nombre || '',
     porcentaje,
     patrimonio_neto_entidad: patrimonio_neto_entidad || 0,
     patrimonio_atribuible: patrimonioAtribuible,
@@ -131,11 +135,16 @@ export async function setParticipacion({ titular_dip, titular_nombre, entidad_ei
     valoracion,
     vigente: true,
     historial: [...historial, { porcentaje, patrimonio_neto: patrimonio_neto_entidad, fecha: new Date().toISOString(), motivo: autor.motivo || 'Registro', autorizado_por: autor.nombre || '' }],
-    created_at: new Date().toISOString(),
+    created_at: existente?.created_at || new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
-  memParticipaciones.push(datos);
-  if (supabase) { try { await supabase.from(T_PARTICIPACIONES).insert(datos); } catch { /* memoria */ } }
+  if (existente) {
+    const idx = memParticipaciones.findIndex(p => p.id === existente.id);
+    if (idx >= 0) memParticipaciones[idx] = datos; else memParticipaciones.push(datos);
+  } else {
+    memParticipaciones.push(datos);
+  }
+  if (supabase) { try { await supabase.from(T_PARTICIPACIONES).upsert(datos, { onConflict: 'id' }); } catch { /* memoria */ } }
   return datos;
 }
 
@@ -223,8 +232,109 @@ export async function patrimonioNetoPersona(dip, cuentas = []) {
   };
 }
 
+// Cuentas del sistema que nunca se tratan como patrimonio de una persona.
+const SISTEMA_PATRIMONIO = new Set([
+  'TGLP', 'AGLDP', 'VAULT_EMISION', 'CAPITALIA_BANK', 'FOUNDATION_RBU', 'FUND-BLP',
+  'sys-bank', 'sys-state', 'DIP-ADMIN', 'DIP-DIGITAL'
+]);
+const ES_DIP_AUTOMATICO = (d) => /^(\d{8}[A-Z]|[XYZ]\d{7,8}[A-Z])$/.test(String(d || '').toUpperCase().trim());
+
+/**
+ * REGISTRO AUTOMÁTICO DE PATRIMONIO desde los datos reales del banco:
+ *  - PARTICIPACIONES: cada cuenta Business con EIP → su titular (100%), patrimonio_neto = saldo.
+ *  - TITULARIDADES: cuentas compartidas con cotitulares (accountHolders del banco) → % por titular.
+ *  - ACTIVOS: cuentas personales (no sistema/empresa) registradas como activo 'cuenta' con su saldo.
+ * Deduplicado: re-ejecutar no duplica (participaciones upsert por titular+eip; activos por propietario+nombre).
+ */
+export async function calcularPatrimonioAutomatico(autor = {}) {
+  const state = await apiBancoGetState();
+  if (!state) throw new Error('No se pudo leer el estado del banco');
+  const users = state.users || [];
+  const accounts = state.accounts || [];
+  const accountHolders = state.accountHolders || [];
+  const userPorPlaceta = new Map(users.map(u => [String(u.placetaId || '').toUpperCase().trim(), u]));
+  const dipDePlaceta = (pid) => {
+    const p = String(pid || '').trim().toUpperCase();
+    if (userPorPlaceta.get(p)?.dip) return String(userPorPlaceta.get(p).dip).toUpperCase();
+    return ES_DIP_AUTOMATICO(p) ? p : null;
+  };
+
+  const participaciones = [];
+  const titularidades = [];
+  const activos = [];
+  const errores = [];
+
+  // 1) Participaciones empresariales (empresas con EIP → titular 100%)
+  for (const b of accounts) {
+    if (b.type !== 'Business' || !b.eip) continue;
+    if (SISTEMA_PATRIMONIO.has(b.id) || SISTEMA_PATRIMONIO.has(b.placetaId)) continue;
+    const dip = dipDePlaceta(b.placetaId);
+    if (!dip) continue;
+    const nombre = userPorPlaceta.get(String(b.placetaId || '').toUpperCase())?.displayName || dip;
+    try {
+      const creada = await setParticipacion({
+        titular_dip: dip, titular_nombre: nombre,
+        entidad_eip: String(b.eip).toUpperCase(), entidad_nombre: b.displayName || b.eip,
+        porcentaje: 100, patrimonio_neto_entidad: b.balancePz || 0,
+      }, { ...autor, motivo: 'Registro automático desde el banco (empresa con EIP)' });
+      participaciones.push({ dip, eip: b.eip, nombre: b.displayName, porcentaje: 100, patrimonio: b.balancePz || 0, actualizada: (creada.historial || []).length > 1 });
+    } catch (e) { errores.push({ tipo: 'participacion', eip: b.eip, error: e.message }); }
+  }
+
+  // 2) Titularidades de cuentas compartidas (cotitulares reales del banco)
+  for (const h of accountHolders) {
+    if (!h.accountId || !h.placetaId) continue;
+    const dip = dipDePlaceta(h.placetaId);
+    if (!dip) continue;
+    const pct = Number(h.ownershipPercent) || 0;
+    if (pct <= 0) continue;
+    try {
+      await setTitularidad({ cuenta_id: h.accountId, titular_dip: dip, porcentaje: pct, tipo: 'compartida' }, { ...autor, motivo: 'Registro automático desde el banco (cotitular)' });
+      titularidades.push({ cuenta: h.accountId, dip, pct });
+    } catch (e) { errores.push({ tipo: 'titularidad', cuenta: h.accountId, error: e.message }); }
+  }
+
+  // 3) Activos: cuentas personales (no sistema/empresa) → activo tipo 'cuenta' con su saldo
+  for (const c of accounts) {
+    if (c.type === 'Business' || c.type === 'State') continue;
+    if (!c.placetaId) continue;
+    if (SISTEMA_PATRIMONIO.has(c.id) || SISTEMA_PATRIMONIO.has(c.placetaId)) continue;
+    if (c.kind === 'TGLP' || c.kind === 'AGLDP' || c.kind === 'OperationalFee') continue;
+    const dip = dipDePlaceta(c.placetaId);
+    if (!dip) continue;
+    const nombre = c.displayName || c.id;
+    try {
+      const existentes = await listarActivos({ propietario_dip: dip });
+      const existente = existentes.find(a => a.vigente !== false && a.tipo === 'cuenta' && a.nombre === nombre);
+      if (existente) {
+        const datos = { ...existente, valor: c.balancePz || 0, valor_fiscal: c.balancePz || 0, updated_at: new Date().toISOString() };
+        const idx = memActivos.findIndex(a => a.id === existente.id);
+        if (idx >= 0) memActivos[idx] = datos; else memActivos.push(datos);
+        if (supabase) { try { await supabase.from(T_ACTIVOS).upsert(datos, { onConflict: 'id' }); } catch { /* memoria */ } }
+        activos.push({ dip, nombre, valor: c.balancePz || 0, actualizado: true });
+      } else {
+        await crearActivo({
+          propietario_dip: dip, tipo: 'cuenta', nombre,
+          descripcion: `Cuenta bancaria (${c.type}) · ${c.iban || c.id}`,
+          valor: c.balancePz || 0, porcentaje_titularidad: 100,
+        }, { ...autor, motivo: 'Registro automático desde el banco' });
+        activos.push({ dip, nombre, valor: c.balancePz || 0, actualizado: false });
+      }
+    } catch (e) { errores.push({ tipo: 'activo', cuenta: c.id, error: e.message }); }
+  }
+
+  return {
+    fecha: new Date().toISOString(),
+    participaciones, titularidades, activos, errores,
+    totalParticipaciones: participaciones.length,
+    totalTitularidades: titularidades.length,
+    totalActivos: activos.length,
+    totalErrores: errores.length,
+  };
+}
+
 export default {
   listarTitularidades, setTitularidad, patrimonioCuentaParaTitular, totalAtribuidoCuenta,
   listarParticipaciones, setParticipacion, patrimonioParticipaciones,
-  listarActivos, crearActivo, patrimonioNetoPersona,
+  listarActivos, crearActivo, patrimonioNetoPersona, calcularPatrimonioAutomatico,
 };

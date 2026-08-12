@@ -36,12 +36,14 @@
 <% } %>
 <% } %>
 
-<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap">
+<div style="display:flex;gap:8px;margin:14px 0;flex-wrap:wrap;align-items:center">
   <% if (esAdmin) { %>
+  <button class="btn btn-primary" onclick="calcularPatrimonioAuto()">⚙️ Registrar patrimonio automático</button>
   <button class="btn btn-primary" onclick="abrirModalTit()">👥 Registrar titularidad</button>
   <button class="btn btn-primary" onclick="abrirModalPart()">🏢 Registrar participación</button>
   <button class="btn btn-primary" onclick="abrirModalAct()">📦 Registrar activo</button>
   <% } %>
+  <span id="autoResult" style="font-size:12px;font-weight:700"></span>
 </div>
 
 <!-- TITULARIDADES -->
@@ -210,6 +212,22 @@ async function post(url, payload){
     if(!j.success){ alert('Error: ' + j.error); return; }
     window.location.reload();
   } catch(e){ alert('Error: ' + e.message); }
+}
+async function calcularPatrimonioAuto(){
+  const btn = event.currentTarget;
+  const res = document.getElementById('autoResult');
+  btn.disabled = true;
+  btn.textContent = '⚙️ Calculando…';
+  res.textContent = '';
+  try {
+    const r = await fetch('/rsp/patrimonio/api/calcular-automatico', { method:'POST', headers:{'Content-Type':'application/json'}, body: '{}' });
+    const j = await r.json();
+    if(!j.success){ alert('Error: ' + j.error); btn.disabled = false; btn.textContent = '⚙️ Registrar patrimonio automático'; return; }
+    const rt = j.resultado;
+    res.textContent = '✅ ' + rt.totalParticipaciones + ' participaciones · ' + rt.totalTitularidades + ' titularidades · ' + rt.totalActivos + ' activos' + (rt.totalErrores ? ' · ⚠️ ' + rt.totalErrores + ' errores' : '');
+    res.style.color = rt.totalErrores ? '#e65100' : '#16a34a';
+    setTimeout(() => window.location.reload(), 1400);
+  } catch(e){ alert('Error: ' + e.message); btn.disabled = false; btn.textContent = '⚙️ Registrar patrimonio automático'; }
 }
 function $(id){ return document.getElementById(id); }
 </script>

@@ -8,12 +8,26 @@ import { verificarSesion, verificarAccesoEntidad, verificarPermiso } from '../mi
 import {
   listarTitularidades, setTitularidad, patrimonioNetoPersona,
   listarParticipaciones, setParticipacion, patrimonioParticipaciones,
-  listarActivos, crearActivo,
+  listarActivos, crearActivo, calcularPatrimonioAutomatico,
 } from '../config/patrimonio.js';
 import { registrarAuditoria } from '../config/auditoria.js';
 
 const router = Router();
 const actor = (req) => ({ dip: req.session?.usuario?.dip || '', nombre: req.session?.usuario?.nombre || 'web' });
+
+// ⚙️ Registro automático de patrimonio (participaciones, titularidades y activos)
+// desde los datos reales del banco. Deduplicado (re-ejecutar no duplica).
+router.post('/api/calcular-automatico', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'gestionar_patrimonio'), async (req, res) => {
+  try {
+    const resultado = await calcularPatrimonioAutomatico(actor(req));
+    await registrarAuditoria({
+      usuario: actor(req), servicio: 'rsp', accion: 'crear', objeto_tipo: 'PATRIMONIO_AUTOMATICO',
+      objeto_id: 'patrimonio', valor_nuevo: { participaciones: resultado.totalParticipaciones, titularidades: resultado.totalTitularidades, activos: resultado.totalActivos },
+      motivo: 'Registro automático de patrimonio desde el banco',
+    });
+    res.json({ success: true, resultado });
+  } catch (e) { res.status(400).json({ success: false, error: e.message }); }
+});
 
 router.get('/', verificarSesion, verificarAccesoEntidad('rsp'), verificarPermiso('rsp', 'ver_patrimonio'), async (req, res) => {
   const [titularidades, participaciones, activos] = await Promise.all([

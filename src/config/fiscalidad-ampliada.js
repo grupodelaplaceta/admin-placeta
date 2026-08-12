@@ -331,7 +331,7 @@ async function insertConCompat(tabla, fila, camposExtra = []) {
 // ═════════════════════════════════════════════════════════════════════════
 // ⚙️ CÁLCULO AUTOMÁTICO DE TRIBUTOS Y RETRIBUCIONES
 // ═════════════════════════════════════════════════════════════════════════
-import { listarParticipaciones } from './patrimonio.js';
+import { listarParticipaciones, calcularPatrimonioAutomatico } from './patrimonio.js';
 import { listarNominas } from './nominas.js';
 import { apiBancoGetState, apiBancoPost } from './db.js';
 import { crearNotificacion } from './notificaciones.js';
@@ -613,18 +613,24 @@ export async function procesarTributosAutomaticos(mes = new Date().toISOString()
   const retribuciones = await calcularRetribucionesMes(mes, autor);
   const desgravaciones = await calcularDesgravacionesIvaAutomaticas(autor);
   const patrimonioAfecto = await calcularPatrimonioAfectoAutomatico(autor);
+  // Registro automático de patrimonio (participaciones, titularidades y activos).
+  const patrimonio = await calcularPatrimonioAutomatico(autor).catch(err => ({ error: err.message, totalParticipaciones: 0, totalTitularidades: 0, totalActivos: 0 }));
   return {
     mes,
     fecha: new Date().toISOString(),
     retribuciones,
     desgravaciones,
     patrimonioAfecto,
+    patrimonio,
     resumen: {
       retribucionesGeneradas: retribuciones.propietarios.length,
       totalRetribucionesPz: retribuciones.totalCalculadas,
       desgravacionesRegistradas: desgravaciones.totalRegistradas,
       totalIvaDesgravadoPz: desgravaciones.totalIva,
       patrimonioAfectoRegistrado: patrimonioAfecto.totalRegistrados,
+      participacionesRegistradas: patrimonio.totalParticipaciones ?? 0,
+      titularidadesRegistradas: patrimonio.totalTitularidades ?? 0,
+      activosRegistrados: patrimonio.totalActivos ?? 0,
     },
   };
 }
