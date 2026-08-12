@@ -89,27 +89,27 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 - [ ] **5.1** 👤 **Ciudadano** → usa **Banco web** (FASE 2) + PlacetaID + portal público (gdlp-crm, sin datos). Pregunta: "¿Tengo que hacer algo?"
 - [ ] **5.2** 🏢 **Entidad** → sección entidad en el Banco web / portal: Expedientes, Obligaciones, Contabilidad, Documentos, Representantes, Notificaciones.
 - [ ] **5.3** 🛠️ **RSP admin-only**: Bandeja de trabajo → Expedientes → Ciudadanos → Entidades → Operaciones → Auditoría → Configuración.
-- [ ] **5.4** **Mi bandeja ciudadana** (`GET /rsp/tramites/api/bandeja/:dip`) consumida por el Banco web/portal.
+- [x] **5.4** **Mi bandeja ciudadana** (`GET /rsp/tramites/api/bandeja/:dip`) consumida por el Banco web/portal. ✅ hecha (12/08).
 
 ## FASE 7 — Notificaciones multicanal + acuse (P1)
-- [ ] **6.1** Modelo ampliado (`canal`, `acuse_recibido`, `leida_en`) en `notificaciones.js`.
-- [ ] **6.2** Email (SendGrid/SMTP) con fallback silencioso.
-- [ ] **6.3** Acuse abre plazos (integra FASE 3).
-- [ ] **6.4** Preferencias de canal en `rsp_ciudadanos`.
+- [x] **6.1** Modelo ampliado (`canal`, `acuse_recibido`, `leida_en`) en `notificaciones.js`. ✅ hecha (12/08): columnas aplicadas en Supabase.
+- [x] **6.2** Email (SendGrid/SMTP) con fallback silencioso. ✅ hecha (12/08): `enviarEmail` (Resend) con fallback silencioso si no hay `EMAIL_API_KEY`.
+- [x] **6.3** Acuse abre plazos (integra FASE 3). ✅ hecha (12/08): `marcarAcuse` (acuse_recibido/acuse_en).
+- [x] **6.4** Preferencias de canal en `rsp_ciudadanos`. ✅ hecha (12/08): `preferenciaCanal` lee `canal_preferido` del registro maestro.
 
 ## FASE 8 — Subsanación guiada + firma múltiple + 2FA (P1)
-- [ ] **7.1** Subsanación con `requisitos_pendientes[]` (checklist exacta).
-- [ ] **7.2** Firma múltiple (`firmantes[]`; webhook espera a todos; "1/2 firmas").
-- [ ] **7.3** 2FA admin en acciones críticas (pagar, resolver, anular).
+- [x] **7.1** Subsanación con `requisitos_pendientes[]` (checklist exacta). ✅ hecha (12/08): pestaña Subsanación con checklist en el detalle.
+- [ ] **7.2** Firma múltiple (`firmantes[]`; webhook espera a todos; "1/2 firmas"). ⏳ pendiente (campo `firmantes[]`/`firmas_completas` preparado en trámites).
+- [x] **7.3** 2FA admin en acciones críticas (pagar, resolver, anular). ✅ hecha (12/08): `src/config/dosfa.js` fail-closed + `POST /rsp/tramites/api/2fa/verificar`; verificado 403 sin 2FA.
 
 ## FASE 9 — Borrador fiscal + auditoría ciudadana (P1)
-- [ ] **8.1** `GET /rsp/tributos/api/borrador/:dip` + estado `borrador|confirmada|corregida|presentada`; confirmar desde el Banco web/portal.
-- [ ] **8.2** Auditoría ciudadana (quién vio/alteró mis datos) visible en la ficha (0.4).
+- [x] **8.1** `GET /rsp/tributos/api/borrador/:dip` + estado `borrador|confirmada|corregida|presentada`; confirmar desde el Banco web/portal. ✅ hecha (12/08): `GET/POST /rsp/api/borrador-fiscal/:dip` con trazabilidad CNIC.
+- [x] **8.2** Auditoría ciudadana (quién vio/alteró mis datos) visible en la ficha (0.4). ✅ hecha (12/08): `GET /rsp/api/auditoria/:dip`.
 
 ## FASE 10 — Sucesiones automáticas (P2)
-- [ ] **9.1** Herederos y % en `herencias.js`.
-- [ ] **9.2** Reparto automático de patrimonio (reusa `setParticipacion` dedupe).
-- [ ] **9.3** Certificado `DOC` + notificaciones a herederos.
+- [x] **9.1** Herederos y % en `herencias.js`. ✅ hecha (12/08): ya existía en el modelo.
+- [x] **9.2** Reparto automático de patrimonio (reusa `setParticipacion` dedupe). ✅ hecha (12/08): `repartirPatrimonioAutomatico`.
+- [x] **9.3** Certificado `DOC` + notificaciones a herederos. ✅ hecha (12/08): certificado + notificación a cada heredero.
 
 ## FASE 11 — Transparencia, observabilidad y tests (P2)
 - [ ] **10.1** Portal de transparencia público (CNIC vigente, presupuestos, subvenciones otorgadas) — sin datos personales.
