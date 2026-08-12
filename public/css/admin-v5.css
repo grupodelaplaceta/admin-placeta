@@ -766,3 +766,45 @@ code{font-family:'SFMono-Regular',Consolas,monospace;font-size:11px;background:#
   .rsp-acciones{grid-template-columns:1fr}
   .bell-dropdown{width:100vw;right:-40px}
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RSP UX refinements (2026-08) — panel más cómodo, estilo consola admin
+   ═══════════════════════════════════════════════════════════════════════ */
+.rsp-section-title{
+  width:fit-content;padding:8px 15px;border-radius:12px;font-size:13px;
+  background:linear-gradient(90deg,#f5f0ff,#fbf9ff);border:1px solid var(--l);
+}
+.rsp-section-title::before{width:7px;height:7px;box-shadow:0 0 0 3px rgba(124,58,237,.12)}
+.info-card h4{font-size:14px}
+.info-card p{line-height:1.62}
+/* Campos y selects coherentes */
+.form-input,select.form-input,input[type=text],input[type=number],input[type=search],input[type=date],select,textarea{
+  font:600 13px var(--font);
+}
+input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(109,40,217,.10);outline:none}
+/* Tablas: más aire y cabeceras consistentes */
+.table-container th,.rsp-table th{padding:13px 16px;position:sticky;top:0}
+.table-container td,.rsp-table td{padding:12px 16px}
+/* Badges más legibles */
+.badge{font-size:10px;letter-spacing:.3px}
+/* Botones secundarios/outline con micro-interacción */
+.btn-secondary,.btn-outline,.rsp-btn-outline{transition:all .15s}
+.btn-secondary:hover,.btn-outline:hover,.rsp-btn-outline:hover{transform:translateY(-1px)}
+/* Sub-navegación dentro de página (chips de sección) */
+.subnav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.subnav a{
+  font-size:11px;font-weight:700;padding:7px 14px;border-radius:50px;background:var(--bg2);
+  border:1px solid var(--l);color:var(--tm);text-decoration:none;transition:all .15s;
+}
+.subnav a:hover{background:var(--p);color:#fff;border-color:var(--p);transform:translateY(-1px)}
+.subnav a.active{background:var(--p);color:#fff;border-color:var(--p)}
+/* Resumen ejecutivo en cabeceras de página */
+.page-hero{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  background:var(--grad-dark);color:#fff;border-radius:var(--radius-lg);padding:18px 24px;margin-bottom:20px;
+  box-shadow:0 10px 30px rgba(59,7,100,.25);
+}
+.page-hero h2{margin:0;font-size:19px;font-weight:900;letter-spacing:-.3px}
+.page-hero p{margin:3px 0 0;font-size:12px;opacity:.82}
+.page-hero .hero-meta{display:flex;gap:10px;flex-wrap:wrap}
+.page-hero .hero-chip{font-size:11px;font-weight:700;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.14);padding:5px 12px;border-radius:50px}

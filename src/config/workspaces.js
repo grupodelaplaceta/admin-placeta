@@ -174,50 +174,50 @@ const WORKSPACES = {
     background: 'linear-gradient(135deg, #065f7a 0%, #0891b2 100%)',
     secciones: [
       {
-        titulo: '📊 RSP',
+        titulo: '🏠 Inicio',
         enlaces: [
           { texto: 'Dashboard', url: '/rsp', icono: '📊' },
           { texto: 'Conexiones', url: '/rsp/conexiones', icono: '📡' },
           { texto: 'Facturación RSP', url: '/rsp/facturacion', icono: '🧾' },
           { texto: 'Fondos', url: '/rsp/fondos', icono: '💰' },
-          { texto: 'Sistema (control)', url: '/rsp/sistema', icono: '🕹️' },
         ]
       },
       {
-        titulo: '🧠 Núcleo RSP',
+        titulo: '🧮 Hacienda y economía',
         enlaces: [
-          { texto: 'Centro Normativo (CNIC)', url: '/rsp/normativo', icono: '📜' },
+          { texto: 'Dashboard Económico', url: '/rsp/economico', icono: '📈' },
+          { texto: 'Patrimonio y activos', url: '/rsp/patrimonio', icono: '💎' },
+          { texto: 'Fiscalidad ampliada', url: '/rsp/fiscalidad', icono: '🧮' },
+          { texto: 'Facturas', url: '/rsp/facturas', icono: '🧾' },
+          { texto: 'Nóminas', url: '/rsp/nominas', icono: '📄' },
+          { texto: 'Contabilidad', url: '/rsp/contabilidad', icono: '📒' },
+          { texto: 'Fundación', url: '/rsp/fundacion', icono: '🏛️' },
+        ]
+      },
+      {
+        titulo: '👥 Personas y herencias',
+        enlaces: [
+          { texto: 'Bajas y Herencias', url: '/rsp/herencias', icono: '📜' },
           { texto: 'Expedientes', url: '/rsp/expedientes', icono: '🗂️' },
           { texto: 'Incidencias', url: '/rsp/incidencias', icono: '⚠️' },
           { texto: 'Notificaciones', url: '/rsp/notificaciones', icono: '🔔' },
+        ]
+      },
+      {
+        titulo: '📜 Marco legal y control',
+        enlaces: [
+          { texto: 'Centro Normativo (CNIC)', url: '/rsp/normativo', icono: '📜' },
           { texto: 'Auditoría', url: '/rsp/auditoria', icono: '🛡️' },
-          { texto: 'Operation Engine', url: '/rsp/operaciones', icono: '⚙️' },
           { texto: 'Comprobación ecosistema', url: '/rsp/comprobacion', icono: '🔍' },
+          { texto: 'Operation Engine', url: '/rsp/operaciones', icono: '⚙️' },
         ]
       },
       {
-        titulo: '🏛️ Entidades y economía',
+        titulo: '🛠️ Supervisión y desarrollo',
         enlaces: [
-          { texto: 'Dashboard Económico', url: '/rsp/economico', icono: '📈' },
-          { texto: 'Contabilidad', url: '/rsp/contabilidad', icono: '📒' },
-          { texto: 'Facturas', url: '/rsp/facturas', icono: '🧾' },
-          { texto: 'Nóminas', url: '/rsp/nominas', icono: '📄' },
-          { texto: 'Fundación', url: '/rsp/fundacion', icono: '🏛️' },
-          { texto: 'Patrimonio y activos', url: '/rsp/patrimonio', icono: '💎' },
-          { texto: 'Fiscalidad ampliada', url: '/rsp/fiscalidad', icono: '🧮' },
-        ]
-      },
-      {
-        titulo: '🛡️ Supervisión y desarrollo',
-        enlaces: [
-          { texto: 'PlacetaID (identidades)', url: '/junta/placetaid', icono: '🔑' },
-          { texto: 'Votaciones', url: '/junta/votaciones', icono: '🗳️' },
-          { texto: 'Reclamaciones y quejas', url: '/junta/reclamaciones', icono: '📨' },
-          { texto: 'Documentos del ecosistema', url: '/rsp/documentos', icono: '📑' },
-          { texto: 'Empresas / Cumplimiento', url: '/junta/empresas/cumplimiento', icono: '🏢' },
-          { texto: 'Bajas y Herencias', url: '/rsp/herencias', icono: '📜' },
           { texto: 'Banco (config y reversiones)', url: '/rsp/supervision/banco', icono: '🏦' },
           { texto: 'Soporte del banco', url: '/rsp/supervision/soporte', icono: '🎧' },
+          { texto: 'Sistema (control)', url: '/rsp/sistema', icono: '🕹️' },
           { texto: 'APIs', url: '/rsp/apis', icono: '🔌' },
           { texto: 'Gastos RSP', url: '/rsp/gastos', icono: '💰' },
         ]
