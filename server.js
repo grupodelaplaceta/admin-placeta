@@ -14,6 +14,7 @@ import { testConnection } from './src/config/supabase.js';
 import { sbFindSolicitanteByDip } from './src/config/db.js';
 import { verificarSesion, cargarPermisosUsuario, verificarAccesoEntidad, verificarPermiso } from './src/middleware/auth.js';
 import { detectarWorkspace, getWorkspace, getWorkspacesDisponibles } from './src/config/workspaces.js';
+import * as i18n from './src/config/i18n.js';
 
 // Importar rutas
 import authRoutes from './src/routes/auth.js';
@@ -137,6 +138,17 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// FASE 12.3 — limitador estricto en login (anti fuerza bruta)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 20,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Demasiados intentos de acceso. Intenta más tarde.' },
+  validate: { xForwardedForHeader: false }
+});
+app.use('/login', loginLimiter);
+app.use('/login/placetaid', loginLimiter);
+app.use('/login/demo', loginLimiter);
+
 // ── Motor de Plantillas ────────────────────────────────────────────────────
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'src/views'));
@@ -152,6 +164,13 @@ app.use((req, res, next) => {
   res.locals.entidad_actual = '';
   res.locals.pathActual = req.path;
   res.locals.anoActual = 2026;
+
+  // FASE 12.2 — i18n ES/EN en vistas (t, lang)
+  const { t: traducir, langFromReq } = i18n;
+  const lang = langFromReq(req);
+  res.locals.lang = lang;
+  res.locals.t = (key) => traducir(key, lang);
+  res.locals.EN = lang === 'en';
 
   // Detectar workspace activo desde la ruta
   const wsId = detectarWorkspace(req.path);
