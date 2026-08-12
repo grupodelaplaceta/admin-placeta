@@ -26,9 +26,26 @@
       <strong><%= resultado.yaRegistradosPlacetaid %></strong> ya registrados ·
       <strong><%= resultado.altasCiudadano %></strong> altas como ciudadano (censo) ·
       <strong><%= resultado.erroresPlacetaid %></strong> errores PlacetaID ·
-      <strong><%= resultado.erroresCiudadano %></strong> errores ciudadano.
+      <strong><%= resultado.erroresCiudadano %></strong> errores ciudadano ·
+      <% if (resultado.ciudadanosSupabase) { %>
+      <strong><%= resultado.ciudadanosSupabaseCreados %></strong> nuevos en <strong>Ciudadanos</strong> ·
+      <strong><%= resultado.ciudadanosSupabaseActualizados %></strong> actualizados ·
+      <strong><%= resultado.ciudadanosSupabaseErrores %></strong> errores.
+      <% } %>
     </p>
   </div>
+
+  <% if (resultado.ciudadanosSupabase && resultado.ciudadanosSupabase.creados.length > 0) { %>
+    <div class="info-card mt-16" style="border-left:4px solid #2a6;">
+      <h4>👥 Nuevos en el registro de Ciudadanos (<%= resultado.ciudadanosSupabase.creados.length %>)</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        <% resultado.ciudadanosSupabase.creados.forEach(d => { %>
+        <span class="badge badge-success"><%= d %></span>
+        <% }) %>
+      </div>
+      <p style="font-size:12px;color:#666;margin-top:10px">Ya aparecen en <a href="/administracion/ciudadanos">Administración → Ciudadanos</a> y <a href="/junta/ciudadanos">Junta → Ciudadanos</a>.</p>
+    </div>
+  <% } %>
 
   <% if (resultado.creados.length > 0) { %>
     <div class="info-card mt-16" style="border-left:4px solid #e90;">

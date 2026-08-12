@@ -12,7 +12,8 @@
  *  4. Para cada DIP no presente en el censo tributario: alta como ciudadano
  *     (acción 'alta-tributos' del banco).
  */
-import { apiBancoGetState, apiBancoPost } from './db.js';
+import { apiBancoGetState, apiBancoPost, sbCreateSolicitante, sbUpdateSolicitante } from './db.js';
+import { supabase } from './supabase.js';
 
 const PLACETAID_API = (process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api').replace(/\/+$/, '');
 const PLACETAID_ADMIN_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
@@ -210,6 +211,10 @@ export async function sincronizar() {
     }
   }
 
+  // 3) Asegurar el registro de CIUDADANOS (Supabase `solicitantes`) que alimenta
+  //    la pantalla «Ciudadanos»: inserta los que faltan y rellena nombres.
+  const supabaseResult = await sincronizarCiudadanosSupabase(padron);
+
   return {
     totalDip: padron.totalDip,
     yaRegistradosPlacetaid: padron.yaRegistrados.length,
@@ -223,7 +228,11 @@ export async function sincronizar() {
     erroresCiudadano: ciudadanosErrores.length,
     ciudadanosErrores,
     sinUsuarioBanco,
-    sinUsuarioBancoCount: sinUsuarioBanco.length
+    sinUsuarioBancoCount: sinUsuarioBanco.length,
+    ciudadanosSupabase: supabaseResult,
+    ciudadanosSupabaseCreados: supabaseResult.creados.length,
+    ciudadanosSupabaseActualizados: supabaseResult.actualizados.length,
+    ciudadanosSupabaseErrores: supabaseResult.errores.length
   };
 }
 
@@ -234,4 +243,57 @@ export async function recuperarPasswordTemporal(dip) {
     body: { dip }
   });
   return { ok: res.ok && res.data?.ok, data: res.data };
+}
+
+/**
+ * Asegura que TODOS los DIPs con cuenta bancaria estén en el registro de
+ * CIUDADANOS (Supabase `solicitantes`), la tabla que alimenta la pantalla
+ * «Ciudadanos» del panel (Administración y Junta). Inserta los que faltan y
+ * rellena el nombre de los que ya existen.
+ */
+export async function sincronizarCiudadanosSupabase(padron) {
+  if (!supabase) return { disponible: false, creados: [], actualizados: [], errores: [] };
+  const creados = [];
+  const actualizados = [];
+  const errores = [];
+  try {
+    const { data: sols } = await supabase.from('solicitantes').select('id,dip,nombre_real,email,alias');
+    const porDip = new Map((sols || []).map(s => [String(s.dip || '').toUpperCase().trim(), s]));
+    const lista = padron ? padron.padron : (await construirPadron()).padron;
+
+    for (const p of lista) {
+      const { nombre } = dividirNombre(p.nombre);
+      const nombreReal = (p.nombre && !NOMBRE_GENERICO.test(p.nombre)) ? p.nombre : p.dip;
+      const alias = `${(nombre || 'ciudadano').toLowerCase().replace(/[^a-z0-9]/g, '')}.${p.dip.slice(-4)}`;
+      const email = `${p.dip.toLowerCase()}@laplaceta.org`;
+      const data = {
+        dip: p.dip,
+        nombre_real: nombreReal,
+        alias,
+        email,
+        placeid: `PLID-${p.dip}`,
+        rol: 'miembro',
+        estado: 'activo',
+        franja_edad: 'Alta_Plena',
+        ip_registro: 'migracion_padron'
+      };
+      const ex = porDip.get(p.dip);
+      if (!ex) {
+        try {
+          await sbCreateSolicitante(data);
+          creados.push(p.dip);
+        } catch (e) {
+          errores.push({ dip: p.dip, nombre: nombreReal, error: e.message });
+        }
+      } else if (!ex.nombre_real && nombreReal && nombreReal !== p.dip) {
+        try {
+          await sbUpdateSolicitante(ex.id, { nombre_real: nombreReal, estado: 'activo' });
+          actualizados.push(p.dip);
+        } catch { /* no-op */ }
+      }
+    }
+  } catch (e) {
+    errores.push({ dip: '—', nombre: '—', error: e.message });
+  }
+  return { disponible: true, creados, actualizados, errores };
 }
