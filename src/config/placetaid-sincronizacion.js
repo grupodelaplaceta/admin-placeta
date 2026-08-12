@@ -14,6 +14,7 @@
  */
 import { apiBancoGetState, apiBancoPost, sbCreateSolicitante, sbUpdateSolicitante } from './db.js';
 import { supabase } from './supabase.js';
+import { upsertCiudadanoMaestro } from './registro-maestro.js';
 
 const PLACETAID_API = (process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api').replace(/\/+$/, '');
 const PLACETAID_ADMIN_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
@@ -209,6 +210,8 @@ export async function sincronizar() {
       }
       usuariosBancoCreados.push({ dip: p.dip, nombre: p.nombre, placetaId: p.placetaId });
     }
+    // FASE 4.2 — mantener el registro maestro de identidad al día
+    try { await upsertCiudadanoMaestro(p.dip); } catch {}
     const res = await apiBancoPost('alta-tributos', { placetaId: p.placetaId });
     if (res && (res.eip || res.tributosCensusDate || res.message)) {
       ciudadanosAltas.push({ dip: p.dip, nombre: p.nombre, eip: res.eip || null });

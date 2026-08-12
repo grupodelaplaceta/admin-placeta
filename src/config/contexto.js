@@ -12,6 +12,7 @@
  */
 import { supabase } from './supabase.js';
 import { apiBancoGetState, apiPlacetaidRegistros, sbFindSolicitanteByDip, sbGetContribuyente } from './db.js';
+import { resolverCiudadano } from './registro-maestro.js';
 
 async function sbQuery(table, column, value, limit = 50) {
   if (!supabase) return [];
@@ -34,9 +35,23 @@ export async function getContextoCiudadano(dip) {
   const fuentes = { ok: [], error: [] };
   const resultado = { dip: DIP, generadoEn: new Date().toISOString() };
 
-  // ── Identidad ──────────────────────────────────────────────────────────
+  // ── Identidad (registro maestro + PlacetaID + Supabase) ────────────────
   const identidad = {};
   try {
+    const maestro = await resolverCiudadano(DIP);
+    if (maestro) {
+      identidad.maestro = {
+        dip: maestro.dip,
+        placetaId: maestro.placeta_id,
+        nombre: maestro.nombre || null,
+        estado: maestro.estado || 'activo',
+        nivel: maestro.nivel || 'N1',
+        cuentaPrincipal: maestro.cuenta_principal || null,
+        canalPreferido: maestro.canal_preferido || null,
+        tributosCensado: !!maestro.tributos_censado,
+        fuente: maestro.fuente || null
+      };
+    }
     const solicitante = await sbFindSolicitanteByDip(DIP);
     if (solicitante) {
       identidad.solicitante = {

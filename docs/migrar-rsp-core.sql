@@ -591,3 +591,21 @@ CREATE INDEX IF NOT EXISTS idx_afecto_eip ON rsp_patrimonio_afecto(entidad_eip);
 -- Columnas de cálculo automático (instalaciones existentes)
 ALTER TABLE rsp_patrimonio_afecto ADD COLUMN IF NOT EXISTS origen TEXT DEFAULT 'manual';
 ALTER TABLE rsp_patrimonio_afecto ADD COLUMN IF NOT EXISTS ejercicio TEXT;
+
+-- ── 22. REGISTRO MAESTRO DE IDENTIDAD (FASE 4) ────────────────────────────
+CREATE TABLE IF NOT EXISTS rsp_ciudadanos (
+  dip TEXT PRIMARY KEY,
+  placeta_id TEXT,
+  nombre TEXT,
+  estado TEXT DEFAULT 'activo',           -- activo | baja
+  nivel TEXT DEFAULT 'N1',                -- N1 | N2 | N3 (sin biometria)
+  cuenta_principal TEXT,
+  canal_preferido TEXT DEFAULT 'email',   -- email | movil | app
+  fuente TEXT DEFAULT 'derivado',         -- registrado | sincronizado | derivado
+  verificado_en TEXT,
+  tributos_censado BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ciud_placeta ON rsp_ciudadanos(placeta_id);
+CREATE INDEX IF NOT EXISTS idx_ciud_nivel ON rsp_ciudadanos(nivel);

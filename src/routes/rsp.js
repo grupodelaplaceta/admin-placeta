@@ -475,4 +475,16 @@ router.post('/api/normativa/refresh', async (req, res) => {
   }
 });
 
+// ── API: Registro maestro de identidad (FASE 4) ───────────────────────────
+// GET /rsp/api/ciudadanos-maestros?nivel=&estado= — listado del registro maestro
+router.get('/api/ciudadanos-maestros', verificarSesion, verificarPermiso('rsp', 'ver_tramites'), async (req, res) => {
+  try {
+    const { listarCiudadanosMaestros } = await import('../config/registro-maestro.js');
+    const lista = await listarCiudadanosMaestros({ nivel: req.query.nivel, estado: req.query.estado });
+    return res.json({ total: lista.length, ciudadanos: lista });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
