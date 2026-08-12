@@ -75,39 +75,49 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 - [ ] **4.3** Helper `resolverCiudadano(dip)` usado por trámites, patrimonio, fiscalidad, contexto.
 - [ ] **4.4** Niveles de verificación N1→N3 con beneficios (límites, firma, subvenciones) — **sin biometría**.
 
-## FASE 5 — Interfaces separadas (P0)
+## FASE 5 — Normativa dinámica desde el BOP (P1) 🟠
+**Objetivo:** el BOP (Boletín Oficial) es la fuente de la normativa. Un cambio publicado en un CNIC (`bop_cnic`: porcentajes, precios, límites, plazos, con `vigente` e `historial`) actualiza automáticamente tarifas, tipos, límites, exenciones y plazos del RSP **hacia el futuro, sin tocar código**.
+
+- [ ] **5.1 Servicio de parámetros** — nuevo `admin-placeta/src/config/normativa.js` que lee de `bop_cnic` (Supabase, lectura pública) los valores vigentes por código (`tipo_valor`, `valor`, `vigente`, `historial`). Criterio: `getParametro('CNIC-4.10-01')` devuelve el valor vigente tipado.
+- [ ] **5.2 Catálogo RSP → CNIC** — mapa de códigos para cada valor hoy hardcodeado: IVA, tope retribución (250 Pz), tarifa consulta/modificación, exención IGF (empresa <20k), límites compliance (empresa 10M / personal 500k), plazos de trámites, sanciones. Criterio: cada constante tiene su código CNIC.
+- [ ] **5.3 Sustituir hardcodes** — reemplazar en `fiscalidad-ampliada.js`, `normativa.js`, `rsp.js` (tarifas), `empresas.js` (compliance), `patrimonio.js`, `tramites.js` (plazos) por `getParametro(...)`. Criterio: los cálculos usan el BOP, no constantes.
+- [ ] **5.4 Sincronización/refresh** — caché con TTL + `POST /api/normativa/refresh` (o webhook del BOP) al publicar un CNIC; el `bop-editor` avisa al publicar. Criterio: al actualizar un CNIC y refrescar, tarifas/tipos cambian sin deploy.
+- [ ] **5.5 Vigencia por fecha (histórico)** — aplicar el valor vigente en la fecha del periodo (declaraciones pasadas) usando `historial` + `fecha_aplicacion`. Criterio: una declaración de un mes anterior usa el tipo vigente de ese mes.
+- [ ] **5.6 Trazabilidad** — registrar en cada operación/declaración la **versión de CNIC aplicada** (auditoría fiscal). Criterio: cada cálculo sabe qué valor CNIC usó.
+
+## FASE 6 — Interfaces separadas (P0)
 - [ ] **5.1** 👤 **Ciudadano** → usa **Banco web** (FASE 2) + PlacetaID + portal público (gdlp-crm, sin datos). Pregunta: "¿Tengo que hacer algo?"
 - [ ] **5.2** 🏢 **Entidad** → sección entidad en el Banco web / portal: Expedientes, Obligaciones, Contabilidad, Documentos, Representantes, Notificaciones.
 - [ ] **5.3** 🛠️ **RSP admin-only**: Bandeja de trabajo → Expedientes → Ciudadanos → Entidades → Operaciones → Auditoría → Configuración.
 - [ ] **5.4** **Mi bandeja ciudadana** (`GET /rsp/tramites/api/bandeja/:dip`) consumida por el Banco web/portal.
 
-## FASE 6 — Notificaciones multicanal + acuse (P1)
+## FASE 7 — Notificaciones multicanal + acuse (P1)
 - [ ] **6.1** Modelo ampliado (`canal`, `acuse_recibido`, `leida_en`) en `notificaciones.js`.
 - [ ] **6.2** Email (SendGrid/SMTP) con fallback silencioso.
 - [ ] **6.3** Acuse abre plazos (integra FASE 3).
 - [ ] **6.4** Preferencias de canal en `rsp_ciudadanos`.
 
-## FASE 7 — Subsanación guiada + firma múltiple + 2FA (P1)
+## FASE 8 — Subsanación guiada + firma múltiple + 2FA (P1)
 - [ ] **7.1** Subsanación con `requisitos_pendientes[]` (checklist exacta).
 - [ ] **7.2** Firma múltiple (`firmantes[]`; webhook espera a todos; "1/2 firmas").
 - [ ] **7.3** 2FA admin en acciones críticas (pagar, resolver, anular).
 
-## FASE 8 — Borrador fiscal + auditoría ciudadana (P1)
+## FASE 9 — Borrador fiscal + auditoría ciudadana (P1)
 - [ ] **8.1** `GET /rsp/tributos/api/borrador/:dip` + estado `borrador|confirmada|corregida|presentada`; confirmar desde el Banco web/portal.
 - [ ] **8.2** Auditoría ciudadana (quién vio/alteró mis datos) visible en la ficha (0.4).
 
-## FASE 9 — Sucesiones automáticas (P2)
+## FASE 10 — Sucesiones automáticas (P2)
 - [ ] **9.1** Herederos y % en `herencias.js`.
 - [ ] **9.2** Reparto automático de patrimonio (reusa `setParticipacion` dedupe).
 - [ ] **9.3** Certificado `DOC` + notificaciones a herederos.
 
-## FASE 10 — Transparencia, observabilidad y tests (P2)
+## FASE 11 — Transparencia, observabilidad y tests (P2)
 - [ ] **10.1** Portal de transparencia público (CNIC vigente, presupuestos, subvenciones otorgadas) — sin datos personales.
 - [ ] **10.2** Observabilidad: request-id + logs JSON + métricas + alerta 5xx.
 - [ ] **10.3** Tests (`node --test`) de motores (tramites, fiscalidad, patrimonio) **+ tests de seguridad** (scoping: un usuario no ve datos de otro).
 - [ ] **10.4** Migraciones en CI (GitHub Actions con `SUPABASE_DB_CONNECTION` secret).
 
-## FASE 11 — Seguridad avanzada e i18n (P3)
+## FASE 12 — Seguridad avanzada e i18n (P3)
 - [ ] **11.1** Secretos centralizados en Vercel + rotación (`SUPABASE_DB_CONNECTION`, `PASSWORD_DEFAULT_SECRET`, claves banco/web).
 - [ ] **11.2** i18n (EN mínimo) y accesibilidad WCAG (contraste, foco, teclado).
 - [ ] **11.3** Rate limiting en login/APIs + reCAPTCHA si procede.
@@ -119,9 +129,10 @@ Cada paso: **archivos/rutas**, **qué hacer**, **criterio de aceptación**. `[x]
 2. **FASE 2 (Banco web)** — el nuevo banco en línea seguro del ciudadano.
 3. **FASE 0 (modelo expediente)** — fundamento del RSP.
 4. **FASE 3–4** (SLA, registro maestro).
-5. **FASE 5** (interfaces) → depende de 2.
-6. **FASE 6–9** (notificaciones, subsanación/firma/2FA, borrador, sucesiones).
-7. **FASE 10** (transparencia/observabilidad/tests).
-8. **FASE 11** (seguridad avanzada/i18n).
+5. **FASE 5 (Normativa dinámica desde el BOP)** — los valores CNIC alimentan tarifas/tipos/límites/plazos (ideal justo tras el registro maestro).
+6. **FASE 6 (interfaces)** → depende de 2.
+7. **FASE 7–10** (notificaciones, subsanación/firma/2FA, borrador, sucesiones).
+8. **FASE 11** (transparencia/observabilidad/tests).
+9. **FASE 12** (seguridad avanzada/i18n).
 
 **Regla:** cada fase = commit+push separado, con **test de seguridad** (scoping) y migración antes del push si toca motor/BD. La FASE 1 es **urgente** (incidente de datos).
