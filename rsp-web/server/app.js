@@ -11,8 +11,12 @@ import { createApiRouter } from './api.js';
 import { calcularContribuyentes, calcularReconciliacion } from './tributos.js';
 
 const BOP_URL = process.env.BOP_URL || 'https://rsp.laplaceta.org';
-const BANK_URL = process.env.BANK_URL || 'https://api.banco.laplaceta.org';
-const BANK_KEY = process.env.BANK_CRM_KEY || 'crm-gdlp-shared-key-2026';
+// Nombres compatibles con admin-placeta (BANCO_API_URL / CRM_READ_KEY).
+const BANK_URL = process.env.BANCO_API_URL || process.env.BANK_URL || 'https://api.banco.laplaceta.org';
+// La clave NO se incrusta en el código: repo público. Debe venir de la
+// variable de entorno CRM_READ_KEY (o BANK_CRM_KEY). En Vercel se define
+// como Environment Variable del proyecto.
+const BANK_KEY = process.env.CRM_READ_KEY || process.env.BANK_CRM_KEY;
 
 const cache = new Map();
 function conCache(key, ttlMs, fn) {
@@ -25,6 +29,7 @@ function conCache(key, ttlMs, fn) {
 }
 
 async function obtenerEstadoBanco() {
+  if (!BANK_KEY) throw new Error('Falta CRM_READ_KEY (o BANK_CRM_KEY): configúrala en las variables de entorno (server/.env o Vercel)');
   return conCache('bank-state', 30_000, async () => {
     const r = await fetch(`${BANK_URL}/api/crm-state`, {
       headers: { 'X-CRM-Key': BANK_KEY },

@@ -26,11 +26,16 @@ npm start            # http://localhost:4000  (o `npm run dev`)
 - `api/index.js` monta la misma aplicación del BFF (`server/app.js`) como función de Vercel.
 - Configurar el proyecto en Vercel con **Root Directory = `rsp-web`** y las variables de entorno de `server` (`.env.example`).
 
-## Variables de entorno (`.env` en server/)
-- `BOP_URL` — base del Boletín/RSP (por defecto `https://rsp.laplaceta.org`).
-- `BANK_URL` — base del banco (por defecto `https://api.banco.laplaceta.org`).
-- `BANK_CRM_KEY` — clave de lectura del estado del banco.
-- `PORT` — puerto (por defecto 4000).
+## Variables de entorno (`.env` en server/ — ver `server/.env.example`)
+- **Core**: `PORT`, `NODE_ENV`, `SESSION_SECRET`, `JWT_SECRET`.
+- **Boletín/RSP**: `BOP_URL` (por defecto `https://rsp.laplaceta.org`).
+- **Banco/CRM**: `BANCO_API_URL`, `CRM_BASE_URL`, `CRM_READ_KEY` (obligatoria para leer el estado del banco; sin valor por defecto porque el repo es público), `APP_BASE_URL`.
+- **PlacetaID (SSO)**: `PLACETAID_API_URL`, `PLACETAID_AUTH_URL`, `PLACETAID_CLIENT_ID`, `PLACETAID_CLIENT_SECRET`.
+- **Supabase (persistencia)**: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_DB_CONNECTION`, `SUPABASE_DB_PASSWORD`.
+- **Documentos/normativa**: `DOCS_API_KEYS`, `ADMIN_MASTER_KEY`.
+- **Email**: `EMAIL_PROVIDER`, `EMAIL_API_KEY`, `EMAIL_FROM`.
+
+> Importante: no incrustar claves en el código. Vercel puede bloquear despliegues de repos públicos si detecta secretos en el código fuente.
 
 ## Pendiente para reemplazar del todo a admin-placeta
 - Persistencia real (Supabase/Postgres) en `server/api.js` y autenticación PlacetaID.

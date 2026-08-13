@@ -26,5 +26,5 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`rsp-web-api escuchando en http://localhost:${PORT}`);
   console.log(`  BOP:   ${process.env.BOP_URL || 'https://rsp.laplaceta.org'}`);
-  console.log(`  Banco: ${process.env.BANK_URL || 'https://api.banco.laplaceta.org'}`);
+  console.log(`  Banco: ${process.env.BANCO_API_URL || process.env.BANK_URL || 'https://api.banco.laplaceta.org'}`);
 });
