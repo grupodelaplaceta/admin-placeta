@@ -1,0 +1,180 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   RSP Web · Estilos de páginas (login, formularios, listas, dl)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.rsp-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  background:
+    radial-gradient(1000px 500px at 100% -10%, var(--bg-radial-1), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, var(--bg-radial-2), transparent 55%),
+    var(--bg);
+}
+.rsp-login-card {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  align-items: center;
+  text-align: center;
+  padding: var(--sp-8);
+}
+.rsp-login-card h1 { margin: 0; font-size: var(--fs-xl); }
+
+.rsp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  text-align: left;
+  width: 100%;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-2);
+}
+.rsp-field input,
+.rsp-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  background: var(--surface);
+  color: var(--text);
+}
+.rsp-field input:focus,
+.rsp-select:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: var(--sh-glow);
+}
+.rsp-select { width: auto; }
+
+.rsp-alert {
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+}
+.rsp-alert-danger { background: var(--danger-soft); border-color: #fecaca; color: var(--danger); }
+
+/* Definiciones (key-value) */
+.rsp-dl { margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.rsp-dl-row { display: grid; grid-template-columns: 140px 1fr; gap: var(--sp-3); align-items: baseline; }
+.rsp-dl-row dt { color: var(--text-3); font-size: var(--fs-sm); }
+.rsp-dl-row dd { margin: 0; display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* Acceso rápido (dashboard) */
+.rsp-acciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-2); }
+.rsp-accion {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  transition: border-color 0.12s ease, transform 0.08s ease;
+}
+.rsp-accion:hover { border-color: var(--c-primary); color: var(--c-primary); text-decoration: none; transform: translateY(-1px); }
+
+/* Lista de checks (configuración) */
+.rsp-list { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: var(--sp-2); font-size: var(--fs-sm); color: var(--text-2); }
+
+/* Autocompletado de identidades (DIP/EIP) */
+.rsp-autocomplete { position: relative; }
+.rsp-autocomplete input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  background: var(--surface);
+  color: var(--text);
+}
+.rsp-autocomplete input:focus { outline: none; border-color: var(--c-primary); box-shadow: var(--sh-glow); }
+.rsp-autocomplete-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-lg);
+  z-index: 80;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.rsp-autocomplete-list button {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+.rsp-autocomplete-list button:hover { background: var(--surface-2); }
+.rsp-autocomplete-list button .u-mono { margin-left: auto; font-size: var(--fs-xs); }
+
+/* Lista de repartos (titulares/socios/herederos con %) */
+.rsp-repartos { width: 100%; }
+.rsp-reparto-row { display: flex; align-items: center; gap: var(--sp-2); }
+.rsp-reparto-buscador { flex: 1; }
+.rsp-reparto-pct {
+  width: 80px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  background: var(--surface);
+  color: var(--text);
+}
+.rsp-reparto-pct:focus { outline: none; border-color: var(--c-primary); box-shadow: var(--sh-glow); }
+
+/* Barra de progreso de presupuesto */
+.rsp-progress { height: 10px; border-radius: var(--r-full); background: var(--surface-3); overflow: hidden; }
+.rsp-progress-bar { height: 100%; background: var(--grad); border-radius: var(--r-full); transition: width 0.3s ease; }
+
+/* Rejilla de tarjetas bancarias */
+.rsp-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-4); }
+.rsp-card-no-pad { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+.rsp-card-visual { position: relative; aspect-ratio: 1.586; overflow: hidden; }
+.rsp-card-visual img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.rsp-card-visual-veil {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.42); color: #fff; font-weight: 800; letter-spacing: 0.04em;
+  font-size: var(--fs-md); text-transform: uppercase;
+}
+.rsp-card-visual.is-frozen img { filter: grayscale(0.65); }
+.rsp-card-visual-body {
+  position: absolute; inset: 0; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between;
+  color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.rsp-card-visual-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.rsp-card-visual-row .rsp-badge { text-shadow: none; }
+.rsp-card-visual-num { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.08em; font-family: var(--font-mono); }
+.rsp-card-visual-foot { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-xs); opacity: 0.92; }
+
+.rsp-cardvisual-actions { display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4) 0; }
+.rsp-cardvisual-meta {
+  display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2);
+  margin: var(--sp-3) var(--sp-4) var(--sp-4); padding: var(--sp-3); border-radius: var(--r-md); background: var(--surface-2);
+}
+.rsp-cardvisual-meta div { display: flex; flex-direction: column; gap: 2px; }
+.rsp-cardvisual-meta dt { margin: 0; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-3); }
+.rsp-cardvisual-meta dd { margin: 0; font-weight: 700; }

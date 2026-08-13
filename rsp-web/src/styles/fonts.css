@@ -1,0 +1,15 @@
+/* Plus Jakarta Sans — fuente de marca (UI + PDF). */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/PlusJakartaSans-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600 800;
+  font-display: swap;
+  src: url('/fonts/PlusJakartaSans-Bold.ttf') format('truetype');
+}

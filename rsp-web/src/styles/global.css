@@ -1,0 +1,89 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   RSP Web · Estilos globales
+   Basado en tokens.css. Sin estilos ad-hoc en componentes.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-md);
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 100% -10%, var(--bg-radial-1), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, var(--bg-radial-2), transparent 55%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--c-primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-3);
+  background-clip: content-box;
+}
+
+/* Utilidades mínimas compartidas */
+.u-muted { color: var(--text-3); }
+.u-mono { font-family: var(--font-mono); font-size: var(--fs-sm); }
+.u-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.u-stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.u-row { display: flex; align-items: center; gap: var(--sp-3); }
+.u-spread { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.u-wrap { flex-wrap: wrap; }
+
+/* Animaciones */
+@keyframes rsp-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rsp-fade-up {
+  animation: rsp-fade-up 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
