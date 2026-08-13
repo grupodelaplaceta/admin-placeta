@@ -870,3 +870,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
 @media(max-width:768px){
   .sidebar.open{z-index:120 !important}
 }
+
+/* ── ORDENADOR (puntero fino): el menú lateral SIEMPRE visible ─────────────
+   En un PC (ratón/trackpad) el sidebar NO debe desaparecer tras el ☰ aunque
+   la ventana sea estrecha o haya escalado de pantalla (p.ej. Windows 125-200%).
+   Solo los dispositivos táctiles usan el drawer móvil. */
+@media (max-width: 768px) and (pointer: fine) {
+  .sidebar { transform: none !important; left: 0 !important; }
+  .sidebar.open { transform: none !important; left: 0 !important; }
+  .hamburger { display: none !important; }
+  .sidebar-overlay { display: none !important; }
+  .main-content { margin-left: var(--sidebar-w) !important; }
+  .content-header { left: 0 !important; }
+}
