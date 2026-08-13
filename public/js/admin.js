@@ -1,6 +1,19 @@
 // ── Sidebar toggle ────────────────────────────────────────────────────────
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
+  const sb = document.getElementById('sidebar');
+  const open = sb.classList.toggle('open');
+  if (open && window.innerWidth <= 768) {
+    // Refuerzo: si pasada la transición (360ms) el drawer sigue fuera de
+    // pantalla (navegador que no aplica el transform del CSS), se fuerza por
+    // JS. En navegadores normales la transición ya lo dejó en 0 y no se toca.
+    setTimeout(() => {
+      if (sb.classList.contains('open') && sb.getBoundingClientRect().left < 0) {
+        sb.style.transform = 'translateX(0)';
+      }
+    }, 360);
+  } else if (!open) {
+    sb.style.transform = '';
+  }
 }
 
 // ── apiFetch con manejo de errores RSP ────────────────────────────────────

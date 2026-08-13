@@ -863,11 +863,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
 /* ── Sidebar móvil: backdrop para cerrar el drawer al tocar fuera ───────── */
 .sidebar-overlay{display:none}
 @media(max-width:768px){
-  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(2,6,23,.55);z-index:30;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  /* z-index 70: por ENCIMA del header fijo (z60) para que, al abrir el drawer,
+     TODO quede atenuado excepto el menú (el menú nunca queda "por debajo" de
+     los elementos del header: búsqueda, campana, chip de usuario). */
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(2,6,23,.55);z-index:70;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
   .sidebar.open ~ .sidebar-overlay{display:block}
 }
 
 /* ── Fix: garantizar que el drawer móvil se abra (sin que nada lo pise) ── */
 @media(max-width:768px){
   .sidebar.open{transform:translateX(0) !important;left:0 !important}
+}
+/* Refuerzo: aunque algún navegador no aplique el transform anterior, el
+   drawer queda SIEMPRE por encima de todo el contenido (incluido el header). */
+@media(max-width:768px){
+  .sidebar.open{z-index:120 !important}
 }
