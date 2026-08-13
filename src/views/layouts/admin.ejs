@@ -172,6 +172,7 @@
         <% } else { %>
         <span class="badge-entidad">🏛️ RSP</span>
         <% } %>
+        <span class="version-chip" title="Versión del panel (cambia en cada actualización — si no la ves al recargar, es caché del navegador)">v<%= typeof assetsV !== 'undefined' ? assetsV.slice(0,5) : '' %></span>
 
         <!-- Buscador global de ciudadanos (estilo agente bancario) -->
         <div class="global-search" id="globalSearch">

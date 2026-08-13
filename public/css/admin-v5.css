@@ -223,6 +223,7 @@ details.demo-login summary::before{content:'🔐 '}
 .hamburger{display:none;background:var(--s);border:1px solid var(--l);font-size:19px;cursor:pointer;color:var(--t);padding:6px 10px;border-radius:10px;transition:all .15s}
 .hamburger:hover{background:var(--bg2);color:var(--p)}
 .badge-entidad{padding:4px 13px;border-radius:50px;font-size:9px;font-weight:800;background:#f0ecff;color:#6d28d9;text-transform:uppercase;letter-spacing:.4px}
+.version-chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:50px;border:1px solid currentColor;opacity:.55;letter-spacing:.5px;flex-shrink:0;white-space:nowrap}
 .content-body{padding:26px 28px;flex:1;max-width:1600px;width:100%;margin:0 auto}
 
 /* ── Content header extras ───────────────────── */
