@@ -893,4 +893,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
 /* Tablas con scroll interno en anchos estrechos (evita desbordar la página) */
 @media (max-width: 768px) {
   .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Botones flex del hero: permiten encogerse y el texto envuelve en ventanas estrechas */
+  .rsp-btn, .rsp-btn-primary, .rsp-btn-secondary, .rsp-btn-outline { min-width: 0; }
+  .rsp-btn .rsp-btn-text { white-space: normal; overflow-wrap: anywhere; }
+  .rsp-hero-actions, .rsp-acciones { flex-wrap: wrap; }
 }
