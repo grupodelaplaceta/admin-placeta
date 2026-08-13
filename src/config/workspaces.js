@@ -183,10 +183,21 @@ const WORKSPACES = {
         ]
       },
       {
-        titulo: '📥 Trámites y bandeja',
+        titulo: '📥 Trabajo',
         enlaces: [
           { texto: 'Bandeja de trabajo', url: '/rsp/trabajo', icono: '🗂️' },
           { texto: 'Trámites', url: '/rsp/tramites', icono: '📋' },
+          { texto: 'Incidencias', url: '/rsp/incidencias', icono: '⚠️' },
+          { texto: 'Notificaciones', url: '/rsp/notificaciones', icono: '🔔' },
+        ]
+      },
+      {
+        titulo: '👥 Ciudadanos y entidades',
+        enlaces: [
+          { texto: 'Registro maestro', url: '/rsp/ciudadanos-maestros', icono: '🪪' },
+          { texto: 'Contexto ciudadano', url: '/rsp/contexto', icono: '🔎' },
+          { texto: 'Bajas y Herencias', url: '/rsp/herencias', icono: '📜' },
+          { texto: 'Expedientes', url: '/rsp/expedientes', icono: '🗂️' },
         ]
       },
       {
@@ -202,18 +213,16 @@ const WORKSPACES = {
         ]
       },
       {
-        titulo: '👥 Personas y herencias',
+        titulo: '🌐 Servicios RSP',
         enlaces: [
-          { texto: 'Registro maestro', url: '/rsp/ciudadanos-maestros', icono: '🪪' },
-          { texto: 'Contexto ciudadano', url: '/rsp/contexto', icono: '🔎' },
-          { texto: 'Bajas y Herencias', url: '/rsp/herencias', icono: '📜' },
-          { texto: 'Expedientes', url: '/rsp/expedientes', icono: '🗂️' },
-          { texto: 'Incidencias', url: '/rsp/incidencias', icono: '⚠️' },
-          { texto: 'Notificaciones', url: '/rsp/notificaciones', icono: '🔔' },
+          { texto: 'Conexiones', url: '/rsp/conexiones', icono: '📡' },
+          { texto: 'Facturación', url: '/rsp/facturacion', icono: '🧾' },
+          { texto: 'Fondos', url: '/rsp/fondos', icono: '💰' },
+          { texto: 'Gastos RSP', url: '/rsp/gastos', icono: '💰' },
         ]
       },
       {
-        titulo: '📜 Marco legal y control',
+        titulo: '📜 Normativa y control',
         enlaces: [
           { texto: 'Centro Normativo (CNIC)', url: '/rsp/normativo', icono: '📜' },
           { texto: 'Auditoría', url: '/rsp/auditoria', icono: '🛡️' },
@@ -222,13 +231,12 @@ const WORKSPACES = {
         ]
       },
       {
-        titulo: '🛠️ Supervisión y desarrollo',
+        titulo: '🛠️ Supervisión',
         enlaces: [
           { texto: 'Banco (config y reversiones)', url: '/rsp/supervision/banco', icono: '🏦' },
           { texto: 'Soporte del banco', url: '/rsp/supervision/soporte', icono: '🎧' },
           { texto: 'Sistema (control)', url: '/rsp/sistema', icono: '🕹️' },
           { texto: 'APIs', url: '/rsp/apis', icono: '🔌' },
-          { texto: 'Gastos RSP', url: '/rsp/gastos', icono: '💰' },
         ]
       }
     ]

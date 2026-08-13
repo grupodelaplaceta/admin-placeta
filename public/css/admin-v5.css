@@ -846,3 +846,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
   .breadcrumb-link.active{display:inline-flex;align-items:center;gap:4px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .breadcrumb-logo{flex-shrink:0}
 }
+
+/* ── Sidebar: secciones colapsables (acordeón) ─────────────────────────── */
+.nav-section-title{
+  display:flex;align-items:center;gap:6px;width:100%;
+  padding:12px 12px 6px;margin:0;border:0;background:none;cursor:pointer;
+  font-family:inherit;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;
+  color:rgba(255,255,255,.42);text-align:left;border-radius:8px;transition:background .15s;
+}
+.nav-section-title:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.9)}
+.nav-section-title .chevron{margin-left:auto;font-size:11px;opacity:.6;transition:transform .18s;flex-shrink:0}
+.nav-section.collapsed .nav-section-title .chevron{transform:rotate(-90deg)}
+.nav-section-items{overflow:hidden}
+.nav-section.collapsed .nav-section-items{display:none}
