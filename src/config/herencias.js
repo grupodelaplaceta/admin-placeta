@@ -213,7 +213,13 @@ export async function crearTestamento({ dip, nombre = '', herederos = [], bienes
 
 export async function listarHerencias(filtros = {}) {
   const db = await listarDB(T_HERENCIAS, filtros);
-  if (db && db.length > 0) return db;
+  if (db && db.length > 0) {
+    // Mezcla campos de sesión/memoria (p.ej. tramite_id) sobre la fila de DB
+    return db.map(row => {
+      const mem = memHerencias.find(h => h.id === row.id);
+      return mem ? { ...row, ...mem } : row;
+    });
+  }
   return [...memHerencias].reverse();
 }
 
@@ -221,7 +227,11 @@ export async function getHerencia(id) {
   if (supabase) {
     try {
       const { data } = await supabase.from(T_HERENCIAS).select('*').eq('id', id).maybeSingle();
-      if (data) return data;
+      if (data) {
+        // Mezcla campos en memoria (tramite_id, etc.) sobre la fila de DB
+        const mem = memHerencias.find(h => h.id === id);
+        return mem ? { ...data, ...mem } : data;
+      }
     } catch { /* memoria */ }
   }
   return memHerencias.find(h => h.id === id) || null;
@@ -253,6 +263,38 @@ export async function iniciarHerencia({ causante_dip, causante_nombre = '', moti
   };
   memHerencias.push(herencia);
   await insertDB(T_HERENCIAS, herencia);
+
+  // ── Integración con el MOTOR DE TRÁMITES ────────────────────────────────
+  // Toda herencia sigue el flujo estándar de trámite (presentado → validación
+  // → revisión → subsanación → resolución → FIRMA MÚLTIPLE de herederos →
+  // ejecución/reparto → cierre), con las mejoras del motor (firma múltiple,
+  // requisitos de subsanación, SLA/plazos, silencio, expediente vinculado).
+  try {
+    const { crearTramite, avanzarTramite } = await import('./tramites.js');
+    const herederosActivos = (herederos || []).filter(h => h.situacion !== 'baja' && h.situacion !== 'inexistente');
+    const representante = herederosActivos[0] || { dip: causante_dip, nombre: causante_nombre };
+    const tramite = await crearTramite({
+      tipo: 'herencia',
+      titulo: `Sucesión de ${causante_nombre || causante_dip}`,
+      solicitante_dip: representante.dip,
+      solicitante_nombre: representante.nombre || null,
+      entidad_eip: null,
+      entidad_nombre: null,
+      // Los herederos ACTIVOS firman el acuerdo de sucesión (firma múltiple)
+      firmantes: herederosActivos,
+      herencia_id: herencia.id,
+      datos: {
+        causante_dip, causa: motivo,
+        herederos: (herederos || []).map(h => `${h.nombre || h.dip} (${h.situacion || 'activo'})`).join(', '),
+      },
+    }, autor);
+    herencia.tramite_id = tramite.id;
+    // Se presenta automáticamente (abre expediente y notifica)
+    await avanzarTramite(tramite.id, { accion: 'presentar' }, autor).catch(() => {});
+    await upsertDB(T_HERENCIAS, herencia);
+  } catch (e) {
+    console.warn('[Herencias] No se pudo crear el trámite vinculado:', e.message);
+  }
   return herencia;
 }
 

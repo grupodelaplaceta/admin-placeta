@@ -21,6 +21,17 @@
 </div>
 <% } %>
 
+<% if (h.tramite_id) { %>
+<a href="/rsp/tramites/<%= h.tramite_id %>" style="display:flex;align-items:center;gap:12px;margin:14px 0;padding:14px 16px;border:1px solid rgba(139,92,246,.35);border-radius:14px;background:rgba(139,92,246,.08);text-decoration:none;color:inherit">
+  <span style="font-size:24px">📜</span>
+  <div style="flex:1;min-width:0">
+    <div style="font-size:13px;font-weight:800">Trámite de sucesión vinculado · <span style="color:var(--p)"><%= h.tramite_id %></span></div>
+    <div style="font-size:11px;color:#666;margin-top:2px">Sigue el flujo estándar: Presentación → Validación → Revisión → Subsanación → Resolución → Firma múltiple de herederos (PlacetaID Móvil) → Reparto y transmisión → Cierre</div>
+  </div>
+  <span class="btn btn-sm btn-primary" style="flex-shrink:0">Ver trámite →</span>
+</a>
+<% } %>
+
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
   <!-- Herederos -->
   <div class="table-container">

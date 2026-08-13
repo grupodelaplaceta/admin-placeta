@@ -351,6 +351,43 @@ export const TRAMITES = {
       ejecucion: [{ id: 'confirmar', label: 'Confirmar pago', icono: 'check_circle', rol: 'admin' }],
     },
   },
+  herencia: {
+    id: 'herencia', nombre: 'Sucesión / Herencia', icono: '📜', servicio: 'herencias',
+    descripcion: 'Proceso de sucesión: transmisión de bienes, participaciones y derechos a los herederos.',
+    color: '#8b5cf6',
+    pasos: [
+      { id: 'inicio', titulo: 'Apertura' }, { id: 'datos', titulo: 'Datos' },
+      { id: 'docs', titulo: 'Documentación' }, { id: 'validacion', titulo: 'Validación' },
+      { id: 'revision', titulo: 'Revisión' }, { id: 'subsanacion', titulo: 'Subsanación' },
+      { id: 'resolucion', titulo: 'Resolución' }, { id: 'firma', titulo: 'Firmas (herederos)' },
+      { id: 'ejecucion', titulo: 'Transmisión y reparto' }, { id: 'cerrado', titulo: 'Cierre' },
+    ],
+    documentos: ['certificado_defuncion', 'testamento', 'inventario_bienes'],
+    campos: [
+      { key: 'causante_dip', label: 'Causante (DIP)', tipo: 'dip', obligatorio: true },
+      { key: 'herederos', label: 'Herederos', tipo: 'text', obligatorio: true },
+    ],
+    acciones: {
+      borrador: [{ id: 'presentar', label: 'Iniciar proceso de sucesión', icono: 'send', rol: 'solicitante', nivel: 'accion' }],
+      presentado: [{ id: 'iniciar_validacion', label: 'Iniciar validación', icono: 'fact_check', rol: 'admin' }],
+      validacion: [{ id: 'pasar_revision', label: 'Pasar a revisión', icono: 'manage_search', rol: 'admin' }],
+      revision: [
+        { id: 'aprobar', label: 'Aprobar sucesión', icono: 'check_circle', rol: 'admin', nivel: 'accion' },
+        { id: 'subsanar', label: 'Solicitar subsanación', icono: 'published_with_changes', rol: 'admin' },
+        { id: 'rechazar', label: 'Rechazar', icono: 'cancel', rol: 'admin' },
+      ],
+      subsanacion: [{ id: 'aportar_documentos', label: 'Aportar documentación', icono: 'upload_file', rol: 'solicitante', nivel: 'accion' }],
+      resolucion: [{ id: 'emitir_firma', label: 'Enviar a firma (herederos — PlacetaID Móvil)', icono: 'draw', rol: 'admin', nivel: 'accion' }],
+      firma: [
+        { id: 'verificar_firma', label: 'Comprobar firmas en PlacetaID', icono: 'sync', rol: 'admin' },
+        { id: 'reenviar_firma', label: 'Reenviar a PlacetaID Móvil', icono: 'send', rol: 'admin' },
+        { id: 'confirmar_firma', label: 'Confirmar firma', icono: 'verified', rol: 'sistema' },
+      ],
+      ejecucion: [{ id: 'transmitir_repartir', label: 'Transmitir y repartir patrimonio', icono: 'share', rol: 'admin', nivel: 'accion' }],
+    },
+    plazos: { revision: 20, subsanacion: 15, firma: 10 },
+    silencio: 'escalado',
+  },
 };
 
 /* ── Persistencia ──────────────────────────────────────────────── */
@@ -573,8 +610,9 @@ export async function crearTramite(datos, autor = {}) {
     plazos: getPlazosTipo(datos.tipo),
     silencio: getSilencioTipo(datos.tipo),
     requisitos_pendientes: [],
-    firmantes: [],
+    firmantes: (datos.firmantes || []).map(f => ({ dip: f.dip, nombre: f.nombre || f.dip, estado: 'pendiente', docId: null, enviado: false })),
     firmas_completas: 0,
+    herencia_id: datos.herencia_id || null,
     resolucion: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -704,6 +742,17 @@ export async function avanzarTramite(id, { accion, nota = '', datos = {} }, auto
       return 'Trámite justificado y cerrado';
     },
     cerrar: async () => { t.estado = 'cerrado'; t.siguiente_accion = 'Trámite completado'; return 'Trámite cerrado'; },
+    transmitir_repartir: async () => {
+      // Herencia: ejecuta el reparto/transmisión real del patrimonio y cierra.
+      if (t.herencia_id) {
+        const { repartirPatrimonioAutomatico } = await import('./herencias.js');
+        await repartirPatrimonioAutomatico(t.herencia_id, autor);
+      }
+      t.estado = 'cerrado';
+      t.siguiente_accion = 'Trámite completado';
+      await crearNotificacion({ nivel: 'completado', titulo: `${t.id} finalizado`, mensaje: 'Patrimonio transmitido y repartido. Sucesión cerrada.', servicio: 'rsp', destinatario_dip: t.solicitante_dip, objeto_tipo: 'TRAMITE', objeto_id: t.id, enlace: `/rsp/tramites/${t.id}` });
+      return 'Patrimonio transmitido y repartido. Trámite cerrado.';
+    },
     rechazar: async () => {
       t.estado = 'rechazado';
       t.resolucion = { estado: 'rechazado', fecha: new Date().toISOString(), por: autor.nombre || autor.dip, nota: nota || 'Documentación insuficiente' };

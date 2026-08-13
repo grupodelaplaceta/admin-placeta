@@ -24,7 +24,9 @@ jobs:
       - name: Aplicar migraciones a Supabase
         env:
           SUPABASE_DB_CONNECTION: ${{ secrets.SUPABASE_DB_CONNECTION }}
-        run: node scripts/aplicar-migraciones.mjs
+        run: |
+          node scripts/aplicar-migraciones.mjs docs/migrar-rsp-core.sql
+          node scripts/aplicar-migraciones.mjs docs/migrar-herencias-tramite.sql
 
       - name: Tests de seguridad (scoping)
         run: npm test
