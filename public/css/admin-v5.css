@@ -859,3 +859,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
 .nav-section.collapsed .nav-section-title .chevron{transform:rotate(-90deg)}
 .nav-section-items{overflow:hidden}
 .nav-section.collapsed .nav-section-items{display:none}
+
+/* ── Sidebar móvil: backdrop para cerrar el drawer al tocar fuera ───────── */
+.sidebar-overlay{display:none}
+@media(max-width:768px){
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(2,6,23,.55);z-index:30;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+  .sidebar.open ~ .sidebar-overlay{display:block}
+}
+
+/* ── Fix: garantizar que el drawer móvil se abra (sin que nada lo pise) ── */
+@media(max-width:768px){
+  .sidebar.open{transform:translateX(0) !important;left:0 !important}
+}

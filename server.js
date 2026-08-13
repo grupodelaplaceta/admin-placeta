@@ -155,6 +155,10 @@ app.set('views', path.join(__dirname, 'src/views'));
 app.use(ejsLayouts);
 app.set('layout', 'layouts/admin');
 
+// Versión de assets (CSS/JS) — cambia en cada arranque/despliegue para
+// evitar que los navegadores sirvan CSS/JS cacheados (menu "viejo")
+const ASSETS_VERSION = Date.now().toString(36);
+
 // Cargar permisos en sesión
 app.use(cargarPermisosUsuario);
 
@@ -164,6 +168,7 @@ app.use((req, res, next) => {
   res.locals.entidad_actual = '';
   res.locals.pathActual = req.path;
   res.locals.anoActual = 2026;
+  res.locals.assetsV = ASSETS_VERSION;
 
   // FASE 12.2 — i18n ES/EN en vistas (t, lang)
   const { t: traducir, langFromReq } = i18n;

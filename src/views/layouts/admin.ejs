@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/admin-v5.css">
-  <link rel="stylesheet" href="/css/rsp-vivid.css">
+  <link rel="stylesheet" href="/css/admin-v5.css?v=<%= typeof assetsV !== 'undefined' ? assetsV : '' %>">
+  <link rel="stylesheet" href="/css/rsp-vivid.css?v=<%= typeof assetsV !== 'undefined' ? assetsV : '' %>">
   <link rel="icon" href="/img/favicon-rsp.png" type="image/png">
 </head>
 <body class="<%= workspaceActivo ? 'workspace-active' : '' %><%= workspaceActivo && workspaceActivo.id === 'rsp' ? ' rsp-theme' : '' %>">
@@ -140,6 +140,7 @@
       </div>
     </div>
   </aside>
+  <div class="sidebar-overlay" onclick="toggleSidebar()" aria-hidden="true"></div>
 
   <!-- ═══ MAIN CONTENT ═══ -->
   <main class="main-content" id="contenido-principal">
@@ -221,7 +222,7 @@
     <div class="modal-box" id="modalBox"></div>
   </div>
 
-  <script src="/js/admin.js"></script>
+  <script src="/js/admin.js?v=<%= typeof assetsV !== 'undefined' ? assetsV : '' %>"></script>
   <script>
     // ── Helpers globales UI ─────────────────────────────────────────
     function toast(msj, tipo) {
@@ -242,29 +243,29 @@
     function cerrarModal() { document.getElementById('modalRoot').classList.remove('open'); }
     document.getElementById('modalRoot').addEventListener('click', function (e) { if (e.target === this) cerrarModal(); });
 
-    // ── Sidebar: secciones colapsables (acordeón con memoria) ─────────
+    // ── Sidebar: secciones colapsables (solo durante la sesión, nunca rotas) ─
+    // Por defecto TODAS las secciones están expandidas. Si el usuario colapsa
+    // una, se recuerda durante la sesión (sessionStorage), pero cada nueva
+    // sesión vuelve a expandido. Así el menú nunca aparece roto/colapsado.
     function navStorageKey() {
       const sb = document.getElementById('sidebar');
       return 'rsp-nav-' + (sb && sb.dataset.workspace ? sb.dataset.workspace : 'ws');
     }
-    function navMap() { try { return JSON.parse(localStorage.getItem(navStorageKey()) || '{}'); } catch { return {}; } }
+    function navMap() { try { return JSON.parse(sessionStorage.getItem(navStorageKey()) || '{}'); } catch { return {}; } }
     function toggleNavSection(btn) {
       const sec = btn.closest('.nav-section');
       if (!sec) return;
       const collapsed = sec.classList.toggle('collapsed');
       btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       const map = navMap();
-      map[sec.dataset.seccion] = collapsed;
-      try { localStorage.setItem(navStorageKey(), JSON.stringify(map)); } catch {}
-      // En móvil, mantener abierta la sección al pulsar no es necesaria
-      if (window.innerWidth <= 768) return;
+      if (collapsed) map[sec.dataset.seccion] = true; else delete map[sec.dataset.seccion];
+      try { sessionStorage.setItem(navStorageKey(), JSON.stringify(map)); } catch {}
     }
-    // Aplicar estado guardado; la sección con el ítem activo siempre abierta
+    // Aplicar solo lo colapsado en esta sesión; nunca colapsar por defecto.
     (function initNavSections() {
+      const map = navMap();
       document.querySelectorAll('.nav-section').forEach(function (sec) {
-        const map = navMap();
-        const tieneActivo = !!sec.querySelector('.nav-item.active');
-        if (!tieneActivo && map[sec.dataset.seccion]) {
+        if (map[sec.dataset.seccion]) {
           sec.classList.add('collapsed');
           const btn = sec.querySelector('.nav-section-title');
           if (btn) btn.setAttribute('aria-expanded', 'false');
