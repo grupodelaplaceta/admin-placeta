@@ -162,18 +162,22 @@ details.demo-login summary::before{content:'🔐 '}
 .sidebar-nav::-webkit-scrollbar{width:5px}
 .sidebar-nav::-webkit-scrollbar-track{background:transparent}
 .sidebar-nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:4px}
-.nav-section{margin-bottom:4px}
-.nav-section-title{
-  display:flex;align-items:center;gap:6px;padding:16px 12px 6px;
-  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;
-  color:rgba(255,255,255,.35);
+.nav-section{margin-bottom:2px}
+.nav-section-label{
+  display:flex;align-items:center;gap:6px;padding:16px 10px 6px;
+  font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.2px;
+  color:rgba(255,255,255,.38);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.nav-section-label::before{
+  content:'';width:4px;height:12px;border-radius:2px;background:var(--ws-color,#8b5cf6);flex-shrink:0;opacity:.7;
 }
 .nav-item{
-  display:flex;align-items:center;gap:11px;padding:9px 12px;
-  color:rgba(255,255,255,.62);font-size:13px;font-weight:500;text-decoration:none;
+  display:flex;align-items:center;gap:11px;padding:10px 12px;
+  color:rgba(255,255,255,.66);font-size:13px;font-weight:500;text-decoration:none;
   border-left:3px solid transparent;border-radius:10px;position:relative;transition:all .15s;
-  margin-bottom:1px;
+  margin-bottom:2px;min-height:38px;line-height:1.2;
 }
+.nav-item:focus-visible{outline:2px solid #a78bfa;outline-offset:-2px}
 .nav-item:hover{background:rgba(255,255,255,.08);color:#fff;transform:translateX(2px)}
 .nav-item.active{
   background:linear-gradient(90deg, rgba(139,92,246,.25) 0%, rgba(139,92,246,.06) 100%);
@@ -846,19 +850,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
   .breadcrumb-link.active{display:inline-flex;align-items:center;gap:4px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .breadcrumb-logo{flex-shrink:0}
 }
-
-/* ── Sidebar: secciones colapsables (acordeón) ─────────────────────────── */
-.nav-section-title{
-  display:flex;align-items:center;gap:6px;width:100%;
-  padding:12px 12px 6px;margin:0;border:0;background:none;cursor:pointer;
-  font-family:inherit;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:1.4px;
-  color:rgba(255,255,255,.42);text-align:left;border-radius:8px;transition:background .15s;
-}
-.nav-section-title:hover{background:rgba(255,255,255,.05);color:rgba(255,255,255,.9)}
-.nav-section-title .chevron{margin-left:auto;font-size:11px;opacity:.6;transition:transform .18s;flex-shrink:0}
-.nav-section.collapsed .nav-section-title .chevron{transform:rotate(-90deg)}
-.nav-section-items{overflow:hidden}
-.nav-section.collapsed .nav-section-items{display:none}
 
 /* ── Sidebar móvil: backdrop para cerrar el drawer al tocar fuera ───────── */
 .sidebar-overlay{display:none}

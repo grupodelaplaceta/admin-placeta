@@ -78,8 +78,8 @@ body.rsp-theme .ws-option{color:rgba(199,197,208,.8)}
 body.rsp-theme .ws-option:hover{background:rgba(139,92,246,.14);color:#fff}
 body.rsp-theme .ws-option.active{background:rgba(139,92,246,.2);color:#fff}
 body.rsp-theme .ws-option-name{color:#e1e0ff}
-body.rsp-theme .nav-section-title{color:rgba(199,197,208,.5)}
-body.rsp-theme .nav-item{color:rgba(199,197,208,.72)}
+body.rsp-theme .nav-section-label{color:rgba(199,197,208,.5)}
+body.rsp-theme .nav-item{color:rgba(199,197,208,.75)}
 body.rsp-theme .nav-item:hover{background:var(--vs-container);color:#fff}
 body.rsp-theme .nav-item.active{
   background:linear-gradient(90deg, rgba(139,92,246,.22), rgba(139,92,246,.04));

@@ -77,10 +77,7 @@
       <% if (workspaceActivo) { %>
         <% workspaceActivo.secciones && workspaceActivo.secciones.forEach(function(seccion) { %>
         <div class="nav-section" data-seccion="<%= seccion.titulo.replace(/[^a-z0-9áéíóúñ]+/gi,'-') %>">
-          <button class="nav-section-title" type="button" onclick="toggleNavSection(this)" aria-expanded="true">
-            <span class="nav-section-name"><%= seccion.titulo %></span>
-            <span class="chevron">▾</span>
-          </button>
+          <div class="nav-section-label"><%= seccion.titulo %></div>
           <div class="nav-section-items">
           <% seccion.enlaces && seccion.enlaces.forEach(function(enlace) { %>
           <a href="<%= enlace.url %>"
@@ -95,7 +92,7 @@
       <% } else { %>
         <!-- Vista global: mostrar acceso rápido a todos los workspaces -->
         <div class="nav-section">
-          <span class="nav-section-title">🏛️ INICIO</span>
+          <div class="nav-section-label">🏛️ INICIO</div>
           <div class="nav-section-items">
           <a href="/dashboard" class="nav-item <%= pathActual === '/dashboard' ? 'active' : '' %>">
             <span class="nav-icon">📊</span>
@@ -105,7 +102,7 @@
         </div>
         <% workspacesDisponibles && workspacesDisponibles.forEach(function(ws) { %>
         <div class="nav-section">
-          <span class="nav-section-title"><%= ws.icono %> <%= ws.nombre %></span>
+          <div class="nav-section-label"><%= ws.icono %> <%= ws.nombre %></div>
           <div class="nav-section-items">
           <% if (ws.secciones && ws.secciones[0]) { %>
             <% ws.secciones[0].enlaces && ws.secciones[0].enlaces.slice(0, 4).forEach(function(enlace) { %>
@@ -242,36 +239,6 @@
     }
     function cerrarModal() { document.getElementById('modalRoot').classList.remove('open'); }
     document.getElementById('modalRoot').addEventListener('click', function (e) { if (e.target === this) cerrarModal(); });
-
-    // ── Sidebar: secciones colapsables (solo durante la sesión, nunca rotas) ─
-    // Por defecto TODAS las secciones están expandidas. Si el usuario colapsa
-    // una, se recuerda durante la sesión (sessionStorage), pero cada nueva
-    // sesión vuelve a expandido. Así el menú nunca aparece roto/colapsado.
-    function navStorageKey() {
-      const sb = document.getElementById('sidebar');
-      return 'rsp-nav-' + (sb && sb.dataset.workspace ? sb.dataset.workspace : 'ws');
-    }
-    function navMap() { try { return JSON.parse(sessionStorage.getItem(navStorageKey()) || '{}'); } catch { return {}; } }
-    function toggleNavSection(btn) {
-      const sec = btn.closest('.nav-section');
-      if (!sec) return;
-      const collapsed = sec.classList.toggle('collapsed');
-      btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      const map = navMap();
-      if (collapsed) map[sec.dataset.seccion] = true; else delete map[sec.dataset.seccion];
-      try { sessionStorage.setItem(navStorageKey(), JSON.stringify(map)); } catch {}
-    }
-    // Aplicar solo lo colapsado en esta sesión; nunca colapsar por defecto.
-    (function initNavSections() {
-      const map = navMap();
-      document.querySelectorAll('.nav-section').forEach(function (sec) {
-        if (map[sec.dataset.seccion]) {
-          sec.classList.add('collapsed');
-          const btn = sec.querySelector('.nav-section-title');
-          if (btn) btn.setAttribute('aria-expanded', 'false');
-        }
-      });
-    })();
 
     // ── Campana de notificaciones ───────────────────────────────────
     const NIVEL_EMOJI = { accion: '🔴', pendiente: '🟡', info: '🔵', completado: '🟢' };

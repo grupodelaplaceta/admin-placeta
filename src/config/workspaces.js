@@ -210,15 +210,7 @@ const WORKSPACES = {
           { texto: 'Nóminas', url: '/rsp/nominas', icono: '📄' },
           { texto: 'Contabilidad', url: '/rsp/contabilidad', icono: '📒' },
           { texto: 'Fundación', url: '/rsp/fundacion', icono: '🏛️' },
-        ]
-      },
-      {
-        titulo: '🌐 Servicios RSP',
-        enlaces: [
-          { texto: 'Conexiones', url: '/rsp/conexiones', icono: '📡' },
-          { texto: 'Facturación', url: '/rsp/facturacion', icono: '🧾' },
-          { texto: 'Fondos', url: '/rsp/fondos', icono: '💰' },
-          { texto: 'Gastos RSP', url: '/rsp/gastos', icono: '💰' },
+          { texto: 'Gastos RSP', url: '/rsp/gastos', icono: '💸' },
         ]
       },
       {
