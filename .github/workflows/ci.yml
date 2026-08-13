@@ -1,0 +1,27 @@
+# CI de rsp-web: compila el SPA y ejecuta los tests en cada push a master.
+name: rsp-web CI
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-y-testear:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Compilar (tsc + vite)
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+

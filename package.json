@@ -1,29 +1,37 @@
 {
-  "name": "admin-placeta",
+  "name": "rsp-web",
   "version": "1.0.0",
-  "description": "Plataforma de Administración Unificada de La Placeta",
-  "main": "server.js",
+  "private": true,
+  "description": "RSP — Panel de administración de la Red de Servicios de La Placeta (SPA segura y homogénea)",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node --test tests/seguridad.test.mjs"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.0",
-    "bcryptjs": "^3.0.3",
-    "cookie-parser": "^1.4.7",
-    "cookie-session": "^2.1.1",
     "cors": "^2.8.6",
-    "dotenv": "^17.4.1",
-    "ejs": "^3.1.10",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "express-ejs-layouts": "^2.5.1",
-    "express-rate-limit": "^8.3.2",
-    "helmet": "^8.1.0",
-    "jsonwebtoken": "^9.0.3",
-    "pdfkit": "^0.19.1",
-    "pg": "^8.23.0",
-    "uuid": "^11.1.0"
+    "jspdf": "^2.5.2",
+    "lucide-react": "^0.454.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.5.0",
+    "@testing-library/react": "^16.0.1",
+    "@types/node": "^22.5.0",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "jsdom": "^25.0.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.4.3",
+    "vitest": "^2.0.5"
   }
 }
