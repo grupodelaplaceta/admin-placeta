@@ -7,6 +7,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { authRouter } from './auth.js';
+import { createApiRouter } from './api.js';
 import { calcularContribuyentes, calcularReconciliacion } from './tributos.js';
 
 const BOP_URL = process.env.BOP_URL || 'https://rsp.laplaceta.org';
@@ -39,6 +40,7 @@ export function createApp() {
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
   app.use(authRouter());
+  app.use(createApiRouter({ getBankState: obtenerEstadoBanco }));
 
   // ── Boletín Oficial: CNIC vigentes + tarifas + subvenciones ────────
   app.get('/api/transparencia', async (_req, res) => {
