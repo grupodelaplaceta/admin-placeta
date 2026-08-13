@@ -6,10 +6,11 @@ import { ApiError } from '../api/client';
 import { Icon } from '../components/icons';
 
 export default function Login() {
-  const { loginDemo } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [dip, setDip] = useState('23749931M');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,7 +21,7 @@ export default function Login() {
     setError(null);
     setLoading(true);
     try {
-      await loginDemo(dip.trim());
+      await login(dip.trim(), password);
       navigate(from, { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No se pudo iniciar sesión');
@@ -45,12 +46,23 @@ export default function Login() {
             required
           />
         </label>
+        <label className="rsp-field">
+          <span>Contraseña</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            required
+          />
+        </label>
         {error && <div className="rsp-alert rsp-alert-danger">{error}</div>}
         <Button type="submit" disabled={loading} icon="lock">
           {loading ? 'Verificando…' : 'Iniciar sesión'}
         </Button>
         <p className="u-muted" style={{ fontSize: 'var(--fs-xs)' }}>
-          La autenticación real se realiza contra PlacetaID + 2FA. En local se usa acceso demo.
+          Acceso con credenciales verificadas contra el BFF (sesión httpOnly). En modo demo la contraseña es <code>demo</code>.
         </p>
       </form>
     </div>

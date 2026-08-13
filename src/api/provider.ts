@@ -17,8 +17,8 @@ import type {
 } from '../types';
 
 export interface Provider {
-  /** Autenticación. loginDemo usa el flujo demo (equivale a POST /login/demo). */
-  loginDemo(dip: string): Promise<Session>;
+  /** Autenticación con credenciales (DIP + contraseña). */
+  login(dip: string, password: string): Promise<Session>;
   logout(): Promise<void>;
   me(): Promise<Session | null>;
 

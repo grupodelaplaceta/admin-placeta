@@ -28,8 +28,8 @@ function qs(f?: Filtros): string {
 }
 
 export const httpProvider: Provider = {
-  async loginDemo(dip) {
-    return http.post<Session>('/login/demo', { dip });
+  async login(dip, password) {
+    return http.post<Session>('/login', { dip, password });
   },
   async logout() {
     await http.post<void>('/logout');

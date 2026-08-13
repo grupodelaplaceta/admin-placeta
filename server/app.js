@@ -6,7 +6,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { authRouter } from './auth.js';
+import { authRouter, requiereSesion } from './auth.js';
 import { createApiRouter } from './api.js';
 import { calcularContribuyentes, calcularReconciliacion } from './tributos.js';
 
@@ -44,7 +44,17 @@ export function createApp() {
 
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
+
+  // Público: health check (lo usa Vercel / uptime).
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true, app: 'rsp-web-api', time: new Date().toISOString() });
+  });
+
+  // Autenticación: POST /login, POST /logout, GET /api/sesion.
   app.use(authRouter());
+
+  // A partir de aquí, todo exige sesión válida (cookie httpOnly).
+  app.use(requiereSesion);
   app.use(createApiRouter({ getBankState: obtenerEstadoBanco }));
 
   // ── Boletín Oficial: CNIC vigentes + tarifas + subvenciones ────────
@@ -116,10 +126,6 @@ export function createApp() {
     } catch (e) {
       res.status(502).json({ error: e.message });
     }
-  });
-
-  app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, app: 'rsp-web-api', time: new Date().toISOString() });
   });
 
   return app;

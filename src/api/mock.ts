@@ -419,12 +419,14 @@ function filtro<T>(items: T[], f?: Filtros): T[] {
 }
 
 export const mockProvider: Provider = {
-  async loginDemo() {
+  async login(_dip, password) {
+    if (password !== 'demo') throw new Error('Contraseña incorrecta (modo demo: usa "demo")');
     return SESSION;
   },
   async logout() {},
   async me() {
-    return SESSION;
+    // En modo demo no hay sesión persistente: siempre se pasa por el login.
+    return null;
   },
   async dashboard(): Promise<DashboardStats> {
     return {

@@ -6,7 +6,7 @@ import type { Session, Entidad } from '../types';
 interface AuthState {
   session: Session | null;
   loading: boolean;
-  loginDemo: (dip: string) => Promise<void>;
+  login: (dip: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   tienePermiso: (entidad: Entidad, permiso: string) => boolean;
   puedeEntidad: (entidad: Entidad) => boolean;
@@ -36,8 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const loginDemo = useCallback(async (dip: string) => {
-    const s = await provider.loginDemo(dip);
+  const login = useCallback(async (dip: string, password: string) => {
+    const s = await provider.login(dip, password);
     setSession(s);
   }, []);
 
@@ -51,12 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {
       session,
       loading,
-      loginDemo,
+      login,
       logout,
       tienePermiso: (entidad, permiso) => tienePermiso(roles, entidad, permiso),
       puedeEntidad: (entidad) => getEntidadesPermitidas(roles).includes(entidad),
     };
-  }, [session, loading, loginDemo, logout]);
+  }, [session, loading, login, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
