@@ -882,4 +882,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
   .sidebar-overlay { display: none !important; }
   .main-content { margin-left: var(--sidebar-w) !important; }
   .content-header { left: 0 !important; }
+  /* Cabecera compacta en ventana estrecha (para que no desborde junto al menú) */
+  .content-header { gap: 8px; padding: 0 12px; }
+  .global-search { min-width: 0; max-width: 150px; }
+  .global-search-input { min-width: 0; }
+  .header-actions { gap: 6px; }
+  .user-chip .uc-role { display: none; }
+}
+
+/* Tablas con scroll interno en anchos estrechos (evita desbordar la página) */
+@media (max-width: 768px) {
+  .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
