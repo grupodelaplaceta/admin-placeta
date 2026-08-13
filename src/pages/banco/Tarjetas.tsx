@@ -1,29 +1,7 @@
 import { useEffect, useState } from 'react';
 import { provider } from '../../api';
-import { Badge, Button, Card, Empty, Field, KPI, Modal, PageHeader, Spinner, useToast } from '../../components/ui';
+import { Badge, Button, Empty, Field, KPI, Modal, PageHeader, Spinner, Table, useToast, type Column } from '../../components/ui';
 import type { TarjetaDigital } from '../../types';
-
-function CardVisual({ t }: { t: TarjetaDigital }) {
-  const img = t.promoPhysical ? '/img/promocard.jpg' : '/img/vitualcard.jpg';
-  const numero = t.cardNumber.replace(/\D/g, '').padStart(6, '0').slice(-6);
-  return (
-    <div className={`rsp-card-visual${t.frozen ? ' is-frozen' : ''}`}>
-      <img src={img} alt={t.alias} draggable={false} />
-      {t.frozen && <div className="rsp-card-visual-veil">Congelada</div>}
-      <div className="rsp-card-visual-body">
-        <div className="rsp-card-visual-row">
-          <strong>{t.alias}</strong>
-          <Badge tone={t.tier === 'Business' ? 'info' : 'brand'}>{t.tier}</Badge>
-        </div>
-        <div className="rsp-card-visual-num">Nº {numero}</div>
-        <div className="rsp-card-visual-foot">
-          <span>{t.promoPhysical ? 'Promo Card' : 'Virtual'} · cuenta {t.accountId || 'libre'}</span>
-          <span>PIN {t.pin ?? '****'}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function Tarjetas() {
   const [items, setItems] = useState<TarjetaDigital[] | null>(null);
@@ -69,11 +47,44 @@ export default function Tarjetas() {
     setLimiteCard(t);
   }
 
+  const columns: Column<TarjetaDigital>[] = [
+    {
+      key: 'tarjeta', header: 'Tarjeta', render: (t) => {
+        const img = t.promoPhysical ? '/img/promocard.jpg' : '/img/vitualcard.jpg';
+        const num = t.cardNumber.replace(/\D/g, '').padStart(6, '0').slice(-6);
+        return (
+          <span className="u-row" style={{ gap: 10 }}>
+            <img src={img} alt={t.alias} className="rsp-card-thumb" width={52} height={33} />
+            <span>
+              <strong>{t.alias}</strong>
+              <br />
+              <span className="u-mono u-muted">Nº {num}</span>
+            </span>
+          </span>
+        );
+      },
+    },
+    { key: 'cuenta', header: 'Cuenta asociada', render: (t) => <span className="u-mono">{t.accountId || 'libre'}</span> },
+    { key: 'tier', header: 'Nivel', render: (t) => <Badge tone={t.tier === 'Business' ? 'info' : 'brand'}>{t.tier}</Badge> },
+    { key: 'limites', header: 'Límites', render: (t) => <span className="u-muted">contactless {t.contactlessLimitPz ?? 500} · semanal {t.weeklyLimitPz ?? 1000} Pz</span> },
+    { key: 'estado', header: 'Estado', render: (t) => t.frozen ? <Badge tone="warning">congelada</Badge> : <Badge tone="success">activa</Badge> },
+    {
+      key: 'acciones', header: 'Acciones', render: (t) => (
+        <div className="u-row">
+          <Button size="sm" variant={t.frozen ? 'outline' : 'danger'} icon={t.frozen ? 'unlock' : 'lock'} onClick={() => congelar(t)}>
+            {t.frozen ? 'Reactivar' : 'Congelar'}
+          </Button>
+          <Button size="sm" variant="outline" icon="settings" onClick={() => abrirLimites(t)}>Límites</Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
         title="Tarjetas digitales"
-        subtitle="Tarjetas emitidas en el sistema bancario: imagen, límites y congelación."
+        subtitle="Tarjetas emitidas en el sistema bancario: límites y congelación."
         breadcrumb="RSP / Banco"
       />
       <div className="rsp-kpi-grid">
@@ -81,29 +92,12 @@ export default function Tarjetas() {
         <KPI label="Activas" value={activas} icon="check" tone="success" />
         <KPI label="Congeladas" value={congeladas} icon="lock" tone="warning" />
       </div>
-
       {items === null ? (
         <Spinner label="Cargando tarjetas…" />
       ) : items.length === 0 ? (
         <Empty icon="creditCard" title="Sin tarjetas" />
       ) : (
-        <div className="rsp-cardgrid">
-          {items.map((t) => (
-            <Card key={t.id} className="rsp-card-no-pad">
-              <CardVisual t={t} />
-              <div className="rsp-cardvisual-actions">
-                <Button size="sm" variant={t.frozen ? 'outline' : 'danger'} icon={t.frozen ? 'unlock' : 'lock'} onClick={() => congelar(t)}>
-                  {t.frozen ? 'Reactivar' : 'Congelar'}
-                </Button>
-                <Button size="sm" variant="outline" icon="settings" onClick={() => abrirLimites(t)}>Límites</Button>
-              </div>
-              <dl className="rsp-cardvisual-meta">
-                <div><dt>Límite contactless</dt><dd>{t.contactlessLimitPz ?? 500} Pz</dd></div>
-                <div><dt>Límite semanal</dt><dd>{t.weeklyLimitPz ?? 1000} Pz</dd></div>
-              </dl>
-            </Card>
-          ))}
-        </div>
+        <Table columns={columns} rows={items} rowKey={(t) => t.id} />
       )}
 
       <Modal

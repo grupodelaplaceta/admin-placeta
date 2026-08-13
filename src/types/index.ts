@@ -505,3 +505,65 @@ export type AccionCritica = (typeof ACCIONES_CRITICAS)[number];
 export function esAccionCritica(accion: string): boolean {
   return (ACCIONES_CRITICAS as readonly string[]).includes(accion);
 }
+
+/* ── Participación democrática (votaciones, juntas, encuestas) ─────── */
+
+export type RangoDemocratico = 'todos' | 'ciudadania_plena' | 'junior' | 'junta';
+
+export interface Votacion {
+  id: string; // VOT-2026-0001
+  titulo: string;
+  categoria: 'referendum' | 'eleccion' | 'consulta' | 'junta';
+  descripcion: string;
+  reunionId?: string; // junta vinculada (opcional)
+  rango: RangoDemocratico;
+  opciones: string[];
+  estado: 'borrador' | 'abierta' | 'cerrada' | 'publicada';
+  resultado?: 'aprobada' | 'rechazada' | null;
+  aFavor: number;
+  enContra: number;
+  abstenciones: number;
+  totalVotos: number;
+  creadaEn: string;
+  cerradaEn?: string;
+  publicadaEn?: string;
+  bopUrl?: string;
+}
+
+export interface VotoRegistro {
+  id: string;
+  votacionId: string;
+  dip: string;
+  voto: string; // opción elegida
+  timestamp: string;
+  esJunta: boolean; // los votos de la junta nunca se anonimizan
+  anonimo: boolean; // true si ya pasó el plazo de anonimato (30 días)
+}
+
+export interface Junta {
+  id: string; // JUN-2026-0001
+  titulo: string;
+  fecha: string;
+  asistentes: string[];
+  ordenDelDia: string[];
+  votaciones: string[]; // ids de votaciones vinculadas
+  acta: string; // texto del acta
+  actaUrl?: string;
+  estado: 'convocada' | 'celebrada' | 'acta_emitida';
+}
+
+export interface Encuesta {
+  id: string; // ENC-2026-0001
+  titulo: string;
+  pregunta: string;
+  opciones: string[];
+  rango: RangoDemocratico;
+  estado: 'borrador' | 'abierta' | 'cerrada' | 'publicada';
+  respuestas: Record<string, number>; // opción -> nº de respuestas
+  totalRespuestas: number;
+  creadaEn: string;
+  publicadaEn?: string;
+  bopUrl?: string;
+}
+
+export const ANONIMATO_DIAS = 30;

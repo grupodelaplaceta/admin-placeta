@@ -1,14 +1,24 @@
 import { useEffect, useState } from 'react';
 import { provider } from '../../api';
-import { Badge, Empty, PageHeader, Spinner, Table, type Column } from '../../components/ui';
+import { Badge, Button, Empty, PageHeader, Spinner, Table, useToast, type Column } from '../../components/ui';
 import type { Operacion } from '../../types';
 
 export default function Operaciones() {
   const [items, setItems] = useState<Operacion[] | null>(null);
+  const { toast } = useToast();
 
-  useEffect(() => {
-    provider.listarOperaciones().then(setItems).catch(() => setItems([]));
-  }, []);
+  const cargar = () => provider.listarOperaciones().then(setItems).catch(() => setItems([]));
+  useEffect(() => { cargar(); }, []);
+
+  async function revertir(o: Operacion) {
+    try {
+      await provider.revertirOperacion(o.id);
+      toast(`Operación ${o.id} revertida`, 'success');
+      cargar();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    }
+  }
 
   const columns: Column<Operacion>[] = [
     { key: 'id', header: 'Operación', render: (o) => <span className="u-mono">{o.id}</span>, width: '160px' },
@@ -21,13 +31,19 @@ export default function Operaciones() {
         o.inconsistencia ? <Badge tone="danger">{o.inconsistencia}</Badge> : <Badge tone="success">OK</Badge>,
     },
     { key: 'estado', header: 'Estado', render: (o) => <Badge tone={o.estado === 'retenida' ? 'warning' : o.estado === 'rechazada' ? 'danger' : 'success'}>{o.estado}</Badge> },
+    {
+      key: 'acciones', header: 'Acciones', render: (o) =>
+        o.estado === 'retenida' ? (
+          <Button size="sm" variant="danger" icon="x" onClick={() => revertir(o)}>Revertir</Button>
+        ) : <span className="u-muted">—</span>,
+    },
   ];
 
   return (
     <>
       <PageHeader
         title="Operaciones"
-        subtitle="Operation Engine: clasificación y detección de operaciones inconsistentes."
+        subtitle="Operation Engine: clasificación, detección de inconsistencias y reversión de operaciones retenidas."
         breadcrumb="RSP / Control"
       />
       {items === null ? (

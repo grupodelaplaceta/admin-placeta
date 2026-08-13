@@ -61,6 +61,18 @@ export function createApiRouter({ getBankState }) {
       { codigo: 'CNIC-IGF-PF-TIPO-3', etiqueta: 'Tipo IGF personas físicas tramo 3', tipoValor: 'porcentaje', valor: 30, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
       { codigo: 'CNIC-IGF-EMPRESA-TIPO-4', etiqueta: 'Tipo IGF empresas tramo 4', tipoValor: 'porcentaje', valor: 85, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
     ],
+    votaciones: [
+      { id: 'VOT-2026-0001', titulo: 'Presupuestos participativos 2026', categoria: 'referendum', descripcion: 'Aprobación del presupuesto anual.', rango: 'ciudadania_plena', opciones: ['A favor', 'En contra', 'Abstención'], estado: 'abierta', resultado: null, aFavor: 12, enContra: 3, abstenciones: 2, totalVotos: 17, creadaEn: AHORA() },
+    ],
+    votos: [
+      { id: 'RGV-1', votacionId: 'VOT-2026-0001', dip: '23749931M', voto: 'A favor', timestamp: AHORA(), esJunta: true, anonimo: false },
+    ],
+    juntas: [
+      { id: 'JUN-2026-0001', titulo: 'Sesión ordinaria de la Junta', fecha: '2026-08-20', asistentes: ['23749931M', '72583347U'], ordenDelDia: ['Aprobación del acta anterior'], votaciones: ['VOT-2026-0001'], acta: '', estado: 'convocada' },
+    ],
+    encuestas: [
+      { id: 'ENC-2026-0001', titulo: 'Horario de apertura del RSP', pregunta: '¿Qué horario prefieres?', opciones: ['Mañanas', 'Tardes', 'Continuo'], rango: 'todos', estado: 'abierta', respuestas: { 'Mañanas': 8, 'Tardes': 5, 'Continuo': 3 }, totalRespuestas: 16, creadaEn: AHORA() },
+    ],
     solicitudes2fa: new Map(),
   };
 
@@ -364,6 +376,13 @@ export function createApiRouter({ getBankState }) {
 
   /* ── Operaciones / auditoría / notificaciones ────────────────────── */
   router.get('/rsp/operaciones/api', (_req, res) => res.json(store.operaciones));
+  router.post('/rsp/operaciones/api/:id/revertir', (req, res) => {
+    const o = store.operaciones.find((x) => x.id === req.params.id);
+    if (!o) return res.status(404).json({ error: 'Operación no encontrada' });
+    if (o.estado !== 'retenida') return res.status(400).json({ error: 'Solo se pueden revertir operaciones retenidas' });
+    o.estado = 'rechazada';
+    res.json({ ok: true });
+  });
   router.get('/rsp/auditoria/api', (_req, res) => res.json(store.auditoria));
   router.get('/api/notificaciones/mis', (_req, res) => res.json(store.notificaciones));
   router.post('/api/notificaciones/:id/leida', (req, res) => {
@@ -412,6 +431,74 @@ export function createApiRouter({ getBankState }) {
         patrimonioMedio: c.patrimonio, cuotaIrm: c.cuotaIrm, cuotaIgf: c.cuotaIgf, estado: 'borrador',
       })));
     } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+
+  /* ── Votaciones / Juntas / Encuestas ────────────────────────────── */
+  router.get('/rsp/votaciones/api', (_req, res) => res.json(store.votaciones));
+  router.get('/rsp/votaciones/api/:id', (req, res) => {
+    const v = store.votaciones.find((x) => x.id === req.params.id);
+    if (!v) return res.status(404).json({ error: 'Votación no encontrada' });
+    res.json({ ...v, votos: store.votos.filter((r) => r.votacionId === v.id) });
+  });
+  router.post('/rsp/votaciones/api', (req, res) => {
+    const d = req.body || {};
+    const v = { id: `VOT-2026-${String(store.votaciones.length + 1).padStart(4, '0')}`, titulo: d.titulo, categoria: d.categoria, descripcion: d.descripcion || '', reunionId: d.reunionId, rango: d.rango || 'ciudadania_plena', opciones: d.opciones || ['A favor', 'En contra', 'Abstención'], estado: 'abierta', resultado: null, aFavor: 0, enContra: 0, abstenciones: 0, totalVotos: 0, creadaEn: AHORA() };
+    store.votaciones.unshift(v);
+    res.status(201).json(v);
+  });
+  router.post('/rsp/votaciones/api/:id/cerrar', (req, res) => {
+    const v = store.votaciones.find((x) => x.id === req.params.id);
+    if (!v) return res.status(404).json({ error: 'Votación no encontrada' });
+    v.estado = 'cerrada'; v.cerradaEn = AHORA();
+    v.resultado = v.aFavor > v.enContra ? 'aprobada' : 'rechazada';
+    res.json({ ok: true });
+  });
+  router.post('/rsp/votaciones/api/:id/publicar', (req, res) => {
+    const v = store.votaciones.find((x) => x.id === req.params.id);
+    if (!v) return res.status(404).json({ error: 'Votación no encontrada' });
+    v.estado = 'publicada'; v.publicadaEn = AHORA();
+    v.bopUrl = `https://bop.laplaceta.org/votaciones.html?codigo=${v.id}`;
+    res.json({ ok: true });
+  });
+  router.get('/rsp/votaciones/api/:id/votos', (req, res) => {
+    const ahora = Date.now();
+    res.json(store.votos.filter((r) => r.votacionId === req.params.id).map((r) => {
+      const anon = !r.esJunta && (ahora - new Date(r.timestamp).getTime()) > 30 * 24 * 3600 * 1000;
+      return { ...r, anonimo: anon, dip: anon ? '••••••' : r.dip };
+    }));
+  });
+  router.get('/rsp/juntas/api', (_req, res) => res.json(store.juntas));
+  router.get('/rsp/juntas/api/:id', (req, res) => {
+    const j = store.juntas.find((x) => x.id === req.params.id);
+    if (!j) return res.status(404).json({ error: 'Junta no encontrada' });
+    res.json({ ...j, votaciones: j.votaciones.map((vid) => store.votaciones.find((v) => v.id === vid)).filter(Boolean) });
+  });
+  router.post('/rsp/juntas/api', (req, res) => {
+    const d = req.body || {};
+    const j = { id: `JUN-2026-${String(store.juntas.length + 1).padStart(4, '0')}`, titulo: d.titulo, fecha: d.fecha || new Date().toISOString().slice(0, 10), asistentes: d.asistentes || [], ordenDelDia: d.ordenDelDia || [], votaciones: d.votaciones || [], acta: '', estado: 'convocada' };
+    store.juntas.unshift(j);
+    res.status(201).json(j);
+  });
+  router.post('/rsp/juntas/api/:id/acta', (req, res) => {
+    const j = store.juntas.find((x) => x.id === req.params.id);
+    if (!j) return res.status(404).json({ error: 'Junta no encontrada' });
+    j.acta = req.body?.acta || ''; j.estado = 'acta_emitida';
+    j.actaUrl = `https://bop.laplaceta.org/juntas.html?codigo=${j.id}`;
+    res.json({ ok: true });
+  });
+  router.get('/rsp/encuestas/api', (_req, res) => res.json(store.encuestas));
+  router.post('/rsp/encuestas/api', (req, res) => {
+    const d = req.body || {};
+    const e = { id: `ENC-2026-${String(store.encuestas.length + 1).padStart(4, '0')}`, titulo: d.titulo, pregunta: d.pregunta, opciones: d.opciones || [], rango: d.rango || 'todos', estado: 'abierta', respuestas: Object.fromEntries((d.opciones || []).map((o) => [o, 0])), totalRespuestas: 0, creadaEn: AHORA() };
+    store.encuestas.unshift(e);
+    res.status(201).json(e);
+  });
+  router.post('/rsp/encuestas/api/:id/publicar', (req, res) => {
+    const e = store.encuestas.find((x) => x.id === req.params.id);
+    if (!e) return res.status(404).json({ error: 'Encuesta no encontrada' });
+    e.estado = 'publicada'; e.publicadaEn = AHORA();
+    e.bopUrl = `https://bop.laplaceta.org/encuestas.html?codigo=${e.id}`;
+    res.json({ ok: true });
   });
 
   return router;

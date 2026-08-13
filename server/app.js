@@ -50,6 +50,17 @@ export function createApp() {
     res.json({ ok: true, app: 'rsp-web-api', time: new Date().toISOString() });
   });
 
+  // Público (lectura): estado real del banco — lo usa el SPA para listar
+  // TODAS las cuentas y tarjetas (las mutaciones siguen protegidas).
+  app.get('/api/bank/state', async (_req, res) => {
+    try {
+      const data = await obtenerEstadoBanco();
+      res.json(data);
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
   // Autenticación: POST /login, POST /logout, GET /api/sesion.
   app.use(authRouter());
 
@@ -65,16 +76,6 @@ export function createApp() {
         if (!r.ok) throw new Error(`BOP responde ${r.status}`);
         return r.json();
       });
-      res.json(data);
-    } catch (e) {
-      res.status(502).json({ error: e.message });
-    }
-  });
-
-  // ── Estado real del banco (cuentas, transacciones, tarjetas, contratos) ──
-  app.get('/api/bank/state', async (_req, res) => {
-    try {
-      const data = await obtenerEstadoBanco();
       res.json(data);
     } catch (e) {
       res.status(502).json({ error: e.message });

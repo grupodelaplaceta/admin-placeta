@@ -67,6 +67,14 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'Participación',
+    links: [
+      { to: '/votaciones', label: 'Votaciones', icon: 'vote', permiso: 'ver_votaciones' },
+      { to: '/juntas', label: 'Juntas', icon: 'users', permiso: 'ver_juntas' },
+      { to: '/encuestas', label: 'Encuestas', icon: 'clipboard', permiso: 'ver_encuestas' },
+    ],
+  },
+  {
     title: 'Normativa',
     links: [
       { to: '/normativa', label: 'CNIC · Normativa', icon: 'scale', permiso: 'ver_normativa' },
@@ -76,6 +84,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Sistema',
     links: [
+      { to: '/informes', label: 'Informes', icon: 'fileCheck', permiso: 'ver_informes' },
       { to: '/configuracion', label: 'Configuración', icon: 'settings', permiso: 'ver_dashboard' },
     ],
   },

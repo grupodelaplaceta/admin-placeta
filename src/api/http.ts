@@ -16,6 +16,7 @@ import type {
   SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior,
+  Votacion, VotoRegistro, Junta, Encuesta,
 } from '../types';
 
 function qs(f?: Filtros): string {
@@ -85,6 +86,49 @@ export const httpProvider: Provider = {
   },
   async listarOperaciones() {
     return http.get<Operacion[]>('/rsp/operaciones/api');
+  },
+  async revertirOperacion(id) {
+    return http.post<void>(`/rsp/operaciones/api/${id}/revertir`);
+  },
+  // ── Votaciones / Juntas / Encuestas ──────────────────────────────
+  async listarVotaciones() {
+    return http.get<Votacion[]>('/rsp/votaciones/api');
+  },
+  async getVotacion(id) {
+    return http.get<Votacion & { votos: VotoRegistro[] }>(`/rsp/votaciones/api/${id}`);
+  },
+  async crearVotacion(datos) {
+    return http.post<Votacion>('/rsp/votaciones/api', datos);
+  },
+  async cerrarVotacion(id) {
+    return http.post<void>(`/rsp/votaciones/api/${id}/cerrar`);
+  },
+  async publicarVotacion(id) {
+    return http.post<void>(`/rsp/votaciones/api/${id}/publicar`);
+  },
+  async listarVotos(id) {
+    return http.get<VotoRegistro[]>(`/rsp/votaciones/api/${id}/votos`);
+  },
+  async listarJuntas() {
+    return http.get<Junta[]>('/rsp/juntas/api');
+  },
+  async getJunta(id) {
+    return http.get<Omit<Junta, 'votaciones'> & { votaciones: Votacion[] }>(`/rsp/juntas/api/${id}`);
+  },
+  async crearJunta(datos) {
+    return http.post<Junta>('/rsp/juntas/api', datos);
+  },
+  async emitirActa(id, acta) {
+    return http.post<void>(`/rsp/juntas/api/${id}/acta`, { acta });
+  },
+  async listarEncuestas() {
+    return http.get<Encuesta[]>('/rsp/encuestas/api');
+  },
+  async crearEncuesta(datos) {
+    return http.post<Encuesta>('/rsp/encuestas/api', datos);
+  },
+  async publicarEncuesta(id) {
+    return http.post<void>(`/rsp/encuestas/api/${id}/publicar`);
   },
   async listarAuditoria(f) {
     return http.get<EventoAuditoria[]>(`/rsp/auditoria/api${qs(f)}`);

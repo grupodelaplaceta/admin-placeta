@@ -33,6 +33,10 @@ import BonoDetail from './pages/bonos/BonoDetail';
 import Cuentas from './pages/banco/Cuentas';
 import Tarjetas from './pages/banco/Tarjetas';
 import Junior from './pages/junior/Junior';
+import Votaciones from './pages/votaciones/Votaciones';
+import Juntas from './pages/juntas/Juntas';
+import Encuestas from './pages/encuestas/Encuestas';
+import Informes from './pages/informes/Informes';
 
 function permiso(perm: string, element: ReactNode) {
   return <RequirePermiso entidad={RSP_ENTIDAD} permiso={perm}>{element}</RequirePermiso>;
@@ -76,6 +80,10 @@ export default function App() {
               <Route path="/banco/cuentas" element={permiso('ver_cuentas', <Cuentas />)} />
               <Route path="/banco/tarjetas" element={permiso('ver_tarjetas', <Tarjetas />)} />
               <Route path="/junior" element={permiso('ver_junior', <Junior />)} />
+              <Route path="/votaciones" element={permiso('ver_votaciones', <Votaciones />)} />
+              <Route path="/juntas" element={permiso('ver_juntas', <Juntas />)} />
+              <Route path="/encuestas" element={permiso('ver_encuestas', <Encuestas />)} />
+              <Route path="/informes" element={permiso('ver_informes', <Informes />)} />
               <Route path="/entidades/:eip" element={permiso('ver_entidades', <EntidadDetail />)} />
               <Route path="/configuracion" element={permiso('ver_dashboard', <Configuracion />)} />
               <Route path="*" element={<Navigate to="/" replace />} />

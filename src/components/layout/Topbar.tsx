@@ -33,6 +33,12 @@ export function Topbar({ onMenu, title }: { onMenu: () => void; title: string })
     .join('')
     .toUpperCase();
 
+  async function marcar(n: Notificacion) {
+    if (n.leida) return;
+    await provider.marcarLeida(n.id);
+    setNotifs((prev) => prev.map((x) => (x.id === n.id ? { ...x, leida: true } : x)));
+  }
+
   return (
     <header className="rsp-topbar">
       <button className="rsp-icon-btn rsp-hamburger" onClick={onMenu} aria-label="Abrir menú"><Icon name="menu" /></button>
@@ -50,7 +56,7 @@ export function Topbar({ onMenu, title }: { onMenu: () => void; title: string })
           {noLeidas > 0 && <span className="rsp-bell-dot" />}
         </button>
         {open && (
-          <div className="rsp-card" style={{ position: 'absolute', right: 0, top: 48, width: 320, zIndex: 60 }}>
+          <div className="rsp-card rsp-bell-menu">
             <div className="rsp-card-header">
               <h3 className="rsp-card-title">Notificaciones</h3>
               <Badge tone="brand">{noLeidas} sin leer</Badge>
@@ -59,15 +65,18 @@ export function Topbar({ onMenu, title }: { onMenu: () => void; title: string })
               <p className="u-muted" style={{ margin: 0 }}>Sin notificaciones.</p>
             ) : (
               notifs.slice(0, 6).map((n) => (
-                <div key={n.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div className="u-spread">
+                <button key={n.id} type="button" className="rsp-bell-item" onClick={() => marcar(n)}>
+                  <span className="u-spread">
                     <strong style={{ fontSize: 'var(--fs-sm)' }}>{n.titulo}</strong>
                     <Badge tone={badgeToneDeEstado(n.nivel)}>{n.nivel}</Badge>
-                  </div>
-                  <div className="u-muted" style={{ fontSize: 'var(--fs-sm)' }}>{n.mensaje}</div>
-                </div>
+                  </span>
+                  <span className="u-muted" style={{ fontSize: 'var(--fs-sm)', display: 'block' }}>{n.mensaje}</span>
+                </button>
               ))
             )}
+            <button type="button" className="rsp-linkbtn" style={{ display: 'block', marginTop: 8 }} onClick={() => { setOpen(false); navigate('/notificaciones'); }}>
+              Ver todas
+            </button>
           </div>
         )}
       </div>

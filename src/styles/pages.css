@@ -174,7 +174,7 @@
 .rsp-progress-bar { height: 100%; background: var(--grad); border-radius: var(--r-full); transition: width 0.3s ease; }
 
 /* Rejilla de tarjetas bancarias */
-.rsp-cardgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--sp-4); }
+.rsp-card-thumb { border-radius: var(--r-sm); object-fit: cover; box-shadow: var(--sh-sm); flex-shrink: 0; }
 .rsp-card-no-pad { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 
 .rsp-card-visual { position: relative; aspect-ratio: 1.586; overflow: hidden; }

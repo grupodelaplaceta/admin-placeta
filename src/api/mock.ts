@@ -13,8 +13,9 @@ import type {
   Obligacion, EntidadDetalle, SubvencionResumen, SubvencionDetalle, Solicitud2FA,
   DesgloseFiscal, CuentaSugerencia, RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior,
+  Votacion, VotoRegistro, Junta, Encuesta,
 } from '../types';
-import { TIPOS_TRAMITE } from '../types';
+import { TIPOS_TRAMITE, ANONIMATO_DIAS } from '../types';
 import type { Provider } from './provider';
 
 const AHORA = new Date().toISOString();
@@ -211,6 +212,80 @@ const OPERACIONES: Operacion[] = [
 const ENTIDADES: EntidadRegistral[] = [
   { eip: 'EIP-XJETNL', nombre: 'Unhiro Inversiones S.P.', tipo: 'Sociedad', representantes: ['23749931M'], estado: 'activa', cumplimiento: 'Al día' },
   { eip: 'EIP-X4NGQU', nombre: 'Red del Grupo de La Placeta S.P.', tipo: 'Sociedad', representantes: ['23749931M'], estado: 'activa', cumplimiento: 'Al día' },
+];
+
+// ── Banco real: se lee el estado en vivo del banco a través del BFF ──
+// (/api/bank/state). En desarrollo el proxy de Vite reenvía /api al BFF;
+// si no está disponible (offline/tests), se usa el seed de abajo.
+let cacheBancoLive: { cuentas: CuentaBancaria[]; tarjetas: TarjetaDigital[] } | null = null;
+async function estadoBancoLive() {
+  if (cacheBancoLive) return cacheBancoLive;
+  try {
+    const r = await fetch('/api/bank/state', { credentials: 'include' });
+    if (!r.ok) return null;
+    const state = await r.json();
+    const cuentas: CuentaBancaria[] = (state.accounts || []).map((a: any) => ({
+      id: a.id,
+      nombre: String(a.displayName || a.name || '').replace(/\s*\(.*\)\s*$/, '').trim(),
+      tipo: a.type || 'Current',
+      dip: (a.placetaId || '').toUpperCase(),
+      saldo: Number(a.balancePz || 0),
+      estado: a.closedAt ? 'cerrada' : 'activa',
+      esFundacion: /fundacion|fundación/i.test(String(a.displayName || '')) || /^FUND-/.test(String(a.id || '')),
+      participaciones: [],
+    }));
+    const tarjetas: TarjetaDigital[] = (state.digitalCards || state.cards || []).map((d: any) => {
+      const num = String(d.cardNumber || d.id || '').replace(/\D/g, '').padStart(6, '0').slice(-6);
+      return {
+        id: d.id, alias: d.alias || 'Tarjeta', accountId: d.accountId || '',
+        tier: d.tier || 'Standard', frozen: !!d.frozen, cardNumber: num,
+        promoPhysical: !!d.promoPhysical, pin: d.pin || '0000',
+        contactlessLimitPz: 500, weeklyLimitPz: 1000,
+      };
+    });
+    cacheBancoLive = { cuentas, tarjetas };
+    return cacheBancoLive;
+  } catch {
+    return null;
+  }
+}
+async function arrayCuentas(): Promise<CuentaBancaria[]> {
+  const live = await estadoBancoLive();
+  return live ? live.cuentas : CUENTAS;
+}
+async function arrayTarjetas(): Promise<TarjetaDigital[]> {
+  const live = await estadoBancoLive();
+  return live ? live.tarjetas : TARJETAS;
+}
+
+// Placeta Junior REAL: se intenta leer de la API oficial de la Academia
+// (admin-placeta.vercel.app). Requiere autenticación; sin credenciales se usa
+// el seed representativo (nunca inventado: son las actividades reales del catálogo).
+async function juniorLive(path: string): Promise<any[] | null> {
+  try {
+    const r = await fetch(`https://admin-placeta.vercel.app/api/junior/${path}`, { credentials: 'include' });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const arr = Array.isArray(d) ? d : (d?.data ?? null);
+    return Array.isArray(arr) ? arr : null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Participación democrática (votaciones, juntas, encuestas) ────────
+const VOTACIONES: Votacion[] = [
+  { id: 'VOT-2026-0001', titulo: 'Presupuestos participativos 2026', categoria: 'referendum', descripcion: 'Aprobación del presupuesto anual.', rango: 'ciudadania_plena', opciones: ['A favor', 'En contra', 'Abstención'], estado: 'abierta', resultado: null, aFavor: 12, enContra: 3, abstenciones: 2, totalVotos: 17, creadaEn: AHORA },
+  { id: 'VOT-2026-0002', titulo: 'Elección del Consejo Junior', categoria: 'eleccion', descripcion: 'Elegir representante junior.', rango: 'junior', opciones: ['Pablo Ruiz', 'Ana García'], estado: 'cerrada', resultado: 'aprobada', aFavor: 20, enContra: 5, abstenciones: 1, totalVotos: 26, creadaEn: AHORA, cerradaEn: AHORA },
+];
+const VOTOS_REGISTRO: VotoRegistro[] = [
+  { id: 'RGV-1', votacionId: 'VOT-2026-0002', dip: '23749931M', voto: 'Pablo Ruiz', timestamp: AHORA, esJunta: true, anonimo: false },
+];
+const JUNTAS: Junta[] = [
+  { id: 'JUN-2026-0001', titulo: 'Sesión ordinaria de la Junta', fecha: '2026-08-20', asistentes: ['23749931M', '72583347U'], ordenDelDia: ['Aprobación del acta anterior', 'Presupuestos 2026'], votaciones: ['VOT-2026-0001'], acta: '', estado: 'convocada' },
+];
+const ENCUESTAS: Encuesta[] = [
+  { id: 'ENC-2026-0001', titulo: 'Horario de apertura del RSP', pregunta: '¿Qué horario prefieres?', opciones: ['Mañanas', 'Tardes', 'Continuo'], rango: 'todos', estado: 'abierta', respuestas: { 'Mañanas': 8, 'Tardes': 5, 'Continuo': 3 }, totalRespuestas: 16, creadaEn: AHORA },
 ];
 
 // Contribuyentes REALES del banco (GET /api/crm-state, saldos agregados por DIP/EIP).
@@ -544,13 +619,22 @@ export const mockProvider: Provider = {
   async listarOperaciones() {
     return OPERACIONES;
   },
+  async revertirOperacion(id) {
+    const o = OPERACIONES.find((x) => x.id === id);
+    if (!o) throw new Error('Operación no encontrada');
+    if (o.estado !== 'retenida') throw new Error('Solo se pueden revertir operaciones retenidas');
+    o.estado = 'rechazada';
+  },
   async listarAuditoria(f) {
     return filtro(AUDITORIA, f);
   },
   async listarNotificaciones() {
     return NOTIFICACIONES;
   },
-  async marcarLeida() {},
+  async marcarLeida(id) {
+    const n = NOTIFICACIONES.find((x) => x.id === id);
+    if (n) n.leida = true;
+  },
   async listarCNIC() {
     return CNIC;
   },
@@ -751,13 +835,13 @@ export const mockProvider: Provider = {
   },
   // ── Banco ───────────────────────────────────────────────────────────
   async listarCuentas(f) {
-    return filtro(CUENTAS, f);
+    return filtro(await arrayCuentas(), f);
   },
   async listarTarjetas() {
-    return TARJETAS;
+    return arrayTarjetas();
   },
   async accionCuenta(id, accion, datos) {
-    const c = CUENTAS.find((x) => x.id === id);
+    const c = (await arrayCuentas()).find((x) => x.id === id);
     if (!c) throw new Error('Cuenta no encontrada');
     if (accion === 'bloquear') c.estado = 'bloqueada';
     else if (accion === 'desbloquear') c.estado = 'activa';
@@ -776,13 +860,14 @@ export const mockProvider: Provider = {
     }
   },
   async cambiarTipoCuenta(id, nuevoTipo) {
-    const c = CUENTAS.find((x) => x.id === id);
+    const c = (await arrayCuentas()).find((x) => x.id === id);
     if (!c) throw new Error('Cuenta no encontrada');
     if (c.estado === 'cerrada') throw new Error('La cuenta está cerrada');
     c.tipo = nuevoTipo;
   },
   async repartirCuenta(id) {
-    const c = CUENTAS.find((x) => x.id === id);
+    const cuentas = await arrayCuentas();
+    const c = cuentas.find((x) => x.id === id);
     if (!c) throw new Error('Cuenta no encontrada');
     if (c.tipo !== 'Business') throw new Error('Solo las cuentas de empresa se reparten conforme al %');
     if (c.esFundacion) throw new Error('Las fundaciones no se reparten ni se cierran');
@@ -794,7 +879,7 @@ export const mockProvider: Provider = {
       const importe = i === partes.length - 1
         ? Math.round(restante * 100) / 100
         : Math.round((c.saldo * p.pct) / 100 * 100) / 100;
-      const destino = CUENTAS.find((x) => x.dip === p.dip && x.estado === 'activa' && (x.tipo === 'Current' || x.tipo === 'Savings'));
+      const destino = cuentas.find((x) => x.dip === p.dip && x.estado === 'activa' && (x.tipo === 'Current' || x.tipo === 'Savings'));
       if (destino) destino.saldo = Math.round((destino.saldo + importe) * 100) / 100;
       restante = Math.round((restante - importe) * 100) / 100;
     });
@@ -809,22 +894,34 @@ export const mockProvider: Provider = {
       saldo: datos.saldoInicial || 0,
       estado: 'activa',
     };
-    CUENTAS.push(nueva);
+    (await arrayCuentas()).push(nueva);
     return nueva;
   },
   async establecerLimiteTarjeta(id, limites) {
-    const t = TARJETAS.find((x) => x.id === id);
+    const t = (await arrayTarjetas()).find((x) => x.id === id);
     if (!t) throw new Error('Tarjeta no encontrada');
     if (typeof limites.contactlessLimitPz === 'number') t.contactlessLimitPz = limites.contactlessLimitPz;
     if (typeof limites.weeklyLimitPz === 'number') t.weeklyLimitPz = limites.weeklyLimitPz;
   },
   async congelarTarjeta(id, frozen) {
-    const t = TARJETAS.find((x) => x.id === id);
+    const t = (await arrayTarjetas()).find((x) => x.id === id);
     if (!t) throw new Error('Tarjeta no encontrada');
     t.frozen = frozen;
   },
   // ── Placeta Junior ───────────────────────────────────────────────────
   async listarActividadesJunior() {
+    const live = await juniorLive('actividades?dip=23749931M');
+    if (live && live.length) {
+      return live.map((a: any) => ({
+        id: a.id, titulo: a.titulo || a.nombre || 'Actividad',
+        edadMin: a.edadMin ?? 6, edadMax: a.edadMax ?? 17,
+        complejidad: a.complejidad || 'Media',
+        precio: a.precio_total ?? a.precio ?? 5.6,
+        recompensa: a.recompensa ?? 10,
+        estado: a.estado || 'aprobada',
+        colaborador: a.colaborador || '—',
+      }));
+    }
     return JUNIOR_ACTIVIDADES;
   },
   async listarColaboradoresJunior() {
@@ -832,5 +929,110 @@ export const mockProvider: Provider = {
   },
   async listarDiplomasJunior() {
     return JUNIOR_DIPLOMAS;
+  },
+  // ── Votaciones ─────────────────────────────────────────────────────
+  async listarVotaciones() {
+    return VOTACIONES;
+  },
+  async getVotacion(id) {
+    const v = VOTACIONES.find((x) => x.id === id);
+    if (!v) throw new Error('Votación no encontrada');
+    const votos = VOTOS_REGISTRO.filter((r) => r.votacionId === id);
+    return { ...v, votos };
+  },
+  async crearVotacion(datos) {
+    const v: Votacion = {
+      id: `VOT-2026-${String(VOTACIONES.length + 1).padStart(4, '0')}`,
+      titulo: datos.titulo,
+      categoria: datos.categoria as Votacion['categoria'],
+      descripcion: datos.descripcion || '',
+      reunionId: datos.reunionId,
+      rango: (datos.rango || 'ciudadania_plena') as Votacion['rango'],
+      opciones: datos.opciones || ['A favor', 'En contra', 'Abstención'],
+      estado: 'abierta',
+      resultado: null,
+      aFavor: 0, enContra: 0, abstenciones: 0, totalVotos: 0,
+      creadaEn: new Date().toISOString(),
+    };
+    VOTACIONES.unshift(v);
+    return v;
+  },
+  async cerrarVotacion(id) {
+    const v = VOTACIONES.find((x) => x.id === id);
+    if (!v) throw new Error('Votación no encontrada');
+    v.estado = 'cerrada';
+    v.cerradaEn = new Date().toISOString();
+    v.resultado = v.aFavor > v.enContra ? 'aprobada' : 'rechazada';
+  },
+  async publicarVotacion(id) {
+    const v = VOTACIONES.find((x) => x.id === id);
+    if (!v) throw new Error('Votación no encontrada');
+    v.estado = 'publicada';
+    v.publicadaEn = new Date().toISOString();
+    v.bopUrl = `https://bop.laplaceta.org/votaciones.html?codigo=${id}`;
+  },
+  async listarVotos(id) {
+    const ahora = Date.now();
+    return VOTOS_REGISTRO.filter((r) => r.votacionId === id).map((r) => {
+      const edad = ahora - new Date(r.timestamp).getTime();
+      const anonimizado = !r.esJunta && edad > ANONIMATO_DIAS * 24 * 3600 * 1000;
+      return { ...r, anonimo: anonimizado, dip: anonimizado ? '••••••' : r.dip };
+    });
+  },
+  // ── Juntas ─────────────────────────────────────────────────────────
+  async listarJuntas() {
+    return JUNTAS;
+  },
+  async getJunta(id) {
+    const j = JUNTAS.find((x) => x.id === id);
+    if (!j) throw new Error('Junta no encontrada');
+    return { ...j, votaciones: j.votaciones.map((vid) => VOTACIONES.find((v) => v.id === vid)!).filter(Boolean) };
+  },
+  async crearJunta(datos) {
+    const j: Junta = {
+      id: `JUN-2026-${String(JUNTAS.length + 1).padStart(4, '0')}`,
+      titulo: datos.titulo,
+      fecha: datos.fecha || new Date().toISOString().slice(0, 10),
+      asistentes: datos.asistentes || [],
+      ordenDelDia: datos.ordenDelDia || [],
+      votaciones: datos.votaciones || [],
+      acta: '',
+      estado: 'convocada',
+    };
+    JUNTAS.unshift(j);
+    return j;
+  },
+  async emitirActa(id, acta) {
+    const j = JUNTAS.find((x) => x.id === id);
+    if (!j) throw new Error('Junta no encontrada');
+    j.acta = acta;
+    j.estado = 'acta_emitida';
+    j.actaUrl = `https://bop.laplaceta.org/juntas.html?codigo=${id}`;
+  },
+  // ── Encuestas ──────────────────────────────────────────────────────
+  async listarEncuestas() {
+    return ENCUESTAS;
+  },
+  async crearEncuesta(datos) {
+    const e: Encuesta = {
+      id: `ENC-2026-${String(ENCUESTAS.length + 1).padStart(4, '0')}`,
+      titulo: datos.titulo,
+      pregunta: datos.pregunta,
+      opciones: datos.opciones || [],
+      rango: (datos.rango || 'todos') as Encuesta['rango'],
+      estado: 'abierta',
+      respuestas: Object.fromEntries((datos.opciones || []).map((o: string) => [o, 0])),
+      totalRespuestas: 0,
+      creadaEn: new Date().toISOString(),
+    };
+    ENCUESTAS.unshift(e);
+    return e;
+  },
+  async publicarEncuesta(id) {
+    const e = ENCUESTAS.find((x) => x.id === id);
+    if (!e) throw new Error('Encuesta no encontrada');
+    e.estado = 'publicada';
+    e.publicadaEn = new Date().toISOString();
+    e.bopUrl = `https://bop.laplaceta.org/encuestas.html?codigo=${id}`;
   },
 };

@@ -14,6 +14,7 @@ import type {
   SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, Baremo, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior,
+  Votacion, VotoRegistro, Junta, Encuesta,
 } from '../types';
 
 export interface Provider {
@@ -93,6 +94,26 @@ export interface Provider {
 
   // Operaciones
   listarOperaciones(): Promise<Operacion[]>;
+  revertirOperacion(id: string): Promise<void>;
+
+  // Votaciones (por rangos democráticos, vía PlacetaID)
+  listarVotaciones(): Promise<Votacion[]>;
+  getVotacion(id: string): Promise<Votacion & { votos: VotoRegistro[] }>;
+  crearVotacion(datos: { titulo: string; categoria: string; descripcion: string; rango: string; opciones: string[]; reunionId?: string }): Promise<Votacion>;
+  cerrarVotacion(id: string): Promise<void>;
+  publicarVotacion(id: string): Promise<void>;
+  listarVotos(id: string): Promise<VotoRegistro[]>;
+
+  // Juntas
+  listarJuntas(): Promise<Junta[]>;
+  getJunta(id: string): Promise<Omit<Junta, 'votaciones'> & { votaciones: Votacion[] }>;
+  crearJunta(datos: { titulo: string; fecha: string; asistentes: string[]; ordenDelDia: string[]; votaciones: string[] }): Promise<Junta>;
+  emitirActa(id: string, acta: string): Promise<void>;
+
+  // Encuestas
+  listarEncuestas(): Promise<Encuesta[]>;
+  crearEncuesta(datos: { titulo: string; pregunta: string; opciones: string[]; rango: string }): Promise<Encuesta>;
+  publicarEncuesta(id: string): Promise<void>;
 
   // Auditoría
   listarAuditoria(filtros?: Filtros): Promise<EventoAuditoria[]>;

@@ -3,6 +3,7 @@ import type { jsPDF } from 'jspdf';
 import type {
   DeclaracionDetalle, TramiteDetalle, SubvencionDetalle, ContextoCiudadano,
   DocumentoCiudadano, FirmaCiudadano, Obligacion, EntidadDetalle,
+  Junta, Votacion, VotoRegistro,
 } from '../types';
 import { etiquetaCampo } from '../config/campos-tramite';
 import { NORMATIVA_APLICADA } from '../config/normativa-declaracion';
@@ -394,4 +395,101 @@ export async function generarPdfFichaEntidad(e: EntidadDetalle): Promise<void> {
 
   pie(doc);
   doc.save(`ficha-${e.eip}.pdf`);
+}
+
+/* ── Acta de junta ─────────────────────────────────────────────────────── */
+export async function generarPdfActa(j: Omit<Junta, 'votaciones'> & { votaciones: Votacion[] }): Promise<void> {
+  const doc = await nuevoDoc();
+  await cabecera(doc, 'Acta de la Junta', `${j.id} · ${j.fecha}`, LOGOS.administracion);
+
+  let y = 64;
+  y = seccion(doc, y, 'Sesión');
+  y = fila(doc, y, 'Título', j.titulo);
+  y = fila(doc, y, 'Fecha', j.fecha);
+  y = fila(doc, y, 'Estado', j.estado);
+  y += 5;
+
+  y = seccion(doc, y, 'Asistentes');
+  if (j.asistentes.length === 0) y = fila(doc, y, 'Asistentes', 'Sin asistentes');
+  else j.asistentes.forEach((a) => { y = fila(doc, y, 'DIP', a); });
+  y += 5;
+
+  y = seccion(doc, y, 'Orden del día');
+  if (j.ordenDelDia.length === 0) y = fila(doc, y, 'Puntos', 'Sin puntos');
+  else j.ordenDelDia.forEach((p, i) => { y = fila(doc, y, `${i + 1}.`, p, 12); });
+  y += 5;
+
+  y = seccion(doc, y, 'Votaciones vinculadas');
+  if (j.votaciones.length === 0) y = fila(doc, y, 'Votaciones', 'Sin votaciones');
+  else for (const v of j.votaciones) y = fila(doc, y, v.id, `${v.titulo} — ${v.estado}${v.resultado ? ` (${v.resultado})` : ''}`, 36);
+  y += 5;
+
+  y = seccion(doc, y, 'Acta');
+  const texto = j.acta || 'Acta pendiente de redacción.';
+  const lineas = doc.splitTextToSize(texto, 180);
+  doc.setFont(FONT, 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...C.dark);
+  for (const l of lineas) {
+    if (y > 265) { doc.addPage(); y = 20; }
+    doc.text(l, 16, y);
+    y += 5.5;
+  }
+
+  bloqueFirma(doc, Math.max(y + 6, 230));
+  pie(doc);
+  doc.save(`${j.id}-acta.pdf`);
+}
+
+/* ── Resumen de votación (con anonimato) ──────────────────────────────── */
+export async function generarPdfResumenVotacion(v: Votacion, votos: VotoRegistro[]): Promise<void> {
+  const doc = await nuevoDoc();
+  await cabecera(doc, 'Resumen de votación', `${v.id} · ${v.titulo}`, LOGOS.rsp);
+
+  let y = 64;
+  y = seccion(doc, y, 'Datos');
+  y = fila(doc, y, 'Categoría', v.categoria);
+  y = fila(doc, y, 'Rango democrático', v.rango);
+  y = fila(doc, y, 'Estado', v.estado);
+  y = fila(doc, y, 'Resultado', v.resultado ?? '—');
+  if (v.bopUrl) y = fila(doc, y, 'Publicada en BOP', v.bopUrl);
+  y += 5;
+
+  y = seccion(doc, y, 'Resultado');
+  for (const o of v.opciones) {
+    const n = o === 'A favor' ? v.aFavor : o === 'En contra' ? v.enContra : o === 'Abstención' ? v.abstenciones : 0;
+    y = fila(doc, y, o, String(n), 90);
+  }
+  y = fila(doc, y, 'Participación', `${v.totalVotos} votos`, 90);
+  y += 5;
+
+  y = seccion(doc, y, 'Registro de votos (anonimato)');
+  if (votos.length === 0) y = fila(doc, y, 'Votos', 'Sin registros');
+  else for (const r of votos) {
+    y = fila(doc, y, r.dip, `${r.voto} · ${r.timestamp.slice(0, 10)}${r.esJunta ? ' · junta (nunca anónimo)' : r.anonimo ? ' · anonimizado' : ''}`, 30);
+  }
+
+  pie(doc);
+  doc.save(`${v.id}-resumen.pdf`);
+}
+
+/* ── Informe genérico (para el módulo de Informes) ────────────────────── */
+export async function generarPdfInforme(opts: {
+  titulo: string;
+  subtitulo: string;
+  secciones: { titulo: string; filas: [string, string][] }[];
+  logoSrc?: string;
+}): Promise<void> {
+  const doc = await nuevoDoc();
+  await cabecera(doc, opts.titulo, opts.subtitulo, opts.logoSrc ?? LOGOS.rsp);
+  let y = 64;
+  for (const s of opts.secciones) {
+    y = seccion(doc, y, s.titulo);
+    if (s.filas.length === 0) y = fila(doc, y, 'Datos', 'Sin datos');
+    else for (const [k, v] of s.filas) y = fila(doc, y, k, v);
+    y += 5;
+  }
+  pie(doc);
+  const nombre = `${opts.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`;
+  doc.save(nombre);
 }

@@ -273,6 +273,27 @@
 .rsp-search input { border: none; background: transparent; outline: none; width: 100%; font-size: var(--fs-md); color: var(--text); }
 
 .rsp-bell { position: relative; }
+.rsp-bell-menu {
+  position: absolute;
+  right: 0;
+  top: 48px;
+  width: min(340px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow-y: auto;
+  z-index: 60;
+}
+.rsp-bell-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+  cursor: pointer;
+  color: var(--text);
+}
+.rsp-bell-item:hover { background: var(--surface-2); }
 .rsp-bell-dot {
   position: absolute;
   top: 2px;
