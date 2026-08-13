@@ -124,6 +124,14 @@ export function getMetricas() { return { ...metricas, ultimos5xx: [...metricas.u
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// No cachear el HTML del panel (CSS/JS van con ?v= para cache-busting).
+// Evita que un navegador con el HTML viejo en caché pida el CSS viejo
+// y muestre el menú "de siempre" (diseño antiguo morado full-screen).
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  next();
+});
+
 // Favicon inline (evita 404 del browser)
 app.get('/favicon.ico', (req, res) => {
   res.setHeader('Content-Type', 'image/svg+xml');
