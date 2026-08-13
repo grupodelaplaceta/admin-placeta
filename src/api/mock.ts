@@ -423,6 +423,10 @@ export const mockProvider: Provider = {
     if (password !== 'demo') throw new Error('Contraseña incorrecta (modo demo: usa "demo")');
     return SESSION;
   },
+  async iniciarPlacetaID() {
+    // En modo demo no hay SSO real; el panel ofrece el acceso demo como fallback.
+    return { redirect: '' };
+  },
   async logout() {},
   async me() {
     // En modo demo no hay sesión persistente: siempre se pasa por el login.

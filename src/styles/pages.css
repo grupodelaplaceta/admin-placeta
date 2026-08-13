@@ -24,6 +24,18 @@
 }
 .rsp-login-card h1 { margin: 0; font-size: var(--fs-xl); }
 
+/* Enlace/botón sutil para el acceso de administrador (fallback demo) */
+.rsp-linkbtn {
+  border: none;
+  background: none;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+.rsp-linkbtn:hover { color: var(--c-primary); }
+
 .rsp-field {
   display: flex;
   flex-direction: column;
@@ -132,10 +144,16 @@
 
 /* Lista de repartos (titulares/socios/herederos con %) */
 .rsp-repartos { width: 100%; }
-.rsp-reparto-row { display: flex; align-items: center; gap: var(--sp-2); }
-.rsp-reparto-buscador { flex: 1; }
+.rsp-reparto-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+.rsp-reparto-buscador { flex: 1 1 240px; min-width: 240px; }
 .rsp-reparto-pct {
-  width: 80px;
+  width: 96px;
+  flex-shrink: 0;
   padding: 10px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
@@ -144,6 +162,12 @@
   color: var(--text);
 }
 .rsp-reparto-pct:focus { outline: none; border-color: var(--c-primary); box-shadow: var(--sh-glow); }
+
+/* En pantallas estrechas, el buscador ocupa toda la fila y el %/quitar quedan debajo */
+@media (max-width: 520px) {
+  .rsp-reparto-buscador { flex-basis: 100%; min-width: 100%; }
+  .rsp-reparto-row .rsp-icon-btn { margin-left: auto; }
+}
 
 /* Barra de progreso de presupuesto */
 .rsp-progress { height: 10px; border-radius: var(--r-full); background: var(--surface-3); overflow: hidden; }

@@ -3,9 +3,12 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import App from '../App';
 
 async function iniciarSesion() {
+  // El acceso demo es el fallback escondido: primero se despliega.
+  const toggle = await screen.findByRole('button', { name: /acceso de administrador/i });
+  fireEvent.click(toggle);
   const passwordInput = await screen.findByLabelText(/contraseña/i);
   fireEvent.change(passwordInput, { target: { value: 'demo' } });
-  fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^entrar$/i }));
 }
 
 describe('App (modo mock)', () => {

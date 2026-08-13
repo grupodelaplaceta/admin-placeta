@@ -31,6 +31,9 @@ export const httpProvider: Provider = {
   async login(dip, password) {
     return http.post<Session>('/login', { dip, password });
   },
+  async iniciarPlacetaID() {
+    return http.post<{ redirect: string }>('/login/placetaid', {});
+  },
   async logout() {
     await http.post<void>('/logout');
   },

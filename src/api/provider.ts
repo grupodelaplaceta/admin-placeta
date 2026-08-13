@@ -19,6 +19,8 @@ import type {
 export interface Provider {
   /** Autenticación con credenciales (DIP + contraseña). */
   login(dip: string, password: string): Promise<Session>;
+  /** Inicia el SSO con PlacetaID móvil: devuelve la URL a la que redirigir. */
+  iniciarPlacetaID(): Promise<{ redirect: string }>;
   logout(): Promise<void>;
   me(): Promise<Session | null>;
 

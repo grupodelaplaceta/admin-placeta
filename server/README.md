@@ -9,7 +9,7 @@ Servidor ligero que hace que **rsp-web** sea autónomo y `admin-placeta` pueda d
    - `GET /api/bank/state` → estado real del banco (`api.banco.laplaceta.org`, cuentas, transacciones, tarjetas, contratos).
    - `GET /api/tributos/contribuyentes` · `GET /api/tributos/declaraciones` · `GET /api/tributos/reconciliacion` → motor fiscal **en vivo** (IRM por IA real, IGF con escala del BOP, exención IVA de empresas).
    - `GET /api/health`.
-3. **Autenticación** (`server/auth.js`): `POST /login` con `{ dip, password }` verificados contra `ADMIN_USERS`, `GET /api/sesion` y `POST /logout`. La sesión es un token aleatorio en cookie **httpOnly** (no falsificable) y **todas las rutas de API exigen sesión** salvo `/api/health`, `/login`, `/logout` y `/api/sesion`. Sustituir por PlacetaID + Supabase en producción.
+3. **Autenticación** (`server/auth.js`): SSO con **PlacetaID móvil** (`POST /login/placetaid` → redirige a PlacetaID → `GET /login/callback`) y fallback de credenciales `POST /login` contra `ADMIN_USERS`. **Solo entran administradores** (`ADMIN_DIPS` / `ADMIN_USERS`). La sesión es un token aleatorio en cookie **httpOnly** y **todas las rutas de API exigen sesión** salvo `/api/health`, `/login*`, `/logout` y `/api/sesion`.
 4. **API de dominio** (`server/api.js`): trámites, expedientes, ciudadanos, entidades, subvenciones, bonos, banco (con las reglas de cierre/reparto), Placeta Junior, operaciones, auditoría, notificaciones y normativa. Implementación de referencia en memoria; sustituir `store` por Supabase/Postgres.
 
 ## Uso (standalone / VPS)
@@ -28,7 +28,7 @@ npm start            # http://localhost:4000  (o `npm run dev`)
 
 ## Variables de entorno (`.env` en server/ — ver `server/.env.example`)
 - **Core**: `PORT`, `NODE_ENV`, `SESSION_SECRET`, `JWT_SECRET`.
-- **Autenticación**: `ADMIN_USERS` (JSON de usuarios con `dip`/`password`/`nombre`/`roles`). Si no se define y `NODE_ENV=production`, el login queda deshabilitado; en desarrollo hay un usuario demo `23749931M` / `demo`.
+- **Autenticación**: `ADMIN_USERS` (credenciales de administradores), `ADMIN_DIPS` (DIPs que pueden entrar por SSO) y `PLACETAID_JWT_SECRET` (verificación de la firma del token). Sin `ADMIN_USERS`/`ADMIN_DIPS` en producción el login queda deshabilitado; en desarrollo hay un usuario demo `23749931M` / `demo`.
 - **Boletín/RSP**: `BOP_URL` (por defecto `https://rsp.laplaceta.org`).
 - **Banco/CRM**: `BANCO_API_URL`, `CRM_BASE_URL`, `CRM_READ_KEY` (obligatoria para leer el estado del banco; sin valor por defecto porque el repo es público), `APP_BASE_URL`.
 - **PlacetaID (SSO)**: `PLACETAID_API_URL`, `PLACETAID_AUTH_URL`, `PLACETAID_CLIENT_ID`, `PLACETAID_CLIENT_SECRET`.
