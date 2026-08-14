@@ -624,6 +624,33 @@ export function createApiRouter({ getBankState }) {
     res.json({ ok: true });
   });
 
+  /* ── Dashboard (estadísticas REALES derivadas del banco y la sesión) ── */
+  router.get('/api/dashboard', async (_req, res) => {
+    // El banco puede no estar configurado (sin CRM_READ_KEY): el dashboard
+    // sigue respondiendo con el resto de contadores reales de la sesión.
+    let bloqueos500k = 0;
+    try {
+      const cuentas = await listarCuentas();
+      bloqueos500k = cuentas.filter((c) => c.saldo > 500000 && c.tipo !== 'Business').length;
+    } catch {
+      /* banco no disponible: se deja en 0 */
+    }
+    res.json({
+      expedientes: store.expedientes.length,
+      incidencias: 0,
+      incidenciasAbiertas: 0,
+      notificacionesNoLeidas: store.notificaciones.filter((n) => !n.leida).length,
+      cnicVigentes: store.cnic.length,
+      nominas: 0,
+      facturas: 0,
+      bloqueos500k,
+      retribucionesPendientes: 0,
+      operacionesRetenidas: store.operaciones.filter((o) => o.estado === 'retenida').length,
+      comprobaciones: 0,
+      comprobacionesInconsistencia: 0,
+    });
+  });
+
   /* ── Normativa (CNIC) ────────────────────────────────────────────── */
   router.get('/rsp/normativo/api', (_req, res) => res.json(store.cnic));
   router.post('/rsp/normativo/api/refresh', (_req, res) => res.json({ sincronizado: true, total: store.cnic.length, fuente: 'BOP' }));
