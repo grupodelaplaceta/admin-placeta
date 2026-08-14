@@ -83,6 +83,13 @@ export function createApiRouter({ getBankState }) {
 
   function mapearCuenta(a) {
     const nombre = limpiar(a.displayName || a.name || a.id);
+    const holders = (a.accountHolders || [])
+      .filter((h) => Number(h.ownershipPercent || h.pct || 0) > 0)
+      .map((h) => ({
+        dip: String(h.placetaId || h.dip || '').toUpperCase(),
+        nombre: limpiar(h.displayName || h.name || h.placetaId || h.dip || ''),
+        pct: Number(h.ownershipPercent || h.pct || 0),
+      }));
     return {
       id: a.id,
       nombre,
@@ -91,7 +98,8 @@ export function createApiRouter({ getBankState }) {
       saldo: Number(a.balancePz || 0),
       estado: a.closedAt ? 'cerrada' : 'activa',
       esFundacion: /fundacion|fundación/i.test(nombre) || /^FUND-/.test(a.id || ''),
-      participaciones: [],
+      eip: String(a.eip || '').toUpperCase(),
+      participaciones: holders,
     };
   }
   function mapearTarjeta(d) {
@@ -116,6 +124,82 @@ export function createApiRouter({ getBankState }) {
   }
   function mutarCuenta(id, patch) {
     overlayCuentas.set(id, { ...(overlayCuentas.get(id) || {}), ...patch });
+  }
+
+  /* ── Entidades derivadas de las cuentas Business reales del banco ── */
+  const EIP_POR_NOMBRE = {
+    'Unhiro S.PV.': 'EIP-XJETNL',
+    'Unhiro Inversiones S.P.': 'EIP-XJETNL',
+    'Red del Grupo de La Placeta S.P.': 'EIP-X4NGQU',
+    // 'Placeta Telecom S.P.': EIP pendiente de confirmar (llega por `eip` real).
+    'Capitália Empresa': 'CAPITALIA_BANK',
+  };
+  const NOMBRE_EIP = {
+    'EIP-XJETNL': 'Unhiro Inversiones S.P.',
+    'EIP-X4NGQU': 'Red del Grupo de La Placeta S.P.',
+    'CAPITALIA_BANK': 'Capitália Empresa',
+  };
+  const SISTEMA_CUENTA = /^(TGLP|AGLDP|VAULT_EMISION|DIP-|sys-|biz-market-|FUND-BLP)$/;
+  function eipDeCuenta(c) {
+    if (c.eip) return c.eip;
+    if (SISTEMA_CUENTA.test(c.id)) return '';
+    return EIP_POR_NOMBRE[c.nombre] || '';
+  }
+  async function entidadesDelBanco() {
+    const cuentas = await listarCuentas();
+    const map = new Map();
+    for (const c of cuentas) {
+      if (c.tipo !== 'Business' || c.estado === 'cerrada') continue;
+      const eip = eipDeCuenta(c);
+      if (!eip) continue;
+      let e = map.get(eip);
+      if (!e) {
+        e = {
+          eip,
+          nombre: NOMBRE_EIP[eip] || c.nombre,
+          tipo: eip === 'CAPITALIA_BANK' ? 'Sociedad pública' : 'Sociedad',
+          representantes: [],
+          estado: 'activa',
+          cumplimiento: 'Al día',
+          cuentas: 0,
+          titulares: 0,
+          participacionTotal: 0,
+        };
+        map.set(eip, e);
+      }
+      e.cuentas += 1;
+      for (const p of c.participaciones || []) {
+        if (p.dip && !e.representantes.includes(p.dip)) e.representantes.push(p.dip);
+      }
+    }
+    const out = [];
+    for (const e of map.values()) {
+      const unicos = new Set(e.representantes);
+      out.push({ ...e, titulares: unicos.size, representantes: Array.from(unicos) });
+    }
+    return out;
+  }
+  // Facturas emitidas: ventas reales (sender = empresa) desde los movimientos.
+  function facturasDe(eip, state, cuentas) {
+    const propias = new Set(cuentas.filter((c) => eipDeCuenta(c) === eip).map((c) => c.id));
+    const KINDS_VENTA = new Set(['Consumption', 'Placezum', 'OperationalFee', 'Service']);
+    const facturas = [];
+    for (const t of state.transactions || []) {
+      if (t.status && String(t.status).toLowerCase() !== 'settled') continue;
+      if (!propias.has(t.fromAccountId || t.fromIban)) continue;
+      if (!KINDS_VENTA.has(t.kind || t.concept)) continue;
+      facturas.push({
+        id: t.id,
+        numero: t.id,
+        concepto: t.concept || t.kind || 'Venta',
+        importe: Number(t.amountPz || t.netAmount || 0),
+        estado: 'cobrada',
+        fecha: (t.createdAt || t.timestamp || '').slice(0, 10),
+        receptor: '',
+        receptorId: t.toAccountId || t.toIban || '',
+      });
+    }
+    return facturas;
   }
 
   function cerrarCuenta(c, motivo) {
@@ -236,11 +320,55 @@ export function createApiRouter({ getBankState }) {
       res.status(502).json({ error: e.message });
     }
   });
-  router.get('/rsp/api/entidades', (_req, res) => res.json(store.entidades));
-  router.get('/rsp/api/entidades/:eip', (req, res) => {
-    const e = store.entidades.find((x) => x.eip === req.params.eip);
-    if (!e) return res.status(404).json({ error: 'Entidad no encontrada' });
-    res.json({ ...e, documentos: [], obligaciones: [], representantes: e.representantes.map((dip) => ({ dip, nombre: dip, cargo: 'representante' })) });
+  router.get('/rsp/api/entidades', async (_req, res) => {
+    try { res.json(await entidadesDelBanco()); } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+  router.get('/rsp/api/entidades/:eip', async (req, res) => {
+    try {
+      const eip = req.params.eip;
+      const cuentas = await listarCuentas();
+      const propias = cuentas.filter((c) => eipDeCuenta(c) === eip);
+      const entidad = (await entidadesDelBanco()).find((x) => x.eip === eip);
+      if (!entidad && propias.length === 0) return res.status(404).json({ error: 'Entidad no encontrada' });
+
+      // Participación agregada por titular.
+      const suma = new Map();
+      for (const c of propias) {
+        for (const p of c.participaciones || []) {
+          if (p.dip) suma.set(p.dip, (suma.get(p.dip) || 0) + p.pct);
+        }
+      }
+      const participacion = Array.from(suma.entries()).map(([dip, pct]) => ({
+        dip,
+        nombre: store.ciudadanos.find((x) => x.dip === dip)?.nombre || dip,
+        pct: Math.round(pct * 10) / 10,
+      }));
+
+      const state = await getBankState();
+      const facturas = facturasDe(eip, state, cuentas);
+      const tramites = store.tramites.filter((t) => t.dip === eip);
+
+      res.json({
+        eip,
+        nombre: entidad?.nombre || NOMBRE_EIP[eip] || (propias[0]?.nombre ?? eip),
+        tipo: entidad?.tipo || 'Sociedad',
+        estado: entidad?.estado || 'activa',
+        cumplimiento: entidad?.cumplimiento,
+        representantes: (entidad?.representantes || []).map((dip) => ({
+          dip,
+          nombre: store.ciudadanos.find((x) => x.dip === dip)?.nombre || dip,
+          cargo: 'Representante legal',
+        })),
+        documentos: [],
+        obligaciones: [],
+        cuentas: propias,
+        facturasEmitidas: facturas,
+        participacion,
+        tramites,
+      });
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
   });
 
   /* ── Subvenciones ────────────────────────────────────────────────── */
@@ -379,9 +507,61 @@ export function createApiRouter({ getBankState }) {
   });
 
   /* ── Placeta Junior ──────────────────────────────────────────────── */
-  router.get('/rsp/junior/api/actividades', (_req, res) => res.json(store.juniorActividades));
-  router.get('/rsp/junior/api/colaboradores', (_req, res) => res.json(store.juniorColaboradores));
-  router.get('/rsp/junior/api/diplomas', (_req, res) => res.json(store.juniorDiplomas));
+  // Datos REALES de la Academia (admin-placeta.vercel.app). Sin acceso se
+  // degrada al seed representativo del catálogo (nunca inventado).
+  const JUNIOR_URL = process.env.JUNIOR_API_URL || 'https://admin-placeta.vercel.app/api/junior';
+  async function juniorLive(path) {
+    try {
+      const r = await fetch(`${JUNIOR_URL}/${path}`);
+      if (!r.ok) return null;
+      const d = await r.json();
+      const arr = Array.isArray(d) ? d : (d?.data ?? null);
+      return Array.isArray(arr) ? arr : null;
+    } catch {
+      return null;
+    }
+  }
+  router.get('/rsp/junior/api/actividades', async (_req, res) => {
+    const live = await juniorLive('actividades?solo_publicas=1');
+    if (live && live.length) {
+      return res.json(live.map((a) => ({
+        id: a.id, titulo: a.titulo || a.nombre || 'Actividad',
+        edadMin: a.edadMin ?? a.edad_min ?? 6, edadMax: a.edadMax ?? a.edad_max ?? 17,
+        complejidad: a.complejidad || 'Media',
+        precio: a.precio_total ?? a.precio ?? 5.6,
+        recompensa: a.recompensa ?? 10,
+        estado: a.estado || 'aprobada',
+        colaborador: a.colaborador || '—',
+      })));
+    }
+    res.json(store.juniorActividades);
+  });
+  router.get('/rsp/junior/api/colaboradores', async (_req, res) => {
+    const live = await juniorLive('colaboradores');
+    if (live && live.length) {
+      return res.json(live.map((c) => ({
+        dip: c.dip ?? c.placetaId ?? '',
+        nombre: c.nombre ?? c.nombre_real ?? 'Colaborador',
+        acuerdoFirmado: c.acuerdoFirmado ?? c.acuerdo_firmado ?? true,
+        actividades: Number(c.actividades ?? c.num_actividades ?? 0),
+        puntos: Number(c.puntos ?? 0),
+      })));
+    }
+    res.json(store.juniorColaboradores);
+  });
+  router.get('/rsp/junior/api/diplomas', async (_req, res) => {
+    const live = await juniorLive('diplomas');
+    if (live && live.length) {
+      return res.json(live.map((d) => ({
+        id: d.id ?? `DIP-${d.dip}-${d.fecha}`,
+        dip: d.dip ?? d.placetaId ?? '',
+        nombre: d.nombre ?? d.nombre_real ?? '',
+        actividad: d.actividad ?? d.actividad_titulo ?? '—',
+        fecha: d.fecha ?? d.fecha_obtencion ?? '',
+      })));
+    }
+    res.json(store.juniorDiplomas);
+  });
 
   /* ── Operaciones / auditoría / notificaciones ────────────────────── */
   router.get('/rsp/operaciones/api', (_req, res) => res.json(store.operaciones));

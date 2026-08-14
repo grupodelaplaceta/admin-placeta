@@ -218,6 +218,12 @@ export interface EntidadRegistral {
   representantes: string[];
   estado: 'activa' | 'baja';
   cumplimiento?: string;
+  /** Cuentas bancarias a nombre de la entidad (datos reales del banco). */
+  cuentas?: number;
+  /** Número de titulares/partícipes con % registrado. */
+  titulares?: number;
+  /** % de participación agregado de los titulares (100 = íntegro). */
+  participacionTotal?: number;
 }
 
 export type TipoSujeto = 'persona' | 'empresa' | 'junior';
@@ -307,10 +313,37 @@ export interface Obligacion {
   plazo?: string;
 }
 
-export interface EntidadDetalle extends Omit<EntidadRegistral, 'representantes'> {
+export interface EntidadDetalle extends Omit<EntidadRegistral, 'representantes' | 'cuentas' | 'titulares' | 'participacionTotal'> {
   documentos: DocumentoCiudadano[];
   obligaciones: Obligacion[];
   representantes: { dip: string; nombre: string; cargo: string }[];
+  /** Cuentas bancarias a nombre de la entidad. */
+  cuentas: CuentaBancaria[];
+  /** Facturas emitidas por la entidad (ventas). */
+  facturasEmitidas: FacturaEmitida[];
+  /** Participación de cada titular (%), agregada de las cuentas. */
+  participacion: ParticipacionEmpresa[];
+  /** Trámites en los que la entidad es interesada. */
+  tramites: Tramite[];
+}
+
+/** Factura emitida por una entidad (empresa). */
+export interface FacturaEmitida {
+  id: string;
+  numero: string; // FAC-2026-000001
+  concepto: string;
+  importe: number;
+  estado: 'pendiente' | 'cobrada' | 'anulada';
+  fecha: string;
+  receptor: string; // nombre del cliente/receptor
+  receptorId: string; // DIP o EIP del receptor
+}
+
+/** Titular con su % de participación en una entidad. */
+export interface ParticipacionEmpresa {
+  dip: string;
+  nombre: string;
+  pct: number;
 }
 
 export interface Solicitud2FA {
@@ -433,6 +466,8 @@ export interface CuentaBancaria {
   estado: 'activa' | 'bloqueada' | 'cerrada';
   /** Las fundaciones no se pueden cerrar ni repartir. */
   esFundacion?: boolean;
+  /** EIP de la entidad titular (cuentas Business). */
+  eip?: string;
   /** Reparto % para cuentas de empresa (obligatorio antes de cerrar con fondos). */
   participaciones?: { dip: string; nombre: string; pct: number }[];
 }

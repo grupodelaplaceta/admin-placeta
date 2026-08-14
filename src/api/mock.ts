@@ -10,10 +10,10 @@ import type {
   EntidadRegistral, Filtros, Actuacion, Requisito, DocumentoVinculado,
   NuevoTramite, EstadoTramite, Contribuyente,
   DeclaracionResumen, DeclaracionDetalle, DocumentoCiudadano, FirmaCiudadano,
-  Obligacion, EntidadDetalle, SubvencionResumen, SubvencionDetalle, Solicitud2FA,
+  Obligacion, SubvencionResumen, SubvencionDetalle, Solicitud2FA,
   DesgloseFiscal, CuentaSugerencia, RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior,
-  Votacion, VotoRegistro, Junta, Encuesta,
+  Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa,
 } from '../types';
 import { TIPOS_TRAMITE, ANONIMATO_DIAS } from '../types';
 import type { Provider } from './provider';
@@ -210,9 +210,82 @@ const OPERACIONES: Operacion[] = [
 ];
 
 const ENTIDADES: EntidadRegistral[] = [
-  { eip: 'EIP-XJETNL', nombre: 'Unhiro Inversiones S.P.', tipo: 'Sociedad', representantes: ['23749931M'], estado: 'activa', cumplimiento: 'Al día' },
-  { eip: 'EIP-X4NGQU', nombre: 'Red del Grupo de La Placeta S.P.', tipo: 'Sociedad', representantes: ['23749931M'], estado: 'activa', cumplimiento: 'Al día' },
+  { eip: 'EIP-XJETNL', nombre: 'Unhiro Inversiones S.P.', tipo: 'Sociedad', representantes: ['23749931M', '20521220S'], estado: 'activa', cumplimiento: 'Al día', cuentas: 1, titulares: 2, participacionTotal: 100 },
+  { eip: 'EIP-X4NGQU', nombre: 'Red del Grupo de La Placeta S.P.', tipo: 'Sociedad', representantes: ['23749931M', '72583347U'], estado: 'activa', cumplimiento: 'Al día', cuentas: 2, titulares: 2, participacionTotal: 100 },
 ];
+
+// Mapa nombre de cuenta del banco → EIP (para cuentas Business sin campo `eip`).
+// Se completa con los datos reales del censo (Supabase) cuando llegan por el banco.
+const EIP_POR_NOMBRE_CUENTA: Record<string, string> = {
+  'Unhiro S.PV.': 'EIP-XJETNL',
+  'Unhiro Inversiones S.P.': 'EIP-XJETNL',
+  'Red del Grupo de La Placeta S.P.': 'EIP-X4NGQU',
+  // 'Placeta Telecom S.P.': EIP pendiente de confirmar en censo (llega por `eip` real).
+  'Capitália Empresa': 'CAPITALIA_BANK',
+};
+
+// Nombre canónico registral por EIP.
+const NOMBRE_ENTIDAD_POR_EIP: Record<string, string> = {
+  'EIP-XJETNL': 'Unhiro Inversiones S.P.',
+  'EIP-X4NGQU': 'Red del Grupo de La Placeta S.P.',
+  'CAPITALIA_BANK': 'Capitália Empresa',
+};
+
+const SISTEMA_CUENTAS = /^(TGLP|AGLDP|VAULT_EMISION|DIP-|sys-|biz-market-|FUND-BLP)$/;
+
+function eipDeCuenta(c: CuentaBancaria): string {
+  if (c.eip) return c.eip;
+  if (SISTEMA_CUENTAS.test(c.id)) return '';
+  return EIP_POR_NOMBRE_CUENTA[c.nombre] ?? '';
+}
+
+// Entidades derivadas de las cuentas Business REALES del banco.
+function entidadesDelBanco(cuentas: CuentaBancaria[]): EntidadRegistral[] {
+  const map = new Map<string, EntidadRegistral & { titularesSet: Set<string>; pctTotal: number }>();
+  for (const c of cuentas) {
+    if (c.tipo !== 'Business' || c.estado === 'cerrada') continue;
+    const eip = eipDeCuenta(c);
+    if (!eip) continue;
+    let e = map.get(eip);
+    if (!e) {
+      e = {
+        eip,
+        nombre: NOMBRE_ENTIDAD_POR_EIP[eip] ?? c.nombre,
+        tipo: eip === 'CAPITALIA_BANK' ? 'Sociedad pública' : 'Sociedad',
+        representantes: [],
+        estado: 'activa',
+        cumplimiento: 'Al día',
+        cuentas: 0,
+        titulares: 0,
+        participacionTotal: 0,
+        titularesSet: new Set(),
+        pctTotal: 0,
+      };
+      map.set(eip, e);
+    }
+    e.cuentas = (e.cuentas ?? 0) + 1;
+    for (const p of c.participaciones ?? []) {
+      e.titularesSet.add(p.dip || p.nombre);
+      if (p.dip && !e.representantes.includes(p.dip)) e.representantes.push(p.dip);
+      e.pctTotal += p.pct;
+    }
+  }
+  return Array.from(map.values()).map(({ titularesSet, pctTotal, ...e }) => ({
+    ...e,
+    titulares: Math.max(titularesSet.size, e.representantes.length),
+    participacionTotal: Math.round(pctTotal * 10) / 10,
+  }));
+}
+
+// Facturas emitidas por entidad (ventas reales del banco, más seed representativo).
+const FACTURAS_EMITIDAS: Record<string, FacturaEmitida[]> = {
+  'EIP-XJETNL': [
+    { id: 'FAC-2026-000184', numero: 'FAC-2026-000184', concepto: 'Servicios de consultoría', importe: 112, estado: 'cobrada', fecha: '2026-08-01', receptor: 'Proveedor PROV-01', receptorId: 'PROV-01' },
+  ],
+  'EIP-X4NGQU': [
+    { id: 'FAC-2026-000190', numero: 'FAC-2026-000190', concepto: 'Servicios de la red', importe: 150, estado: 'cobrada', fecha: '2026-08-05', receptor: 'Mikel Alegre Marcos', receptorId: '23749931M' },
+  ],
+};
 
 // ── Banco real: se lee el estado en vivo del banco a través del BFF ──
 // (/api/bank/state). En desarrollo el proxy de Vite reenvía /api al BFF;
@@ -224,16 +297,28 @@ async function estadoBancoLive() {
     const r = await fetch('/api/bank/state', { credentials: 'include' });
     if (!r.ok) return null;
     const state = await r.json();
-    const cuentas: CuentaBancaria[] = (state.accounts || []).map((a: any) => ({
-      id: a.id,
-      nombre: String(a.displayName || a.name || '').replace(/\s*\(.*\)\s*$/, '').trim(),
-      tipo: a.type || 'Current',
-      dip: (a.placetaId || '').toUpperCase(),
-      saldo: Number(a.balancePz || 0),
-      estado: a.closedAt ? 'cerrada' : 'activa',
-      esFundacion: /fundacion|fundación/i.test(String(a.displayName || '')) || /^FUND-/.test(String(a.id || '')),
-      participaciones: [],
-    }));
+    const cuentas: CuentaBancaria[] = (state.accounts || []).map((a: any) => {
+      const nombre = String(a.displayName || a.name || '').replace(/\s*\(.*\)\s*$/, '').trim();
+      const esFund = /fundacion|fundación/i.test(String(a.displayName || '')) || /^FUND-/.test(String(a.id || ''));
+      const holders: { dip: string; nombre: string; pct: number }[] = (a.accountHolders || [])
+        .filter((h: any) => Number(h.ownershipPercent || h.pct || 0) > 0)
+        .map((h: any) => ({
+          dip: String(h.placetaId || h.dip || '').toUpperCase(),
+          nombre: String(h.displayName || h.name || h.placetaId || h.dip || '').replace(/\s*\(.*\)\s*$/, '').trim(),
+          pct: Number(h.ownershipPercent || h.pct || 0),
+        }));
+      return {
+        id: a.id,
+        nombre,
+        tipo: a.type || 'Current',
+        dip: (a.placetaId || '').toUpperCase(),
+        saldo: Number(a.balancePz || 0),
+        estado: a.closedAt ? 'cerrada' : 'activa',
+        esFundacion: esFund,
+        eip: String(a.eip || '').toUpperCase(),
+        participaciones: holders,
+      };
+    });
     const tarjetas: TarjetaDigital[] = (state.digitalCards || state.cards || []).map((d: any) => {
       const num = String(d.cardNumber || d.id || '').replace(/\D/g, '').padStart(6, '0').slice(-6);
       return {
@@ -394,10 +479,10 @@ const OBLIGACIONES_CIUDADANO: Obligacion[] = [
   { id: 'DEC-2026-08-001', tipo: 'declaracion', titulo: 'Declaración agosto 2026', estado: 'pendiente_aprobacion', plazo: '5 ago' },
 ];
 
-const ENTIDADES_DETALLE: Record<string, EntidadDetalle> = {
+// Seed registral (documentos/obligaciones). El resto del detalle se deriva
+// de las cuentas reales del banco en `getEntidad`.
+const ENTIDADES_DETALLE: Record<string, { documentos: DocumentoCiudadano[]; obligaciones: Obligacion[] }> = {
   'EIP-XJETNL': {
-    eip: 'EIP-XJETNL', nombre: 'Unhiro Inversiones S.P.', tipo: 'Sociedad', estado: 'activa', cumplimiento: 'Al día',
-    representantes: [{ dip: '23749931M', nombre: 'Mikel Alegre Marcos', cargo: 'Representante legal' }],
     documentos: [{ id: 'DOC-1', nombre: 'Escritura de constitución.pdf', tipo: 'escritura', estado: 'firmado', fecha: '2026-01-15' }],
     obligaciones: [{ id: 'DEC-2026-08-003', tipo: 'declaracion', titulo: 'Declaración agosto 2026', estado: 'aprobada', plazo: '5 ago' }],
   },
@@ -614,7 +699,9 @@ export const mockProvider: Provider = {
     };
   },
   async listarEntidades() {
-    return ENTIDADES;
+    const cuentas = await arrayCuentas();
+    const reales = entidadesDelBanco(cuentas);
+    return reales.length ? reales : ENTIDADES;
   },
   async listarOperaciones() {
     return OPERACIONES;
@@ -730,9 +817,48 @@ export const mockProvider: Provider = {
     }
   },
   async getEntidad(eip) {
-    const e = ENTIDADES.find((x) => x.eip === eip);
-    if (!e) throw new Error('Entidad no encontrada');
-    return ENTIDADES_DETALLE[eip] ?? { ...e, documentos: [], obligaciones: [], representantes: [] };
+    const cuentas = await arrayCuentas();
+    const cuentasEip = cuentas.filter((c) => eipDeCuenta(c) === eip);
+    const base = ENTIDADES.find((x) => x.eip === eip);
+    const real = entidadesDelBanco(cuentas).find((x) => x.eip === eip);
+    if (!base && !real && cuentasEip.length === 0) throw new Error('Entidad no encontrada');
+
+    const nombre = real?.nombre ?? base?.nombre ?? (cuentasEip[0]?.nombre ?? eip);
+    const repsDip = real?.representantes ?? base?.representantes ?? [];
+
+    // Participación agregada desde las cuentas reales (por titular).
+    const sumaPct = new Map<string, number>();
+    for (const c of cuentasEip) {
+      for (const p of c.participaciones ?? []) {
+        if (p.dip) sumaPct.set(p.dip, (sumaPct.get(p.dip) ?? 0) + p.pct);
+      }
+    }
+    const participacion: ParticipacionEmpresa[] = Array.from(sumaPct.entries()).map(([dip, pct]) => ({
+      dip,
+      nombre: CIUDADANOS.find((x) => x.dip === dip)?.nombre ?? dip,
+      pct: Math.round(pct * 10) / 10,
+    }));
+
+    const representantes = repsDip.map((dip) => ({
+      dip,
+      nombre: CIUDADANOS.find((x) => x.dip === dip)?.nombre ?? dip,
+      cargo: 'Representante legal',
+    }));
+
+    return {
+      eip,
+      nombre,
+      tipo: real?.tipo ?? base?.tipo ?? 'Sociedad',
+      estado: real?.estado ?? base?.estado ?? 'activa',
+      cumplimiento: real?.cumplimiento ?? base?.cumplimiento,
+      documentos: ENTIDADES_DETALLE[eip]?.documentos ?? [],
+      obligaciones: ENTIDADES_DETALLE[eip]?.obligaciones ?? [],
+      representantes,
+      cuentas: cuentasEip,
+      facturasEmitidas: FACTURAS_EMITIDAS[eip] ?? [],
+      participacion,
+      tramites: TRAMITES.filter((t) => t.dip === eip),
+    };
   },
   // ── Subvenciones ───────────────────────────────────────────────────
   async listarSubvenciones(f) {
@@ -821,7 +947,7 @@ export const mockProvider: Provider = {
       id: `BON-2026-${String(1000 + BONOS.length + 1)}`,
       nombre: datos.nombre,
       emisorEip: datos.emisorEip,
-      emisorNombre: ENTIDADES.find((e) => e.eip === datos.emisorEip)?.nombre ?? datos.emisorEip,
+      emisorNombre: NOMBRE_ENTIDAD_POR_EIP[datos.emisorEip] ?? ENTIDADES.find((e) => e.eip === datos.emisorEip)?.nombre ?? datos.emisorEip,
       presupuesto: datos.presupuesto,
       maxPorPersona: datos.maxPorPersona,
       baremos: datos.baremos ?? [],
@@ -940,9 +1066,29 @@ export const mockProvider: Provider = {
     return JUNIOR_ACTIVIDADES;
   },
   async listarColaboradoresJunior() {
+    const live = await juniorLive('colaboradores');
+    if (live && live.length) {
+      return live.map((c: any) => ({
+        dip: c.dip ?? c.placetaId ?? '',
+        nombre: c.nombre ?? c.nombre_real ?? 'Colaborador',
+        acuerdoFirmado: c.acuerdoFirmado ?? c.acuerdo_firmado ?? true,
+        actividades: Number(c.actividades ?? c.num_actividades ?? 0),
+        puntos: Number(c.puntos ?? 0),
+      }));
+    }
     return JUNIOR_COLABORADORES;
   },
   async listarDiplomasJunior() {
+    const live = await juniorLive('diplomas');
+    if (live && live.length) {
+      return live.map((d: any) => ({
+        id: d.id ?? `DIP-${d.dip}-${d.fecha}`,
+        dip: d.dip ?? d.placetaId ?? '',
+        nombre: d.nombre ?? d.nombre_real ?? '',
+        actividad: d.actividad ?? d.actividad_titulo ?? '—',
+        fecha: d.fecha ?? d.fecha_obtencion ?? '',
+      }));
+    }
     return JUNIOR_DIPLOMAS;
   },
   // ── Votaciones ─────────────────────────────────────────────────────

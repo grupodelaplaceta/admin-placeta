@@ -372,6 +372,20 @@ export async function generarPdfFichaEntidad(e: EntidadDetalle): Promise<void> {
   const doc = await nuevoDoc();
   await cabecera(doc, 'Ficha de entidad', `${e.nombre} · ${e.eip}`, LOGOS.administracion);
 
+  // Valor en tipografía mono (courier) para códigos EIP/DIP/cuentas.
+  const filaCodigo = (doc: jsPDF, y: number, etiqueta: string, valor: string, ancho = 50) => {
+    doc.setFont(FONT, 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...C.muted);
+    doc.text(etiqueta, 16, y);
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...C.dark);
+    doc.text(valor, 16 + ancho, y, { maxWidth: 196 - (16 + ancho) });
+    doc.setFont(FONT, 'normal');
+    return y + 7;
+  };
+
   let y = 64;
   y = seccion(doc, y, 'Datos registrales');
   y = fila(doc, y, 'Tipo', e.tipo);
@@ -381,7 +395,35 @@ export async function generarPdfFichaEntidad(e: EntidadDetalle): Promise<void> {
 
   y = seccion(doc, y, 'Representantes legales');
   if (e.representantes.length === 0) y = fila(doc, y, 'Representantes', 'Sin representantes');
-  else for (const r of e.representantes) y = fila(doc, y, r.cargo, `${r.nombre} (${r.dip})`);
+  else for (const r of e.representantes) y = filaCodigo(doc, y, r.cargo, `${r.nombre} · ${r.dip}`, 44);
+  y += 4;
+
+  y = seccion(doc, y, 'Participación');
+  if (e.participacion.length === 0) y = fila(doc, y, 'Titulares', 'Sin % registrado');
+  else for (const p of e.participacion) y = filaCodigo(doc, y, `${p.pct}%`, `${p.nombre} · ${p.dip}`, 20);
+  y += 4;
+
+  y = seccion(doc, y, 'Cuentas bancarias');
+  if (e.cuentas.length === 0) y = fila(doc, y, 'Cuentas', 'Sin cuentas');
+  else for (const c of e.cuentas) {
+    y = filaCodigo(doc, y, c.tipo, c.id, 34);
+    y = fila(doc, y, 'Saldo', `${c.saldo.toLocaleString('es-ES')} Pz · ${c.estado}`, 34);
+    for (const p of c.participaciones ?? []) y = filaCodigo(doc, y, `  ${p.pct}%`, `${p.nombre} · ${p.dip}`, 34);
+  }
+  y += 4;
+
+  y = seccion(doc, y, 'Facturas emitidas');
+  if (e.facturasEmitidas.length === 0) y = fila(doc, y, 'Facturas', 'Sin facturas emitidas');
+  else for (const f of e.facturasEmitidas) {
+    y = filaCodigo(doc, y, f.estado, f.numero, 30);
+    y = fila(doc, y, 'Concepto', `${f.concepto} · ${f.importe.toLocaleString('es-ES')} Pz`, 30);
+    if (f.receptorId) y = filaCodigo(doc, y, 'Receptor', `${f.receptor || f.receptorId} · ${f.receptorId} · ${f.fecha}`, 30);
+  }
+  y += 4;
+
+  y = seccion(doc, y, 'Trámites');
+  if (e.tramites.length === 0) y = fila(doc, y, 'Trámites', 'Sin trámites');
+  else for (const t of e.tramites) y = filaCodigo(doc, y, t.estado, `${t.id} · ${t.titulo} (${t.servicio ?? 'RSP'})`, 30);
   y += 4;
 
   y = seccion(doc, y, 'Documentos');
