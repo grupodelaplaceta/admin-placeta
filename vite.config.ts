@@ -24,5 +24,9 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.ts',
     css: false,
+    env: {
+      // Los tests usan el proveedor mock (con el snapshot real del banco).
+      VITE_USE_MOCK: 'true',
+    },
   },
 });

@@ -27,71 +27,12 @@ const SESSION: Session = {
   permisos: { rsp: [] },
 };
 
-const TRAMITES: (Tramite & { actuaciones?: Actuacion[] })[] = [
-  {
-    id: 'TR-2026-000184', tipo: 'subvencion', titulo: 'Solicitud de subvención — Material escolar',
-    dip: '84866700A', nombreCiudadano: 'Pablo Ruiz', estado: 'revision', plazo: 15,
-    plazoDesde: AHORA, vencido: false, asignadoA: 'Mikel Alegre Marcos', expedienteId: 'EXP-2026-000184',
-    servicio: 'Subvenciones', firmasCompletas: 0, firmasRequeridas: 1, actualizadoEn: AHORA,
-    actuaciones: [
-      { id: 'ACT-1', tipo: 'presentacion', descripcion: 'Presentada la solicitud', autor: 'Pablo Ruiz', fecha: AHORA },
-      { id: 'ACT-2', tipo: 'validacion', descripcion: 'Validación automática superada', autor: 'Sistema', fecha: AHORA },
-    ],
-  },
-  {
-    id: 'TR-2026-000121', tipo: 'cambio_titularidad', titulo: 'Cambio de titularidad — Cuenta compartida',
-    dip: '23749931M', nombreCiudadano: 'Mikel Alegre Marcos', estado: 'firma', plazo: 7,
-    plazoDesde: AHORA, vencido: true, asignadoA: 'Unai García', expedienteId: 'EXP-2026-000121',
-    servicio: 'Patrimonio', firmasCompletas: 1, firmasRequeridas: 2, actualizadoEn: AHORA,
-    actuaciones: [],
-  },
-  {
-    id: 'TR-2026-000099', tipo: 'baja', titulo: 'Baja de persona — Traslado fuera del ecosistema',
-    dip: '11111111D', nombreCiudadano: 'Salma El Harrak', estado: 'subsanacion', plazo: 10,
-    plazoDesde: AHORA, vencido: false, asignadoA: null, expedienteId: 'EXP-2026-000099',
-    servicio: 'Registro', firmasCompletas: 0, firmasRequeridas: 1, actualizadoEn: AHORA,
-    actuaciones: [],
-  },
-  {
-    id: 'TR-2026-000088', tipo: 'herencia', titulo: 'Sucesión — Reparto de participaciones',
-    dip: 'EIP-XJETNL', nombreCiudadano: 'Unhiro Inversiones S.P.', estado: 'resolucion', plazo: 20,
-    plazoDesde: AHORA, vencido: false, asignadoA: null, expedienteId: 'EXP-2026-000088',
-    servicio: 'Sucesiones', firmasCompletas: 2, firmasRequeridas: 3, actualizadoEn: AHORA,
-    actuaciones: [],
-  },
-];
+// Sin datos demo: los trámites reales llegan del backend (Supabase). Arrancan vacíos.
+const TRAMITES: (Tramite & { actuaciones?: Actuacion[] })[] = [];
 
-const ACTUACIONES: Record<string, Actuacion[]> = {
-  'TR-2026-000184': [
-    { id: 'ACT-1', tipo: 'presentacion', descripcion: 'Presentada la solicitud', autor: 'Pablo Ruiz', fecha: AHORA },
-    { id: 'ACT-2', tipo: 'validacion', descripcion: 'Validación automática superada', autor: 'Sistema', fecha: AHORA },
-  ],
-};
+const ACTUACIONES: Record<string, Actuacion[]> = {};
 
-const DETALLES: Record<string, { requisitos: Requisito[]; documentos: DocumentoVinculado[] }> = {
-  'TR-2026-000184': {
-    requisitos: [
-      { id: 'R1', descripcion: 'Presupuesto del material escolar', cumplido: true },
-      { id: 'R2', descripcion: 'Justificante de matriculación', cumplido: false },
-    ],
-    documentos: [
-      { id: 'DOC-1', nombre: 'Solicitud firmada.pdf', tipo: 'solicitud', firmado: true },
-      { id: 'DOC-2', nombre: 'Presupuesto.pdf', tipo: 'anexo', firmado: false },
-    ],
-  },
-  'TR-2026-000121': {
-    requisitos: [{ id: 'R1', descripcion: 'Identidad de cedente y cesionario', cumplido: false }],
-    documentos: [{ id: 'DOC-1', nombre: 'Contrato de cesión.pdf', tipo: 'contrato', firmado: false }],
-  },
-  'TR-2026-000099': {
-    requisitos: [{ id: 'R1', descripcion: 'Justificante del traslado', cumplido: false }],
-    documentos: [],
-  },
-  'TR-2026-000088': {
-    requisitos: [{ id: 'R1', descripcion: 'Testamento digital', cumplido: true }],
-    documentos: [{ id: 'DOC-1', nombre: 'Testamento.pdf', tipo: 'testamento', firmado: true }],
-  },
-};
+const DETALLES: Record<string, { requisitos: Requisito[]; documentos: DocumentoVinculado[] }> = {};
 
 const TRANSICIONES: Record<string, EstadoTramite> = {
   validar: 'revision',
@@ -128,36 +69,12 @@ const EXPEDIENTES: Expediente[] = TRAMITES.map((t, i) => ({
 }));
 
 // Censo REAL completo (coincide con CONTRIBUYENTES): todas las personas y el junior.
-const CIUDADANOS: CiudadanoResumen[] = [
-  { dip: '23749931M', nombre: 'Mikel Alegre Marcos', nivel: 'N3', cuentas: 4, expedientesActivos: 3, estado: 'activo' },
-  { dip: '72583347U', nombre: 'Unai García Almazán', nivel: 'N3', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '20521220S', nombre: 'Salma El Harrak', nivel: 'N3', cuentas: 1, expedientesActivos: 2, estado: 'activo' },
-  { dip: '45134577U', nombre: 'Uriel', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '86843254E', nombre: 'Enzo Alegre Marcos', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '38599364E', nombre: 'Edgar', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '49348594L', nombre: 'Leire', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '58285937S', nombre: 'Shaheer Shajjad Bhatti', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '74929475A', nombre: 'Aitor de Felipe Alcántara', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '83759384A', nombre: 'Ana Maria', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '65725675A', nombre: 'Alba Marcos del Pozo', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '31856370M', nombre: 'Minaya Covas Armesto', nivel: 'N1', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '82639682N', nombre: 'Nuria', nivel: 'N1', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '39587539P', nombre: 'Phoebe', nivel: 'N1', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '39672964I', nombre: 'Iker', nivel: 'N1', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-  { dip: '86209131P', nombre: 'Pablo Ruiz', nivel: 'N1', cuentas: 1, expedientesActivos: 1, estado: 'activo' },
-];
+// Ciudadanos derivados de las cuentas reales del banco (placetaId = DIP).
+const CIUDADANOS: CiudadanoResumen[] = [];
 
-const NOTIFICACIONES: Notificacion[] = [
-  { id: 'NOTIF-1', nivel: 'pendiente', titulo: 'Trámite a punto de vencer', mensaje: 'TR-2026-000121 vence en 1 día.', destinatarioDip: '23749931M', leida: false, acuseRecibido: false, creadaEn: AHORA },
-  { id: 'NOTIF-2', nivel: 'accion', titulo: 'Firma pendiente', mensaje: 'Falta 1 de 2 firmas en la sucesión EXP-2026-000088.', destinatarioDip: '23749931M', leida: false, acuseRecibido: true, creadaEn: AHORA },
-  { id: 'NOTIF-3', nivel: 'info', titulo: 'CNIC programado', mensaje: 'CNIC-IVA v4 se publicará el 15/08.', leida: true, acuseRecibido: true, creadaEn: AHORA },
-];
+const NOTIFICACIONES: Notificacion[] = [];
 
-const AUDITORIA: EventoAuditoria[] = [
-  { id: 'AUD-2026-000521', usuario: 'Mikel Alegre Marcos', servicio: 'tramites', accion: 'aprobar', objetoTipo: 'tramite', objetoId: 'TR-2026-000184', fecha: AHORA },
-  { id: 'AUD-2026-000520', usuario: 'Unai García', servicio: 'expedientes', accion: 'vincular_documento', objetoTipo: 'expediente', objetoId: 'EXP-2026-000121', fecha: AHORA },
-  { id: 'AUD-2026-000519', usuario: 'Sistema', servicio: 'fiscalidad', accion: 'bloquear_limite_500k', objetoTipo: 'cuenta', objetoId: 'ACC-2026-000077', motivo: 'Supera el límite de capital', fecha: AHORA },
-];
+const AUDITORIA: EventoAuditoria[] = [];
 
 function cnic(codigo: string, etiqueta: string, tipoValor: string, valor: string | number, unidad?: string): CNICRegla {
   return {
@@ -229,11 +146,7 @@ const CNIC: CNICRegla[] = [
   cnic('CNIC-BONO-BIENVENIDA-JUNIOR-BASICA', 'Bono de bienvenida menor de 16 años', 'numero', 750, 'Pz'),
 ];
 
-const OPERACIONES: Operacion[] = [
-  { id: 'OP-2026-000321', concepto: 'Nómina agosto', importe: 350, origen: 'FUND-BLP', destino: '84866700A', clasificacion: 'nomina', inconsistencia: 'NOMINA_SIN_REFERENCIA', estado: 'retenida', fecha: AHORA },
-  { id: 'OP-2026-000320', concepto: 'Factura proveedor', importe: 112, origen: 'EIP-XJETNL', destino: 'PROV-01', clasificacion: 'factura', estado: 'procesada', fecha: AHORA },
-  { id: 'OP-2026-000319', concepto: 'Subvención concedida', importe: 1000, origen: 'AGLDP', destino: 'EIP-X4NGQU', clasificacion: 'subvencion', inconsistencia: 'SUBVENCION_SIN_EXPEDIENTE', estado: 'retenida', fecha: AHORA },
-];
+const OPERACIONES: Operacion[] = [];
 
 const ENTIDADES: EntidadRegistral[] = [
   { eip: 'EIP-XJETNL', nombre: 'Unhiro Inversiones S.P.', tipo: 'Sociedad', representantes: ['23749931M', '20521220S'], estado: 'activa', cumplimiento: 'Al día', cuentas: 1, titulares: 2, participacionTotal: 100 },
@@ -429,19 +342,10 @@ async function juniorLive(path: string): Promise<any[] | null> {
 }
 
 // ── Participación democrática (votaciones, juntas, encuestas) ────────
-const VOTACIONES: Votacion[] = [
-  { id: 'VOT-2026-0001', titulo: 'Presupuestos participativos 2026', categoria: 'referendum', descripcion: 'Aprobación del presupuesto anual.', rango: 'ciudadania_plena', opciones: ['A favor', 'En contra', 'Abstención'], estado: 'abierta', resultado: null, aFavor: 12, enContra: 3, abstenciones: 2, totalVotos: 17, creadaEn: AHORA },
-  { id: 'VOT-2026-0002', titulo: 'Elección del Consejo Junior', categoria: 'eleccion', descripcion: 'Elegir representante junior.', rango: 'junior', opciones: ['Pablo Ruiz', 'Ana García'], estado: 'cerrada', resultado: 'aprobada', aFavor: 20, enContra: 5, abstenciones: 1, totalVotos: 26, creadaEn: AHORA, cerradaEn: AHORA },
-];
-const VOTOS_REGISTRO: VotoRegistro[] = [
-  { id: 'RGV-1', votacionId: 'VOT-2026-0002', dip: '23749931M', voto: 'Pablo Ruiz', timestamp: AHORA, esJunta: true, anonimo: false },
-];
-const JUNTAS: Junta[] = [
-  { id: 'JUN-2026-0001', titulo: 'Sesión ordinaria de la Junta', fecha: '2026-08-20', asistentes: ['23749931M', '72583347U'], ordenDelDia: ['Aprobación del acta anterior', 'Presupuestos 2026'], votaciones: ['VOT-2026-0001'], acta: '', estado: 'convocada' },
-];
-const ENCUESTAS: Encuesta[] = [
-  { id: 'ENC-2026-0001', titulo: 'Horario de apertura del RSP', pregunta: '¿Qué horario prefieres?', opciones: ['Mañanas', 'Tardes', 'Continuo'], rango: 'todos', estado: 'abierta', respuestas: { 'Mañanas': 8, 'Tardes': 5, 'Continuo': 3 }, totalRespuestas: 16, creadaEn: AHORA },
-];
+const VOTACIONES: Votacion[] = [];
+const VOTOS_REGISTRO: VotoRegistro[] = [];
+const JUNTAS: Junta[] = [];
+const ENCUESTAS: Encuesta[] = [];
 
 // Contribuyentes REALES del banco (GET /api/crm-state, saldos agregados por DIP/EIP).
 const CONTRIBUYENTES: Contribuyente[] = [
@@ -533,21 +437,9 @@ function desgloseDe(d: DeclaracionResumen): DesgloseFiscal {
   };
 }
 
-const DOCS_CIUDADANO: DocumentoCiudadano[] = [
-  { id: 'DOC-2026-0001', nombre: 'Declaración Fiscal Mensual DFM-2026-07.pdf', tipo: 'declaracion', estado: 'firmado', fecha: '2026-07-05' },
-  { id: 'DOC-2026-0002', nombre: 'Certificado de residencia.pdf', tipo: 'certificado', estado: 'emitido', fecha: '2026-06-10' },
-  { id: 'DOC-2026-0003', nombre: 'Contrato de cesión.pdf', tipo: 'contrato', estado: 'pendiente', fecha: '2026-08-01' },
-];
-
-const FIRMAS_CIUDADANO: FirmaCiudadano[] = [
-  { id: 'FIR-1', documento: 'Contrato de cesión.pdf', firmante: 'Mikel Alegre Marcos', estado: 'pendiente' },
-  { id: 'FIR-2', documento: 'Acta de reunión.pdf', firmante: 'Mikel Alegre Marcos', estado: 'completada', fecha: '2026-07-20' },
-];
-
-const OBLIGACIONES_CIUDADANO: Obligacion[] = [
-  { id: 'TR-2026-000121', tipo: 'tramite', titulo: 'Cambio de titularidad — Cuenta compartida', estado: 'firma', plazo: '7 días' },
-  { id: 'DEC-2026-08-001', tipo: 'declaracion', titulo: 'Declaración agosto 2026', estado: 'pendiente_aprobacion', plazo: '5 ago' },
-];
+const DOCS_CIUDADANO: DocumentoCiudadano[] = [];
+const FIRMAS_CIUDADANO: FirmaCiudadano[] = [];
+const OBLIGACIONES_CIUDADANO: Obligacion[] = [];
 
 // Seed registral (documentos/obligaciones). El resto del detalle se deriva
 // de las cuentas reales del banco en `getEntidad`.
@@ -605,38 +497,12 @@ const TARJETAS: TarjetaDigital[] = [
   { id: 'card-promo-mikel', alias: 'Promo Card', accountId: '', tier: 'Standard', frozen: true, cardNumber: '0001', promoPhysical: true, pin: '0000', contactlessLimitPz: 500, weeklyLimitPz: 1000 },
 ];
 
-// Placeta Junior (normativa CNI Cap. III / Art. 5-6; academia con IVA 12% y Capitalia).
-const JUNIOR_ACTIVIDADES: ActividadJunior[] = [
-  { id: 'ACT-1', titulo: 'Matemáticas básicas', edadMin: 6, edadMax: 12, complejidad: 'Fácil', precio: 5.6, recompensa: 10, estado: 'aprobada', colaborador: 'Mikel Alegre Marcos' },
-  { id: 'ACT-2', titulo: 'Historia de La Placeta', edadMin: 12, edadMax: 17, complejidad: 'Media', precio: 11.2, recompensa: 25, estado: 'aprobada', colaborador: 'Mikel Alegre Marcos' },
-  { id: 'ACT-3', titulo: 'Robótica junior', edadMin: 14, edadMax: 17, complejidad: 'Difícil', precio: 22.4, recompensa: 50, estado: 'en_revision', colaborador: 'Unai García Almazán' },
-];
-const JUNIOR_COLABORADORES: ColaboradorJunior[] = [
-  { dip: '23749931M', nombre: 'Mikel Alegre Marcos', acuerdoFirmado: true, actividades: 2, puntos: 180 },
-  { dip: '72583347U', nombre: 'Unai García Almazán', acuerdoFirmado: true, actividades: 1, puntos: 40 },
-];
-const JUNIOR_DIPLOMAS: DiplomaJunior[] = [
-  { id: 'DIP-1', dip: '86209131P', nombre: 'Pablo Ruiz', actividad: 'Matemáticas básicas', fecha: '2026-07-20' },
-];
+// Placeta Junior REAL: se proxea de la API oficial de la Academia. Sin red, vacío.
+const JUNIOR_ACTIVIDADES: ActividadJunior[] = [];
+const JUNIOR_COLABORADORES: ColaboradorJunior[] = [];
+const JUNIOR_DIPLOMAS: DiplomaJunior[] = [];
 
-const CONTEXTOS: Record<string, ContextoCiudadano> = {
-  '23749931M': {
-    dip: '23749931M', nombre: 'Mikel Alegre Marcos', nivel: 'N3',
-    email: 'mikel@laplaceta.org', telefono: '+34 600 000 000',
-    bloques: [
-      { clave: 'identidad', etiqueta: 'Identidad', icono: 'user', items: [{ clave: 'dip', etiqueta: 'DIP', valor: '23749931M' }, { clave: 'nivel', etiqueta: 'Verificación', valor: 'N3' }] },
-      { clave: 'banco', etiqueta: 'Banco', icono: 'wallet', items: [{ clave: 'cuentas', etiqueta: 'Cuentas', valor: 4 }, { clave: 'saldo', etiqueta: 'Saldo total', valor: '487.994 Pz' }] },
-      { clave: 'fiscalidad', etiqueta: 'Fiscalidad', icono: 'receipt', items: [{ clave: 'declaraciones', etiqueta: 'Declaraciones', valor: 2 }, { clave: 'deuda', etiqueta: 'Deuda pendiente', valor: '0 Pz' }] },
-      { clave: 'patrimonio', etiqueta: 'Patrimonio', icono: 'home', items: [
-        { clave: 'titularidades', etiqueta: 'Titularidades', valor: 3 },
-        { clave: 'compartidas', etiqueta: 'Cuentas compartidas', valor: '2 (50% / 50%)' },
-        { clave: 'participaciones', etiqueta: 'Participaciones empresa', valor: 'Unhiro 60% · Red GDLP 100%' },
-        { clave: 'empresas', etiqueta: 'Empresas', valor: 'Placeta Telecom · Ubuntu · Unhiro · Red GDLP' },
-      ] },
-      { clave: 'expedientes', etiqueta: 'Expedientes', icono: 'folder', items: [{ clave: 'activos', etiqueta: 'Activos', valor: 3 }, { clave: 'historicos', etiqueta: 'Históricos', valor: 12 }] },
-    ],
-  },
-};
+const CONTEXTOS: Record<string, ContextoCiudadano> = {};
 
 function filtro<T>(items: T[], f?: Filtros): T[] {
   let out = items;
@@ -663,11 +529,21 @@ export const mockProvider: Provider = {
     return null;
   },
   async dashboard(): Promise<DashboardStats> {
+    const cuentas = await arrayCuentas();
     return {
-      expedientes: 184, incidencias: 12, incidenciasAbiertas: 4,
-      notificacionesNoLeidas: 2, cnicVigentes: 68, nominas: 21, facturas: 44,
-      bloqueos500k: 1, retribucionesPendientes: 3, operacionesRetenidas: 2,
-      comprobaciones: 8, comprobacionesInconsistencia: 1,
+      // Solo datos reales/derivados. Los contadores sin fuente real valen 0.
+      expedientes: 0,
+      incidencias: 0,
+      incidenciasAbiertas: 0,
+      notificacionesNoLeidas: NOTIFICACIONES.filter((n) => !n.leida).length,
+      cnicVigentes: CNIC.length, // CNIC reales del BOP
+      nominas: 0,
+      facturas: 0,
+      bloqueos500k: cuentas.filter((c) => c.saldo > 500000 && c.tipo !== 'Business').length,
+      retribucionesPendientes: 0,
+      operacionesRetenidas: 0,
+      comprobaciones: 0,
+      comprobacionesInconsistencia: 0,
     };
   },
   async bandeja() {

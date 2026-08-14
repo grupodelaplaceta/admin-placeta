@@ -17,62 +17,33 @@ const limpiar = (s = '') => String(s).replace(/\s*\(.*\)\s*$/, '').trim();
 export function createApiRouter({ getBankState }) {
   const router = Router();
 
-  /* ── Almacén en memoria (referencia) ─────────────────────────────── */
+  /* ── Almacén en memoria (solo datos creados en sesión; SIN datos demo) ── */
+  // Los datos reales vienen del banco (crm-state), de la Academia
+  // (admin-placeta) y del BOP. Nada de aquí se inventa: los listados que aún
+  // no tienen fuente real arrancan vacíos.
   const store = {
-    ciudadanos: [
-      { dip: '23749931M', nombre: 'Mikel Alegre Marcos', nivel: 'N3', cuentas: 2, expedientesActivos: 1, estado: 'activo' },
-      { dip: '72583347U', nombre: 'Unai García Almazán', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-      { dip: '20521220S', nombre: 'Salma El Harrak', nivel: 'N2', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-      { dip: '86209131P', nombre: 'Pablo Ruiz', nivel: 'N1', cuentas: 1, expedientesActivos: 0, estado: 'activo' },
-    ],
-    entidades: [
-      { eip: 'EIP-X4NGQU', nombre: 'Red del Grupo de La Placeta S.P.', tipo: 'sociedad', representantes: ['23749931M'], estado: 'activa' },
-      { eip: 'EIP-XJETNL', nombre: 'Unhiro S.PV.', tipo: 'sociedad', representantes: ['23749931M', '20521220S'], estado: 'activa' },
-    ],
-    expedientes: [
-      { id: 'EXP-2026-000088', titulo: 'Sucesión · Cuenta compartida', dip: '23749931M', nombreCiudadano: 'Mikel Alegre Marcos', servicio: 'Sucesiones', estado: 'firma', numActuaciones: 3, documentos: 3, creadoEn: AHORA() },
-    ],
-    tramites: [
-      { id: 'TR-2026-000121', tipo: 'cambio_titularidad', titulo: 'Cambio de titularidad — Cuenta compartida', dip: '23749931M', nombreCiudadano: 'Mikel Alegre Marcos', estado: 'firma', plazo: 7, servicio: 'Patrimonio', firmasCompletas: 1, firmasRequeridas: 2, actualizadoEn: AHORA(), datosEspecificos: { porcentaje: '50' } },
-    ],
+    ciudadanos: [],   // derivados del banco en `ciudadanosDelBanco()`
+    entidades: [],    // derivadas del banco en `entidadesDelBanco()`
+    expedientes: [],  // fuente real: Supabase (a conectar)
+    tramites: [],     // fuente real: Supabase (a conectar)
     subvenciones: [],
     subvencionesDetalle: {},
     bonos: [],
     bonosDetalle: {},
-    juniorActividades: [
-      { id: 'ACT-1', titulo: 'Matemáticas básicas', edadMin: 6, edadMax: 12, complejidad: 'Fácil', precio: 5.6, recompensa: 10, estado: 'aprobada', colaborador: 'Mikel Alegre Marcos' },
-    ],
-    juniorColaboradores: [
-      { dip: '23749931M', nombre: 'Mikel Alegre Marcos', acuerdoFirmado: true, actividades: 2, puntos: 180 },
-    ],
-    juniorDiplomas: [
-      { id: 'DIP-1', dip: '86209131P', nombre: 'Pablo Ruiz', actividad: 'Matemáticas básicas', fecha: '2026-07-20' },
-    ],
-    operaciones: [
-      { id: 'OP-2026-0001', concepto: 'Nómina agosto', importe: 150, origen: 'EIP-X4NGQU', destino: '23749931M', clasificacion: 'nomina', estado: 'procesada', fecha: AHORA() },
-    ],
-    auditoria: [
-      { id: 'AUD-2026-0001', usuario: 'Mikel Alegre Marcos', servicio: 'Patrimonio', accion: 'avanzar', objetoTipo: 'tramite', objetoId: 'TR-2026-000121', fecha: AHORA() },
-    ],
-    notificaciones: [
-      { id: 'NOTIF-1', nivel: 'accion', titulo: 'Firma pendiente', mensaje: 'Falta 1 de 2 firmas en la sucesión EXP-2026-000088.', destinatarioDip: '23749931M', leida: false, acuseRecibido: true, creadaEn: AHORA() },
-    ],
+    juniorActividades: [],   // proxeados de la API real de la Academia
+    juniorColaboradores: [],
+    juniorDiplomas: [],
+    operaciones: [],  // fuente real: motor de operaciones del banco
+    auditoria: [],    // fuente real: Supabase (a conectar)
+    notificaciones: [],
     cnic: [
       { codigo: 'CNIC-IGF-PF-TIPO-3', etiqueta: 'Tipo IGF personas físicas tramo 3', tipoValor: 'porcentaje', valor: 30, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
       { codigo: 'CNIC-IGF-EMPRESA-TIPO-4', etiqueta: 'Tipo IGF empresas tramo 4', tipoValor: 'porcentaje', valor: 85, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
     ],
-    votaciones: [
-      { id: 'VOT-2026-0001', titulo: 'Presupuestos participativos 2026', categoria: 'referendum', descripcion: 'Aprobación del presupuesto anual.', rango: 'ciudadania_plena', opciones: ['A favor', 'En contra', 'Abstención'], estado: 'abierta', resultado: null, aFavor: 12, enContra: 3, abstenciones: 2, totalVotos: 17, creadaEn: AHORA() },
-    ],
-    votos: [
-      { id: 'RGV-1', votacionId: 'VOT-2026-0001', dip: '23749931M', voto: 'A favor', timestamp: AHORA(), esJunta: true, anonimo: false },
-    ],
-    juntas: [
-      { id: 'JUN-2026-0001', titulo: 'Sesión ordinaria de la Junta', fecha: '2026-08-20', asistentes: ['23749931M', '72583347U'], ordenDelDia: ['Aprobación del acta anterior'], votaciones: ['VOT-2026-0001'], acta: '', estado: 'convocada' },
-    ],
-    encuestas: [
-      { id: 'ENC-2026-0001', titulo: 'Horario de apertura del RSP', pregunta: '¿Qué horario prefieres?', opciones: ['Mañanas', 'Tardes', 'Continuo'], rango: 'todos', estado: 'abierta', respuestas: { 'Mañanas': 8, 'Tardes': 5, 'Continuo': 3 }, totalRespuestas: 16, creadaEn: AHORA() },
-    ],
+    votaciones: [],
+    votos: [],
+    juntas: [],
+    encuestas: [],
     solicitudes2fa: new Map(),
   };
 
@@ -179,6 +150,19 @@ export function createApiRouter({ getBankState }) {
     }
     return out;
   }
+  // Ciudadanos REALES derivados de las cuentas del banco (placetaId = DIP).
+  async function ciudadanosDelBanco() {
+    const cuentas = await listarCuentas();
+    const DIP = /^[XYZ0-9][0-9]{7,8}[A-Z]$/;
+    const map = new Map();
+    for (const c of cuentas) {
+      if (!DIP.test(c.dip)) continue;
+      const e = map.get(c.dip) || { dip: c.dip, nombre: c.nombre, nivel: 'N1', cuentas: 0, expedientesActivos: 0, estado: 'activo' };
+      e.cuentas += 1;
+      map.set(c.dip, e);
+    }
+    return Array.from(map.values());
+  }
   // Facturas emitidas: ventas reales (sender = empresa) desde los movimientos.
   function facturasDe(eip, state, cuentas) {
     const propias = new Set(cuentas.filter((c) => eipDeCuenta(c) === eip).map((c) => c.id));
@@ -215,9 +199,10 @@ export function createApiRouter({ getBankState }) {
   }
   async function verificarRequisitos(dip, requisitos) {
     const cuentas = await listarCuentas();
+    const ciudadanos = await ciudadanosDelBanco();
     const propias = cuentas.filter((c) => c.dip === dip && c.estado === 'activa');
     const junior = propias.some((c) => c.tipo === 'Child') ? 1 : 0;
-    const nivel = store.ciudadanos.find((c) => c.dip === dip)?.nivel === 'N3' ? 3 : 1;
+    const nivel = ciudadanos.find((c) => c.dip === dip)?.nivel === 'N3' ? 3 : 1;
     const datos = {
       patrimonio: propias.reduce((s, c) => s + c.saldo, 0),
       cuentas: propias.length,
@@ -325,20 +310,33 @@ export function createApiRouter({ getBankState }) {
   });
 
   /* ── Ciudadanos / entidades ──────────────────────────────────────── */
-  router.get('/rsp/api/ciudadanos', (req, res) => {
-    const q = String(req.query.q || '').toLowerCase();
-    const lista = q ? store.ciudadanos.filter((c) => c.nombre.toLowerCase().includes(q) || c.dip.toLowerCase().includes(q)) : store.ciudadanos;
-    res.json(lista);
+  router.get('/rsp/api/ciudadanos', async (req, res) => {
+    try {
+      const todos = await ciudadanosDelBanco();
+      const q = String(req.query.q || '').toLowerCase();
+      const lista = q ? todos.filter((c) => c.nombre.toLowerCase().includes(q) || c.dip.toLowerCase().includes(q)) : todos;
+      res.json(lista);
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
   });
-  router.get('/rsp/api/contexto/:dip', (req, res) => {
-    const c = store.ciudadanos.find((x) => x.dip === req.params.dip);
-    if (!c) return res.status(404).json({ error: 'Ciudadano no encontrado' });
-    res.json({ ...c, email: `${c.dip.toLowerCase()}@laplaceta.org`, bloques: [{ clave: 'identidad', etiqueta: 'Identidad', icono: 'user', items: [{ clave: 'nivel', etiqueta: 'Nivel', valor: c.nivel }] }] });
+  router.get('/rsp/api/contexto/:dip', async (req, res) => {
+    try {
+      const c = (await ciudadanosDelBanco()).find((x) => x.dip === req.params.dip);
+      if (!c) return res.status(404).json({ error: 'Ciudadano no encontrado' });
+      res.json({ ...c, email: `${c.dip.toLowerCase()}@laplaceta.org`, bloques: [{ clave: 'identidad', etiqueta: 'Identidad', icono: 'user', items: [{ clave: 'nivel', etiqueta: 'Nivel', valor: c.nivel }] }] });
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
   });
-  router.post('/rsp/api/ciudadanos/:dip', (req, res) => {
-    const c = store.ciudadanos.find((x) => x.dip === req.params.dip);
-    if (!c) return res.status(404).json({ error: 'Ciudadano no encontrado' });
-    res.json({ ok: true });
+  router.post('/rsp/api/ciudadanos/:dip', async (req, res) => {
+    try {
+      const c = (await ciudadanosDelBanco()).find((x) => x.dip === req.params.dip);
+      if (!c) return res.status(404).json({ error: 'Ciudadano no encontrado' });
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
   });
   router.get('/rsp/api/ciudadanos/:dip/documentos', (_req, res) => res.json([]));
   router.get('/rsp/api/ciudadanos/:dip/firmas', (_req, res) => res.json([]));
@@ -359,6 +357,7 @@ export function createApiRouter({ getBankState }) {
     try {
       const eip = req.params.eip;
       const cuentas = await listarCuentas();
+      const ciudadanos = await ciudadanosDelBanco();
       const propias = cuentas.filter((c) => eipDeCuenta(c) === eip);
       const entidad = (await entidadesDelBanco()).find((x) => x.eip === eip);
       if (!entidad && propias.length === 0) return res.status(404).json({ error: 'Entidad no encontrada' });
@@ -372,7 +371,7 @@ export function createApiRouter({ getBankState }) {
       }
       const participacion = Array.from(suma.entries()).map(([dip, pct]) => ({
         dip,
-        nombre: store.ciudadanos.find((x) => x.dip === dip)?.nombre || dip,
+        nombre: ciudadanos.find((x) => x.dip === dip)?.nombre || dip,
         pct: Math.round(pct * 10) / 10,
       }));
 
@@ -388,7 +387,7 @@ export function createApiRouter({ getBankState }) {
         cumplimiento: entidad?.cumplimiento,
         representantes: (entidad?.representantes || []).map((dip) => ({
           dip,
-          nombre: store.ciudadanos.find((x) => x.dip === dip)?.nombre || dip,
+          nombre: ciudadanos.find((x) => x.dip === dip)?.nombre || dip,
           cargo: 'Representante legal',
         })),
         documentos: [],
