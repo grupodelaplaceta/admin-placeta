@@ -329,6 +329,8 @@ export interface SubvencionResumen {
   concepto: string;
   estado: 'concedida' | 'justificada' | 'cerrada';
   fechaConcesion: string;
+  /** Publicada en la web del GDLP (solo si se marcó la casilla). */
+  publicada?: boolean;
 }
 
 export interface DocumentoRequerido {
@@ -362,6 +364,13 @@ export interface SubvencionDetalle extends SubvencionResumen {
   justificaciones: JustificacionPago[];
   /** Tipos de gasto excluibles (impuestos/comisiones) según el sistema real. */
   excluirTipos: string[];
+  /** Tipos de transacción del banco que SÍ se pueden justificar (aptos). */
+  tiposAptos: string[];
+  /** Baremos automáticos para empresas que quieran optar. */
+  baremos?: Baremo[];
+  publicada?: boolean;
+  publicadaEn?: string;
+  bopUrl?: string;
 }
 
 export interface CampoTramite {
@@ -383,6 +392,8 @@ export interface Baremo {
   id: string;
   descripcion: string;
   peso: number;
+  /** Explicación de cómo se calcula/comprueba automáticamente. */
+  descripcionCalculo?: string;
 }
 
 export interface RegimenBono {
@@ -393,6 +404,8 @@ export interface RegimenBono {
   presupuesto: number;
   maxPorPersona: number;
   baremos?: Baremo[];
+  /** Requisitos que debe cumplir el solicitante. */
+  requisitos?: string[];
   fechaLimite?: string;
   presupuestoUsado: number;
   adscritos: number;

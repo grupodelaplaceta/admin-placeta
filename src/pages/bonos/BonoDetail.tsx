@@ -72,12 +72,25 @@ export default function BonoDetail() {
           ) : (
             <ul className="rsp-doclist">
               {det.baremos.map((b) => (
-                <li key={b.id} className="rsp-doc">
+                <li key={b.id} className="rsp-doc" style={{ alignItems: 'flex-start' }}>
                   <Icon name="scale" size={16} />
-                  <span>{b.descripcion}</span>
+                  <span style={{ flex: 1 }}>
+                    <strong>{b.descripcion}</strong>
+                    {b.descripcionCalculo && <><br /><span className="u-muted" style={{ fontSize: 'var(--fs-xs)' }}>{b.descripcionCalculo}</span></>}
+                  </span>
                   <Badge tone="success">auto</Badge>
                   <Badge tone="brand">peso {b.peso}</Badge>
                 </li>
+              ))}
+            </ul>
+          )}
+          <CardHeader title="Requisitos" subtitle="Condiciones que debe cumplir el solicitante" />
+          {!det.requisitos || det.requisitos.length === 0 ? (
+            <p className="u-muted">Sin requisitos adicionales.</p>
+          ) : (
+            <ul className="rsp-list">
+              {det.requisitos.map((r, i) => (
+                <li key={i}><Icon name="check" size={14} /> {r}</li>
               ))}
             </ul>
           )}

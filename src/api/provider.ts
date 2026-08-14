@@ -43,7 +43,7 @@ export interface Provider {
   // Subvenciones
   listarSubvenciones(filtros?: Filtros): Promise<SubvencionResumen[]>;
   getSubvencion(id: string): Promise<SubvencionDetalle>;
-  concederSubvencion(datos: { emisorEip: string; receptorEip: string; importe: number; concepto: string }): Promise<SubvencionResumen>;
+  concederSubvencion(datos: { emisorEip: string; receptorEip: string; importe: number; concepto: string; tiposAptos?: string[]; publicada?: boolean; baremos?: Baremo[] }): Promise<SubvencionResumen>;
   requerirDocumentosSubvencion(id: string, documentos: string[]): Promise<void>;
   justificarPagoSubvencion(id: string, gastoIds: string[]): Promise<void>;
 
@@ -65,7 +65,7 @@ export interface Provider {
   // Bonificaciones (empresa → particular, bajo regímenes de bono)
   listarBonos(): Promise<RegimenBono[]>;
   getBono(id: string): Promise<BonoDetalle>;
-  crearBono(datos: { nombre: string; emisorEip: string; presupuesto: number; maxPorPersona: number; fechaLimite?: string; baremos?: Baremo[] }): Promise<RegimenBono>;
+  crearBono(datos: { nombre: string; emisorEip: string; presupuesto: number; maxPorPersona: number; fechaLimite?: string; baremos?: Baremo[]; requisitos?: string[] }): Promise<RegimenBono>;
   adscribirCiudadano(id: string, dip: string): Promise<void>;
 
   // Expedientes

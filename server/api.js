@@ -258,9 +258,17 @@ export function createApiRouter({ getBankState }) {
       receptorEip: d.receptorEip, receptorNombre: d.receptorEip,
       importe: d.importe, importeRestante: d.importe,
       concepto: d.concepto, estado: 'concedida', fechaConcesion: AHORA().slice(0, 10),
+      publicada: d.publicada ?? false,
     };
     store.subvenciones.unshift(s);
-    store.subvencionesDetalle[s.id] = { ...s, documentosRequeridos: [], gastos: [], justificaciones: [], excluirTipos: ['impuestos', 'comisiones'] };
+    store.subvencionesDetalle[s.id] = {
+      ...s, documentosRequeridos: [], gastos: [], justificaciones: [],
+      excluirTipos: ['Tax', 'IrmCharge', 'IvaAdjustment'],
+      tiposAptos: d.tiposAptos || [],
+      baremos: d.baremos || [],
+      publicadaEn: d.publicada ? AHORA() : undefined,
+      bopUrl: d.publicada ? `https://gdlp.laplaceta.org/subvenciones.html?codigo=${s.id}` : undefined,
+    };
     res.status(201).json(s);
   });
   router.post('/rsp/subvenciones/api/:id/requerir-documentos', (req, res) => {
@@ -288,6 +296,7 @@ export function createApiRouter({ getBankState }) {
     const b = {
       id: `BONO-${Date.now()}`, nombre: d.nombre, emisorEip: d.emisorEip, emisorNombre: d.emisorEip,
       presupuesto: d.presupuesto, maxPorPersona: d.maxPorPersona, baremos: d.baremos || [],
+      requisitos: d.requisitos || [],
       fechaLimite: d.fechaLimite, presupuestoUsado: 0, adscritos: 0, estado: 'activo',
     };
     store.bonos.unshift(b);

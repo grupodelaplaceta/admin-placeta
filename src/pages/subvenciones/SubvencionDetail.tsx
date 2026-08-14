@@ -87,6 +87,7 @@ export default function SubvencionDetail() {
             <div className="rsp-dl-row"><dt>Importe</dt><dd>{det.importe.toLocaleString('es-ES')} Pz</dd></div>
             <div className="rsp-dl-row"><dt>Restante</dt><dd><strong>{det.importeRestante.toLocaleString('es-ES')} Pz</strong></dd></div>
             <div className="rsp-dl-row"><dt>Concedida</dt><dd>{det.fechaConcesion}</dd></div>
+            <div className="rsp-dl-row"><dt>Publicación</dt><dd>{det.publicada ? <>{det.bopUrl ? <a href={det.bopUrl} target="_blank" rel="noreferrer">web GDLP ↗</a> : <Badge tone="brand">publicada</Badge>}</> : <span className="u-muted">no publicada</span>}</dd></div>
           </dl>
         </Card>
         <Card>
@@ -106,6 +107,34 @@ export default function SubvencionDetail() {
           )}
         </Card>
       </div>
+
+      <Card style={{ marginBottom: 'var(--sp-4)' }}>
+        <CardHeader title="Tipos de transacción justificables (aptos)" subtitle="Solo estos tipos del banco se pueden justificar como gasto." />
+        {det.tiposAptos.length === 0 ? (
+          <p className="u-muted">Cualquier tipo de transacción es apto (sin restricción).</p>
+        ) : (
+          <div className="u-row u-wrap">
+            {det.tiposAptos.map((t) => <Badge key={t} tone="success">{t}</Badge>)}
+          </div>
+        )}
+        <CardHeader title="Baremos para empresas" subtitle="Criterios automáticos que una empresa debe cumplir para optar." />
+        {!det.baremos || det.baremos.length === 0 ? (
+          <p className="u-muted">Sin baremos definidos.</p>
+        ) : (
+          <ul className="rsp-doclist">
+            {det.baremos.map((b) => (
+              <li key={b.id} className="rsp-doc" style={{ alignItems: 'flex-start' }}>
+                <Icon name="scale" size={16} />
+                <span style={{ flex: 1 }}>
+                  <strong>{b.descripcion}</strong>
+                  {b.descripcionCalculo && <><br /><span className="u-muted" style={{ fontSize: 'var(--fs-xs)' }}>{b.descripcionCalculo}</span></>}
+                </span>
+                <Badge tone="brand">peso {b.peso}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <Card style={{ marginBottom: 'var(--sp-4)' }}>
         <CardHeader

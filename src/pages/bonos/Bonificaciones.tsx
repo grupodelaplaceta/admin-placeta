@@ -10,7 +10,7 @@ export default function Bonificaciones() {
   const [items, setItems] = useState<RegimenBono[] | null>(null);
   const [creando, setCreando] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const [form, setForm] = useState({ nombre: '', emisorEip: 'EIP-X4NGQU', presupuesto: '', maxPorPersona: '', fechaLimite: '' });
+  const [form, setForm] = useState({ nombre: '', emisorEip: 'EIP-X4NGQU', presupuesto: '', maxPorPersona: '', fechaLimite: '', requisitos: '' });
   const [baremosSel, setBaremosSel] = useState<Record<string, string>>({});
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -33,7 +33,7 @@ export default function Bonificaciones() {
         .filter(([, peso]) => Number(peso) > 0)
         .map(([id, peso]) => {
           const t = BAREMOS_AUTOMATICOS.find((b) => b.id === id);
-          return { id, descripcion: t?.etiqueta ?? id, peso: Number(peso) || 0 };
+          return { id, descripcion: t?.etiqueta ?? id, descripcionCalculo: t?.explicacion ?? t?.descripcion, peso: Number(peso) || 0 };
         });
       await provider.crearBono({
         nombre: form.nombre.trim(),
@@ -42,10 +42,11 @@ export default function Bonificaciones() {
         maxPorPersona: Number(form.maxPorPersona),
         fechaLimite: form.fechaLimite.trim() || undefined,
         baremos,
+        requisitos: form.requisitos.split('\n').map((s) => s.trim()).filter(Boolean),
       });
       toast('Bono creado', 'success');
       setCreando(false);
-      setForm({ nombre: '', emisorEip: 'EIP-X4NGQU', presupuesto: '', maxPorPersona: '', fechaLimite: '' });
+      setForm({ nombre: '', emisorEip: 'EIP-X4NGQU', presupuesto: '', maxPorPersona: '', fechaLimite: '', requisitos: '' });
       setBaremosSel({});
       cargar();
     } catch (e) {
@@ -114,6 +115,9 @@ export default function Bonificaciones() {
           <Field label="Fecha límite">
             <input type="date" value={form.fechaLimite} onChange={(e) => setForm({ ...form, fechaLimite: e.target.value })} />
           </Field>
+          <Field label="Requisitos (uno por línea)" hint="Condiciones que debe cumplir el solicitante.">
+            <textarea rows={3} value={form.requisitos} onChange={(e) => setForm({ ...form, requisitos: e.target.value })} placeholder={'Ser residente\nNo haber recibido otro bono este año'} />
+          </Field>
           <Field label="Baremos (comprobación automática)" hint="El sistema verifica cada criterio al adscribir al ciudadano.">
             <ul className="rsp-checklist">
               {BAREMOS_AUTOMATICOS.map((b) => (
@@ -130,7 +134,7 @@ export default function Bonificaciones() {
                     }}
                   />
                   <span>{b.etiqueta}</span>
-                  <span className="u-muted" style={{ fontSize: 'var(--fs-xs)' }}>{b.descripcion}</span>
+                  <span className="u-muted" style={{ fontSize: 'var(--fs-xs)', flexBasis: '100%' }}>{b.explicacion}</span>
                   {baremosSel[b.id] !== undefined && (
                     <input
                       type="number"

@@ -741,7 +741,7 @@ export const mockProvider: Provider = {
   async getSubvencion(id) {
     const s = SUBVENCIONES.find((x) => x.id === id);
     if (!s) throw new Error('Subvención no encontrada');
-    return SUBVENCIONES_DETALLE[id] ?? { ...s, documentosRequeridos: [], gastos: [], justificaciones: [], excluirTipos: [] };
+    return SUBVENCIONES_DETALLE[id] ?? { ...s, documentosRequeridos: [], gastos: [], justificaciones: [], excluirTipos: [], tiposAptos: [] };
   },
   async concederSubvencion(datos) {
     const nueva: SubvencionResumen = {
@@ -755,8 +755,21 @@ export const mockProvider: Provider = {
       concepto: datos.concepto,
       estado: 'concedida',
       fechaConcesion: new Date().toISOString().slice(0, 10),
+      publicada: datos.publicada ?? false,
     };
     SUBVENCIONES.unshift(nueva);
+    const detalle: SubvencionDetalle = {
+      ...nueva,
+      documentosRequeridos: [],
+      gastos: [],
+      justificaciones: [],
+      excluirTipos: ['Tax', 'IrmCharge', 'IvaAdjustment', 'InvestmentTax', 'InvestmentCommission', 'LateTaxInterest'],
+      tiposAptos: datos.tiposAptos ?? [],
+      baremos: datos.baremos ?? [],
+      publicadaEn: datos.publicada ? new Date().toISOString() : undefined,
+      bopUrl: datos.publicada ? `https://gdlp.laplaceta.org/subvenciones.html?codigo=${nueva.id}` : undefined,
+    };
+    SUBVENCIONES_DETALLE[nueva.id] = detalle;
     return nueva;
   },
   async requerirDocumentosSubvencion(id, documentos) {
@@ -775,7 +788,8 @@ export const mockProvider: Provider = {
     for (const gid of gastoIds) {
       const g = d.gastos.find((x) => x.id === gid);
       const excluido = g?.excluido || (g?.kind && d.excluirTipos.includes(g.kind));
-      if (g && !g.justificado && !excluido) {
+      const apto = !g?.kind || d.tiposAptos.length === 0 || d.tiposAptos.includes(g.kind);
+      if (g && !g.justificado && !excluido && apto) {
         g.justificado = true;
         total += g.importe;
       }
@@ -811,6 +825,7 @@ export const mockProvider: Provider = {
       presupuesto: datos.presupuesto,
       maxPorPersona: datos.maxPorPersona,
       baremos: datos.baremos ?? [],
+      requisitos: datos.requisitos ?? [],
       fechaLimite: datos.fechaLimite,
       presupuestoUsado: 0,
       adscritos: 0,
