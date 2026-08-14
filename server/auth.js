@@ -136,6 +136,10 @@ export function authRouter() {
     res.json(sesionPara(usuario));
   });
 
+  // Navegación directa a /login (Vercel reenvía /login a esta función):
+  // se redirige al SPA, que muestra el formulario de acceso.
+  router.get('/login', (_req, res) => res.redirect('/'));
+
   // ── SSO con PlacetaID móvil: devuelve la URL de la fase 1 ──────────
   // `service` es el nombre que PlacetaID muestra al ciudadano ("accedes a X").
   router.post('/login/placetaid', (req, res) => {
@@ -205,6 +209,9 @@ export function authRouter() {
     res.clearCookie(COOKIE);
     res.json({ ok: true });
   });
+
+  // Navegación directa a /logout: cierra y vuelve al SPA.
+  router.get('/logout', (_req, res) => res.redirect('/'));
 
   router.get('/api/sesion', (req, res) => {
     const token = parseCookies(req)[COOKIE];
