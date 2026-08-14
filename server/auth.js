@@ -7,7 +7,7 @@ import { Router } from 'express';
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
 const COOKIE = 'rsp_session';
-const TTL = 1000 * 60 * 60 * 8; // 8 horas
+const TTL = 1000 * 60 * 60 * 24; // 24 horas
 const SESIONES = new Map(); // token -> { dip, expira }
 
 const PLACETAID_URL = process.env.PLACETAID_AUTH_URL || 'https://id.laplaceta.org';

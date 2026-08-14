@@ -30,7 +30,7 @@ function camelize(obj) {
   return obj;
 }
 
-export function coleccion(tabla, { idCol = 'id' } = {}) {
+export function coleccion(tabla, { idCol = 'id', orderCol = 'created_at' } = {}) {
   const memoria = [];
   let cargada = false;
   const tieneId = (fila) => fila && fila[idCol] != null;
@@ -38,7 +38,9 @@ export function coleccion(tabla, { idCol = 'id' } = {}) {
   async function cargar() {
     if (!supabase || cargada) return;
     try {
-      const { data, error } = await supabase.from(tabla).select('*').order('created_at', { ascending: false }).limit(1000);
+      let q = supabase.from(tabla).select('*');
+      if (orderCol) q = q.order(orderCol, { ascending: false });
+      const { data, error } = await q.limit(1000);
       if (error) throw error;
       memoria.length = 0;
       for (const row of data || []) memoria.push(camelize(row));
@@ -59,7 +61,8 @@ export function coleccion(tabla, { idCol = 'id' } = {}) {
         try {
           let q = supabase.from(tabla).select('*');
           for (const [k, v] of Object.entries(filtros)) q = q.eq(toSnake(k), v);
-          const { data, error } = await q.order('created_at', { ascending: false }).limit(1000);
+          if (orderCol) q = q.order(orderCol, { ascending: false });
+          const { data, error } = await q.limit(1000);
           if (!error && Array.isArray(data)) return data.map(camelize);
         } catch { /* cae a memoria */ }
       }

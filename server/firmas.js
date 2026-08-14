@@ -101,3 +101,56 @@ export async function registrarFirma(docId, { dip, firmaBase64 }) {
 }
 
 export { documentos };
+
+/* ── Participación democrática vía PlacetaID Móvil ──────────────────── */
+// Envía una votación/encuesta al sistema de PlacetaID (POST /admin/votaciones),
+// que notifica a los destinatarios del grupo y la muestra en la app móvil.
+export async function enviarVotacionPlacetaID(votacion) {
+  if (!PLACETAID_ADMIN_KEY) {
+    console.warn('[PlacetaID] PLACETAID_ADMIN_KEY no configurada: no se envía a la app móvil.');
+    return { enviado: false };
+  }
+  try {
+    const fechaLimite = new Date();
+    fechaLimite.setDate(fechaLimite.getDate() + 7);
+    const r = await fetch(`${PLACETAID_API}/admin/votaciones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': PLACETAID_ADMIN_KEY },
+      body: JSON.stringify({
+        id: votacion.id,
+        titulo: votacion.titulo,
+        grupo: votacion.categoria || 'Publico_General',
+        descripcion: votacion.descripcion || votacion.pregunta || '',
+        categoria: votacion.categoria || 'General',
+        quorum: 50,
+        requiereQuorum: true,
+        fechaLimite: fechaLimite.toISOString(),
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) {
+      console.warn('[PlacetaID] Error enviando votación:', r.status);
+      return { enviado: false };
+    }
+    return { enviado: true };
+  } catch (err) {
+    console.warn('[PlacetaID] Error enviando votación:', err.message);
+    return { enviado: false };
+  }
+}
+
+/** Cierra la votación en PlacetaID y notifica el resultado a los destinatarios. */
+export async function cerrarVotacionPlacetaID(id) {
+  if (!PLACETAID_ADMIN_KEY) return { enviado: false };
+  try {
+    const r = await fetch(`${PLACETAID_API}/admin/votaciones/${encodeURIComponent(id)}/cerrar`, {
+      method: 'PUT',
+      headers: { 'X-API-Key': PLACETAID_ADMIN_KEY },
+      signal: AbortSignal.timeout(8000),
+    });
+    return { enviado: r.ok };
+  } catch (err) {
+    console.warn('[PlacetaID] Error cerrando votación:', err.message);
+    return { enviado: false };
+  }
+}

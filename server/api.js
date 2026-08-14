@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import { calcularContribuyentes } from './tributos.js';
 import { coleccion } from './db.js';
-import { crearYEnviarFirma, estadoFirma } from './firmas.js';
+import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacionPlacetaID } from './firmas.js';
 
 const AHORA = () => new Date().toISOString();
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -33,6 +33,10 @@ export function createApiRouter({ getBankState }) {
     auditoria: coleccion('rsp_auditoria'),
     notificaciones: coleccion('rsp_notificaciones'),
     cnic: coleccion('rsp_cnic'),
+    bopCnic: coleccion('bop_cnic'),
+    juniorActividadesDb: coleccion('junior_actividades', { orderCol: 'creado_en' }),
+    juniorColaboradoresDb: coleccion('junior_colaboradores', { orderCol: 'creado_en' }),
+    juniorDiplomasDb: coleccion('junior_diplomas', { orderCol: 'creado_en' }),
     votaciones: coleccion('rsp_votaciones'),
     votos: coleccion('rsp_registro_votos'),
     juntas: coleccion('rsp_reuniones'),
@@ -51,6 +55,25 @@ export function createApiRouter({ getBankState }) {
     { codigo: 'CNIC-IGF-PF-TIPO-3', etiqueta: 'Tipo IGF personas físicas tramo 3', tipoValor: 'porcentaje', valor: 30, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
     { codigo: 'CNIC-IGF-EMPRESA-TIPO-4', etiqueta: 'Tipo IGF empresas tramo 4', tipoValor: 'porcentaje', valor: 85, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
   ];
+
+  // Adapta una fila de bop_cnic (Supabase) al contrato CNICRegla del SPA.
+  function normalizarBopCnic(row) {
+    const historial = Array.isArray(row.historial) ? row.historial : [];
+    const valor = Number(row.valor);
+    return {
+      codigo: row.codigo,
+      etiqueta: row.etiqueta || row.codigo,
+      tipoValor: row.tipoValor || 'porcentaje',
+      valor: Number.isNaN(valor) ? (row.valor ?? '') : valor,
+      unidad: row.unidad || '%',
+      version: historial.length + 1,
+      estado: row.vigente ? 'vigente' : 'historico',
+      autor: row.autorDip || 'BOP',
+      fuente: 'BOP',
+      bopUrl: `https://bop.laplaceta.org/cnic.html?codigo=${encodeURIComponent(row.codigo)}`,
+      historial: historial.map((h, i) => ({ version: i + 1, valor: h.valor, desde: h.desde, notas: h.notas })),
+    };
+  }
 
   let nuevaCuentaSeq = 0;
   const nuevasCuentas = [];
@@ -620,6 +643,24 @@ export function createApiRouter({ getBankState }) {
         colaborador: a.colaborador || '—',
       })));
     }
+    // Fuente real: Supabase (junior_actividades), sin depender del proxy HTTP.
+    const rows = await store.juniorActividadesDb.listar();
+    if (rows && rows.length) {
+      return res.json(rows.map((a) => {
+        const rango = String(a.edadRecomendada || '6-17').split('-').map((x) => parseInt(x, 10));
+        return {
+          id: a.id,
+          titulo: a.titulo || 'Actividad',
+          edadMin: Number.isFinite(rango[0]) ? rango[0] : 6,
+          edadMax: Number.isFinite(rango[1]) ? rango[1] : 17,
+          complejidad: a.dificultad || 'Media',
+          precio: Number(a.precioLicencia || 0) + Number(a.precioIntento || 0),
+          recompensa: Number(a.recompensa || 0),
+          estado: a.publica ? 'aprobada' : (a.estado === 'rechazada' ? 'rechazada' : 'en_revision'),
+          colaborador: a.autorNombre || '—',
+        };
+      }));
+    }
     res.json(store.juniorActividades);
   });
   router.get('/rsp/junior/api/colaboradores', async (_req, res) => {
@@ -633,6 +674,16 @@ export function createApiRouter({ getBankState }) {
         puntos: Number(c.puntos ?? 0),
       })));
     }
+    const rows = await store.juniorColaboradoresDb.listar();
+    if (rows && rows.length) {
+      return res.json(rows.map((c) => ({
+        dip: c.dip || c.placetaId || '',
+        nombre: c.nombre || c.nombreReal || 'Colaborador',
+        acuerdoFirmado: c.acuerdoFirmado !== false,
+        actividades: Number(c.actividades || c.numActividades || 0),
+        puntos: Number(c.puntos || 0),
+      })));
+    }
     res.json(store.juniorColaboradores);
   });
   router.get('/rsp/junior/api/diplomas', async (_req, res) => {
@@ -644,6 +695,16 @@ export function createApiRouter({ getBankState }) {
         nombre: d.nombre ?? d.nombre_real ?? '',
         actividad: d.actividad ?? d.actividad_titulo ?? '—',
         fecha: d.fecha ?? d.fecha_obtencion ?? '',
+      })));
+    }
+    const rows = await store.juniorDiplomasDb.listar();
+    if (rows && rows.length) {
+      return res.json(rows.map((d) => ({
+        id: d.id ?? `DIP-${d.juniorDip}-${d.fecha}`,
+        dip: d.juniorDip || '',
+        nombre: d.juniorNombre || '',
+        actividad: d.actividadTitulo || '—',
+        fecha: d.fecha || '',
       })));
     }
     res.json(store.juniorDiplomas);
@@ -678,15 +739,16 @@ export function createApiRouter({ getBankState }) {
     } catch {
       /* banco no disponible: se deja en 0 */
     }
-    const [expedientes, notificaciones, cnic, operaciones] = await Promise.all([
-      store.expedientes.listar(), store.notificaciones.listar(), store.cnic.listar(), store.operaciones.listar(),
+    const [expedientes, notificaciones, cnic, bopCnic, operaciones] = await Promise.all([
+      store.expedientes.listar(), store.notificaciones.listar(), store.cnic.listar(), store.bopCnic.listar(), store.operaciones.listar(),
     ]);
+    const cnicVigentes = Math.max(cnic.filter((c) => c.estado === 'vigente').length, (bopCnic || []).filter((c) => c.vigente).length, CNIC_BASE.length);
     res.json({
       expedientes: expedientes.length,
       incidencias: 0,
       incidenciasAbiertas: 0,
       notificacionesNoLeidas: notificaciones.filter((n) => !n.leida).length,
-      cnicVigentes: cnic.length || CNIC_BASE.length,
+      cnicVigentes,
       nominas: 0,
       facturas: 0,
       bloqueos500k,
@@ -699,12 +761,17 @@ export function createApiRouter({ getBankState }) {
 
   /* ── Normativa (CNIC) ────────────────────────────────────────────── */
   router.get('/rsp/normativo/api', async (_req, res) => {
-    const lista = await store.cnic.listar();
+    const [bop, locales] = await Promise.all([store.bopCnic.listar(), store.cnic.listar()]);
+    const desdeBop = (bop || []).map(normalizarBopCnic);
+    const codigosBop = new Set(desdeBop.map((c) => c.codigo));
+    const localesUnicos = (locales || []).filter((c) => !codigosBop.has(c.codigo));
+    const lista = [...desdeBop, ...localesUnicos];
     res.json(lista.length ? lista : CNIC_BASE);
   });
   router.post('/rsp/normativo/api/refresh', async (_req, res) => {
-    const lista = await store.cnic.listar();
-    res.json({ sincronizado: true, total: lista.length || CNIC_BASE.length, fuente: 'BOP' });
+    const bop = await store.bopCnic.listar();
+    const total = (bop || []).length || CNIC_BASE.length;
+    res.json({ sincronizado: true, total, fuente: 'BOP' });
   });
   router.post('/rsp/normativo/api/version', async (req, res) => {
     const d = req.body || {};
@@ -762,14 +829,19 @@ export function createApiRouter({ getBankState }) {
   router.post('/rsp/votaciones/api/:id/cerrar', async (req, res) => {
     const v = await store.votaciones.obtener(req.params.id);
     if (!v) return res.status(404).json({ error: 'Votación no encontrada' });
-    await store.votaciones.actualizar(req.params.id, { estado: 'cerrada', cerradaEn: AHORA(), resultado: v.aFavor > v.enContra ? 'aprobada' : 'rechazada' });
-    res.json({ ok: true });
+    const resultado = v.aFavor > v.enContra ? 'aprobada' : 'rechazada';
+    await store.votaciones.actualizar(req.params.id, { estado: 'cerrada', cerradaEn: AHORA(), resultado });
+    // Cierra también en PlacetaID Móvil (notifica el resultado a los destinatarios).
+    const placetaid = await cerrarVotacionPlacetaID(v.id);
+    res.json({ ok: true, placetaid: placetaid.enviado });
   });
   router.post('/rsp/votaciones/api/:id/publicar', async (req, res) => {
     const v = await store.votaciones.obtener(req.params.id);
     if (!v) return res.status(404).json({ error: 'Votación no encontrada' });
     await store.votaciones.actualizar(req.params.id, { estado: 'publicada', publicadaEn: AHORA(), bopUrl: `https://bop.laplaceta.org/votaciones.html?codigo=${v.id}` });
-    res.json({ ok: true });
+    // La abre también en PlacetaID Móvil (aparece en la app y notifica al grupo).
+    const placetaid = await enviarVotacionPlacetaID(v);
+    res.json({ ok: true, placetaid: placetaid.enviado });
   });
   router.get('/rsp/votaciones/api/:id/votos', async (req, res) => {
     const ahora = Date.now();
@@ -811,7 +883,10 @@ export function createApiRouter({ getBankState }) {
     const e = await store.encuestas.obtener(req.params.id);
     if (!e) return res.status(404).json({ error: 'Encuesta no encontrada' });
     await store.encuestas.actualizar(req.params.id, { estado: 'publicada', publicadaEn: AHORA(), bopUrl: `https://bop.laplaceta.org/encuestas.html?codigo=${e.id}` });
-    res.json({ ok: true });
+    // Se envía a PlacetaID Móvil con el mismo sistema que las votaciones
+    // (la app la muestra como consulta a los destinatarios del rango).
+    const placetaid = await enviarVotacionPlacetaID({ id: e.id, titulo: e.titulo, pregunta: e.pregunta, descripcion: e.pregunta, categoria: 'encuesta' });
+    res.json({ ok: true, placetaid: placetaid.enviado });
   });
 
   return router;
