@@ -10,9 +10,9 @@ export default defineConfig({
     port: 5174,
     // En modo live, proxeamos /api y /login al backend RSP para evitar CORS.
     proxy: {
-      '/api': { target: process.env.VITE_API_URL || 'http://localhost:3002', changeOrigin: true },
-      '/login': { target: process.env.VITE_API_URL || 'http://localhost:3002', changeOrigin: true },
-      '/rsp': { target: process.env.VITE_API_URL || 'http://localhost:3002', changeOrigin: true },
+      '/api': { target: process.env.VITE_API_URL || 'http://localhost:4000', changeOrigin: true },
+      '/login': { target: process.env.VITE_API_URL || 'http://localhost:4000', changeOrigin: true },
+      '/rsp': { target: process.env.VITE_API_URL || 'http://localhost:4000', changeOrigin: true },
     },
   },
   build: {

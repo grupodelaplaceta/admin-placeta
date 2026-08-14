@@ -14,7 +14,9 @@ import { createHash, randomUUID } from 'crypto';
 import { coleccion } from './db.js';
 
 const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
-const PLACETAID_KEY = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
+// Para enviar documentos de firma se usa la clave de ADMINISTRACIÓN de
+// PlacetaID (X-API-Key), distinta del client_id del SSO.
+const PLACETAID_ADMIN_KEY = process.env.PLACETAID_ADMIN_KEY || '';
 
 const documentos = coleccion('rsp_documentos');
 
@@ -41,24 +43,28 @@ export async function crearYEnviarFirma({ titulo, tipo = 'resolucion', dip, tram
   await documentos.insertar(doc);
 
   let enviado = false;
-  try {
-    const r = await fetch(`${PLACETAID_API}/admin/documentos`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': PLACETAID_KEY },
-      body: JSON.stringify({
-        id: docId,
-        titulo,
-        tipo,
-        entidad,
-        csv,
-        destinatariosDIP: dip ? [dip] : [],
-        contenido: `Documento oficial de ${entidad}: ${titulo}. Firme desde PlacetaID Móvil para dar validez al trámite.\n\nCSV: ${csv}\nHash: ${hash.slice(0, 16)}`,
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    enviado = r.ok;
-  } catch (err) {
-    console.warn('[FirmaPlacetaID] Error enviando a PlacetaID:', err.message);
+  if (PLACETAID_ADMIN_KEY) {
+    try {
+      const r = await fetch(`${PLACETAID_API}/admin/documentos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-Key': PLACETAID_ADMIN_KEY },
+        body: JSON.stringify({
+          id: docId,
+          titulo,
+          tipo,
+          entidad,
+          csv,
+          destinatariosDIP: dip ? [dip] : [],
+          contenido: `Documento oficial de ${entidad}: ${titulo}. Firme desde PlacetaID Móvil para dar validez al trámite.\n\nCSV: ${csv}\nHash: ${hash.slice(0, 16)}`,
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+      enviado = r.ok;
+    } catch (err) {
+      console.warn('[FirmaPlacetaID] Error enviando a PlacetaID:', err.message);
+    }
+  } else {
+    console.warn('[FirmaPlacetaID] PLACETAID_ADMIN_KEY no configurada: el documento no se envía a la app móvil.');
   }
   if (enviado) await documentos.actualizar(docId, { estado: 'enviada' });
   return { id: docId, csv, hash, enviado };

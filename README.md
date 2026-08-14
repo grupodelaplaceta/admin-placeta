@@ -4,19 +4,20 @@ SPA de administración de la **Red de Servicios de La Placeta**, reconstruida co
 Vite + React + TypeScript aplicando las mejoras de seguridad, homogeneidad y
 comodidad detectadas en la auditoría de `admin-placeta`.
 
-## Estado: esqueleto completo + P0 (demo funcional sin backend)
+## Estado: esqueleto completo + P0 (datos reales)
 
-- Arranca en **modo mock** por defecto (`VITE_USE_MOCK=true`): todas las pantallas
-  funcionan con datos de demostración, sin backend.
-- En **modo live** (`VITE_USE_MOCK=false`) consume las APIs JSON del backend
-  `admin-placeta` configurado en `VITE_API_URL`.
+- Arranca en **modo live por defecto**: consume las APIs JSON del backend
+  (BFF) en `VITE_API_URL` (misma máquina en producción). El SSO de PlacetaID
+  usa el client id de RSP registrado como solicitante en PlacetaID.
+- Para **dev local sin backend**, fija `VITE_USE_MOCK=true` en `.env.local`:
+  todas las pantallas funcionan con un snapshot real del banco.
 
 ## Puesta en marcha
 
 ```bash
 cd rsp-web
 npm install
-npm run dev        # http://localhost:5174 (modo demo)
+npm run dev        # http://localhost:5174 (modo live; requiere el BFF en VITE_API_URL)
 npm test           # tests (RBAC, 2FA, smoke de la app)
 npm run build      # typecheck + build de producción
 ```

@@ -11,7 +11,9 @@ const TTL = 1000 * 60 * 60 * 8; // 8 horas
 const SESIONES = new Map(); // token -> { dip, expira }
 
 const PLACETAID_URL = process.env.PLACETAID_AUTH_URL || 'https://id.laplaceta.org';
-const PLACETAID_CLIENT_ID = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdadf7218418dc195dcb';
+// Client id REAL de RSP registrado como solicitante en PlacetaID.
+// Sin él, el SSO no puede iniciarse (no se usa ningún client id ajeno).
+const PLACETAID_CLIENT_ID = process.env.PLACETAID_CLIENT_ID || '';
 
 // ADMIN_USERS = JSON: [{"dip":"23749931M","password":"...","nombre":"...","roles":["superadmin","rsp_admin"]}]
 function cargarUsuarios() {
@@ -137,6 +139,9 @@ export function authRouter() {
   // ── SSO con PlacetaID móvil: devuelve la URL de la fase 1 ──────────
   // `service` es el nombre que PlacetaID muestra al ciudadano ("accedes a X").
   router.post('/login/placetaid', (req, res) => {
+    if (!PLACETAID_CLIENT_ID) {
+      return res.status(503).json({ error: 'RSP no está registrado en PlacetaID: configura PLACETAID_CLIENT_ID en el backend.' });
+    }
     const state = randomBytes(16).toString('hex');
     const redirectUri = `${req.protocol}://${req.get('host')}/login/callback`;
     const service = 'Red de Servicios de La Placeta (RSP)';
