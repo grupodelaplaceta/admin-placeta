@@ -14,20 +14,20 @@ const IGF_EMPRESA = [
   { hasta: 500000, tipo: 0.35 },
   { hasta: Infinity, tipo: 0.85 },
 ];
-// IRM por IA (incremento de activos): CNIC-IRM-PARTICULAR/EMPRESA tramos 0..4.
+// IRM por IA (incremento de activos): tipos REALES del CNI Art. 4.10.
 const IRM_PF = [
   { hasta: 0, tipo: 0 },
-  { hasta: 5000, tipo: 0.005 },
-  { hasta: 20000, tipo: 0.015 },
-  { hasta: 50000, tipo: 0.04 },
-  { hasta: Infinity, tipo: 0.06 },
+  { hasta: 5000, tipo: 0.005 },  // 0,5 %
+  { hasta: 20000, tipo: 0.015 }, // 1,5 %
+  { hasta: 50000, tipo: 0.03 },  // 3 %
+  { hasta: Infinity, tipo: 0.05 }, // 5 %
 ];
 const IRM_EMPRESA = [
   { hasta: 0, tipo: 0 },
-  { hasta: 5000, tipo: 0.0075 },
-  { hasta: 20000, tipo: 0.02 },
-  { hasta: 50000, tipo: 0.05 },
-  { hasta: Infinity, tipo: 0.09 },
+  { hasta: 5000, tipo: 0.01 },   // 1 %
+  { hasta: 20000, tipo: 0.03 },  // 3 %
+  { hasta: 50000, tipo: 0.06 },  // 6 %
+  { hasta: Infinity, tipo: 0.09 }, // 9 %
 ];
 
 // Movimientos que computan IA (incremento de activos gravable por IRM).

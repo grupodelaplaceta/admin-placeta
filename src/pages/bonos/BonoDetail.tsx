@@ -84,13 +84,20 @@ export default function BonoDetail() {
               ))}
             </ul>
           )}
-          <CardHeader title="Requisitos" subtitle="Condiciones que debe cumplir el solicitante" />
+          <CardHeader title="Requisitos" subtitle="Condiciones verificadas automáticamente al adscribir" />
           {!det.requisitos || det.requisitos.length === 0 ? (
-            <p className="u-muted">Sin requisitos adicionales.</p>
+            <p className="u-muted">Sin requisitos.</p>
           ) : (
-            <ul className="rsp-list">
-              {det.requisitos.map((r, i) => (
-                <li key={i}><Icon name="check" size={14} /> {r}</li>
+            <ul className="rsp-doclist">
+              {det.requisitos.map((r) => (
+                <li key={r.id} className="rsp-doc" style={{ alignItems: 'flex-start' }}>
+                  <Icon name="check" size={16} />
+                  <span style={{ flex: 1 }}>
+                    <strong>{r.descripcion}</strong>
+                    <br /><span className="u-muted" style={{ fontSize: 'var(--fs-xs)' }}>{r.explicacion}</span>
+                  </span>
+                  <Badge tone="success">auto</Badge>
+                </li>
               ))}
             </ul>
           )}

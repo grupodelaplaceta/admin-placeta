@@ -14,7 +14,7 @@ import type {
   SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, Baremo, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior,
-  Votacion, VotoRegistro, Junta, Encuesta,
+  Votacion, VotoRegistro, Junta, Encuesta, RequisitoBono,
 } from '../types';
 
 export interface Provider {
@@ -65,7 +65,7 @@ export interface Provider {
   // Bonificaciones (empresa → particular, bajo regímenes de bono)
   listarBonos(): Promise<RegimenBono[]>;
   getBono(id: string): Promise<BonoDetalle>;
-  crearBono(datos: { nombre: string; emisorEip: string; presupuesto: number; maxPorPersona: number; fechaLimite?: string; baremos?: Baremo[]; requisitos?: string[] }): Promise<RegimenBono>;
+  crearBono(datos: { nombre: string; emisorEip: string; presupuesto: number; maxPorPersona: number; fechaLimite?: string; baremos?: Baremo[]; requisitos?: RequisitoBono[] }): Promise<RegimenBono>;
   adscribirCiudadano(id: string, dip: string): Promise<void>;
 
   // Expedientes

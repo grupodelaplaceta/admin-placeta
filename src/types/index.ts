@@ -437,12 +437,24 @@ export interface RegimenBono {
   presupuesto: number;
   maxPorPersona: number;
   baremos?: Baremo[];
-  /** Requisitos que debe cumplir el solicitante. */
-  requisitos?: string[];
+  /** Requisitos que debe cumplir el solicitante (comprobables automáticamente). */
+  requisitos?: RequisitoBono[];
   fechaLimite?: string;
   presupuestoUsado: number;
   adscritos: number;
   estado: 'activo' | 'cerrado';
+}
+
+/** Requisito de un bono, comprobable automáticamente contra datos reales. */
+export interface RequisitoBono {
+  id: string;
+  descripcion: string;
+  /** Magnitud que se evalúa (patrimonio, edad, nivel, cuentas, junior, fiscal). */
+  tipo: 'patrimonio' | 'edad' | 'nivel' | 'cuentas' | 'junior' | 'fiscal';
+  operador: '<' | '>' | '<=' | '>=' | '==';
+  valor: number;
+  /** Cómo se comprueba automáticamente (fuente de datos real). */
+  explicacion: string;
 }
 
 export interface AdscripcionBono {

@@ -202,6 +202,38 @@ export function createApiRouter({ getBankState }) {
     return facturas;
   }
 
+  // Requisitos de bono: comprobación automática contra datos reales.
+  function cumple(actual, operador, valor) {
+    switch (operador) {
+      case '<': return actual < valor;
+      case '>': return actual > valor;
+      case '<=': return actual <= valor;
+      case '>=': return actual >= valor;
+      case '==': return actual === valor;
+      default: return false;
+    }
+  }
+  async function verificarRequisitos(dip, requisitos) {
+    const cuentas = await listarCuentas();
+    const propias = cuentas.filter((c) => c.dip === dip && c.estado === 'activa');
+    const junior = propias.some((c) => c.tipo === 'Child') ? 1 : 0;
+    const nivel = store.ciudadanos.find((c) => c.dip === dip)?.nivel === 'N3' ? 3 : 1;
+    const datos = {
+      patrimonio: propias.reduce((s, c) => s + c.saldo, 0),
+      cuentas: propias.length,
+      junior,
+      edad: junior ? 15 : 18,
+      nivel,
+      fiscal: 1, // al día por defecto en el censo del BFF de referencia
+    };
+    const fallos = [];
+    for (const r of requisitos || []) {
+      const actual = datos[r.tipo];
+      if (typeof actual !== 'number' || !cumple(actual, r.operador, r.valor)) fallos.push(r);
+    }
+    return fallos;
+  }
+
   function cerrarCuenta(c, motivo) {
     if (c.estado === 'cerrada') throw new Error('La cuenta ya está cerrada');
     if (c.esFundacion) throw new Error('Las fundaciones no se pueden cerrar ni repartir');
@@ -431,10 +463,22 @@ export function createApiRouter({ getBankState }) {
     store.bonosDetalle[b.id] = { ...b, adscripciones: [], justificaciones: [] };
     res.status(201).json(b);
   });
-  router.post('/rsp/bonos/api/:id/adscribir', (req, res) => {
+  router.post('/rsp/bonos/api/:id/adscribir', async (req, res) => {
     const b = store.bonos.find((x) => x.id === req.params.id);
     if (!b) return res.status(404).json({ error: 'Bono no encontrado' });
-    const dip = req.body?.dip;
+    const dip = (req.body?.dip || '').toUpperCase();
+
+    // Comprobación automática de requisitos contra datos reales del banco.
+    try {
+      const fallos = await verificarRequisitos(dip, b.requisitos);
+      if (fallos.length) {
+        const detalle = fallos.map((f) => f.descripcion).join(' · ');
+        return res.status(400).json({ error: `No cumple los requisitos: ${detalle}` });
+      }
+    } catch (e) {
+      return res.status(502).json({ error: e.message });
+    }
+
     const detalle = store.bonosDetalle[b.id];
     if (!detalle.adscripciones.some((a) => a.dip === dip)) {
       detalle.adscripciones.push({ dip, nombre: dip, fechaAdscripcion: AHORA().slice(0, 10), justificado: 0 });

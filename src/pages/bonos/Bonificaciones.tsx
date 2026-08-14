@@ -2,16 +2,17 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { provider } from '../../api';
 import { Badge, Button, Empty, Field, KPI, Modal, PageHeader, Spinner, Table, useToast, type Column } from '../../components/ui';
-import type { RegimenBono } from '../../types';
+import type { RegimenBono, RequisitoBono } from '../../types';
 import { BuscadorIdentidad } from '../../components/BuscadorIdentidad';
-import { BAREMOS_AUTOMATICOS } from '../../config/baremos';
+import { BAREMOS_AUTOMATICOS, REQUISITOS_AUTOMATICOS } from '../../config/baremos';
 
 export default function Bonificaciones() {
   const [items, setItems] = useState<RegimenBono[] | null>(null);
   const [creando, setCreando] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const [form, setForm] = useState({ nombre: '', emisorEip: 'EIP-X4NGQU', presupuesto: '', maxPorPersona: '', fechaLimite: '', requisitos: '' });
+  const [form, setForm] = useState({ nombre: '', emisorEip: 'EIP-X4NGQU', presupuesto: '', maxPorPersona: '', fechaLimite: '' });
   const [baremosSel, setBaremosSel] = useState<Record<string, string>>({});
+  const [requisitosSel, setRequisitosSel] = useState<string[]>([]);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -35,6 +36,10 @@ export default function Bonificaciones() {
           const t = BAREMOS_AUTOMATICOS.find((b) => b.id === id);
           return { id, descripcion: t?.etiqueta ?? id, descripcionCalculo: t?.explicacion ?? t?.descripcion, peso: Number(peso) || 0 };
         });
+      const requisitos: RequisitoBono[] = requisitosSel.map((id) => {
+        const r = REQUISITOS_AUTOMATICOS.find((x) => x.id === id)!;
+        return { id: r.id, descripcion: r.descripcion, tipo: r.tipo, operador: r.operador, valor: r.valor, explicacion: r.explicacion };
+      });
       await provider.crearBono({
         nombre: form.nombre.trim(),
         emisorEip: form.emisorEip.trim(),
@@ -42,12 +47,13 @@ export default function Bonificaciones() {
         maxPorPersona: Number(form.maxPorPersona),
         fechaLimite: form.fechaLimite.trim() || undefined,
         baremos,
-        requisitos: form.requisitos.split('\n').map((s) => s.trim()).filter(Boolean),
+        requisitos,
       });
       toast('Bono creado', 'success');
       setCreando(false);
-      setForm({ nombre: '', emisorEip: 'EIP-X4NGQU', presupuesto: '', maxPorPersona: '', fechaLimite: '', requisitos: '' });
+      setForm({ nombre: '', emisorEip: 'EIP-X4NGQU', presupuesto: '', maxPorPersona: '', fechaLimite: '' });
       setBaremosSel({});
+      setRequisitosSel([]);
       cargar();
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -115,8 +121,20 @@ export default function Bonificaciones() {
           <Field label="Fecha límite">
             <input type="date" value={form.fechaLimite} onChange={(e) => setForm({ ...form, fechaLimite: e.target.value })} />
           </Field>
-          <Field label="Requisitos (uno por línea)" hint="Condiciones que debe cumplir el solicitante.">
-            <textarea rows={3} value={form.requisitos} onChange={(e) => setForm({ ...form, requisitos: e.target.value })} placeholder={'Ser residente\nNo haber recibido otro bono este año'} />
+          <Field label="Requisitos (comprobación automática)" hint="El sistema verifica cada requisito contra datos reales (banco, censo, PlacetaID) al adscribir a un ciudadano.">
+            <ul className="rsp-checklist">
+              {REQUISITOS_AUTOMATICOS.map((r) => (
+                <li key={r.id} className="rsp-check">
+                  <input
+                    type="checkbox"
+                    checked={requisitosSel.includes(r.id)}
+                    onChange={(e) => setRequisitosSel((s) => e.target.checked ? [...s, r.id] : s.filter((x) => x !== r.id))}
+                  />
+                  <span><strong>{r.etiqueta}</strong> — {r.descripcion}</span>
+                  <span className="u-muted" style={{ fontSize: 'var(--fs-xs)', flexBasis: '100%' }}>{r.explicacion}</span>
+                </li>
+              ))}
+            </ul>
           </Field>
           <Field label="Baremos (comprobación automática)" hint="El sistema verifica cada criterio al adscribir al ciudadano.">
             <ul className="rsp-checklist">

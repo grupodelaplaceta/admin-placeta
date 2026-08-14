@@ -13,7 +13,7 @@ import type {
   Obligacion, SubvencionResumen, SubvencionDetalle, Solicitud2FA,
   DesgloseFiscal, CuentaSugerencia, RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior,
-  Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa,
+  Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa, RequisitoBono,
 } from '../types';
 import { TIPOS_TRAMITE, ANONIMATO_DIAS } from '../types';
 import type { Provider } from './provider';
@@ -167,38 +167,64 @@ function cnic(codigo: string, etiqueta: string, tipoValor: string, valor: string
   };
 }
 
-// Valores REALES del Boletín Oficial (GET /api/transparencia, 68 CNIC vigentes).
+// Valores REALES del Boletín Oficial (CNI Cap. IV, CNIC-4.x vigentes).
 const CNIC: CNICRegla[] = [
-  cnic('CNIC-IVA', 'Impuesto sobre el Valor Añadido', 'porcentaje', 12, '%'),
+  cnic('CNIC-IVA', 'Impuesto sobre el Valor Añadido (tipo general)', 'porcentaje', 12, '%'),
   cnic('CNIC-LIMITE-CAPITAL-PERSONAL', 'Límite de capital cuenta personal', 'numero', 500000, 'Pz'),
-  cnic('CNIC-LIMITE-CAPITAL-INSTITUCIONAL', 'Límite de capital cuenta institucional', 'numero', 10000000, 'Pz'),
+  cnic('CNIC-LIMITE-CAPITAL-INSTITUCIONAL', 'Límite de capital cuenta institucional/estatal', 'numero', 10000000, 'Pz'),
   cnic('CNIC-CUENTA-CIUDADANA-SALDO', 'Saldo máximo cuenta ciudadana', 'numero', 500000, 'Pz'),
+  cnic('CNIC-SANCION-SALDO-EXCESO-PERSONAL', 'Multa por exceso de capital personal (Art. 4.1)', 'numero', 225000, 'Pz'),
+  cnic('CNIC-SANCION-SALDO-NEGATIVO-DIA-6', 'Sanción saldo negativo desde día 6 (Art. 4.2)', 'numero', 25000, 'Pz'),
+  cnic('CNIC-SANCION-SALDO-NEGATIVO-DIA-30', 'Sanción saldo negativo día 30 (acumulable, Art. 4.2)', 'numero', 125000, 'Pz'),
   cnic('CNIC-SMI-MENSUAL', 'Salario Mínimo Interprofesional', 'numero', 150, 'Pz'),
   cnic('CNIC-SALARIO-MAXIMO-MENSUAL', 'Salario Máximo Interprofesional', 'numero', 1750, 'Pz'),
   cnic('CNIC-RBU-SEMANAL', 'RBU semanal', 'numero', 5, 'Pz'),
   cnic('CNIC-TASA-TRANSFERENCIA-MAXIMA', 'Tasa máxima de transferencia', 'porcentaje', 12, '%'),
-  cnic('CNIC-IRM-PARTICULAR-0', 'IRM cuenta particular IA 0', 'porcentaje', 0, '%'),
-  cnic('CNIC-IRM-PARTICULAR-1', 'IRM cuenta particular tramo 1', 'porcentaje', 0.5, '%'),
-  cnic('CNIC-IRM-PARTICULAR-2', 'IRM cuenta particular tramo 2', 'porcentaje', 1.5, '%'),
-  cnic('CNIC-IRM-PARTICULAR-3', 'IRM cuenta particular tramo 3', 'porcentaje', 4, '%'),
-  cnic('CNIC-IRM-PARTICULAR-4', 'IRM cuenta particular tramo 4', 'porcentaje', 6, '%'),
-  cnic('CNIC-IRM-EMPRESA-0', 'IRM cuenta empresa IA 0', 'porcentaje', 0, '%'),
-  cnic('CNIC-IRM-EMPRESA-1', 'IRM cuenta empresa tramo 1', 'porcentaje', 0.75, '%'),
-  cnic('CNIC-IRM-EMPRESA-2', 'IRM cuenta empresa tramo 2', 'porcentaje', 2, '%'),
-  cnic('CNIC-IRM-EMPRESA-3', 'IRM cuenta empresa tramo 3', 'porcentaje', 5, '%'),
-  cnic('CNIC-IRM-EMPRESA-4', 'IRM cuenta empresa tramo 4', 'porcentaje', 9, '%'),
-  cnic('CNIC-IGF-PF-TRAMO-1', 'Primer tramo IGF personas físicas', 'numero', 5000, 'Pz'),
-  cnic('CNIC-IGF-PF-TIPO-1', 'Tipo IGF personas físicas tramo 1', 'porcentaje', 0, '%'),
-  cnic('CNIC-IGF-PF-TRAMO-2', 'Segundo tramo IGF personas físicas', 'numero', 20000, 'Pz'),
-  cnic('CNIC-IGF-PF-TIPO-2', 'Tipo IGF personas físicas tramo 2', 'porcentaje', 10, '%'),
-  cnic('CNIC-IGF-PF-TRAMO-3', 'Tercer tramo IGF personas físicas', 'numero', 500000, 'Pz'),
-  cnic('CNIC-IGF-PF-TIPO-3', 'Tipo IGF personas físicas tramo 3', 'porcentaje', 30, '%'),
-  cnic('CNIC-IGF-EMPRESA-TIPO-4', 'Tipo IGF empresas tramo 4', 'porcentaje', 85, '%'),
+  // IRM por Índice de Acumulación (Art. 4.10)
+  cnic('CNIC-IRM-PARTICULAR-0', 'IRM particular IA ≤ 0', 'porcentaje', 0, '%'),
+  cnic('CNIC-IRM-PARTICULAR-1', 'IRM particular 0 < IA ≤ 0,05', 'porcentaje', 0.5, '%'),
+  cnic('CNIC-IRM-PARTICULAR-2', 'IRM particular 0,05 < IA ≤ 0,15', 'porcentaje', 1.5, '%'),
+  cnic('CNIC-IRM-PARTICULAR-3', 'IRM particular 0,15 < IA ≤ 0,30', 'porcentaje', 3, '%'),
+  cnic('CNIC-IRM-PARTICULAR-4', 'IRM particular IA > 0,30', 'porcentaje', 5, '%'),
+  cnic('CNIC-IRM-COMPARTIDA-0', 'IRM compartida IA ≤ 0', 'porcentaje', 0, '%'),
+  cnic('CNIC-IRM-COMPARTIDA-1', 'IRM compartida 0 < IA ≤ 0,05', 'porcentaje', 0.75, '%'),
+  cnic('CNIC-IRM-COMPARTIDA-2', 'IRM compartida 0,05 < IA ≤ 0,15', 'porcentaje', 2, '%'),
+  cnic('CNIC-IRM-COMPARTIDA-3', 'IRM compartida 0,15 < IA ≤ 0,30', 'porcentaje', 4, '%'),
+  cnic('CNIC-IRM-COMPARTIDA-4', 'IRM compartida IA > 0,30', 'porcentaje', 6, '%'),
+  cnic('CNIC-IRM-EMPRESA-0', 'IRM empresa IA ≤ 0', 'porcentaje', 0, '%'),
+  cnic('CNIC-IRM-EMPRESA-1', 'IRM empresa 0 < IA ≤ 0,05', 'porcentaje', 1, '%'),
+  cnic('CNIC-IRM-EMPRESA-2', 'IRM empresa 0,05 < IA ≤ 0,15', 'porcentaje', 3, '%'),
+  cnic('CNIC-IRM-EMPRESA-3', 'IRM empresa 0,15 < IA ≤ 0,30', 'porcentaje', 6, '%'),
+  cnic('CNIC-IRM-EMPRESA-4', 'IRM empresa IA > 0,30', 'porcentaje', 9, '%'),
+  // IGF personas físicas (Art. 4.13)
+  cnic('CNIC-IGF-PF-TRAMO-1', 'IGF PF tramo exento (hasta)', 'numero', 5000, 'Pz'),
+  cnic('CNIC-IGF-PF-TIPO-1', 'IGF PF tipo tramo exento', 'porcentaje', 0, '%'),
+  cnic('CNIC-IGF-PF-TRAMO-2', 'IGF PF segundo tramo (hasta)', 'numero', 20000, 'Pz'),
+  cnic('CNIC-IGF-PF-TIPO-2', 'IGF PF tipo segundo tramo', 'porcentaje', 10, '%'),
+  cnic('CNIC-IGF-PF-TRAMO-3', 'IGF PF tercer tramo (hasta)', 'numero', 500000, 'Pz'),
+  cnic('CNIC-IGF-PF-TIPO-3', 'IGF PF tipo tercer tramo', 'porcentaje', 30, '%'),
+  // IGF empresas y entidades (Art. 4.14)
+  cnic('CNIC-IGF-EMPRESA-TRAMO-1', 'IGF empresa tramo exento (hasta)', 'numero', 5000, 'Pz'),
+  cnic('CNIC-IGF-EMPRESA-TIPO-1', 'IGF empresa tipo tramo exento', 'porcentaje', 0, '%'),
+  cnic('CNIC-IGF-EMPRESA-TRAMO-2', 'IGF empresa segundo tramo (hasta)', 'numero', 20000, 'Pz'),
+  cnic('CNIC-IGF-EMPRESA-TIPO-2', 'IGF empresa tipo segundo tramo', 'porcentaje', 5, '%'),
+  cnic('CNIC-IGF-EMPRESA-TRAMO-3', 'IGF empresa tercer tramo (hasta)', 'numero', 500000, 'Pz'),
+  cnic('CNIC-IGF-EMPRESA-TIPO-3', 'IGF empresa tipo tercer tramo', 'porcentaje', 35, '%'),
+  cnic('CNIC-IGF-EMPRESA-TIPO-4', 'IGF empresa tipo tramo > 500.000', 'porcentaje', 85, '%'),
+  cnic('CNIC-EXENCION-EMPRESA-PEQUENA', 'Umbral exención IGF empresa pequeña (Art. 4.15)', 'numero', 20000, 'Pz'),
+  // Cotizaciones laborales (Art. 4.5): tramos por sueldo bruto mensual
+  cnic('CNIC-COTIZACION-TRAMO-1-LIMITE', 'Tope tramo 1 cotización (sueldo bruto)', 'numero', 1700, 'Pz'),
+  cnic('CNIC-COTIZACION-TRAMO-2-LIMITE', 'Tope tramo 2 cotización (sueldo bruto)', 'numero', 3000, 'Pz'),
   cnic('CNIC-COTIZACION-TRABAJADOR-TRAMO-1', 'Cotización trabajador tramo 1', 'porcentaje', 7.5, '%'),
   cnic('CNIC-COTIZACION-TRABAJADOR-TRAMO-2', 'Cotización trabajador tramo 2', 'porcentaje', 10.5, '%'),
   cnic('CNIC-COTIZACION-TRABAJADOR-TRAMO-3', 'Cotización trabajador tramo 3', 'porcentaje', 17.5, '%'),
+  cnic('CNIC-COTIZACION-EMPRESA-TRAMO-1', 'Cotización empresa tramo 1', 'porcentaje', 7.5, '%'),
+  cnic('CNIC-COTIZACION-EMPRESA-TRAMO-2', 'Cotización empresa tramo 2', 'porcentaje', 10.5, '%'),
+  cnic('CNIC-COTIZACION-EMPRESA-TRAMO-3', 'Cotización empresa tramo 3', 'porcentaje', 17.5, '%'),
   cnic('CNIC-COTIZACION-TOTAL-TRAMO-1', 'Cotización total tramo 1', 'porcentaje', 15, '%'),
-  cnic('CNIC-SANCION-SALDO-EXCESO-PERSONAL', 'Sanción por exceso de capital personal', 'numero', 10000, 'Pz'),
+  cnic('CNIC-COTIZACION-TOTAL-TRAMO-2', 'Cotización total tramo 2', 'porcentaje', 21, '%'),
+  cnic('CNIC-COTIZACION-TOTAL-TRAMO-3', 'Cotización total tramo 3', 'porcentaje', 35, '%'),
+  // Bono de bienvenida (CNI Art. 7)
   cnic('CNIC-BONO-BIENVENIDA-CIUDADANA', 'Bono de bienvenida alta plena', 'numero', 500, 'Pz'),
   cnic('CNIC-BONO-BIENVENIDA-JUNIOR-BASICA', 'Bono de bienvenida menor de 16 años', 'numero', 750, 'Pz'),
 ];
@@ -341,6 +367,50 @@ async function arrayCuentas(): Promise<CuentaBancaria[]> {
 async function arrayTarjetas(): Promise<TarjetaDigital[]> {
   const live = await estadoBancoLive();
   return live ? live.tarjetas : TARJETAS;
+}
+
+// ── Verificación automática de requisitos de bono (datos REALES) ──────
+// Magnitudes reales del ciudadano que los requisitos pueden comprobar.
+async function evaluarCiudadano(dip: string) {
+  const cuentas = await arrayCuentas();
+  const propias = cuentas.filter((c) => c.dip === dip && c.estado === 'activa');
+  const patrimonio = propias.reduce((s, c) => s + c.saldo, 0);
+  const ciudadano = CIUDADANOS.find((x) => x.dip === dip);
+  const contrib = CONTRIBUYENTES.find((x) => x.id === dip);
+  const juniorActivo = propias.some((c) => c.tipo === 'Child') ? 1 : 0;
+  const nivel = ciudadano?.nivel === 'N3' ? 3 : ciudadano?.nivel === 'N2' ? 2 : 1;
+  return {
+    patrimonio,
+    cuentas: propias.length,
+    junior: juniorActivo,
+    // Sin fecha de nacimiento en el censo local, la cuenta Child es el
+    // indicador real de minoría de edad (< 16) que usa PlacetaID.
+    edad: juniorActivo ? 15 : 18,
+    nivel,
+    fiscal: contrib?.estadoFiscal === 'al_dia' ? 1 : 0,
+  };
+}
+
+function cumple(actual: number, operador: RequisitoBono['operador'], valor: number): boolean {
+  switch (operador) {
+    case '<': return actual < valor;
+    case '>': return actual > valor;
+    case '<=': return actual <= valor;
+    case '>=': return actual >= valor;
+    case '==': return actual === valor;
+    default: return false;
+  }
+}
+
+/** Devuelve la lista de requisitos NO cumplidos (vacía = cumple todos). */
+async function verificarRequisitos(dip: string, requisitos: RequisitoBono[]): Promise<RequisitoBono[]> {
+  const d = await evaluarCiudadano(dip);
+  const fallos: RequisitoBono[] = [];
+  for (const r of requisitos) {
+    const actual = d[r.tipo as keyof typeof d];
+    if (typeof actual !== 'number' || !cumple(actual, r.operador, r.valor)) fallos.push(r);
+  }
+  return fallos;
 }
 
 // Placeta Junior REAL: se intenta leer de la API oficial de la Academia
@@ -965,6 +1035,14 @@ export const mockProvider: Provider = {
     if (!b) throw new Error('Bono no encontrado');
     if (b.estado === 'cerrado') throw new Error('El bono está cerrado');
     if (b.presupuestoUsado + b.maxPorPersona > b.presupuesto) throw new Error('No queda presupuesto en este bono');
+
+    // Comprobación AUTOMÁTICA de requisitos contra datos reales del banco/censo.
+    const fallos = await verificarRequisitos(dip, b.requisitos ?? []);
+    if (fallos.length > 0) {
+      const detalle = fallos.map((f) => `${f.descripcion} (${f.explicacion})`).join(' · ');
+      throw new Error(`No cumple los requisitos: ${detalle}`);
+    }
+
     const d = BONOS_DETALLE[id] ?? { ...b, adscripciones: [], justificaciones: [] };
     if (!d.adscripciones.some((a) => a.dip === dip)) {
       d.adscripciones.push({ dip, nombre: CIUDADANOS.find((c) => c.dip === dip)?.nombre ?? dip, fechaAdscripcion: new Date().toISOString().slice(0, 10), justificado: 0 });
