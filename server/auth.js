@@ -135,11 +135,14 @@ export function authRouter() {
   });
 
   // ── SSO con PlacetaID móvil: devuelve la URL de la fase 1 ──────────
+  // `service` es el nombre que PlacetaID muestra al ciudadano ("accedes a X").
   router.post('/login/placetaid', (req, res) => {
     const state = randomBytes(16).toString('hex');
     const redirectUri = `${req.protocol}://${req.get('host')}/login/callback`;
+    const service = 'Red de Servicios de La Placeta (RSP)';
     const authUrl = `${PLACETAID_URL}/api/auth/fase1?from=${encodeURIComponent(redirectUri)}`
-      + `&client_id=${encodeURIComponent(PLACETAID_CLIENT_ID)}&state=${state}&platform=web`;
+      + `&client_id=${encodeURIComponent(PLACETAID_CLIENT_ID)}&state=${state}&platform=web`
+      + `&service=${encodeURIComponent(service)}`;
     res.json({ redirect: authUrl });
   });
 

@@ -9,6 +9,8 @@
    ═══════════════════════════════════════════════════════════════════════ */
 import { Router } from 'express';
 import { calcularContribuyentes } from './tributos.js';
+import { coleccion } from './db.js';
+import { crearYEnviarFirma, estadoFirma } from './firmas.js';
 
 const AHORA = () => new Date().toISOString();
 const round2 = (n) => Math.round(n * 100) / 100;
@@ -17,35 +19,38 @@ const limpiar = (s = '') => String(s).replace(/\s*\(.*\)\s*$/, '').trim();
 export function createApiRouter({ getBankState }) {
   const router = Router();
 
-  /* ── Almacén en memoria (solo datos creados en sesión; SIN datos demo) ── */
-  // Los datos reales vienen del banco (crm-state), de la Academia
-  // (admin-placeta) y del BOP. Nada de aquí se inventa: los listados que aún
-  // no tienen fuente real arrancan vacíos.
+  /* ── Almacén persistente (Supabase) con respaldo en memoria ────────── */
+  // Cada colección lee/escribe en Supabase (Postgres). Si Supabase no está
+  // configurado (SUPABASE_SERVICE_KEY), opera en memoria sin persistencia.
   const store = {
     ciudadanos: [],   // derivados del banco en `ciudadanosDelBanco()`
     entidades: [],    // derivadas del banco en `entidadesDelBanco()`
-    expedientes: [],  // fuente real: Supabase (a conectar)
-    tramites: [],     // fuente real: Supabase (a conectar)
-    subvenciones: [],
+    expedientes: coleccion('rsp_expedientes'),
+    tramites: coleccion('rsp_tramites'),
+    subvenciones: coleccion('rsp_subvenciones'),
+    bonos: coleccion('rsp_bonos'),
+    operaciones: coleccion('rsp_operaciones'),
+    auditoria: coleccion('rsp_auditoria'),
+    notificaciones: coleccion('rsp_notificaciones'),
+    cnic: coleccion('rsp_cnic'),
+    votaciones: coleccion('rsp_votaciones'),
+    votos: coleccion('rsp_registro_votos'),
+    juntas: coleccion('rsp_reuniones'),
+    encuestas: coleccion('rsp_encuestas'),
+    // En memoria (sesión): detalle de subvenciones/bonos y estado 2FA.
     subvencionesDetalle: {},
-    bonos: [],
     bonosDetalle: {},
-    juniorActividades: [],   // proxeados de la API real de la Academia
+    juniorActividades: [],
     juniorColaboradores: [],
     juniorDiplomas: [],
-    operaciones: [],  // fuente real: motor de operaciones del banco
-    auditoria: [],    // fuente real: Supabase (a conectar)
-    notificaciones: [],
-    cnic: [
-      { codigo: 'CNIC-IGF-PF-TIPO-3', etiqueta: 'Tipo IGF personas físicas tramo 3', tipoValor: 'porcentaje', valor: 30, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
-      { codigo: 'CNIC-IGF-EMPRESA-TIPO-4', etiqueta: 'Tipo IGF empresas tramo 4', tipoValor: 'porcentaje', valor: 85, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
-    ],
-    votaciones: [],
-    votos: [],
-    juntas: [],
-    encuestas: [],
     solicitudes2fa: new Map(),
   };
+
+  // CNIC reales del BOP (fallback si la tabla rsp_cnic aún no está migrada).
+  const CNIC_BASE = [
+    { codigo: 'CNIC-IGF-PF-TIPO-3', etiqueta: 'Tipo IGF personas físicas tramo 3', tipoValor: 'porcentaje', valor: 30, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
+    { codigo: 'CNIC-IGF-EMPRESA-TIPO-4', etiqueta: 'Tipo IGF empresas tramo 4', tipoValor: 'porcentaje', valor: 85, unidad: '%', version: 1, estado: 'vigente', autor: 'Tributos', fuente: 'BOP' },
+  ];
 
   let nuevaCuentaSeq = 0;
   const nuevasCuentas = [];
@@ -249,23 +254,24 @@ export function createApiRouter({ getBankState }) {
   }
 
   /* ── Trámites ────────────────────────────────────────────────────── */
-  router.get('/rsp/tramites/api', (req, res) => {
+  router.get('/rsp/tramites/api', async (req, res) => {
     const q = String(req.query.q || '').toLowerCase();
     const estado = req.query.estado;
-    let lista = store.tramites;
+    let lista = await store.tramites.listar();
     if (q) lista = lista.filter((t) => t.titulo.toLowerCase().includes(q) || t.dip.toLowerCase().includes(q));
     if (estado) lista = lista.filter((t) => t.estado === estado);
     res.json(lista);
   });
-  router.get('/rsp/tramites/api/bandeja', (_req, res) => {
-    res.json(store.tramites.filter((t) => t.asignadoA || t.vencido));
+  router.get('/rsp/tramites/api/bandeja', async (_req, res) => {
+    const lista = await store.tramites.listar();
+    res.json(lista.filter((t) => t.asignadoA || t.vencido));
   });
-  router.get('/rsp/tramites/api/:id', (req, res) => {
-    const t = store.tramites.find((x) => x.id === req.params.id);
+  router.get('/rsp/tramites/api/:id', async (req, res) => {
+    const t = await store.tramites.obtener(req.params.id);
     if (!t) return res.status(404).json({ error: 'Trámite no encontrado' });
     res.json({ ...t, requisitos: [], documentos: [], actuaciones: [] });
   });
-  router.post('/rsp/tramites/api', (req, res) => {
+  router.post('/rsp/tramites/api', async (req, res) => {
     const d = req.body || {};
     const t = {
       id: `TR-${Date.now()}`,
@@ -279,15 +285,50 @@ export function createApiRouter({ getBankState }) {
       actualizadoEn: AHORA(),
       datosEspecificos: d.datos || {},
     };
-    store.tramites.unshift(t);
+    await store.tramites.insertar(t);
     res.status(201).json(t);
   });
-  router.post('/rsp/tramites/api/:id/accion', (req, res) => {
-    const t = store.tramites.find((x) => x.id === req.params.id);
+  router.post('/rsp/tramites/api/:id/accion', async (req, res) => {
+    const t = await store.tramites.obtener(req.params.id);
     if (!t) return res.status(404).json({ error: 'Trámite no encontrado' });
-    t.estado = req.body?.accion === 'resolver' ? 'resolucion' : req.body?.accion || t.estado;
-    t.actualizadoEn = AHORA();
-    res.json(t);
+    const accion = req.body?.accion;
+    const estado = accion === 'resolver' ? 'resolucion' : accion || t.estado;
+    await store.tramites.actualizar(req.params.id, { estado, actualizadoEn: AHORA() });
+
+    // Al emitir firma, se crea y envía el documento a PlacetaID Móvil.
+    let firma = null;
+    if (accion === 'emitir_firma') {
+      try {
+        firma = await crearYEnviarFirma({
+          titulo: t.titulo || `Firma de ${req.params.id}`,
+          tipo: 'resolucion',
+          dip: t.dip,
+          tramiteId: t.id,
+          accion,
+        });
+      } catch { /* la firma es best-effort: no bloquea el avance del trámite */ }
+    }
+    res.json({ ...t, estado, actualizadoEn: AHORA(), firma });
+  });
+
+  /* ── Firma vía PlacetaID Móvil ────────────────────────────────────── */
+  router.post('/api/firmas/crear', async (req, res) => {
+    const d = req.body || {};
+    try {
+      const firma = await crearYEnviarFirma({
+        titulo: d.titulo || `Firma de ${d.accion || 'trámite'}`,
+        tipo: d.tipo || 'resolucion',
+        dip: d.dip,
+        tramiteId: d.tramiteId || d.objetoId,
+        accion: d.accion,
+      });
+      res.status(201).json({ id: firma.id, estado: firma.enviado ? 'enviada' : 'pendiente', enviado: firma.enviado });
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+  router.get('/api/firmas/estado/:id', async (req, res) => {
+    res.json(await estadoFirma(req.params.id));
   });
   router.post('/rsp/tramites/api/2fa/enviar', (req, res) => {
     const id = `2FA-${Date.now()}`;
@@ -302,9 +343,11 @@ export function createApiRouter({ getBankState }) {
   });
 
   /* ── Expedientes ─────────────────────────────────────────────────── */
-  router.get('/rsp/expedientes/api', (_req, res) => res.json(store.expedientes));
-  router.get('/rsp/expedientes/api/:id', (req, res) => {
-    const e = store.expedientes.find((x) => x.id === req.params.id);
+  router.get('/rsp/expedientes/api', async (_req, res) => {
+    res.json(await store.expedientes.listar());
+  });
+  router.get('/rsp/expedientes/api/:id', async (req, res) => {
+    const e = await store.expedientes.obtener(req.params.id);
     if (!e) return res.status(404).json({ error: 'Expediente no encontrado' });
     res.json({ ...e, actuaciones: [] });
   });
@@ -377,7 +420,7 @@ export function createApiRouter({ getBankState }) {
 
       const state = await getBankState();
       const facturas = facturasDe(eip, state, cuentas);
-      const tramites = store.tramites.filter((t) => t.dip === eip);
+      const tramites = (await store.tramites.listar()).filter((t) => t.dip === eip);
 
       res.json({
         eip,
@@ -403,13 +446,13 @@ export function createApiRouter({ getBankState }) {
   });
 
   /* ── Subvenciones ────────────────────────────────────────────────── */
-  router.get('/rsp/subvenciones/api', (_req, res) => res.json(store.subvenciones));
+  router.get('/rsp/subvenciones/api', async (_req, res) => res.json(await store.subvenciones.listar()));
   router.get('/rsp/subvenciones/api/:id', (req, res) => {
     const s = store.subvencionesDetalle[req.params.id];
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
     res.json(s);
   });
-  router.post('/rsp/subvenciones/api/conceder', (req, res) => {
+  router.post('/rsp/subvenciones/api/conceder', async (req, res) => {
     const d = req.body || {};
     const s = {
       id: `SUB-${Date.now()}`,
@@ -419,7 +462,7 @@ export function createApiRouter({ getBankState }) {
       concepto: d.concepto, estado: 'concedida', fechaConcesion: AHORA().slice(0, 10),
       publicada: d.publicada ?? false,
     };
-    store.subvenciones.unshift(s);
+    await store.subvenciones.insertar(s);
     store.subvencionesDetalle[s.id] = {
       ...s, documentosRequeridos: [], gastos: [], justificaciones: [],
       excluirTipos: ['Tax', 'IrmCharge', 'IvaAdjustment'],
@@ -444,13 +487,13 @@ export function createApiRouter({ getBankState }) {
   });
 
   /* ── Bonificaciones (bonos) ──────────────────────────────────────── */
-  router.get('/rsp/bonos/api', (_req, res) => res.json(store.bonos));
+  router.get('/rsp/bonos/api', async (_req, res) => res.json(await store.bonos.listar()));
   router.get('/rsp/bonos/api/:id', (req, res) => {
     const b = store.bonosDetalle[req.params.id];
     if (!b) return res.status(404).json({ error: 'Bono no encontrado' });
     res.json(b);
   });
-  router.post('/rsp/bonos/api', (req, res) => {
+  router.post('/rsp/bonos/api', async (req, res) => {
     const d = req.body || {};
     const b = {
       id: `BONO-${Date.now()}`, nombre: d.nombre, emisorEip: d.emisorEip, emisorNombre: d.emisorEip,
@@ -458,12 +501,12 @@ export function createApiRouter({ getBankState }) {
       requisitos: d.requisitos || [],
       fechaLimite: d.fechaLimite, presupuestoUsado: 0, adscritos: 0, estado: 'activo',
     };
-    store.bonos.unshift(b);
+    await store.bonos.insertar(b);
     store.bonosDetalle[b.id] = { ...b, adscripciones: [], justificaciones: [] };
     res.status(201).json(b);
   });
   router.post('/rsp/bonos/api/:id/adscribir', async (req, res) => {
-    const b = store.bonos.find((x) => x.id === req.params.id);
+    const b = await store.bonos.obtener(req.params.id);
     if (!b) return res.status(404).json({ error: 'Bono no encontrado' });
     const dip = (req.body?.dip || '').toUpperCase();
 
@@ -478,11 +521,11 @@ export function createApiRouter({ getBankState }) {
       return res.status(502).json({ error: e.message });
     }
 
-    const detalle = store.bonosDetalle[b.id];
+    const detalle = store.bonosDetalle[b.id] || { ...b, adscripciones: [], justificaciones: [] };
     if (!detalle.adscripciones.some((a) => a.dip === dip)) {
       detalle.adscripciones.push({ dip, nombre: dip, fechaAdscripcion: AHORA().slice(0, 10), justificado: 0 });
-      b.adscritos += 1;
-      b.presupuestoUsado = Math.min(b.presupuesto, b.presupuestoUsado + b.maxPorPersona);
+      store.bonosDetalle[b.id] = detalle;
+      await store.bonos.actualizar(b.id, { adscritos: (b.adscritos || 0) + 1, presupuestoUsado: Math.min(b.presupuesto, (b.presupuestoUsado || 0) + b.maxPorPersona) });
     }
     res.json({ ok: true });
   });
@@ -607,20 +650,20 @@ export function createApiRouter({ getBankState }) {
   });
 
   /* ── Operaciones / auditoría / notificaciones ────────────────────── */
-  router.get('/rsp/operaciones/api', (_req, res) => res.json(store.operaciones));
-  router.post('/rsp/operaciones/api/:id/revertir', (req, res) => {
-    const o = store.operaciones.find((x) => x.id === req.params.id);
+  router.get('/rsp/operaciones/api', async (_req, res) => res.json(await store.operaciones.listar()));
+  router.post('/rsp/operaciones/api/:id/revertir', async (req, res) => {
+    const o = await store.operaciones.obtener(req.params.id);
     if (!o) return res.status(404).json({ error: 'Operación no encontrada' });
     if (o.estado !== 'retenida') return res.status(400).json({ error: 'Solo se pueden revertir operaciones retenidas' });
-    o.estado = 'rechazada';
+    await store.operaciones.actualizar(req.params.id, { estado: 'rechazada' });
     res.json({ ok: true });
   });
-  router.get('/rsp/auditoria/api', (_req, res) => res.json(store.auditoria));
-  router.get('/api/notificaciones/mis', (_req, res) => res.json(store.notificaciones));
-  router.post('/api/notificaciones/:id/leida', (req, res) => {
-    const n = store.notificaciones.find((x) => x.id === req.params.id);
+  router.get('/rsp/auditoria/api', async (_req, res) => res.json(await store.auditoria.listar()));
+  router.get('/api/notificaciones/mis', async (_req, res) => res.json(await store.notificaciones.listar()));
+  router.post('/api/notificaciones/:id/leida', async (req, res) => {
+    const n = await store.notificaciones.obtener(req.params.id);
     if (!n) return res.status(404).json({ error: 'Notificación no encontrada' });
-    n.leida = true;
+    await store.notificaciones.actualizar(req.params.id, { leida: true });
     res.json({ ok: true });
   });
 
@@ -635,32 +678,41 @@ export function createApiRouter({ getBankState }) {
     } catch {
       /* banco no disponible: se deja en 0 */
     }
+    const [expedientes, notificaciones, cnic, operaciones] = await Promise.all([
+      store.expedientes.listar(), store.notificaciones.listar(), store.cnic.listar(), store.operaciones.listar(),
+    ]);
     res.json({
-      expedientes: store.expedientes.length,
+      expedientes: expedientes.length,
       incidencias: 0,
       incidenciasAbiertas: 0,
-      notificacionesNoLeidas: store.notificaciones.filter((n) => !n.leida).length,
-      cnicVigentes: store.cnic.length,
+      notificacionesNoLeidas: notificaciones.filter((n) => !n.leida).length,
+      cnicVigentes: cnic.length || CNIC_BASE.length,
       nominas: 0,
       facturas: 0,
       bloqueos500k,
       retribucionesPendientes: 0,
-      operacionesRetenidas: store.operaciones.filter((o) => o.estado === 'retenida').length,
+      operacionesRetenidas: operaciones.filter((o) => o.estado === 'retenida').length,
       comprobaciones: 0,
       comprobacionesInconsistencia: 0,
     });
   });
 
   /* ── Normativa (CNIC) ────────────────────────────────────────────── */
-  router.get('/rsp/normativo/api', (_req, res) => res.json(store.cnic));
-  router.post('/rsp/normativo/api/refresh', (_req, res) => res.json({ sincronizado: true, total: store.cnic.length, fuente: 'BOP' }));
-  router.post('/rsp/normativo/api/version', (req, res) => {
+  router.get('/rsp/normativo/api', async (_req, res) => {
+    const lista = await store.cnic.listar();
+    res.json(lista.length ? lista : CNIC_BASE);
+  });
+  router.post('/rsp/normativo/api/refresh', async (_req, res) => {
+    const lista = await store.cnic.listar();
+    res.json({ sincronizado: true, total: lista.length || CNIC_BASE.length, fuente: 'BOP' });
+  });
+  router.post('/rsp/normativo/api/version', async (req, res) => {
     const d = req.body || {};
     const regla = {
       codigo: d.codigo, etiqueta: d.codigo, tipoValor: 'porcentaje', valor: d.valor, unidad: '%',
       version: 2, estado: 'validacion', autor: 'RSP', fuente: 'local',
     };
-    store.cnic.push(regla);
+    await store.cnic.insertar(regla);
     res.status(201).json(regla);
   });
 
@@ -693,70 +745,72 @@ export function createApiRouter({ getBankState }) {
   });
 
   /* ── Votaciones / Juntas / Encuestas ────────────────────────────── */
-  router.get('/rsp/votaciones/api', (_req, res) => res.json(store.votaciones));
-  router.get('/rsp/votaciones/api/:id', (req, res) => {
-    const v = store.votaciones.find((x) => x.id === req.params.id);
+  router.get('/rsp/votaciones/api', async (_req, res) => res.json(await store.votaciones.listar()));
+  router.get('/rsp/votaciones/api/:id', async (req, res) => {
+    const v = await store.votaciones.obtener(req.params.id);
     if (!v) return res.status(404).json({ error: 'Votación no encontrada' });
-    res.json({ ...v, votos: store.votos.filter((r) => r.votacionId === v.id) });
+    const votos = (await store.votos.listar({ filtros: { votacionId: v.id } }));
+    res.json({ ...v, votos });
   });
-  router.post('/rsp/votaciones/api', (req, res) => {
+  router.post('/rsp/votaciones/api', async (req, res) => {
     const d = req.body || {};
-    const v = { id: `VOT-2026-${String(store.votaciones.length + 1).padStart(4, '0')}`, titulo: d.titulo, categoria: d.categoria, descripcion: d.descripcion || '', reunionId: d.reunionId, rango: d.rango || 'ciudadania_plena', opciones: d.opciones || ['A favor', 'En contra', 'Abstención'], estado: 'abierta', resultado: null, aFavor: 0, enContra: 0, abstenciones: 0, totalVotos: 0, creadaEn: AHORA() };
-    store.votaciones.unshift(v);
+    const n = (await store.votaciones.listar()).length;
+    const v = { id: `VOT-2026-${String(n + 1).padStart(4, '0')}`, titulo: d.titulo, categoria: d.categoria, descripcion: d.descripcion || '', reunionId: d.reunionId, rango: d.rango || 'ciudadania_plena', opciones: d.opciones || ['A favor', 'En contra', 'Abstención'], estado: 'abierta', resultado: null, aFavor: 0, enContra: 0, abstenciones: 0, totalVotos: 0, creadaEn: AHORA() };
+    await store.votaciones.insertar(v);
     res.status(201).json(v);
   });
-  router.post('/rsp/votaciones/api/:id/cerrar', (req, res) => {
-    const v = store.votaciones.find((x) => x.id === req.params.id);
+  router.post('/rsp/votaciones/api/:id/cerrar', async (req, res) => {
+    const v = await store.votaciones.obtener(req.params.id);
     if (!v) return res.status(404).json({ error: 'Votación no encontrada' });
-    v.estado = 'cerrada'; v.cerradaEn = AHORA();
-    v.resultado = v.aFavor > v.enContra ? 'aprobada' : 'rechazada';
+    await store.votaciones.actualizar(req.params.id, { estado: 'cerrada', cerradaEn: AHORA(), resultado: v.aFavor > v.enContra ? 'aprobada' : 'rechazada' });
     res.json({ ok: true });
   });
-  router.post('/rsp/votaciones/api/:id/publicar', (req, res) => {
-    const v = store.votaciones.find((x) => x.id === req.params.id);
+  router.post('/rsp/votaciones/api/:id/publicar', async (req, res) => {
+    const v = await store.votaciones.obtener(req.params.id);
     if (!v) return res.status(404).json({ error: 'Votación no encontrada' });
-    v.estado = 'publicada'; v.publicadaEn = AHORA();
-    v.bopUrl = `https://bop.laplaceta.org/votaciones.html?codigo=${v.id}`;
+    await store.votaciones.actualizar(req.params.id, { estado: 'publicada', publicadaEn: AHORA(), bopUrl: `https://bop.laplaceta.org/votaciones.html?codigo=${v.id}` });
     res.json({ ok: true });
   });
-  router.get('/rsp/votaciones/api/:id/votos', (req, res) => {
+  router.get('/rsp/votaciones/api/:id/votos', async (req, res) => {
     const ahora = Date.now();
-    res.json(store.votos.filter((r) => r.votacionId === req.params.id).map((r) => {
+    const votos = await store.votos.listar({ filtros: { votacionId: req.params.id } });
+    res.json(votos.map((r) => {
       const anon = !r.esJunta && (ahora - new Date(r.timestamp).getTime()) > 30 * 24 * 3600 * 1000;
       return { ...r, anonimo: anon, dip: anon ? '••••••' : r.dip };
     }));
   });
-  router.get('/rsp/juntas/api', (_req, res) => res.json(store.juntas));
-  router.get('/rsp/juntas/api/:id', (req, res) => {
-    const j = store.juntas.find((x) => x.id === req.params.id);
+  router.get('/rsp/juntas/api', async (_req, res) => res.json(await store.juntas.listar()));
+  router.get('/rsp/juntas/api/:id', async (req, res) => {
+    const j = await store.juntas.obtener(req.params.id);
     if (!j) return res.status(404).json({ error: 'Junta no encontrada' });
-    res.json({ ...j, votaciones: j.votaciones.map((vid) => store.votaciones.find((v) => v.id === vid)).filter(Boolean) });
+    const votaciones = await store.votaciones.listar();
+    res.json({ ...j, votaciones: (j.votaciones || []).map((vid) => votaciones.find((v) => v.id === vid)).filter(Boolean) });
   });
-  router.post('/rsp/juntas/api', (req, res) => {
+  router.post('/rsp/juntas/api', async (req, res) => {
     const d = req.body || {};
-    const j = { id: `JUN-2026-${String(store.juntas.length + 1).padStart(4, '0')}`, titulo: d.titulo, fecha: d.fecha || new Date().toISOString().slice(0, 10), asistentes: d.asistentes || [], ordenDelDia: d.ordenDelDia || [], votaciones: d.votaciones || [], acta: '', estado: 'convocada' };
-    store.juntas.unshift(j);
+    const n = (await store.juntas.listar()).length;
+    const j = { id: `JUN-2026-${String(n + 1).padStart(4, '0')}`, titulo: d.titulo, fecha: d.fecha || new Date().toISOString().slice(0, 10), asistentes: d.asistentes || [], ordenDelDia: d.ordenDelDia || [], votaciones: d.votaciones || [], acta: '', estado: 'convocada' };
+    await store.juntas.insertar(j);
     res.status(201).json(j);
   });
-  router.post('/rsp/juntas/api/:id/acta', (req, res) => {
-    const j = store.juntas.find((x) => x.id === req.params.id);
+  router.post('/rsp/juntas/api/:id/acta', async (req, res) => {
+    const j = await store.juntas.obtener(req.params.id);
     if (!j) return res.status(404).json({ error: 'Junta no encontrada' });
-    j.acta = req.body?.acta || ''; j.estado = 'acta_emitida';
-    j.actaUrl = `https://bop.laplaceta.org/juntas.html?codigo=${j.id}`;
+    await store.juntas.actualizar(req.params.id, { acta: req.body?.acta || '', estado: 'acta_emitida', actaUrl: `https://bop.laplaceta.org/juntas.html?codigo=${j.id}` });
     res.json({ ok: true });
   });
-  router.get('/rsp/encuestas/api', (_req, res) => res.json(store.encuestas));
-  router.post('/rsp/encuestas/api', (req, res) => {
+  router.get('/rsp/encuestas/api', async (_req, res) => res.json(await store.encuestas.listar()));
+  router.post('/rsp/encuestas/api', async (req, res) => {
     const d = req.body || {};
-    const e = { id: `ENC-2026-${String(store.encuestas.length + 1).padStart(4, '0')}`, titulo: d.titulo, pregunta: d.pregunta, opciones: d.opciones || [], rango: d.rango || 'todos', estado: 'abierta', respuestas: Object.fromEntries((d.opciones || []).map((o) => [o, 0])), totalRespuestas: 0, creadaEn: AHORA() };
-    store.encuestas.unshift(e);
+    const n = (await store.encuestas.listar()).length;
+    const e = { id: `ENC-2026-${String(n + 1).padStart(4, '0')}`, titulo: d.titulo, pregunta: d.pregunta, opciones: d.opciones || [], rango: d.rango || 'todos', estado: 'abierta', respuestas: Object.fromEntries((d.opciones || []).map((o) => [o, 0])), totalRespuestas: 0, creadaEn: AHORA() };
+    await store.encuestas.insertar(e);
     res.status(201).json(e);
   });
-  router.post('/rsp/encuestas/api/:id/publicar', (req, res) => {
-    const e = store.encuestas.find((x) => x.id === req.params.id);
+  router.post('/rsp/encuestas/api/:id/publicar', async (req, res) => {
+    const e = await store.encuestas.obtener(req.params.id);
     if (!e) return res.status(404).json({ error: 'Encuesta no encontrada' });
-    e.estado = 'publicada'; e.publicadaEn = AHORA();
-    e.bopUrl = `https://bop.laplaceta.org/encuestas.html?codigo=${e.id}`;
+    await store.encuestas.actualizar(req.params.id, { estado: 'publicada', publicadaEn: AHORA(), bopUrl: `https://bop.laplaceta.org/encuestas.html?codigo=${e.id}` });
     res.json({ ok: true });
   });
 

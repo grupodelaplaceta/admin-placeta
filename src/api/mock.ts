@@ -5,7 +5,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 import type {
-  Session, DashboardStats, Tramite, Expediente, ContextoCiudadano,
+  Session, DashboardStats, Tramite, Expediente,
   CiudadanoResumen, Notificacion, EventoAuditoria, CNICRegla, Operacion,
   EntidadRegistral, Filtros, Actuacion, Requisito, DocumentoVinculado,
   NuevoTramite, EstadoTramite, Contribuyente,
@@ -282,6 +282,20 @@ async function arrayTarjetas(): Promise<TarjetaDigital[]> {
   return live ? live.tarjetas : TARJETAS;
 }
 
+// Ciudadanos REALES derivados de las cuentas del banco (placetaId = DIP).
+async function ciudadanosDelBanco(): Promise<CiudadanoResumen[]> {
+  const cuentas = await arrayCuentas();
+  const DIP = /^[XYZ0-9][0-9]{7,8}[A-Z]$/;
+  const map = new Map<string, CiudadanoResumen>();
+  for (const c of cuentas) {
+    if (!DIP.test(c.dip)) continue;
+    const e = map.get(c.dip) ?? { dip: c.dip, nombre: c.nombre, nivel: 'N1' as CiudadanoResumen['nivel'], cuentas: 0, expedientesActivos: 0, estado: 'activo' as const };
+    e.cuentas += 1;
+    map.set(c.dip, e);
+  }
+  return Array.from(map.values());
+}
+
 // ── Verificación automática de requisitos de bono (datos REALES) ──────
 // Magnitudes reales del ciudadano que los requisitos pueden comprobar.
 async function evaluarCiudadano(dip: string) {
@@ -502,8 +516,6 @@ const JUNIOR_ACTIVIDADES: ActividadJunior[] = [];
 const JUNIOR_COLABORADORES: ColaboradorJunior[] = [];
 const JUNIOR_DIPLOMAS: DiplomaJunior[] = [];
 
-const CONTEXTOS: Record<string, ContextoCiudadano> = {};
-
 function filtro<T>(items: T[], f?: Filtros): T[] {
   let out = items;
   if (f?.estado) out = out.filter((i) => (i as { estado?: string }).estado === f.estado);
@@ -635,13 +647,31 @@ export const mockProvider: Provider = {
     return { ...e, actuaciones: t?.actuaciones ?? [] };
   },
   async buscarCiudadanos(q) {
-    if (!q) return CIUDADANOS;
-    return CIUDADANOS.filter((c) => (c.nombre + c.dip).toLowerCase().includes(q.toLowerCase()));
+    const todos = await ciudadanosDelBanco();
+    if (!q) return todos;
+    return todos.filter((c) => (c.nombre + c.dip).toLowerCase().includes(q.toLowerCase()));
   },
   async contextoCiudadano(dip) {
-    return CONTEXTOS[dip] ?? {
-      dip, nombre: dip, nivel: 'N1',
-      bloques: [{ clave: 'identidad', etiqueta: 'Identidad', icono: 'user', items: [{ clave: 'dip', etiqueta: 'DIP', valor: dip }] }],
+    const cuentas = await arrayCuentas();
+    const propias = cuentas.filter((c) => c.dip === dip);
+    const saldo = propias.reduce((s, c) => s + c.saldo, 0);
+    const contrib = CONTRIBUYENTES.find((x) => x.id === dip);
+    const nombre = propias[0]?.nombre ?? contrib?.nombre ?? dip;
+    return {
+      dip,
+      nombre,
+      nivel: 'N1',
+      email: `${dip.toLowerCase()}@laplaceta.org`,
+      bloques: [
+        { clave: 'identidad', etiqueta: 'Identidad', icono: 'user', items: [{ clave: 'dip', etiqueta: 'DIP', valor: dip }] },
+        { clave: 'banco', etiqueta: 'Banco', icono: 'wallet', items: [
+          { clave: 'cuentas', etiqueta: 'Cuentas', valor: propias.length },
+          { clave: 'saldo', etiqueta: 'Saldo total', valor: `${saldo.toLocaleString('es-ES')} Pz` },
+        ] },
+        { clave: 'fiscalidad', etiqueta: 'Fiscalidad', icono: 'receipt', items: [
+          { clave: 'estado', etiqueta: 'Estado fiscal', valor: contrib?.estadoFiscal ?? '—' },
+        ] },
+      ],
     };
   },
   async listarEntidades() {
@@ -753,14 +783,10 @@ export const mockProvider: Provider = {
     if (ql.length < 2) return [];
     return CUENTAS_REALES.filter((c) => c.etiqueta.toLowerCase().includes(ql) || c.id.toLowerCase().includes(ql));
   },
-  async actualizarCiudadano(dip, datos) {
-    const c = CIUDADANOS.find((x) => x.dip === dip);
+  async actualizarCiudadano(dip, _datos) {
+    const c = (await ciudadanosDelBanco()).find((x) => x.dip === dip);
     if (!c) throw new Error('Ciudadano no encontrado');
-    const ctx = CONTEXTOS[dip];
-    if (ctx) {
-      if (datos.email !== undefined) ctx.email = datos.email;
-      if (datos.telefono !== undefined) ctx.telefono = datos.telefono;
-    }
+    // El mock no persiste email/teléfono (datos de PlacetaID): sin efecto real.
   },
   async getEntidad(eip) {
     const cuentas = await arrayCuentas();
@@ -771,6 +797,8 @@ export const mockProvider: Provider = {
 
     const nombre = real?.nombre ?? base?.nombre ?? (cuentasEip[0]?.nombre ?? eip);
     const repsDip = real?.representantes ?? base?.representantes ?? [];
+    const nombreDe = (dip: string) => cuentas.find((x) => x.dip === dip)?.nombre
+      ?? CONTRIBUYENTES.find((x) => x.id === dip)?.nombre ?? dip;
 
     // Participación agregada desde las cuentas reales (por titular).
     const sumaPct = new Map<string, number>();
@@ -781,13 +809,13 @@ export const mockProvider: Provider = {
     }
     const participacion: ParticipacionEmpresa[] = Array.from(sumaPct.entries()).map(([dip, pct]) => ({
       dip,
-      nombre: CIUDADANOS.find((x) => x.dip === dip)?.nombre ?? dip,
+      nombre: nombreDe(dip),
       pct: Math.round(pct * 10) / 10,
     }));
 
     const representantes = repsDip.map((dip) => ({
       dip,
-      nombre: CIUDADANOS.find((x) => x.dip === dip)?.nombre ?? dip,
+      nombre: nombreDe(dip),
       cargo: 'Representante legal',
     }));
 
@@ -921,7 +949,9 @@ export const mockProvider: Provider = {
 
     const d = BONOS_DETALLE[id] ?? { ...b, adscripciones: [], justificaciones: [] };
     if (!d.adscripciones.some((a) => a.dip === dip)) {
-      d.adscripciones.push({ dip, nombre: CIUDADANOS.find((c) => c.dip === dip)?.nombre ?? dip, fechaAdscripcion: new Date().toISOString().slice(0, 10), justificado: 0 });
+      const nombre = CONTRIBUYENTES.find((c) => c.id === dip)?.nombre
+        ?? (await ciudadanosDelBanco()).find((c) => c.dip === dip)?.nombre ?? dip;
+      d.adscripciones.push({ dip, nombre, fechaAdscripcion: new Date().toISOString().slice(0, 10), justificado: 0 });
       b.adscritos += 1;
       b.presupuestoUsado = Math.min(b.presupuesto, b.presupuestoUsado + b.maxPorPersona);
       BONOS_DETALLE[id] = d;

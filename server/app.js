@@ -9,6 +9,8 @@ import cors from 'cors';
 import { authRouter, requiereSesion } from './auth.js';
 import { createApiRouter } from './api.js';
 import { calcularContribuyentes, calcularReconciliacion } from './tributos.js';
+import { registrarFirma } from './firmas.js';
+import { probarSupabase } from './supabase.js';
 
 const BOP_URL = process.env.BOP_URL || 'https://rsp.laplaceta.org';
 // Nombres compatibles con admin-placeta (BANCO_API_URL / CRM_READ_KEY).
@@ -46,8 +48,15 @@ export function createApp() {
   app.use(express.json());
 
   // Público: health check (lo usa Vercel / uptime).
-  app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, app: 'rsp-web-api', time: new Date().toISOString() });
+  app.get('/api/health', async (_req, res) => {
+    const supabase = await probarSupabase();
+    res.json({
+      ok: true,
+      app: 'rsp-web-api',
+      time: new Date().toISOString(),
+      supabase: supabase.ok ? 'conectado' : 'sin_configuracion',
+      supabaseError: supabase.ok ? null : supabase.error,
+    });
   });
 
   // Público (lectura): estado real del banco — lo usa el SPA para listar
@@ -58,6 +67,23 @@ export function createApp() {
       res.json(data);
     } catch (e) {
       res.status(502).json({ error: e.message });
+    }
+  });
+
+  // Público: callback de firma de PlacetaID Móvil (con api_key de documentos).
+  app.post('/publico/rsp/documentos/:id/firmar', async (req, res) => {
+    const key = String(req.query.api_key || '');
+    const claves = (process.env.DOCS_API_KEYS || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (claves.length && !claves.includes(key)) return res.status(401).json({ error: 'api_key inválida' });
+    try {
+      const doc = await registrarFirma(req.params.id, {
+        dip: req.body?.dip || req.body?.firmadoPor || req.body?.firmante,
+        firmaBase64: req.body?.firma_base64 || req.body?.firmaImagen,
+      });
+      if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
+      res.json({ ok: true, estado: doc.estado });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
     }
   });
 
