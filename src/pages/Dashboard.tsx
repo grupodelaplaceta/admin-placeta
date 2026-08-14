@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { provider } from '../api';
 import { useAuth } from '../auth/AuthContext';
-import { Card, CardHeader, KPI, PageHeader, Spinner, Badge } from '../components/ui';
+import { Card, CardHeader, KPI, PageHeader, Spinner, Badge, ErrorState } from '../components/ui';
 import { Icon } from '../components/icons';
 import type { DashboardStats } from '../types';
 
@@ -11,11 +11,26 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const cargar = () => {
+    setError(null);
+    setStats(null);
     provider.dashboard().then(setStats).catch((e) => setError(e.message));
-  }, []);
+  };
+  useEffect(cargar, []);
 
-  if (error) return <div className="rsp-alert rsp-alert-danger">No se pudo cargar el dashboard: {error}</div>;
+  if (error) {
+    return (
+      <>
+        <PageHeader title={`Hola, ${session?.usuario.nombre.split(' ')[0] ?? 'admin'}`} subtitle="Resumen operativo del ecosistema de La Placeta." />
+        <ErrorState
+          title="No se pudo cargar el panel"
+          message={error}
+          hint="Comprueba la conexión con el backend y vuelve a intentarlo."
+          onRetry={cargar}
+        />
+      </>
+    );
+  }
   if (!stats) return <Spinner label="Cargando panel…" />;
 
   return (

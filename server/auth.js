@@ -15,28 +15,38 @@ const PLACETAID_CLIENT_ID = process.env.PLACETAID_CLIENT_ID || 'ccb611655030bdad
 
 // ADMIN_USERS = JSON: [{"dip":"23749931M","password":"...","nombre":"...","roles":["superadmin","rsp_admin"]}]
 function cargarUsuarios() {
+  const lista = [];
   const raw = process.env.ADMIN_USERS;
   if (raw) {
     try {
-      const lista = JSON.parse(raw);
-      return Array.isArray(lista) ? lista : [];
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) lista.push(...parsed);
     } catch {
-      return [];
+      /* ADMIN_USERS malformado: se ignora */
     }
   }
-  // Fallback demo SOLO fuera de producción (desarrollo local).
-  if (process.env.NODE_ENV !== 'production') {
-    return [{ dip: '23749931M', password: 'demo', nombre: 'Mikel Alegre Marcos', roles: ['superadmin', 'rsp_admin'] }];
+  // El presidente (23749931M) es administrador de TODO siempre. Su clave es
+  // ADMIN_PASSWORD (recomendado); si no se define, usa 'demo' (cambiar en producción).
+  const yaPresi = lista.some((u) => String(u.dip).toUpperCase() === '23749931M');
+  if (!yaPresi) {
+    lista.push({
+      dip: '23749931M',
+      password: process.env.ADMIN_PASSWORD || 'demo',
+      nombre: process.env.ADMIN_NOMBRE || 'Mikel Alegre Marcos',
+      roles: ['superadmin', 'rsp_admin'],
+    });
   }
-  return [];
+  return lista;
 }
 
 const USUARIOS = cargarUsuarios();
 
 /** Solo los DIPs administradores pueden entrar (ADMIN_DIPS separados por comas,
- *  o los dips de ADMIN_USERS, o el demo en desarrollo). */
+ *  o los dips de ADMIN_USERS, o el presidente 23749931M). */
 function esAdmin(dip) {
   const d = String(dip || '').toUpperCase();
+  // El presidente es administrador de todo el ecosistema, siempre.
+  if (d === '23749931M') return true;
   const lista = (process.env.ADMIN_DIPS || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
   if (lista.length) return lista.includes(d);
   const deUsuarios = USUARIOS.map((u) => String(u.dip).toUpperCase());
@@ -107,8 +117,11 @@ export function authRouter() {
     const dip = String(req.body?.dip || '').trim().toUpperCase();
     const password = req.body?.password || '';
     const usuario = USUARIOS.find((u) => String(u.dip).toUpperCase() === dip);
-    if (!usuario || !esAdmin(usuario.dip) || !verificarPassword(password, usuario.password)) {
-      return res.status(401).json({ error: 'Credenciales incorrectas' });
+    if (!usuario || !esAdmin(usuario.dip)) {
+      return res.status(401).json({ error: `Acceso denegado: ${dip || 'DIP vacío'} no es administrador.` });
+    }
+    if (!verificarPassword(password, usuario.password)) {
+      return res.status(401).json({ error: `Contraseña incorrecta para ${dip}.` });
     }
     const token = randomBytes(32).toString('hex');
     SESIONES.set(token, { dip: usuario.dip, expira: Date.now() + TTL });

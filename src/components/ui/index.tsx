@@ -114,6 +114,28 @@ export function Empty({ icon = 'folder', title, hint, actions }: { icon?: IconNa
   );
 }
 
+/* ── ErrorState (pantalla de error amigable) ─────────────────────────── */
+export function ErrorState({ title = 'Algo ha ido mal', message, hint, onRetry }: {
+  title?: string;
+  message: string;
+  hint?: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="rsp-empty rsp-error-state" role="alert">
+      <span className="rsp-empty-icon rsp-empty-icon-danger"><Icon name="alert" size={28} /></span>
+      <h3>{title}</h3>
+      <p className="u-muted" style={{ whiteSpace: 'pre-wrap' }}>{message}</p>
+      {hint && <p className="u-muted" style={{ fontSize: 'var(--fs-xs)' }}>{hint}</p>}
+      {onRetry && (
+        <div className="u-row">
+          <Button size="sm" variant="outline" icon="refresh" onClick={onRetry}>Reintentar</Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Table ───────────────────────────────────────────────────────────── */
 export interface Column<T> {
   key: string;

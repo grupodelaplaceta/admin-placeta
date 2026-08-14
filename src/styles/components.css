@@ -142,6 +142,11 @@
 .rsp-empty-icon { font-size: 2rem; }
 .rsp-empty h3 { margin: var(--sp-2) 0 0; color: var(--text); }
 
+/* ErrorState: pantalla de error amigable */
+.rsp-error-state { border-style: solid; border-color: var(--danger); }
+.rsp-empty-icon-danger { color: var(--danger); }
+.rsp-error-state h3 { color: var(--danger); }
+
 /* ── Table ──────────────────────────────────────────────────────────── */
 .rsp-table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-sm); }
 .rsp-table { width: 100%; border-collapse: collapse; font-size: var(--fs-md); }

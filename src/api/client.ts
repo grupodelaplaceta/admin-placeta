@@ -15,11 +15,19 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    credentials: 'include', // la sesión viaja en cookie httpOnly
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-    ...init,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      credentials: 'include', // la sesión viaja en cookie httpOnly
+      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+      ...init,
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      'No se pudo conectar con el servidor. Comprueba que el backend esté en marcha e inténtalo de nuevo.',
+    );
+  }
   if (!res.ok) {
     let msg = `Error ${res.status}`;
     try {

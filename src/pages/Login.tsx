@@ -13,11 +13,22 @@ export default function Login() {
   const [dip, setDip] = useState('23749931M');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
   const [mostrarDemo, setMostrarDemo] = useState(false);
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/';
+
+  function mostrarError(err: unknown, fallback: string) {
+    if (err instanceof ApiError) {
+      setError(err.message);
+      setErrorStatus(err.status);
+    } else {
+      setError(fallback);
+      setErrorStatus(0);
+    }
+  }
 
   async function entrarConPlacetaID() {
     setError(null);
@@ -30,9 +41,10 @@ export default function Login() {
       }
       setMostrarDemo(true);
       setError('PlacetaID no está disponible aquí; usa el acceso de administrador.');
+      setErrorStatus(0);
     } catch (err) {
       setMostrarDemo(true);
-      setError(err instanceof ApiError ? err.message : 'No se pudo conectar con PlacetaID');
+      mostrarError(err, 'No se pudo conectar con PlacetaID');
     } finally {
       setSsoLoading(false);
     }
@@ -46,7 +58,7 @@ export default function Login() {
       await login(dip.trim(), password);
       navigate(from, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo iniciar sesión');
+      mostrarError(err, 'No se pudo iniciar sesión');
     } finally {
       setLoading(false);
     }
@@ -103,7 +115,25 @@ export default function Login() {
           </>
         )}
 
-        {error && <div className="rsp-alert rsp-alert-danger">{error}</div>}
+        {error && (
+          <div className="rsp-alert rsp-alert-danger" role="alert" style={{ display: 'flex', gap: 'var(--sp-2)', alignItems: 'flex-start', textAlign: 'left', width: '100%' }}>
+            <Icon name="alert" size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+            <div style={{ flex: 1 }}>
+              <strong>{error}</strong>
+              {errorStatus === 0 && (
+                <p className="u-muted" style={{ margin: '4px 0 0', fontSize: 'var(--fs-xs)' }}>
+                  No hay conexión con el servidor. Comprueba que el backend (rsp-web-api) esté en marcha.
+                </p>
+              )}
+              {errorStatus === 401 && (
+                <p className="u-muted" style={{ margin: '4px 0 0', fontSize: 'var(--fs-xs)' }}>
+                  Verifica el DIP y la contraseña. Si eres el presidente (23749931M) y aun así no entras,
+                  configura ADMIN_PASSWORD en el backend.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
         <p className="u-muted" style={{ fontSize: 'var(--fs-xs)' }}>
           Solo entran administradores. La sesión viaja en cookie httpOnly.
         </p>
