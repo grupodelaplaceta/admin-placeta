@@ -44,6 +44,10 @@ async function obtenerEstadoBanco() {
 export function createApp() {
   const app = express();
 
+  // Detrás de Vercel/proxies, req.protocol debe respetar X-Forwarded-Proto
+  // para que el callback de PlacetaID use https correctamente.
+  app.set('trust proxy', 1);
+
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
 
