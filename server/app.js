@@ -10,8 +10,7 @@ import { authRouter, requiereSesion } from './auth.js';
 import { createApiRouter } from './api.js';
 import { calcularContribuyentes, calcularReconciliacion } from './tributos.js';
 import { registrarFirma } from './firmas.js';
-import { probarSupabase } from './supabase.js';
-
+import { supabase, probarSupabase } from './supabase.js';
 const BOP_URL = process.env.BOP_URL || 'https://rsp.laplaceta.org';
 // Nombres compatibles con admin-placeta (BANCO_API_URL / CRM_READ_KEY).
 const BANK_URL = process.env.BANCO_API_URL || process.env.BANK_URL || 'https://api.banco.laplaceta.org';
@@ -86,6 +85,72 @@ export function createApp() {
       });
       if (!doc) return res.status(404).json({ error: 'Documento no encontrado' });
       res.json({ ok: true, estado: doc.estado });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ── Placeta Junior PÚBLICO (junior.laplaceta.org) ──────────────────
+  // La web pública necesita leer el catálogo de actividades SIN sesión.
+  // La API antigua (/api/junior/...) se eliminó en el rewrite del BFF;
+  // se restaura aquí como lectura pública desde Supabase (filas crudas,
+  // el mismo contrato que consumía la web: { success, actividades }).
+  const DEMO_DIP = '16381756J';
+  const esDipDemo = (dip) => String(dip || '').trim().toUpperCase() === DEMO_DIP;
+  const esActividadPublica = (a) => !!a && a.estado === 'aprobada' && a.publica === true;
+  // Promueve los campos económicos que viven como respaldo en `contenido`
+  // a nivel superior (subvencionada, destacada, precios, recompensa).
+  function normalizarActividad(a) {
+    if (!a || typeof a !== 'object') return a;
+    const c = (typeof a.contenido === 'object' && a.contenido) ? a.contenido : {};
+    if (a.subvencionada === undefined && c.subvencionada !== undefined) a.subvencionada = !!c.subvencionada;
+    if (a.destacada === undefined && c.destacada !== undefined) a.destacada = !!c.destacada;
+    if (a.precio_licencia === undefined && c.precio_licencia !== undefined) a.precio_licencia = Number(c.precio_licencia) || 0;
+    if (a.precio_intento === undefined && c.precio_intento !== undefined) a.precio_intento = Number(c.precio_intento) || 0;
+    if (a.recompensa === undefined && c.recompensa !== undefined) a.recompensa = Number(c.recompensa) || 0;
+    return a;
+  }
+
+  // GET /api/junior/actividades — catálogo (aprobadas/públicas; el DIP demo
+  // 16381756J además ve las que están "en revisión").
+  app.get('/api/junior/actividades', async (req, res) => {
+    try {
+      const { solo_publicas = '1', categoria, dip } = req.query;
+      const esDemo = esDipDemo(dip);
+      if (!supabase) return res.status(503).json({ error: 'Supabase no configurado' });
+      let q = supabase.from('junior_actividades').select('*');
+      if (esDemo) q = q.in('estado', ['aprobada', 'en_revision']);
+      else if (solo_publicas === '1') q = q.eq('publica', true).eq('estado', 'aprobada');
+      else q = q.eq('estado', 'aprobada');
+      if (categoria) q = q.eq('categoria', categoria);
+      q = q.order('creado_en', { ascending: false }).limit(200);
+      const { data, error } = await q;
+      if (error) throw error;
+      const actividades = (data || []).map(normalizarActividad);
+      res.json({ success: true, total: actividades.length, actividades });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // GET /api/junior/actividades/:id — detalle (solo públicas; el DIP demo
+  // además puede ver las que están "en revisión").
+  app.get('/api/junior/actividades/:id', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: 'Supabase no configurado' });
+      const { data, error } = await supabase
+        .from('junior_actividades')
+        .select('*')
+        .eq('id', req.params.id)
+        .maybeSingle();
+      if (error) throw error;
+      const actividad = normalizarActividad(data);
+      if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
+      const esDemo = esDipDemo(req.query.dip);
+      if (!esActividadPublica(actividad) && !esDemo) {
+        return res.status(404).json({ error: 'Actividad no encontrada' });
+      }
+      res.json({ success: true, actividad });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
