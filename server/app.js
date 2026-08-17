@@ -8,6 +8,7 @@ import express from 'express';
 import cors from 'cors';
 import { authRouter, requiereSesion } from './auth.js';
 import { createApiRouter } from './api.js';
+import { juniorRouter } from './junior.js';
 import { calcularContribuyentes, calcularReconciliacion } from './tributos.js';
 import { registrarFirma } from './firmas.js';
 import { supabase, probarSupabase } from './supabase.js';
@@ -38,6 +39,19 @@ async function obtenerEstadoBanco() {
     if (!r.ok) throw new Error(`Banco responde ${r.status}`);
     return r.json();
   });
+}
+
+// Mutación del banco vía crm-state (usada por la API bancaria junior).
+async function postBanco(action, data = {}) {
+  if (!BANK_KEY) throw new Error('Falta CRM_READ_KEY (o BANK_CRM_KEY)');
+  const r = await fetch(`${BANK_URL}/api/crm-state`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CRM-Key': BANK_KEY },
+    body: JSON.stringify({ action, ...data }),
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || `Banco responde ${r.status}`);
+  return body;
 }
 
 export function createApp() {
@@ -155,6 +169,10 @@ export function createApp() {
       res.status(500).json({ error: e.message });
     }
   });
+
+  // ── Placeta Junior PÚBLICO (junior.laplaceta.org / app Android) ────
+  // API bancaria del monedero: cuentas Child reales del banco.
+  app.use('/api/junior', juniorRouter({ getBankState: obtenerEstadoBanco, postBanco }));
 
   // Autenticación: POST /login, POST /logout, GET /api/sesion.
   app.use(authRouter());
