@@ -1,159 +1,53 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { provider } from '../../api';
-import { Badge, Button, Card, CardHeader, Field, PageHeader, Spinner, Table, Tabs, useToast, type Column } from '../../components/ui';
+import { Badge, Button, Card, Empty, Field, PageHeader, Spinner, useToast } from '../../components/ui';
 import { Icon } from '../../components/icons';
 import type { BopDocumento, CNICRegla } from '../../types';
 
+type Workspace = 'cni' | 'cnic';
+type DocForm = { codigo: string; titulo: string; tipo: string; categoria: string; contenidoMd: string; notasCambio: string; cnicRefs: string };
+const EMPTY_DOC: DocForm = { codigo: '', titulo: '', tipo: 'cni', categoria: 'capitulo', contenidoMd: '', notasCambio: '', cnicRefs: '' };
+function estadoTone(estado: string): 'success' | 'neutral' | 'warning' { return estado === 'vigente' || estado === 'aprobado' ? 'success' : estado === 'borrador' ? 'neutral' : 'warning'; }
+function textoVisible(html: string) { return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); }
+
 export default function Bop() {
   const { toast } = useToast();
+  const [workspace, setWorkspace] = useState<Workspace>('cni');
   const [items, setItems] = useState<CNICRegla[] | null>(null);
   const [documentos, setDocumentos] = useState<BopDocumento[] | null>(null);
-  const [sincronizando, setSincronizando] = useState(false);
-  const [panel, setPanel] = useState('cni');
-  const [form, setForm] = useState({ codigo: 'CNIC-', valor: '', motivo: '' });
-  const [docForm, setDocForm] = useState({ codigo: '', titulo: '', tipo: 'cni', categoria: 'capitulo', contenidoMd: '', notasCambio: '', cnicRefs: '' });
-  const [preview, setPreview] = useState(false);
-  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [docForm, setDocForm] = useState<DocForm>(EMPTY_DOC);
+  const [cnicForm, setCnicForm] = useState({ codigo: 'CNIC-', valor: '', motivo: '' });
+  const [query, setQuery] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
 
-  const cargar = () => { provider.listarCNIC().then(setItems).catch(() => setItems([])); provider.listarBopDocumentos().then(setDocumentos).catch(() => setDocumentos([])); };
+  function seleccionar(d: BopDocumento) {
+    setSelectedId(d.id); setDocForm({ codigo: d.codigo, titulo: d.titulo, tipo: d.tipo, categoria: d.categoria, contenidoMd: d.contenidoMd || '', notasCambio: '', cnicRefs: (d.cnicRefs || []).map((r) => r.codigo).join(', ') });
+    requestAnimationFrame(() => { if (editorRef.current) editorRef.current.innerHTML = d.contenidoMd || ''; });
+  }
+  const cargar = () => { provider.listarCNIC().then(setItems).catch(() => setItems([])); provider.listarBopDocumentos().then((docs) => { setDocumentos(docs); if (!selectedId && docs[0]) seleccionar(docs[0]); }).catch(() => setDocumentos([])); };
   useEffect(() => { cargar(); }, []);
-
-  async function refrescar() {
-    setSincronizando(true);
-    try {
-      const r = await provider.refrescarNormativa();
-      toast(`Sincronizado con ${r.fuente} (${r.total} reglas)`, 'success');
-      cargar();
-    } catch (e) {
-      toast((e as Error).message, 'error');
-    } finally {
-      setSincronizando(false);
-    }
-  }
-
-  async function nuevaVersion() {
-    if (!form.codigo.trim() || form.valor.trim() === '') return;
-    try {
-      await provider.crearVersionCNIC({ codigo: form.codigo.trim(), valor: Number(form.valor), motivo: form.motivo });
-      toast('Nueva versión creada (borrador). Se publicará en el BOP al aprobarse.', 'success');
-      setForm({ codigo: 'CNIC-', valor: '', motivo: '' });
-      cargar();
-    } catch (e) {
-      toast((e as Error).message, 'error');
-    }
-  }
-
-  async function aprobar(codigo: string) {
-    try {
-      await provider.aprobarCNIC(codigo);
-      toast('CNIC aprobado y publicado como vigente en BOP', 'success');
-      cargar();
-    } catch (e) { toast((e as Error).message, 'error'); }
-  }
-
+  function nuevoDocumento() { setSelectedId(null); setDocForm(EMPTY_DOC); requestAnimationFrame(() => { if (editorRef.current) editorRef.current.innerHTML = ''; }); }
+  function exec(command: string, value?: string) { editorRef.current?.focus(); document.execCommand(command, false, value); if (editorRef.current) setDocForm((f) => ({ ...f, contenidoMd: editorRef.current?.innerHTML || '' })); }
   async function guardarDocumento() {
-    if (!docForm.codigo.trim() || !docForm.titulo.trim() || !docForm.contenidoMd.trim() || !docForm.notasCambio.trim()) { toast('Completa código, título, contenido y motivo', 'error'); return; }
-    try { await provider.guardarBopDocumento({ ...docForm, cnicRefs: docForm.cnicRefs.split(',').map((codigo) => ({ codigo: codigo.trim(), etiqueta: codigo.trim() })).filter((r) => r.codigo) }); toast('Documento guardado como proyecto', 'success'); setDocForm({ codigo: '', titulo: '', tipo: 'cni', categoria: 'capitulo', contenidoMd: '', notasCambio: '', cnicRefs: '' }); cargar(); } catch (e) { toast((e as Error).message, 'error'); }
+    const contenido = editorRef.current?.innerHTML || docForm.contenidoMd;
+    if (!docForm.codigo.trim() || !docForm.titulo.trim() || !textoVisible(contenido) || !docForm.notasCambio.trim()) { toast('Completa código, título, contenido y motivo del cambio', 'error'); return; }
+    setSaving(true); try { const saved = await provider.guardarBopDocumento({ ...docForm, contenidoMd: contenido, cnicRefs: docForm.cnicRefs.split(',').map((codigo) => ({ codigo: codigo.trim(), etiqueta: codigo.trim() })).filter((r) => r.codigo) }); toast('Proyecto guardado correctamente', 'success'); setSelectedId(saved.id); cargar(); } catch (e) { toast((e as Error).message, 'error'); } finally { setSaving(false); }
   }
+  async function aprobarDocumento(id: string) { try { await provider.aprobarBopDocumento(id); toast('Documento publicado en BOP', 'success'); cargar(); } catch (e) { toast((e as Error).message, 'error'); } }
+  async function aprobar(codigo: string) { try { await provider.aprobarCNIC(codigo); toast('CNIC aprobado y publicado', 'success'); cargar(); } catch (e) { toast((e as Error).message, 'error'); } }
+  async function nuevaVersion() { if (!cnicForm.codigo.trim() || !cnicForm.valor.trim() || !cnicForm.motivo.trim()) { toast('Completa código, valor y motivo', 'error'); return; } try { await provider.crearVersionCNIC({ codigo: cnicForm.codigo.trim(), valor: Number(cnicForm.valor), motivo: cnicForm.motivo.trim() }); toast('Nueva versión creada como borrador', 'success'); setCnicForm({ codigo: 'CNIC-', valor: '', motivo: '' }); cargar(); } catch (e) { toast((e as Error).message, 'error'); } }
+  async function refrescar() { setSyncing(true); try { const r = await provider.refrescarNormativa(); toast(`Sincronizado con ${r.fuente} · ${r.total} reglas`, 'success'); cargar(); } catch (e) { toast((e as Error).message, 'error'); } finally { setSyncing(false); } }
+  const filteredDocs = useMemo(() => (documentos || []).filter((d) => `${d.codigo} ${d.titulo}`.toLowerCase().includes(query.toLowerCase())), [documentos, query]);
+  const filteredCnic = useMemo(() => (items || []).filter((c) => `${c.codigo} ${c.etiqueta}`.toLowerCase().includes(query.toLowerCase())), [items, query]);
+  const selectedDoc = documentos?.find((d) => d.id === selectedId);
 
-  async function aprobarDocumento(id: string) {
-    try { await provider.aprobarBopDocumento(id); toast('Documento BOP aprobado y publicado', 'success'); cargar(); } catch (e) { toast((e as Error).message, 'error'); }
-  }
-
-  function formato(prefijo: string, sufijo = prefijo) {
-    const editor = editorRef.current;
-    if (!editor) return;
-    const inicio = editor.selectionStart;
-    const fin = editor.selectionEnd;
-    const seleccionado = docForm.contenidoMd.slice(inicio, fin) || 'texto';
-    const contenido = docForm.contenidoMd.slice(0, inicio) + prefijo + seleccionado + sufijo + docForm.contenidoMd.slice(fin);
-    setDocForm({ ...docForm, contenidoMd: contenido });
-    requestAnimationFrame(() => { editor.focus(); editor.setSelectionRange(inicio + prefijo.length, inicio + prefijo.length + seleccionado.length); });
-  }
-
-  function editarDocumento(d: BopDocumento) {
-    setDocForm({ codigo: d.codigo, titulo: d.titulo, tipo: d.tipo, categoria: d.categoria, contenidoMd: d.contenidoMd, notasCambio: '', cnicRefs: (d.cnicRefs || []).map((r) => r.codigo).join(', ') });
-    setPreview(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  const columns: Column<CNICRegla>[] = [
-    { key: 'codigo', header: 'Código', render: (c) => <span className="u-mono">{c.codigo}</span>, width: '240px' },
-    { key: 'etiqueta', header: 'Regla', render: (c) => <strong>{c.etiqueta}</strong> },
-    { key: 'valor', header: 'Valor', render: (c) => <span className="u-mono">{c.valor}{c.unidad ?? ''}</span> },
-    { key: 'version', header: 'Versión', render: (c) => `v${c.version}` },
-    { key: 'fuente', header: 'Fuente / estado', render: (c) => <>{c.fuente === 'BOP'
-      ? <a href={c.bopUrl} target="_blank" rel="noreferrer"><Badge tone="success">BOP ↗</Badge></a>
-      : <Badge tone="warning">{c.estado}</Badge>}{c.estado !== 'vigente' && <Button size="sm" variant="outline" onClick={() => aprobar(c.codigo)}>Aprobar</Button>}</> },
-  ];
-
-  return (
-    <>
-      <PageHeader
-        title="Boletín Oficial (BOP)"
-        subtitle="La normativa vive en el BOP. El RSP consume la versión vigente de cada CNIC y propone nuevas versiones."
-        breadcrumb="RSP / Normativa"
-      />
-      <Tabs active={panel} onChange={setPanel} tabs={[{ id: 'cni', label: 'CNI · Documentos normativos' }, { id: 'cnic', label: 'CNIC · Valores complementarios' }]} />
-      <div className="rsp-grid rsp-grid-2" style={{ marginBottom: 'var(--sp-4)' }}>
-        <Card>
-          <CardHeader title="Conexión con el BOP" subtitle="bop.laplaceta.org" />
-          <div className="u-stack">
-            <div className="u-row">
-              <Badge tone="success"><Icon name="circleCheck" size={14} /> Conectado</Badge>
-              <span className="u-muted">Fuente de verdad de los CNIC</span>
-            </div>
-            <Button variant="outline" icon="refresh" onClick={refrescar} disabled={sincronizando}>
-              {sincronizando ? 'Sincronizando…' : 'Refrescar desde BOP'}
-            </Button>
-          </div>
-        </Card>
-        {panel === 'cnic' && <Card>
-          <CardHeader title="Nueva versión CNIC" subtitle="Se crea en borrador y se publica en el BOP al aprobarse" />
-          <div className="rsp-form-grid">
-            <Field label="Código CNIC">
-              <input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} placeholder="CNIC-FISC-001" />
-            </Field>
-            <Field label="Nuevo valor">
-              <input value={form.valor} onChange={(e) => setForm({ ...form, valor: e.target.value })} placeholder="80" inputMode="numeric" />
-            </Field>
-            <Field label="Motivo del cambio">
-              <input value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })} placeholder="Ajuste de la bonificación" />
-            </Field>
-          </div>
-          <Button icon="plus" onClick={nuevaVersion} style={{ marginTop: 'var(--sp-3)' }}>Crear versión</Button>
-        </Card>}
-        {panel === 'cni' && <Card>
-          <CardHeader title="Editor de documentos BOP" subtitle="Crear una versión en proyecto para revisión y publicación" />
-          <div className="rsp-form-grid">
-            <Field label="Código"><input value={docForm.codigo} onChange={(e) => setDocForm({ ...docForm, codigo: e.target.value })} placeholder="CNI-IV" /></Field>
-            <Field label="Título"><input value={docForm.titulo} onChange={(e) => setDocForm({ ...docForm, titulo: e.target.value })} /></Field>
-            <Field label="Tipo"><select value={docForm.tipo} onChange={(e) => setDocForm({ ...docForm, tipo: e.target.value })}><option value="cni">CNI</option><option value="estatuto">Estatuto</option><option value="programa">Programa</option></select></Field>
-            <Field label="Categoría"><select value={docForm.categoria} onChange={(e) => setDocForm({ ...docForm, categoria: e.target.value })}><option value="capitulo">Capítulo</option><option value="sistema">Sistema</option><option value="programa">Programa</option><option value="general">General</option></select></Field>
-            <Field label="Motivo del cambio"><input value={docForm.notasCambio} onChange={(e) => setDocForm({ ...docForm, notasCambio: e.target.value })} /></Field>
-            <Field label="Referencias CNIC (separadas por coma)"><input value={docForm.cnicRefs} onChange={(e) => setDocForm({ ...docForm, cnicRefs: e.target.value })} placeholder="CNIC-IVA, CNIC-LIMITE-..." /></Field>
-          </div>
-          <div className="u-row" style={{ marginTop: 'var(--sp-3)', flexWrap: 'wrap' }}>
-            {['# ', '## ', '**', '*', '- ', '1. '].map((f) => <Button key={f} size="sm" variant="outline" onClick={() => formato(f, f === '**' || f === '*' ? f : '')}>{f.trim() || 'Formato'}</Button>)}
-            <Button size="sm" variant={preview ? 'primary' : 'outline'} onClick={() => setPreview(!preview)} icon="eye">{preview ? 'Editar fuente' : 'Vista previa'}</Button>
-            <Button icon="check" onClick={guardarDocumento}>Guardar proyecto</Button>
-          </div>
-          <div className="rsp-grid rsp-grid-2" style={{ marginTop: 'var(--sp-3)' }}>
-            {!preview && <textarea ref={editorRef} aria-label="Contenido del documento CNI" rows={14} value={docForm.contenidoMd} onChange={(e) => setDocForm({ ...docForm, contenidoMd: e.target.value })} placeholder="# Capítulo…\n\nEscribe aquí la normativa…" style={{ width: '100%', fontFamily: 'var(--font-mono, monospace)', resize: 'vertical' }} />}
-            {preview && <article className="rsp-card" style={{ minHeight: '250px', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{docForm.contenidoMd || 'La vista previa aparecerá aquí.'}</article>}
-          </div>
-        </Card>}
-      </div>
-
-      {panel === 'cnic' && (items === null ? (
-        <Spinner label="Cargando CNIC…" />
-      ) : (
-        <Table columns={columns} rows={items} rowKey={(c) => c.codigo} />
-      ))}
-      {panel === 'cni' && <Card>
-        <CardHeader title="Documentos BOP" subtitle="Versionado y estado de publicación" />
-        {documentos === null ? <Spinner label="Cargando documentos…" /> : documentos.length === 0 ? <p className="u-muted">No hay documentos gestionados desde RSP.</p> : documentos.map((d) => <div key={d.id} className="u-row" style={{ justifyContent: 'space-between', padding: 'var(--sp-2) 0', flexWrap: 'wrap' }}><span><strong>{d.codigo}</strong> · {d.titulo} · v{d.version}</span><span><Badge tone={d.estado === 'vigente' ? 'success' : 'warning'}>{d.estado}</Badge><Button size="sm" variant="outline" onClick={() => editarDocumento(d)}>Editar</Button>{d.estado !== 'vigente' && <Button size="sm" variant="outline" onClick={() => aprobarDocumento(d.id)}>Aprobar</Button>}</span></div>)}
-      </Card>}
-    </>
-  );
+  return <>
+    <PageHeader title="BOP · Centro normativo" subtitle="Crea, revisa y publica la normativa oficial con control de versiones." breadcrumb="RSP / Normativa / BOP" actions={<><Badge tone="success"><Icon name="circleCheck" size={14} /> BOP conectado</Badge><Button size="sm" variant="outline" icon="refresh" onClick={refrescar} disabled={syncing}>{syncing ? 'Sincronizando…' : 'Sincronizar'}</Button></>} />
+    <div className="bop-switcher"><button className={workspace === 'cni' ? 'is-active' : ''} onClick={() => setWorkspace('cni')}><span className="bop-switcher-icon"><Icon name="file" /></span><span><strong>CNI</strong><small>Documentos normativos</small></span><Icon name="chevronRight" size={16} /></button><button className={workspace === 'cnic' ? 'is-active' : ''} onClick={() => setWorkspace('cnic')}><span className="bop-switcher-icon bop-switcher-icon-gold"><Icon name="scale" /></span><span><strong>CNIC</strong><small>Valores complementarios</small></span><Icon name="chevronRight" size={16} /></button></div>
+    {workspace === 'cni' ? <section className="bop-workspace"><aside className="bop-library rsp-card"><div className="bop-library-head"><div><span className="bop-eyebrow">Biblioteca CNI</span><h2>Documentos</h2></div><Button size="sm" icon="plus" onClick={nuevoDocumento}>Nuevo</Button></div><div className="bop-search"><Icon name="search" size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar documento…" aria-label="Buscar documento" /></div><div className="bop-doc-list">{documentos === null ? <Spinner label="Cargando documentos…" /> : filteredDocs.length === 0 ? <Empty icon="file" title="Sin documentos" hint="Crea el primer documento normativo." /> : filteredDocs.map((d) => <button key={d.id} className={`bop-doc-item ${selectedId === d.id ? 'is-selected' : ''}`} onClick={() => seleccionar(d)}><span className="bop-doc-icon"><Icon name="file" size={17} /></span><span className="bop-doc-copy"><strong>{d.codigo}</strong><span>{d.titulo}</span><small>v{d.version} · {d.estado}</small></span><Icon name="chevronRight" size={15} /></button>)}</div></aside>
+      <main className="bop-editor-shell"><div className="bop-editor-top"><div><span className="bop-eyebrow">{selectedDoc ? `Editando · versión ${selectedDoc.version}` : 'Nuevo documento'}</span><h2>{docForm.titulo || 'Documento sin título'}</h2></div><div className="u-row"><Badge tone={selectedDoc ? estadoTone(selectedDoc.estado) : 'neutral'}>{selectedDoc?.estado || 'borrador'}</Badge>{selectedDoc && selectedDoc.estado !== 'vigente' && <Button size="sm" variant="outline" icon="stamp" onClick={() => aprobarDocumento(selectedDoc.id)}>Publicar</Button>}<Button size="sm" onClick={guardarDocumento} icon="check" disabled={saving}>{saving ? 'Guardando…' : 'Guardar proyecto'}</Button></div></div><div className="bop-editor-meta"><input className="bop-title-input" value={docForm.titulo} onChange={(e) => setDocForm({ ...docForm, titulo: e.target.value })} placeholder="Título del documento" /><span className="bop-save-state"><Icon name="circleCheck" size={14} /> Proyecto editable</span></div><div className="bop-editor-layout"><div className="bop-canvas-wrap"><div className="bop-toolbar" role="toolbar" aria-label="Formato del documento"><select aria-label="Estilo de texto" onChange={(e) => exec('formatBlock', e.target.value)} defaultValue="p"><option value="p">Texto normal</option><option value="h1">Título 1</option><option value="h2">Título 2</option><option value="h3">Título 3</option></select><i /><button onClick={() => exec('bold')} title="Negrita"><b>B</b></button><button onClick={() => exec('italic')} title="Cursiva"><i>I</i></button><button onClick={() => exec('underline')} title="Subrayado"><u>U</u></button><i /><button onClick={() => exec('insertUnorderedList')} title="Lista"><Icon name="clipboard" size={16} /></button><button onClick={() => exec('insertOrderedList')} title="Lista numerada">1.</button><button onClick={() => exec('justifyLeft')} title="Alinear izquierda">≡</button><button onClick={() => exec('justifyCenter')} title="Centrar">≡</button></div><div ref={editorRef} className="bop-canvas" contentEditable suppressContentEditableWarning onInput={(e) => setDocForm({ ...docForm, contenidoMd: e.currentTarget.innerHTML })} data-placeholder="Empieza a redactar el documento normativo…" /></div><aside className="bop-properties"><div className="bop-properties-title"><Icon name="settings" size={17} /><strong>Propiedades</strong></div><Field label="Código"><input value={docForm.codigo} onChange={(e) => setDocForm({ ...docForm, codigo: e.target.value })} placeholder="CNI-IV" /></Field><Field label="Tipo"><select value={docForm.tipo} onChange={(e) => setDocForm({ ...docForm, tipo: e.target.value })}><option value="cni">CNI</option><option value="estatuto">Estatuto</option><option value="programa">Programa</option></select></Field><Field label="Categoría"><select value={docForm.categoria} onChange={(e) => setDocForm({ ...docForm, categoria: e.target.value })}><option value="capitulo">Capítulo</option><option value="sistema">Sistema</option><option value="programa">Programa</option><option value="general">General</option></select></Field><Field label="Referencias CNIC" hint="Separa los códigos por comas"><input value={docForm.cnicRefs} onChange={(e) => setDocForm({ ...docForm, cnicRefs: e.target.value })} placeholder="CNIC-IVA, CNIC-LIMITE" /></Field><Field label="Motivo del cambio"><textarea rows={4} value={docForm.notasCambio} onChange={(e) => setDocForm({ ...docForm, notasCambio: e.target.value })} placeholder="Describe qué cambia y por qué…" /></Field><div className="bop-help"><Icon name="info" size={16} /><span>Los documentos se crean como proyecto y solo se publican tras su aprobación.</span></div></aside></div></main></section> : <section className="bop-cnic-page"><div className="bop-cnic-head"><div><span className="bop-eyebrow">Parámetros vivos del sistema</span><h2>Reglas CNIC</h2><p>Valores que el motor fiscal utiliza en tiempo real. Cada cambio crea una nueva versión.</p></div><Button icon="plus" onClick={() => document.getElementById('bop-cnic-new')?.scrollIntoView({ behavior: 'smooth' })}>Nueva versión</Button></div><div className="bop-cnic-grid"><Card className="bop-cnic-create" id="bop-cnic-new"><div className="bop-card-kicker"><span className="bop-round-icon"><Icon name="plus" size={17} /></span><div><h3>Nueva versión CNIC</h3><p>Se guardará como borrador para revisión.</p></div></div><div className="bop-form-stack"><Field label="Código CNIC"><input value={cnicForm.codigo} onChange={(e) => setCnicForm({ ...cnicForm, codigo: e.target.value })} placeholder="CNIC-FISC-001" /></Field><div className="bop-two-fields"><Field label="Nuevo valor"><input value={cnicForm.valor} onChange={(e) => setCnicForm({ ...cnicForm, valor: e.target.value })} placeholder="80" inputMode="decimal" /></Field><Field label="Unidad"><input placeholder="% / € / días" /></Field></div><Field label="Motivo del cambio"><textarea rows={3} value={cnicForm.motivo} onChange={(e) => setCnicForm({ ...cnicForm, motivo: e.target.value })} placeholder="Explica el ajuste normativo…" /></Field><Button icon="check" onClick={nuevaVersion}>Crear borrador</Button></div></Card><Card className="bop-cnic-list"><div className="bop-list-head"><div><h3>Catálogo de reglas</h3><span>{filteredCnic.length} reglas · última sincronización desde BOP</span></div><div className="bop-search"><Icon name="search" size={16} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar CNIC…" /></div></div>{items === null ? <Spinner label="Cargando CNIC…" /> : filteredCnic.length === 0 ? <Empty icon="scale" title="Sin reglas" hint="No hay CNIC que coincidan con la búsqueda." /> : <div className="bop-rule-list">{filteredCnic.map((c) => <div className="bop-rule" key={c.codigo}><div className="bop-rule-main"><span className="bop-rule-code">{c.codigo}</span><strong>{c.etiqueta}</strong><small>{c.fuente === 'BOP' ? 'Fuente oficial · ' : 'Local · '}v{c.version}{c.fechaVigencia ? ` · vigente desde ${c.fechaVigencia}` : ''}</small></div><div className="bop-rule-value"><strong>{c.valor}{c.unidad || ''}</strong><Badge tone={estadoTone(c.estado)}>{c.estado}</Badge>{c.estado !== 'vigente' && <Button size="sm" variant="outline" onClick={() => aprobar(c.codigo)}>Aprobar</Button>}</div></div>)}</div>}</Card></div></section>}
+  </>;
 }
