@@ -14,7 +14,7 @@ import { registrarFirma } from './firmas.js';
 import { supabase, probarSupabase } from './supabase.js';
 import { CATALOGO_BASE } from './tramites-catalogo.js';
 import { CATALOGO_EDU_BASE } from './edu-cursos.js';
-const BOP_URL = process.env.BOP_URL || 'https://rsp.laplaceta.org';
+const BOP_URL = (process.env.BOP_URL || 'https://bop.laplaceta.org').replace(/\/+$/, '');
 // Nombres compatibles con admin-placeta (BANCO_API_URL / CRM_READ_KEY).
 const BANK_URL = process.env.BANCO_API_URL || process.env.BANK_URL || 'https://api.banco.laplaceta.org';
 // La clave NO se incrusta en el código: repo público. Debe venir de la
@@ -45,6 +45,14 @@ async function obtenerEstadoBanco() {
 
 // CNIC vigentes del BOP (tabla bop_cnic) para el motor fiscal.
 async function cargarCnicVigentes() {
+  try {
+    const response = await fetch(`${BOP_URL}/api/cnic`, { headers: { Accept: 'application/json' } });
+    if (response.ok) {
+      const payload = await response.json();
+      const rows = Array.isArray(payload) ? payload : payload.cnic;
+      if (Array.isArray(rows)) return rows.filter((row) => row.vigente ?? row.estado === 'vigente');
+    }
+  } catch { /* usa Supabase compartido durante una caída temporal del BOP */ }
   if (!supabase) return null;
   try {
     return await conCache('bop-cnic', 60_000, async () => {

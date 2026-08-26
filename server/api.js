@@ -15,11 +15,39 @@ import { CATALOGO_BASE } from './tramites-catalogo.js';
 import { CATALOGO_EDU_BASE } from './edu-cursos.js';
 
 const AHORA = () => new Date().toISOString();
+const BOP_URL = (process.env.BOP_URL || 'https://bop.laplaceta.org').replace(/\/+$/, '');
 const round2 = (n) => Math.round(n * 100) / 100;
 const limpiar = (s = '') => String(s).replace(/\s*\(.*\)\s*$/, '').trim();
 
 export function createApiRouter({ getBankState }) {
   const router = Router();
+
+  // El catálogo oficial vive en BOP. RSP solo lo cachea para resiliencia:
+  // nunca mezcla rsp_cnic ni genera una copia normativa propia.
+  let bopHttpCache = { at: 0, data: null };
+  async function cargarCnicOficial() {
+    if (bopHttpCache.data && Date.now() - bopHttpCache.at < 60_000) return bopHttpCache.data;
+    try {
+      const response = await fetch(`${BOP_URL}/api/cnic`, { headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error(`BOP respondió ${response.status}`);
+      const payload = await response.json();
+      const rows = Array.isArray(payload) ? payload : payload.cnic;
+      if (!Array.isArray(rows)) throw new Error('Respuesta CNIC inválida');
+      const data = rows.map((row) => normalizarBopCnic({
+        ...row,
+        codigo: row.codigo || row.cnic,
+        tipoValor: row.tipoValor || row.tipo_valor || row.tipo,
+        valor: row.valor ?? row.valor_vigente,
+        autorDip: row.autorDip || row.autor_dip,
+        updatedAt: row.updatedAt || row.desde,
+        vigente: row.vigente ?? row.estado === 'vigente',
+      }));
+      bopHttpCache = { at: Date.now(), data };
+      return data;
+    } catch {
+      return null;
+    }
+  }
 
   /* ── Almacén persistente (Supabase) con respaldo en memoria ────────── */
   // Cada colección lee/escribe en Supabase (Postgres). Si Supabase no está
@@ -87,6 +115,8 @@ export function createApiRouter({ getBankState }) {
   // Cachea los CNIC vigentes del BOP (bop_cnic) para el motor fiscal.
   let cnicCache = { t: 0, data: null };
   async function cargarCnicVigentes() {
+    const oficial = await cargarCnicOficial();
+    if (oficial) return oficial.filter((r) => r.estado === 'vigente');
     if (cnicCache.data && Date.now() - cnicCache.t < 60000) return cnicCache.data;
     try {
       const bop = (await store.bopCnic.listar()) || [];
@@ -1061,17 +1091,20 @@ export function createApiRouter({ getBankState }) {
 
   /* ── Normativa (CNIC) ────────────────────────────────────────────── */
   router.get('/rsp/normativo/api', async (_req, res) => {
-    const [bop, locales] = await Promise.all([store.bopCnic.listar(), store.cnic.listar()]);
+    const oficial = await cargarCnicOficial();
+    if (oficial) return res.json(oficial);
+    const [bop] = await Promise.all([store.bopCnic.listar()]);
     const desdeBop = (bop || []).map(normalizarBopCnic);
-    const codigosBop = new Set(desdeBop.map((c) => c.codigo));
-    const localesUnicos = (locales || []).filter((c) => !codigosBop.has(c.codigo));
-    const lista = [...desdeBop, ...localesUnicos];
-    res.json(lista.length ? lista : CNIC_BASE);
+    if (!desdeBop.length) return res.status(503).json({ error: 'bop_no_disponible', message: 'No se puede cargar el catálogo oficial de CNIC' });
+    res.json(desdeBop);
   });
   router.post('/rsp/normativo/api/refresh', async (_req, res) => {
+    bopHttpCache = { at: 0, data: null };
+    const oficial = await cargarCnicOficial();
+    if (oficial) return res.json({ sincronizado: true, total: oficial.length, fuente: 'BOP · API oficial' });
     const bop = await store.bopCnic.listar();
-    const total = (bop || []).length || CNIC_BASE.length;
-    res.json({ sincronizado: true, total, fuente: 'BOP' });
+    if (!(bop || []).length) return res.status(503).json({ error: 'bop_no_disponible' });
+    res.json({ sincronizado: true, total: bop.length, fuente: 'BOP · Supabase compartido' });
   });
   router.post('/rsp/normativo/api/version', async (req, res) => {
     const d = req.body || {};
@@ -1089,6 +1122,7 @@ export function createApiRouter({ getBankState }) {
     };
     if (actual) await store.bopCnic.actualizar(codigo, regla);
     else await store.bopCnic.insertar(regla);
+    bopHttpCache = { at: 0, data: null };
     res.status(201).json(normalizarBopCnic(regla));
   });
   router.post('/rsp/normativo/api/:codigo/aprobar', async (req, res) => {
@@ -1096,6 +1130,7 @@ export function createApiRouter({ getBankState }) {
     const actual = await store.bopCnic.obtener(codigo);
     if (!actual) return res.status(404).json({ error: 'CNIC no encontrado' });
     await store.bopCnic.actualizar(codigo, { vigente: true, estado: 'vigente', autorDip: req.user?.dip || actual.autorDip || 'RSP', updatedAt: AHORA() });
+    bopHttpCache = { at: 0, data: null };
     cnicCache = { t: 0, data: null };
     res.json({ success: true });
   });
