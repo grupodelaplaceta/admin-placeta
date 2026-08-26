@@ -14,11 +14,31 @@ function estadoTone(estado: string): 'success' | 'neutral' | 'warning' {
 function textoVisible(html: string) { return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); }
 function markdownToHtml(markdown: string) {
   if (!markdown) return '';
-  return markdown.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const tablas: string[] = [];
+  const filas = markdown.replace(/\r\n/g, '\n').split('\n');
+  const conTablas: string[] = [];
+  for (let i = 0; i < filas.length; i += 1) {
+    const fila = (linea: string) => /^\s*\|.*\|\s*$/.test(linea);
+    const separador = (linea: string) => linea.split('|').slice(1, -1).every((celda) => /^\s*:?-{2,}:?\s*$/.test(celda));
+    if (fila(filas[i]) && separador(filas[i + 1] || '')) {
+      const tabla = [filas[i], filas[i + 1]];
+      i += 2;
+      while (i < filas.length && fila(filas[i])) { tabla.push(filas[i]); i += 1; }
+      const celdas = (linea: string) => linea.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+      const cabecera = celdas(tabla[0]);
+      const cuerpo = tabla.slice(2).map(celdas);
+      tablas.push(`<table><thead><tr>${cabecera.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${cuerpo.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
+      conTablas.push(`@@BOP_TABLE_${tablas.length - 1}@@`);
+      i -= 1;
+    } else conTablas.push(filas[i]);
+  }
+  let html = conTablas.join('\n').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/^### (.*)$/gm, '<h3>$1</h3>').replace(/^## (.*)$/gm, '<h2>$1</h2>').replace(/^# (.*)$/gm, '<h1>$1</h1>')
     .replace(/^[-*] (.*)$/gm, '<li>$1</li>').replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>')
     .split(/\n{2,}/).map((block) => block.startsWith('<h') || block.startsWith('<ul') ? block : `<p>${block.replace(/\n/g, '<br>')}</p>`).join('');
+  tablas.forEach((tabla, i) => { html = html.replace(`<p>@@BOP_TABLE_${i}@@</p>`, tabla).replace(`@@BOP_TABLE_${i}@@`, tabla); });
+  return html;
 }
 function htmlToMarkdown(html: string) {
   const root = document.createElement('div'); root.innerHTML = html;
