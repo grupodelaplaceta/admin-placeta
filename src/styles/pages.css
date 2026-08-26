@@ -93,6 +93,12 @@
 .bop-cnic-token { display: inline-block; padding: 1px 6px; border: 1px solid #c4b5fd; border-radius: 5px; background: #f5f3ff; color: #6d28d9; font: 700 .86em var(--font-mono); }
 .bop-editor-hint { display: flex; align-items: center; gap: 6px; padding: 9px 14px; border-top: 1px solid var(--border); color: var(--text-3); font-size: var(--fs-xs); }
 .bop-editor-hint code { padding: 2px 5px; border-radius: 4px; background: var(--surface-2); color: var(--c-primary); }
+.bop-toolbar { flex-wrap: wrap; }
+.bop-canvas hr { margin: 1.5rem 0; border: 0; border-top: 2px solid var(--border-strong); }
+.bop-canvas blockquote { margin: 1rem 0; padding: .8rem 1rem; border-left: 4px solid var(--c-primary); background: var(--brand-100); color: var(--text-2); }
+.bop-canvas table { width: 100%; margin: 1rem 0; border-collapse: collapse; font-size: .92em; }
+.bop-canvas th, .bop-canvas td { padding: 9px 11px; border: 1px solid var(--border-strong); text-align: left; }
+.bop-canvas th { background: var(--surface-2); color: var(--text-2); font-weight: 800; }
 
 /* Acceso rápido (dashboard) */
 .rsp-acciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-2); }
