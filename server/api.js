@@ -1091,12 +1091,14 @@ export function createApiRouter({ getBankState }) {
 
   /* ── Normativa (CNIC) ────────────────────────────────────────────── */
   router.get('/rsp/normativo/api', async (_req, res) => {
+    // El editor necesita ver también borradores. La API pública de BOP
+    // solo expone vigentes, por lo que aquí se consulta la tabla compartida
+    // directamente y se conserva el estado real de cada versión.
+    const bop = await store.bopCnic.listar();
+    if (bop?.length) return res.json(bop.map(normalizarBopCnic));
     const oficial = await cargarCnicOficial();
-    if (oficial) return res.json(oficial);
-    const [bop] = await Promise.all([store.bopCnic.listar()]);
-    const desdeBop = (bop || []).map(normalizarBopCnic);
-    if (!desdeBop.length) return res.status(503).json({ error: 'bop_no_disponible', message: 'No se puede cargar el catálogo oficial de CNIC' });
-    res.json(desdeBop);
+    if (!oficial) return res.status(503).json({ error: 'bop_no_disponible', message: 'No se puede cargar el catálogo oficial de CNIC' });
+    res.json(oficial);
   });
   router.post('/rsp/normativo/api/refresh', async (_req, res) => {
     bopHttpCache = { at: 0, data: null };

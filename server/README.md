@@ -29,7 +29,7 @@ npm start            # http://localhost:4000  (o `npm run dev`)
 ## Variables de entorno (`.env` en server/ — ver `server/.env.example`)
 - **Core**: `PORT`, `NODE_ENV`, `SESSION_SECRET`, `JWT_SECRET`.
 - **Autenticación**: `ADMIN_USERS` (credenciales de administradores), `ADMIN_DIPS` (DIPs que pueden entrar por SSO) y `PLACETAID_JWT_SECRET` (verificación de la firma del token). Sin `ADMIN_USERS`/`ADMIN_DIPS` en producción el login queda deshabilitado; en desarrollo hay un usuario demo `23749931M` / `demo`.
-- **Boletín/RSP**: `BOP_URL` (por defecto `https://rsp.laplaceta.org`).
+- **Boletín/RSP**: `BOP_URL` (por defecto `https://bop.laplaceta.org`).
 - **Banco/CRM**: `BANCO_API_URL`, `CRM_BASE_URL`, `CRM_READ_KEY` (obligatoria para leer el estado del banco; sin valor por defecto porque el repo es público), `APP_BASE_URL`.
 - **PlacetaID (SSO)**: `PLACETAID_API_URL`, `PLACETAID_AUTH_URL`, `PLACETAID_CLIENT_ID`, `PLACETAID_CLIENT_SECRET`.
 - **Supabase (persistencia)**: `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_DB_CONNECTION`, `SUPABASE_DB_PASSWORD`.
