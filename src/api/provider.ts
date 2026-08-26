@@ -13,7 +13,7 @@ import type {
   DocumentoCiudadano, FirmaCiudadano, Obligacion, EntidadDetalle,
   SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, Baremo, CuentaBancaria, TarjetaDigital,
-  ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado,
+  ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   FacturaEmitida, ParticipacionEmpresa, Nomina,
   Votacion, VotoRegistro, Junta, Encuesta, RequisitoBono,
   BopDocumento,
@@ -64,6 +64,15 @@ export interface Provider {
   listarColaboradoresJunior(): Promise<ColaboradorJunior[]>;
   listarDiplomasJunior(): Promise<DiplomaJunior[]>;
   cambiarEstadoActividadJunior(id: string, estado: 'aprobada' | 'rechazada' | 'en_revision'): Promise<void>;
+  crearActividadJunior(datos: Partial<ActividadJunior>): Promise<ActividadJunior>;
+  editarActividadJunior(id: string, datos: Partial<ActividadJunior>): Promise<void>;
+  listarCategoriasJunior(): Promise<CategoriaJunior[]>;
+  crearCategoriaJunior(datos: { nombre: string; descripcion?: string }): Promise<CategoriaJunior>;
+  listarBundlesJunior(): Promise<BundleJunior[]>;
+  crearBundleJunior(datos: Partial<BundleJunior>): Promise<BundleJunior>;
+  editarBundleJunior(id: string, datos: Partial<BundleJunior>): Promise<void>;
+  listarEstadisticasJunior(): Promise<EstadisticasJunior[]>;
+  listarFinanzasJunior(): Promise<FinanzasJunior[]>;
 
   // Códigos Junior (recarga + actividades)
   listarCodigosJunior(): Promise<CodigoJunior[]>;
@@ -72,7 +81,7 @@ export interface Provider {
 
   // Subapartados de actividades (diapositivas progresivas)
   listarSubapartados(actividadId: string): Promise<Subapartado[]>;
-  crearSubapartado(actividadId: string, datos: { titulo: string; tipo?: string; recompensa?: number }): Promise<Subapartado>;
+  crearSubapartado(actividadId: string, datos: { titulo: string; tipo?: string; recompensa?: number; contenido?: Record<string, unknown> }): Promise<Subapartado>;
   desbloquearSubapartado(actividadId: string, subId: string): Promise<void>;
 
   // Entidades: edición y facturas

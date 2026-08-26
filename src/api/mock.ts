@@ -12,7 +12,7 @@ import type {
   DeclaracionResumen, DeclaracionDetalle, DocumentoCiudadano, FirmaCiudadano,
   Obligacion, SubvencionResumen, SubvencionDetalle, Solicitud2FA,
   DesgloseFiscal, CuentaSugerencia, RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
-  ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado,
+  ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa, Nomina, RequisitoBono, BopDocumento,
 } from '../types';
 import { TIPOS_TRAMITE, ANONIMATO_DIAS } from '../types';
@@ -515,6 +515,10 @@ const TARJETAS: TarjetaDigital[] = [
 
 // Placeta Junior REAL: se proxea de la API oficial de la Academia. Sin red, vacío.
 const JUNIOR_ACTIVIDADES: ActividadJunior[] = [];
+const JUNIOR_CATEGORIAS: CategoriaJunior[] = [];
+const JUNIOR_BUNDLES: BundleJunior[] = [];
+const JUNIOR_ESTADISTICAS: EstadisticasJunior[] = [];
+const JUNIOR_FINANZAS: FinanzasJunior[] = [];
 const JUNIOR_COLABORADORES: ColaboradorJunior[] = [];
 const JUNIOR_DIPLOMAS: DiplomaJunior[] = [];
 const JUNIOR_CODIGOS: CodigoJunior[] = [];
@@ -1117,6 +1121,15 @@ export const mockProvider: Provider = {
     const a = JUNIOR_ACTIVIDADES.find((x) => x.id === id);
     if (a) a.estado = estado;
   },
+  async crearActividadJunior(datos) { const a = { id: `ACT-${Date.now()}`, titulo: datos.titulo || 'Actividad', edadMin: datos.edadMin || 6, edadMax: datos.edadMax || 17, complejidad: datos.complejidad || 'Media', precio: datos.precio || 0, recompensa: datos.recompensa || 0, estado: 'en_revision' as const, colaborador: datos.colaborador || 'RSP', ...datos }; JUNIOR_ACTIVIDADES.unshift(a); return a; },
+  async editarActividadJunior(id, datos) { const a = JUNIOR_ACTIVIDADES.find(x => x.id === id); if (a) Object.assign(a, datos); },
+  async listarCategoriasJunior() { return JUNIOR_CATEGORIAS; },
+  async crearCategoriaJunior(datos) { const c = { id: `CAT-${Date.now()}`, nombre: datos.nombre, descripcion: datos.descripcion, activa: true, orden: JUNIOR_CATEGORIAS.length + 1 }; JUNIOR_CATEGORIAS.push(c); return c; },
+  async listarBundlesJunior() { return JUNIOR_BUNDLES; },
+  async crearBundleJunior(datos) { const b = { id: `BUN-${Date.now()}`, nombre: datos.nombre || 'Bundle', actividadIds: datos.actividadIds || [], precioLicencia: datos.precioLicencia || 0, precioIntento: datos.precioIntento || 0, publica: true, ...datos }; JUNIOR_BUNDLES.push(b); return b; },
+  async editarBundleJunior(id, datos) { const b = JUNIOR_BUNDLES.find(x => x.id === id); if (b) Object.assign(b, datos); },
+  async listarEstadisticasJunior() { return JUNIOR_ESTADISTICAS; },
+  async listarFinanzasJunior() { return JUNIOR_FINANZAS; },
   async listarCodigosJunior() {
     return JUNIOR_CODIGOS;
   },

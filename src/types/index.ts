@@ -580,7 +580,21 @@ export interface ActividadJunior {
   recompensa: number;
   estado: 'en_revision' | 'aprobada' | 'rechazada';
   colaborador: string;
+  descripcion?: string;
+  categoria?: string;
+  tipo?: string;
+  portadaUrl?: string;
+  fechaPublicacion?: string | null;
+  precioLicencia?: number;
+  precioIntento?: number;
+  subvencionada?: boolean;
+  contenido?: Record<string, unknown>;
 }
+
+export interface CategoriaJunior { id: string; nombre: string; descripcion?: string; activa: boolean; orden: number; }
+export interface BundleJunior { id: string; nombre: string; descripcion?: string; actividadIds: string[]; precioLicencia: number; precioIntento: number; publica: boolean; fechaPublicacion?: string | null; }
+export interface EstadisticasJunior { actividadId?: string; actividad?: string; jugadas: number; completadas: number; comprasLicencia: number; comprasIntento: number; recompensas: number; ingresos: number; regalado: number; }
+export interface FinanzasJunior { concepto: string; cantidad: number; tipo: 'facturado' | 'regalado'; origen: 'CAPITALIA' | 'PLACETA_JUNIOR'; fecha: string; referencia?: string; }
 
 export interface ColaboradorJunior {
   dip: string;
@@ -619,6 +633,7 @@ export interface Subapartado {
   desbloqueado: boolean;
   recompensa: number;
   desbloqueo: string;
+  contenido?: Record<string, unknown>;
 }
 
 export interface DashboardStats {

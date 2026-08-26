@@ -73,6 +73,10 @@ export function createApiRouter({ getBankState }) {
     juniorDiplomasDb: coleccion('junior_diplomas', { orderCol: 'creado_en' }),
     juniorCodigosDb: coleccion('junior_codigos', { orderCol: 'creado_en' }),
     juniorSubapartadosDb: coleccion('junior_subapartados', { orderCol: 'orden' }),
+    juniorCategoriasDb: coleccion('junior_categorias', { orderCol: 'orden' }),
+    juniorBundlesDb: coleccion('junior_bundles', { orderCol: 'creado_en' }),
+    juniorEstadisticasDb: coleccion('junior_estadisticas', { orderCol: 'fecha' }),
+    juniorFinanzasDb: coleccion('junior_finanzas', { orderCol: 'fecha' }),
     votaciones: coleccion('rsp_votaciones'),
     votos: coleccion('rsp_registro_votos'),
     juntas: coleccion('rsp_reuniones'),
@@ -866,18 +870,6 @@ export function createApiRouter({ getBankState }) {
     }
   }
   router.get('/rsp/junior/api/actividades', async (_req, res) => {
-    const live = await juniorLive('actividades?solo_publicas=1');
-    if (live && live.length) {
-      return res.json(live.map((a) => ({
-        id: a.id, titulo: a.titulo || a.nombre || 'Actividad',
-        edadMin: a.edadMin ?? a.edad_min ?? 6, edadMax: a.edadMax ?? a.edad_max ?? 17,
-        complejidad: a.complejidad || 'Media',
-        precio: a.precio_total ?? a.precio ?? 5.6,
-        recompensa: a.recompensa ?? 10,
-        estado: a.estado || 'aprobada',
-        colaborador: a.colaborador || '—',
-      })));
-    }
     // Fuente real: Supabase (junior_actividades), sin depender del proxy HTTP.
     const rows = await store.juniorActividadesDb.listar();
     if (rows && rows.length) {
@@ -890,12 +882,19 @@ export function createApiRouter({ getBankState }) {
           edadMax: Number.isFinite(rango[1]) ? rango[1] : 17,
           complejidad: a.dificultad || 'Media',
           precio: Number(a.precioLicencia || 0) + Number(a.precioIntento || 0),
+          precioLicencia: Number(a.precioLicencia || 0), precioIntento: Number(a.precioIntento || 0),
           recompensa: Number(a.recompensa || 0),
+          descripcion: a.descripcion || '', categoria: a.categoria || 'General', portadaUrl: a.portadaUrl || '', fechaPublicacion: a.fechaPublicacion || null, tipo: a.tipo || 'test', contenido: a.contenido || {},
           estado: a.publica ? 'aprobada' : (a.estado === 'rechazada' ? 'rechazada' : 'en_revision'),
           colaborador: a.autorNombre || '—',
         };
       }));
     }
+    const live = await juniorLive('actividades?solo_publicas=1');
+    if (live && live.length) return res.json(live.map((a) => ({
+      id: a.id, titulo: a.titulo || a.nombre || 'Actividad', edadMin: a.edadMin ?? a.edad_min ?? 6, edadMax: a.edadMax ?? a.edad_max ?? 17,
+      complejidad: a.complejidad || 'Media', precio: a.precio_total ?? a.precio ?? 5.6, recompensa: a.recompensa ?? 10, estado: a.estado || 'aprobada', colaborador: a.colaborador || '—',
+    })));
     res.json(store.juniorActividades);
   });
   router.get('/rsp/junior/api/colaboradores', async (_req, res) => {
@@ -951,8 +950,9 @@ export function createApiRouter({ getBankState }) {
     if (!['aprobada', 'rechazada', 'en_revision'].includes(estado)) {
       return res.status(400).json({ error: 'Estado inválido' });
     }
-    const publica = estado === 'aprobada';
     try {
+      const actual = await store.juniorActividadesDb.obtener(req.params.id);
+      const publica = estado === 'aprobada' && (!actual?.fechaPublicacion || new Date(actual.fechaPublicacion) <= new Date());
       await store.juniorActividadesDb.actualizar(req.params.id, { estado, publica });
       res.json({ success: true, id: req.params.id, estado, publica });
     } catch (e) {
@@ -1020,6 +1020,7 @@ export function createApiRouter({ getBankState }) {
       tipo: String(d.tipo || 'diapositiva'),
       desbloqueado: false,
       recompensa: Number(d.recompensa) || 0,
+      contenido: d.contenido && typeof d.contenido === 'object' ? d.contenido : { version: 2, bloques: [] },
       desbloqueo: String(d.desbloqueo || 'completar_anterior'),
     };
     await store.juniorSubapartadosDb.insertar(sub);
@@ -1100,6 +1101,44 @@ export function createApiRouter({ getBankState }) {
     if (!oficial) return res.status(503).json({ error: 'bop_no_disponible', message: 'No se puede cargar el catálogo oficial de CNIC' });
     res.json(oficial);
   });
+
+  // Gestión de catálogo desde RSP. Las fechas futuras se guardan como
+  // programadas y no se publican hasta que llegue la fecha indicada.
+  router.post('/rsp/junior/api/actividades', async (req, res) => {
+    const d = req.body || {};
+    if (!String(d.titulo || '').trim()) return res.status(400).json({ error: 'Título requerido' });
+    const fecha = d.fechaPublicacion || d.fecha_publicacion || null;
+    const publica = d.estado === 'aprobada' && (!fecha || new Date(fecha) <= new Date());
+    const a = { id: `ACT-${Date.now()}`, titulo: String(d.titulo).trim(), descripcion: String(d.descripcion || ''), categoria: String(d.categoria || 'General'), tipo: String(d.tipo || 'test'), contenido: d.contenido && typeof d.contenido === 'object' ? d.contenido : {}, edadMin: Number(d.edadMin) || 6, edadMax: Number(d.edadMax) || 17, dificultad: String(d.complejidad || d.dificultad || 'Media'), precioLicencia: Number(d.precioLicencia) || 0, precioIntento: Number(d.precioIntento) || 0, recompensa: Number(d.recompensa) || 0, portadaUrl: d.portadaUrl || null, fechaPublicacion: fecha, estado: publica ? 'aprobada' : (d.estado || 'en_revision'), publica, autorNombre: d.colaborador || req.user?.dip || 'RSP', creadoEn: AHORA() };
+    await store.juniorActividadesDb.insertar(a);
+    res.status(201).json(a);
+  });
+  router.post('/rsp/junior/api/actividades/:id', async (req, res) => {
+    const a = await store.juniorActividadesDb.obtener(req.params.id);
+    if (!a) return res.status(404).json({ error: 'Actividad no encontrada' });
+    const d = req.body || {}; const patch = { ...d };
+    if (d.fechaPublicacion !== undefined) patch.publica = a.estado === 'aprobada' && (!d.fechaPublicacion || new Date(d.fechaPublicacion) <= new Date());
+    await store.juniorActividadesDb.actualizar(req.params.id, patch);
+    res.json({ success: true });
+  });
+
+  router.get('/rsp/junior/api/categorias', async (_req, res) => res.json(await store.juniorCategoriasDb.listar()));
+  router.post('/rsp/junior/api/categorias', async (req, res) => {
+    const nombre = String(req.body?.nombre || '').trim();
+    if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
+    const actual = await store.juniorCategoriasDb.listar();
+    const c = { id: `CAT-${Date.now()}`, nombre, descripcion: String(req.body?.descripcion || ''), activa: true, orden: actual.length + 1, creadoEn: AHORA() };
+    await store.juniorCategoriasDb.insertar(c); res.status(201).json(c);
+  });
+  router.get('/rsp/junior/api/bundles', async (_req, res) => res.json(await store.juniorBundlesDb.listar()));
+  router.post('/rsp/junior/api/bundles', async (req, res) => {
+    const d = req.body || {}; if (!String(d.nombre || '').trim()) return res.status(400).json({ error: 'Nombre requerido' });
+    const b = { id: `BUN-${Date.now()}`, nombre: String(d.nombre).trim(), descripcion: String(d.descripcion || ''), actividadIds: Array.isArray(d.actividadIds) ? d.actividadIds.map(String) : [], precioLicencia: Number(d.precioLicencia) || 0, precioIntento: Number(d.precioIntento) || 0, publica: d.publica !== false, fechaPublicacion: d.fechaPublicacion || null, creadoEn: AHORA() };
+    await store.juniorBundlesDb.insertar(b); res.status(201).json(b);
+  });
+  router.post('/rsp/junior/api/bundles/:id', async (req, res) => { if (!await store.juniorBundlesDb.obtener(req.params.id)) return res.status(404).json({ error: 'Bundle no encontrado' }); await store.juniorBundlesDb.actualizar(req.params.id, req.body || {}); res.json({ success: true }); });
+  router.get('/rsp/junior/api/estadisticas', async (_req, res) => res.json(await store.juniorEstadisticasDb.listar()));
+  router.get('/rsp/junior/api/finanzas', async (_req, res) => res.json(await store.juniorFinanzasDb.listar()));
   router.post('/rsp/normativo/api/refresh', async (_req, res) => {
     bopHttpCache = { at: 0, data: null };
     const oficial = await cargarCnicOficial();

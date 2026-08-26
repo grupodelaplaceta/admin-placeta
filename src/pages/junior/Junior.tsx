@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { provider } from '../../api';
 import { Badge, Button, Card, Empty, Field, KPI, Modal, PageHeader, Spinner, Table, Tabs, useToast, type Column } from '../../components/ui';
 import { generarPdfDiplomaJunior } from '../../lib/pdf';
-import type { ActividadJunior, CodigoJunior, ColaboradorJunior, DiplomaJunior, Subapartado } from '../../types';
+import type { ActividadJunior, CodigoJunior, ColaboradorJunior, DiplomaJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior } from '../../types';
 
 const NORMATIVA_JUNIOR = [
   { clave: 'Franjas', valor: 'Menor de 16: tutelada básica (500 Pz / 50 Pz día). 16-17: tutelada senior (1.000 Pz / 100 Pz día).' },
@@ -18,9 +18,18 @@ export default function Junior() {
   const [diplomas, setDiplomas] = useState<DiplomaJunior[] | null>(null);
   const [codigos, setCodigos] = useState<CodigoJunior[] | null>(null);
   const [subapartados, setSubapartados] = useState<Subapartado[]>([]);
-  const [modal, setModal] = useState<null | 'codigo' | { kind: 'subapartados'; actividad: ActividadJunior }>(null);
+  const [categorias, setCategorias] = useState<CategoriaJunior[]>([]);
+  const [bundles, setBundles] = useState<BundleJunior[]>([]);
+  const [estadisticas, setEstadisticas] = useState<EstadisticasJunior[]>([]);
+  const [finanzas, setFinanzas] = useState<FinanzasJunior[]>([]);
+  const [modal, setModal] = useState<null | 'codigo' | 'actividad' | 'categoria' | 'bundle' | { kind: 'subapartados'; actividad: ActividadJunior }>(null);
+  const [editActividad, setEditActividad] = useState<ActividadJunior | null>(null);
+  const [fAct, setFAct] = useState({ titulo: '', descripcion: '', categoria: 'General', tipo: 'test', edadMin: '6', edadMax: '17', dificultad: 'Media', fechaPublicacion: '', precioLicencia: '0', precioIntento: '0', recompensa: '0', portadaUrl: '', contenidoJson: '{\n  "version": 2,\n  "bloques": []\n}' });
+  const [vistaPrevia, setVistaPrevia] = useState(false);
+  const [fCat, setFCat] = useState({ nombre: '', descripcion: '' });
+  const [fBundle, setFBundle] = useState({ nombre: '', descripcion: '', precioLicencia: '0', precioIntento: '0', actividadIds: [] as string[], fechaPublicacion: '' });
   const [fCod, setFCod] = useState({ tipo: 'recarga' as 'recarga' | 'actividades', valor: '0', actividadIds: [] as string[] });
-  const [fSub, setFSub] = useState({ titulo: '', tipo: 'diapositiva', recompensa: '0' });
+  const [fSub, setFSub] = useState({ titulo: '', tipo: 'diapositiva', recompensa: '0', contenidoJson: '{\n  "version": 2,\n  "bloques": []\n}' });
   const [tab, setTab] = useState('actividades');
   const { toast } = useToast();
 
@@ -29,6 +38,10 @@ export default function Junior() {
     provider.listarColaboradoresJunior().then(setColaboradores).catch(() => setColaboradores([]));
     provider.listarDiplomasJunior().then(setDiplomas).catch(() => setDiplomas([]));
     provider.listarCodigosJunior().then(setCodigos).catch(() => setCodigos([]));
+    provider.listarCategoriasJunior().then(setCategorias).catch(() => setCategorias([]));
+    provider.listarBundlesJunior().then(setBundles).catch(() => setBundles([]));
+    provider.listarEstadisticasJunior().then(setEstadisticas).catch(() => setEstadisticas([]));
+    provider.listarFinanzasJunior().then(setFinanzas).catch(() => setFinanzas([]));
   }, []);
 
   async function cambiarEstadoActividad(id: string, estado: 'aprobada' | 'rechazada' | 'en_revision') {
@@ -40,6 +53,17 @@ export default function Junior() {
       toast('No se pudo actualizar el estado', 'error');
     }
   }
+
+  function abrirEditar(a: ActividadJunior) {
+    setEditActividad(a); setVistaPrevia(false); setFAct({ titulo: a.titulo, descripcion: a.descripcion || '', categoria: a.categoria || 'General', tipo: a.tipo || 'test', edadMin: String(a.edadMin), edadMax: String(a.edadMax), dificultad: a.complejidad || 'Media', fechaPublicacion: a.fechaPublicacion || '', precioLicencia: String(a.precioLicencia ?? 0), precioIntento: String(a.precioIntento ?? 0), recompensa: String(a.recompensa), portadaUrl: a.portadaUrl || '', contenidoJson: JSON.stringify(a.contenido || { version: 2, bloques: [] }, null, 2) }); setModal('actividad');
+  }
+  async function guardarActividad() {
+    try { const contenido = JSON.parse(fAct.contenidoJson); if (!contenido || typeof contenido !== 'object' || !Array.isArray(contenido.bloques)) throw new Error('El contenido debe incluir un array bloques'); const datos = { ...fAct, contenido, edadMin: Number(fAct.edadMin), edadMax: Number(fAct.edadMax), complejidad: fAct.dificultad, precioLicencia: Number(fAct.precioLicencia), precioIntento: Number(fAct.precioIntento), recompensa: Number(fAct.recompensa), fechaPublicacion: fAct.fechaPublicacion || null }; if (editActividad) await provider.editarActividadJunior(editActividad.id, datos); else await provider.crearActividadJunior(datos); toast('Actividad guardada', 'success'); setModal(null); setEditActividad(null); setActividades(await provider.listarActividadesJunior()); } catch (e) { toast(e instanceof Error ? e.message : 'No se pudo guardar la actividad', 'error'); }
+  }
+  function abrirNuevaActividad() { setEditActividad(null); setVistaPrevia(false); setFAct({ titulo: '', descripcion: '', categoria: 'General', tipo: 'test', edadMin: '6', edadMax: '17', dificultad: 'Media', fechaPublicacion: '', precioLicencia: '0', precioIntento: '0', recompensa: '0', portadaUrl: '', contenidoJson: '{\n  "version": 2,\n  "bloques": []\n}' }); setModal('actividad'); }
+  async function guardarCategoria() { try { await provider.crearCategoriaJunior(fCat); setCategorias(await provider.listarCategoriasJunior()); setFCat({ nombre: '', descripcion: '' }); setModal(null); toast('Categoría creada', 'success'); } catch { toast('No se pudo crear la categoría', 'error'); } }
+  async function guardarBundle() { try { await provider.crearBundleJunior({ ...fBundle, precioLicencia: Number(fBundle.precioLicencia), precioIntento: Number(fBundle.precioIntento), fechaPublicacion: fBundle.fechaPublicacion || null }); setBundles(await provider.listarBundlesJunior()); setModal(null); toast('Bundle creado', 'success'); } catch { toast('No se pudo crear el bundle', 'error'); } }
+  function descargarActividad(a: ActividadJunior) { const blob = new Blob([JSON.stringify(a, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${a.id}-${a.titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`; link.click(); URL.revokeObjectURL(url); }
 
   function descargarDiploma(d: DiplomaJunior) {
     generarPdfDiplomaJunior(d).catch(() => toast('No se pudo generar el PDF', 'error'));
@@ -73,17 +97,18 @@ export default function Junior() {
   }
 
   async function crearSubapartado() {
-    if (!modal || modal === 'codigo') return;
+    if (!modal || typeof modal !== 'object') return;
     try {
-      await provider.crearSubapartado(modal.actividad.id, { titulo: fSub.titulo, tipo: fSub.tipo, recompensa: Number(fSub.recompensa) });
+      const contenido = JSON.parse(fSub.contenidoJson); if (!Array.isArray(contenido.bloques)) throw new Error('El nivel necesita contenido.bloques');
+      await provider.crearSubapartado(modal.actividad.id, { titulo: fSub.titulo, tipo: fSub.tipo, recompensa: Number(fSub.recompensa), contenido });
       toast('Subapartado creado', 'success');
-      setFSub({ titulo: '', tipo: 'diapositiva', recompensa: '0' });
+      setFSub({ titulo: '', tipo: 'diapositiva', recompensa: '0', contenidoJson: '{\n  "version": 2,\n  "bloques": []\n}' });
       setSubapartados(await provider.listarSubapartados(modal.actividad.id));
     } catch { toast('No se pudo crear el subapartado', 'error'); }
   }
 
   async function desbloquearSubapartado(subId: string) {
-    if (!modal || modal === 'codigo') return;
+    if (!modal || typeof modal !== 'object') return;
     try {
       await provider.desbloquearSubapartado(modal.actividad.id, subId);
       setSubapartados(await provider.listarSubapartados(modal.actividad.id));
@@ -100,9 +125,9 @@ export default function Junior() {
     { key: 'recompensa', header: 'Recompensa', render: (a) => `${a.recompensa} pts` },
     { key: 'estado', header: 'Estado', render: (a) => <Badge tone={a.estado === 'aprobada' ? 'success' : a.estado === 'rechazada' ? 'danger' : 'warning'}>{a.estado}</Badge> },
     { key: 'colaborador', header: 'Colaborador', render: (a) => a.colaborador },
-    { key: 'acciones', header: 'Moderación', render: (a) => (
+    { key: 'acciones', header: 'Gestión', render: (a) => (
       <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-        <Button size="sm" variant="outline" onClick={() => abrirSubapartados(a)}>Diapositivas</Button>
+        <Button size="sm" variant="outline" onClick={() => abrirEditar(a)}>Editar</Button><Button size="sm" variant="outline" onClick={() => descargarActividad(a)}>Descargar</Button><Button size="sm" variant="outline" onClick={() => abrirSubapartados(a)}>Diapositivas</Button>
         {a.estado !== 'aprobada' && <Button size="sm" variant="outline" onClick={() => cambiarEstadoActividad(a.id, 'aprobada')}>Aprobar</Button>}
         {a.estado !== 'rechazada' && <Button size="sm" variant="outline" onClick={() => cambiarEstadoActividad(a.id, 'rechazada')}>Rechazar</Button>}
         {a.estado !== 'en_revision' && <Button size="sm" variant="outline" onClick={() => cambiarEstadoActividad(a.id, 'en_revision')}>Revisión</Button>}
@@ -156,7 +181,7 @@ export default function Junior() {
         title="Placeta Junior"
         subtitle="Administración del programa educativo y bancario de menores (CNI Cap. III, Art. 5-6)."
         breadcrumb="RSP / Junior"
-        actions={<Button icon="plus" onClick={() => setModal('codigo')}>Crear código</Button>}
+        actions={<div style={{ display: 'flex', gap: '.5rem' }}><Button icon="plus" onClick={abrirNuevaActividad}>Actividad / Studio / DevAI</Button><Button variant="outline" onClick={() => setModal('codigo')}>Código</Button></div>}
       />
       <div className="rsp-kpi-grid">
         <KPI label="Actividades" value={actividades?.length ?? '—'} icon="sparkles" tone="brand" />
@@ -172,6 +197,10 @@ export default function Junior() {
             { id: 'colaboradores', label: 'Colaboradores' },
             { id: 'diplomas', label: 'Diplomas' },
             { id: 'codigos', label: 'Códigos' },
+            { id: 'categorias', label: `Categorías (${categorias.length})` },
+            { id: 'bundles', label: `Bundles (${bundles.length})` },
+            { id: 'estadisticas', label: 'Estadísticas' },
+            { id: 'finanzas', label: 'Facturado/regalado' },
             { id: 'normativa', label: 'Normativa' },
           ]}
           active={tab}
@@ -193,6 +222,11 @@ export default function Junior() {
         {tab === 'codigos' && (codigos === null ? <Spinner label="Cargando códigos…" /> :
           codigos.length === 0 ? <Empty icon="key" title="Sin códigos" hint="Crea códigos de recarga o de actividades" /> :
             <Table columns={colsCod} rows={codigos} rowKey={(c) => c.id} />)}
+
+        {tab === 'categorias' && <><div style={{ padding: '1rem' }}><Button onClick={() => setModal('categoria')}>Crear categoría</Button></div><Table columns={[{ key: 'nombre', header: 'Categoría', render: (c: CategoriaJunior) => <strong>{c.nombre}</strong> }, { key: 'descripcion', header: 'Descripción' }, { key: 'activa', header: 'Estado', render: (c: CategoriaJunior) => c.activa ? 'Activa' : 'Inactiva' }]} rows={categorias} rowKey={(c) => c.id} /></>}
+        {tab === 'bundles' && <><div style={{ padding: '1rem' }}><Button onClick={() => setModal('bundle')}>Crear bundle</Button></div><Table columns={[{ key: 'nombre', header: 'Bundle', render: (b: BundleJunior) => <strong>{b.nombre}</strong> }, { key: 'actividadIds', header: 'Actividades', render: (b: BundleJunior) => b.actividadIds.length }, { key: 'precioLicencia', header: 'Licencia', render: (b: BundleJunior) => `${b.precioLicencia} Pz` }, { key: 'fechaPublicacion', header: 'Publicación', render: (b: BundleJunior) => b.fechaPublicacion || 'Inmediata' }]} rows={bundles} rowKey={(b) => b.id} /></>}
+        {tab === 'estadisticas' && <Table columns={[{ key: 'actividad', header: 'Actividad', render: (s: EstadisticasJunior) => s.actividad || s.actividadId || 'Total' }, { key: 'jugadas', header: 'Jugadas' }, { key: 'completadas', header: 'Completadas' }, { key: 'comprasLicencia', header: 'Licencias' }, { key: 'comprasIntento', header: 'Intentos' }, { key: 'recompensas', header: 'Recompensas' }]} rows={estadisticas} rowKey={(s) => s.actividadId || s.actividad || 'total'} />}
+        {tab === 'finanzas' && <Table columns={[{ key: 'concepto', header: 'Concepto' }, { key: 'tipo', header: 'Tipo', render: (f: FinanzasJunior) => f.tipo }, { key: 'origen', header: 'Origen' }, { key: 'cantidad', header: 'Pz', render: (f: FinanzasJunior) => f.cantidad }]} rows={finanzas} rowKey={(f) => `${f.fecha}-${f.concepto}`} />}
 
         {tab === 'normativa' && (
           <ul className="rsp-doclist">
@@ -229,9 +263,16 @@ export default function Junior() {
         )}
       </Modal>
 
+      <Modal open={modal === 'actividad'} title={editActividad ? 'Edición completa de actividad' : 'Crear actividad'} onClose={() => setModal(null)} footer={<Button onClick={guardarActividad}>Guardar borrador</Button>}>
+        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '.75rem' }}><Button size="sm" variant="outline" onClick={() => window.open('https://junior.laplaceta.org/studio', '_blank')}>Abrir Studio</Button><Button size="sm" variant="outline" onClick={() => window.open('https://junior.laplaceta.org/devai', '_blank')}>Abrir DevAI</Button><Button size="sm" variant="outline" onClick={() => setVistaPrevia(!vistaPrevia)}>{vistaPrevia ? 'Editar contenido' : 'Previsualizar'}</Button></div>
+        {vistaPrevia ? <Card><h3>{fAct.titulo || 'Sin título'}</h3><p>{fAct.descripcion || 'Sin descripción'}</p><Badge tone="brand">{fAct.categoria} · {fAct.tipo}</Badge><pre style={{ maxHeight: 360, overflow: 'auto', whiteSpace: 'pre-wrap', marginTop: '1rem' }}>{fAct.contenidoJson}</pre></Card> : <><Field label="Título"><input value={fAct.titulo} onChange={e => setFAct({ ...fAct, titulo: e.target.value })} /></Field><Field label="Descripción"><textarea value={fAct.descripcion} onChange={e => setFAct({ ...fAct, descripcion: e.target.value })} /></Field><div style={{ display: 'flex', gap: '.5rem' }}><Field label="Categoría"><input value={fAct.categoria} onChange={e => setFAct({ ...fAct, categoria: e.target.value })} /></Field><Field label="Tipo"><input value={fAct.tipo} onChange={e => setFAct({ ...fAct, tipo: e.target.value })} /></Field><Field label="Dificultad"><input value={fAct.dificultad} onChange={e => setFAct({ ...fAct, dificultad: e.target.value })} /></Field></div><div style={{ display: 'flex', gap: '.5rem' }}><Field label="Edad mínima"><input type="number" value={fAct.edadMin} onChange={e => setFAct({ ...fAct, edadMin: e.target.value })} /></Field><Field label="Edad máxima"><input type="number" value={fAct.edadMax} onChange={e => setFAct({ ...fAct, edadMax: e.target.value })} /></Field><Field label="Carátula (URL)"><input value={fAct.portadaUrl} onChange={e => setFAct({ ...fAct, portadaUrl: e.target.value })} /></Field></div><Field label="Contenido completo JSON · pega aquí la salida de Studio o DevAI"><textarea rows={14} value={fAct.contenidoJson} onChange={e => setFAct({ ...fAct, contenidoJson: e.target.value })} /></Field><Field label="Publicar el (opcional)"><input type="datetime-local" value={fAct.fechaPublicacion} onChange={e => setFAct({ ...fAct, fechaPublicacion: e.target.value })} /></Field><div style={{ display: 'flex', gap: '.5rem' }}><Field label="Licencia Pz"><input type="number" value={fAct.precioLicencia} onChange={e => setFAct({ ...fAct, precioLicencia: e.target.value })} /></Field><Field label="Intento Pz"><input type="number" value={fAct.precioIntento} onChange={e => setFAct({ ...fAct, precioIntento: e.target.value })} /></Field><Field label="Recompensa"><input type="number" value={fAct.recompensa} onChange={e => setFAct({ ...fAct, recompensa: e.target.value })} /></Field></div></>}
+      </Modal>
+      <Modal open={modal === 'categoria'} title="Nueva categoría" onClose={() => setModal(null)} footer={<Button onClick={guardarCategoria}>Guardar</Button>}><Field label="Nombre"><input value={fCat.nombre} onChange={e => setFCat({ ...fCat, nombre: e.target.value })} /></Field><Field label="Descripción"><textarea value={fCat.descripcion} onChange={e => setFCat({ ...fCat, descripcion: e.target.value })} /></Field></Modal>
+      <Modal open={modal === 'bundle'} title="Nuevo bundle" onClose={() => setModal(null)} footer={<Button onClick={guardarBundle}>Guardar</Button>}><Field label="Nombre"><input value={fBundle.nombre} onChange={e => setFBundle({ ...fBundle, nombre: e.target.value })} /></Field><Field label="Descripción"><textarea value={fBundle.descripcion} onChange={e => setFBundle({ ...fBundle, descripcion: e.target.value })} /></Field><Field label="Publicar el (opcional)"><input type="datetime-local" value={fBundle.fechaPublicacion} onChange={e => setFBundle({ ...fBundle, fechaPublicacion: e.target.value })} /></Field><Field label="Actividades"><div style={{ maxHeight: 160, overflow: 'auto' }}>{actividades?.map(a => <label key={a.id} style={{ display: 'block' }}><input type="checkbox" checked={fBundle.actividadIds.includes(a.id)} onChange={e => setFBundle(p => ({ ...p, actividadIds: e.target.checked ? [...p.actividadIds, a.id] : p.actividadIds.filter(id => id !== a.id) }))} /> {a.titulo}</label>)}</div></Field></Modal>
+
       <Modal
-        open={modal !== null && modal !== 'codigo'}
-        title={`Diapositivas · ${modal !== null && modal !== 'codigo' ? modal.actividad.titulo : ''}`}
+        open={modal !== null && typeof modal === 'object'}
+        title={`Diapositivas · ${modal !== null && typeof modal === 'object' ? modal.actividad.titulo : ''}`}
         onClose={() => setModal(null)}
       >
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
@@ -239,6 +280,7 @@ export default function Junior() {
           <Field label="Recompensa (pts)"><input type="number" value={fSub.recompensa} onChange={(e) => setFSub({ ...fSub, recompensa: e.target.value })} /></Field>
           <Button onClick={crearSubapartado}>Añadir</Button>
         </div>
+        <Field label="Contenido del nivel (JSON generado por Studio/DevAI)"><textarea rows={8} value={fSub.contenidoJson} onChange={(e) => setFSub({ ...fSub, contenidoJson: e.target.value })} /></Field>
         {subapartados.length === 0 ? <Empty icon="file" title="Sin diapositivas" /> : (
           <Table columns={colsSub} rows={subapartados} rowKey={(s) => s.id} />
         )}

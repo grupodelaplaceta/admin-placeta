@@ -15,7 +15,7 @@ import type {
   DocumentoCiudadano, FirmaCiudadano, Obligacion, EntidadDetalle,
   SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
-  ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado,
+  ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   FacturaEmitida, Nomina,
   Votacion, VotoRegistro, Junta, Encuesta,
   BopDocumento,
@@ -257,6 +257,15 @@ export const httpProvider: Provider = {
   async cambiarEstadoActividadJunior(id: string, estado: 'aprobada' | 'rechazada' | 'en_revision') {
     return http.post<void>(`/rsp/junior/api/actividades/${id}/estado`, { estado });
   },
+  async crearActividadJunior(datos) { return http.post<ActividadJunior>('/rsp/junior/api/actividades', datos); },
+  async editarActividadJunior(id, datos) { await http.post<void>(`/rsp/junior/api/actividades/${id}`, datos); },
+  async listarCategoriasJunior() { return http.get<CategoriaJunior[]>('/rsp/junior/api/categorias'); },
+  async crearCategoriaJunior(datos) { return http.post<CategoriaJunior>('/rsp/junior/api/categorias', datos); },
+  async listarBundlesJunior() { return http.get<BundleJunior[]>('/rsp/junior/api/bundles'); },
+  async crearBundleJunior(datos) { return http.post<BundleJunior>('/rsp/junior/api/bundles', datos); },
+  async editarBundleJunior(id, datos) { await http.post<void>(`/rsp/junior/api/bundles/${id}`, datos); },
+  async listarEstadisticasJunior() { return http.get<EstadisticasJunior[]>('/rsp/junior/api/estadisticas'); },
+  async listarFinanzasJunior() { return http.get<FinanzasJunior[]>('/rsp/junior/api/finanzas'); },
   async listarCodigosJunior() {
     return http.get<CodigoJunior[]>('/rsp/junior/api/codigos');
   },
