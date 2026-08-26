@@ -22,7 +22,12 @@ export function Sidebar({ open, onNavigate }: { open: boolean; onNavigate: () =>
           return (
             <div className="rsp-nav-section" key={seccion.title}>
               <span className="rsp-nav-section-label">{seccion.title}</span>
-              {links.map((l) => (
+              {links.map((l) => l.external ? (
+                <a key={l.to} href={l.to} target="_blank" rel="noopener noreferrer" onClick={onNavigate} className="rsp-nav-item">
+                  <span className="rsp-nav-item-icon"><Icon name={l.icon} size={18} /></span>
+                  <span>{l.label}</span>
+                </a>
+              ) : (
                 <NavLink
                   key={l.to}
                   to={l.to}

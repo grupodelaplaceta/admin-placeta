@@ -7,6 +7,7 @@ export interface NavLink {
   label: string;
   icon: IconName;
   permiso?: string; // permiso requerido (entidad rsp por defecto)
+  external?: boolean;
 }
 
 export interface NavSection {
@@ -42,6 +43,12 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Placeta Junior',
     links: [
       { to: '/junior', label: 'Academia', icon: 'sparkles', permiso: 'ver_junior' },
+    ],
+  },
+  {
+    title: 'Departamentos',
+    links: [
+      { to: 'https://edu.laplaceta.org', label: 'PlacetaEDU', icon: 'graduationCap', permiso: 'ver_dashboard', external: true },
     ],
   },
   {

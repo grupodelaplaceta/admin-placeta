@@ -6,7 +6,7 @@ import {
   Plus, Clock, PenLine, Send, Eye, CalendarDays, Download, ChevronRight, Pencil,
   Trash2, Filter, ArrowRight, Sparkles, Banknote, Gavel, FileCheck2, ClipboardList,
   Stamp, Landmark, CircleCheck, CircleX, Info, BadgeCheck, Loader2, ScanLine,
-  RefreshCw, CreditCard, LockOpen, Trophy,
+  RefreshCw, CreditCard, LockOpen, Trophy, GraduationCap,
 } from 'lucide-react';
 
 export const ICONS = {
@@ -67,6 +67,7 @@ export const ICONS = {
   creditCard: CreditCard,
   unlock: LockOpen,
   trophy: Trophy,
+  graduationCap: GraduationCap,
 } as const;
 
 export type IconName = keyof typeof ICONS;
