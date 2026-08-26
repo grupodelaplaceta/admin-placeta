@@ -1,0 +1,271 @@
+/* ── Autenticación del BFF ──────────────────────────────────────────────
+   Login con credenciales (DIP + contraseña) verificadas contra la variable
+   de entorno ADMIN_USERS. La sesión es un token aleatorio guardado en
+   memoria y servido en cookie httpOnly (no falsificable desde el cliente).
+   Sustituir por PlacetaID + Supabase en producción. */
+import { Router } from 'express';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'crypto';
+
+const COOKIE = 'rsp_session';
+const TTL = 1000 * 60 * 60 * 24; // 24 horas
+
+// ── Sesión ESTATELESS (compatible con Vercel serverless) ──────────────
+// El token de sesión va firmado (HMAC) dentro de la cookie httpOnly, de modo
+// que sobrevive a los reinicios/escalado de instancias. Un Map en memoria se
+// perdía entre peticiones y el panel «perdía» la sesión → sin datos reales.
+const SECRETO_SESION = process.env.SESSION_SECRET || process.env.PLACETAID_JWT_SECRET || 'rsp-bff-sesion-2026';
+const REVOCADOS = new Set();
+
+function firmarSesion(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = createHmac('sha256', SECRETO_SESION).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+function verificarSesion(token) {
+  if (!token) return null;
+  const i = token.lastIndexOf('.');
+  if (i <= 0) return null;
+  const body = token.slice(0, i);
+  const sig = token.slice(i + 1);
+  const esperada = createHmac('sha256', SECRETO_SESION).update(body).digest('base64url');
+  let ok = false;
+  try { ok = esperada.length === sig.length && timingSafeEqual(Buffer.from(esperada), Buffer.from(sig)); } catch { ok = false; }
+  if (!ok) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (!payload || typeof payload.dip !== 'string' || !Number.isFinite(payload.exp)) return null;
+    if (payload.exp < Date.now()) return null;
+    return payload;
+  } catch { return null; }
+}
+
+function crearTokenSesion(dip) {
+  return firmarSesion({ dip: String(dip).toUpperCase(), exp: Date.now() + TTL });
+}
+
+const PLACETAID_URL = process.env.PLACETAID_AUTH_URL || 'https://id.laplaceta.org';
+// Client id REAL de RSP registrado como solicitante en PlacetaID.
+// Sin él, el SSO no puede iniciarse (no se usa ningún client id ajeno).
+const PLACETAID_CLIENT_ID = process.env.PLACETAID_CLIENT_ID || '';
+
+// ADMIN_USERS = JSON: [{"dip":"23749931M","password":"...","nombre":"...","roles":["superadmin","rsp_admin"]}]
+function cargarUsuarios() {
+  const lista = [];
+  const raw = process.env.ADMIN_USERS;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) lista.push(...parsed);
+    } catch {
+      /* ADMIN_USERS malformado: se ignora */
+    }
+  }
+  // El presidente (23749931M) es administrador de TODO siempre. Su clave es
+  // ADMIN_PASSWORD (recomendado); si no se define, usa 'demo' (cambiar en producción).
+  const yaPresi = lista.some((u) => String(u.dip).toUpperCase() === '23749931M');
+  if (!yaPresi) {
+    lista.push({
+      dip: '23749931M',
+      password: process.env.ADMIN_PASSWORD || 'demo',
+      nombre: process.env.ADMIN_NOMBRE || 'Mikel Alegre Marcos',
+      roles: ['superadmin', 'rsp_admin'],
+    });
+  }
+  return lista;
+}
+
+const USUARIOS = cargarUsuarios();
+
+/** Solo los DIPs administradores pueden entrar (ADMIN_DIPS separados por comas,
+ *  o los dips de ADMIN_USERS, o el presidente 23749931M). */
+function esAdmin(dip) {
+  const d = String(dip || '').toUpperCase();
+  // El presidente es administrador de todo el ecosistema, siempre.
+  if (d === '23749931M') return true;
+  const lista = (process.env.ADMIN_DIPS || '').split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+  if (lista.length) return lista.includes(d);
+  const deUsuarios = USUARIOS.map((u) => String(u.dip).toUpperCase());
+  if (deUsuarios.length) return deUsuarios.includes(d);
+  return process.env.NODE_ENV !== 'production' && d === '23749931M';
+}
+
+/** Decodifica el payload de un JWT (base64url) sin verificar la firma. */
+function decodificarJwt(token) {
+  try {
+    const partes = String(token).split('.');
+    if (partes.length !== 3) return null;
+    return JSON.parse(Buffer.from(partes[1], 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/** Verifica la firma HMAC si hay PLACETAID_JWT_SECRET; sin secreto se acepta (como admin-placeta). */
+function verificarFirmaJwt(token) {
+  const secret = process.env.PLACETAID_JWT_SECRET;
+  if (!secret) return true;
+  const partes = String(token).split('.');
+  if (partes.length !== 3) return false;
+  const firmado = `${partes[0]}.${partes[1]}`;
+  const esperado = createHmac('sha256', secret).update(firmado).digest('base64url');
+  try {
+    return esperado.length === partes[2].length && timingSafeEqual(Buffer.from(esperado), Buffer.from(partes[2]));
+  } catch {
+    return false;
+  }
+}
+
+function verificarPassword(entrada, esperado) {
+  const a = createHash('sha256').update(String(entrada)).digest();
+  const b = createHash('sha256').update(String(esperado)).digest();
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function sesionPara(usuario) {
+  return {
+    usuario: {
+      dip: usuario.dip,
+      nombre: usuario.nombre || usuario.dip,
+      email: usuario.email || `${String(usuario.dip).toLowerCase()}@laplaceta.org`,
+      nivel: 'N3',
+    },
+    roles: usuario.roles || ['rsp_admin'],
+    entidades: ['banco', 'tributos', 'junta', 'administracion', 'rsp', 'junior'],
+    permisos: { rsp: [] },
+  };
+}
+
+function parseCookies(req) {
+  const raw = req.headers.cookie || '';
+  const out = {};
+  for (const part of raw.split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+
+export function authRouter() {
+  const router = Router();
+
+  router.post('/login', (req, res) => {
+    const dip = String(req.body?.dip || '').trim().toUpperCase();
+    const password = req.body?.password || '';
+    const usuario = USUARIOS.find((u) => String(u.dip).toUpperCase() === dip);
+    if (!usuario || !esAdmin(usuario.dip)) {
+      return res.status(401).json({ error: `Acceso denegado: ${dip || 'DIP vacío'} no es administrador.` });
+    }
+    if (!verificarPassword(password, usuario.password)) {
+      return res.status(401).json({ error: `Contraseña incorrecta para ${dip}.` });
+    }
+    const token = crearTokenSesion(usuario.dip);
+    res.cookie(COOKIE, token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: TTL,
+    });
+    res.json(sesionPara(usuario));
+  });
+
+  // Navegación directa a /login (Vercel reenvía /login a esta función):
+  // se redirige al SPA, que muestra el formulario de acceso.
+  router.get('/login', (_req, res) => res.redirect('/'));
+
+  // ── SSO con PlacetaID móvil: devuelve la URL de la fase 1 ──────────
+  // `service` es el nombre que PlacetaID muestra al ciudadano ("accedes a X").
+  router.post('/login/placetaid', (req, res) => {
+    if (!PLACETAID_CLIENT_ID) {
+      return res.status(503).json({ error: 'RSP no está registrado en PlacetaID: configura PLACETAID_CLIENT_ID en el backend.' });
+    }
+    const state = randomBytes(16).toString('hex');
+    const redirectUri = `${req.protocol}://${req.get('host')}/login/callback`;
+    const service = 'Red de Servicios de La Placeta (RSP)';
+    const authUrl = `${PLACETAID_URL}/api/auth/fase1?from=${encodeURIComponent(redirectUri)}`
+      + `&client_id=${encodeURIComponent(PLACETAID_CLIENT_ID)}&state=${state}&platform=web`
+      + `&service=${encodeURIComponent(service)}`;
+    res.json({ redirect: authUrl });
+  });
+
+  // ── Callback del SSO: valida el token, exige admin y crea sesión ──
+  router.get('/login/callback', (req, res) => {
+    const denegar = (mensaje) => res.status(403).send(
+      `<meta charset="utf-8"><h1>Acceso denegado</h1><p>${mensaje}</p><p><a href="/">Volver</a></p>`,
+    );
+    const { token, error } = req.query;
+    if (error) return denegar('Autenticación cancelada o rechazada.');
+
+    // PlacetaID devuelve `user` (JSON del registro) y `token` (JWT). Extraemos
+    // el DIP de forma robusta desde cualquiera de las dos fuentes.
+    const deQuery = (valor) => {
+      if (!valor) return null;
+      try {
+        const o = JSON.parse(decodeURIComponent(String(valor)));
+        if (o && typeof o === 'object') return o.dip || o.userId || o.sub || o.placetaId || o.placeid || null;
+      } catch { /* no es JSON */ }
+      return String(valor);
+    };
+    let dip = '';
+    for (const key of ['user', 'dip', 'userId', 'sub', 'placetaId']) {
+      const v = deQuery(req.query[key]);
+      if (v) { dip = String(v).toUpperCase(); break; }
+    }
+    if (!dip && token) {
+      const payload = decodificarJwt(token);
+      dip = String(payload?.dip || payload?.sub || payload?.userId || payload?.placetaId || '').toUpperCase();
+    }
+
+    // Si hay PLACETAID_JWT_SECRET se verifica la firma; si no coincide se
+    // confía en el JSON `user` que devuelve PlacetaID (mismo criterio que
+    // admin-placeta, que aceptaba sin secreto).
+    if (token && verificarFirmaJwt(token) === false && !dip) return denegar('Token inválido.');
+
+    if (!dip) return denegar('No se recibió el DIP.');
+    if (!esAdmin(dip)) return denegar('No eres administrador del RSP.');
+    const usuario = USUARIOS.find((u) => String(u.dip).toUpperCase() === dip)
+      || { dip, nombre: dip, roles: ['superadmin', 'rsp_admin'] };
+    const sess = crearTokenSesion(usuario.dip);
+    res.cookie(COOKIE, sess, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: TTL,
+    });
+    res.redirect('/');
+  });
+
+  router.post('/logout', (req, res) => {
+    const token = parseCookies(req)[COOKIE];
+    if (token) REVOCADOS.add(token);
+    res.clearCookie(COOKIE);
+    res.json({ ok: true });
+  });
+
+  // Navegación directa a /logout: cierra y vuelve al SPA.
+  router.get('/logout', (_req, res) => res.redirect('/'));
+
+  router.get('/api/sesion', (req, res) => {
+    const token = parseCookies(req)[COOKIE];
+    const s = !REVOCADOS.has(token) && verificarSesion(token);
+    if (!s) {
+      return res.status(401).json({ error: 'Sin sesión' });
+    }
+    const usuario = USUARIOS.find((u) => String(u.dip).toUpperCase() === String(s.dip).toUpperCase())
+      || { dip: s.dip, nombre: s.dip, roles: ['rsp_admin'] };
+    res.json(sesionPara(usuario));
+  });
+
+  return router;
+}
+
+/** Middleware que protege las rutas de API: exige sesión válida. */
+export function requiereSesion(req, res, next) {
+  const token = parseCookies(req)[COOKIE];
+  const s = !REVOCADOS.has(token) && verificarSesion(token);
+  if (!s) {
+    return res.status(401).json({ error: 'No autenticado' });
+  }
+  req.usuario = s;
+  next();
+}

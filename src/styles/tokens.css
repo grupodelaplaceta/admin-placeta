@@ -1,0 +1,94 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   RSP Web · Design tokens
+   Fuente única de verdad visual. Todo componente usa estas variables;
+   un cambio de marca solo toca este archivo.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Marca (violeta La Placeta) ─────────────────────────────── */
+  --brand-50: #f5f3ff;
+  --brand-100: #ede9fe;
+  --brand-200: #ddd6fe;
+  --brand-300: #c4b5fd;
+  --brand-400: #a78bfa;
+  --brand-500: #8b5cf6;
+  --brand-600: #7c3aed;
+  --brand-700: #6d28d9;
+  --brand-800: #5b21b6;
+  --brand-900: #4c1d95;
+
+  --c-primary: var(--brand-700);
+  --c-primary-strong: var(--brand-900);
+  --c-primary-soft: var(--brand-100);
+  --c-focus: var(--brand-500);
+
+  /* ── Superficies / fondo ────────────────────────────────────── */
+  --bg: #f7f5fb;
+  --bg-radial-1: #ede9fe;
+  --bg-radial-2: #e0f2fe;
+  --surface: #ffffff;
+  --surface-2: #f4f1fa;
+  --surface-3: #ece7f6;
+  --border: #e6e1f0;
+  --border-strong: #d5cde5;
+
+  /* ── Texto ──────────────────────────────────────────────────── */
+  --text: #1e1b2e;
+  --text-2: #57536b;
+  --text-3: #8a86a0;
+  --text-on-brand: #ffffff;
+
+  /* ── Semánticos ─────────────────────────────────────────────── */
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --info: #2563eb;
+  --info-soft: #dbeafe;
+
+  /* ── Tipografía ─────────────────────────────────────────────── */
+  --font-sans: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Alan Sans', 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem;
+  --fs-3xl: 2rem;
+
+  /* ── Espaciado ──────────────────────────────────────────────── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* ── Radios ─────────────────────────────────────────────────── */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 20px;
+  --r-full: 999px;
+
+  /* ── Sombras ────────────────────────────────────────────────── */
+  --sh-sm: 0 1px 2px rgba(30, 27, 46, 0.06);
+  --sh-md: 0 4px 12px rgba(30, 27, 46, 0.08);
+  --sh-lg: 0 12px 32px rgba(76, 29, 149, 0.14);
+  --sh-glow: 0 0 0 4px rgba(124, 58, 237, 0.16);
+
+  /* ── Gradientes ─────────────────────────────────────────────── */
+  --grad: linear-gradient(135deg, var(--brand-600), var(--brand-800));
+  --grad-soft: linear-gradient(135deg, #ffffff, var(--surface-2));
+
+  /* ── Layout ─────────────────────────────────────────────────── */
+  --sidebar-w: 264px;
+  --topbar-h: 64px;
+  --content-max: 1280px;
+}

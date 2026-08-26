@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/rsp/(.*)", "destination": "/api/index.js" },
+    { "source": "/publico/(.*)", "destination": "/api/index.js" },
+    { "source": "/login/(.*)", "destination": "/api/index.js" },
+    { "source": "/login", "destination": "/api/index.js" },
+    { "source": "/logout", "destination": "/api/index.js" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
