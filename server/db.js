@@ -89,6 +89,7 @@ export function coleccion(tabla, { idCol = 'id', orderCol = 'created_at' } = {})
         try {
           const { data, error } = await supabase.from(tabla).insert(filaSnake).select().maybeSingle();
           if (!error && data) return camelize(data);
+          if (error) return { ...fila, __dbError: error.message };
         } catch { /* sin persistencia */ }
       }
       return fila;
@@ -99,9 +100,11 @@ export function coleccion(tabla, { idCol = 'id', orderCol = 'created_at' } = {})
       if (enMemoria) Object.assign(enMemoria, patch);
       if (supabase) {
         try {
-          await supabase.from(tabla).update(snakize(patch)).eq(idCol, id);
+          const { error } = await supabase.from(tabla).update(snakize(patch)).eq(idCol, id);
+          if (error) return { ok: false, error: error.message };
         } catch { /* sin persistencia */ }
       }
+      return { ok: true };
     },
 
     async borrar(id) {

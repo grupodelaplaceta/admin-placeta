@@ -884,7 +884,7 @@ export function createApiRouter({ getBankState }) {
           precio: Number(a.precioLicencia || 0) + Number(a.precioIntento || 0),
           precioLicencia: Number(a.precioLicencia || 0), precioIntento: Number(a.precioIntento || 0),
           recompensa: Number(a.recompensa || 0),
-          descripcion: a.descripcion || '', categoria: a.categoria || 'General', portadaUrl: a.portadaUrl || '', fechaPublicacion: a.fechaPublicacion || null, tipo: a.tipo || 'test', contenido: a.contenido || {},
+          descripcion: a.descripcion || '', categoria: a.categoria || 'General', portadaUrl: a.portadaUrl || a.contenido?.__rspPortadaUrl || '', fechaPublicacion: a.fechaPublicacion || a.contenido?.__rspFechaPublicacion || null, tipo: a.tipo || 'test', contenido: a.contenido || {},
           estado: a.publica ? 'aprobada' : (a.estado === 'rechazada' ? 'rechazada' : 'en_revision'),
           colaborador: a.autorNombre || '—',
         };
@@ -1109,16 +1109,26 @@ export function createApiRouter({ getBankState }) {
     if (!String(d.titulo || '').trim()) return res.status(400).json({ error: 'Título requerido' });
     const fecha = d.fechaPublicacion || d.fecha_publicacion || null;
     const publica = d.estado === 'aprobada' && (!fecha || new Date(fecha) <= new Date());
-    const a = { id: `ACT-${Date.now()}`, titulo: String(d.titulo).trim(), descripcion: String(d.descripcion || ''), categoria: String(d.categoria || 'General'), tipo: String(d.tipo || 'test'), contenido: d.contenido && typeof d.contenido === 'object' ? d.contenido : {}, edadMin: Number(d.edadMin) || 6, edadMax: Number(d.edadMax) || 17, dificultad: String(d.complejidad || d.dificultad || 'Media'), precioLicencia: Number(d.precioLicencia) || 0, precioIntento: Number(d.precioIntento) || 0, recompensa: Number(d.recompensa) || 0, portadaUrl: d.portadaUrl || null, fechaPublicacion: fecha, estado: publica ? 'aprobada' : (d.estado || 'en_revision'), publica, autorNombre: d.colaborador || req.user?.dip || 'RSP', creadoEn: AHORA() };
-    await store.juniorActividadesDb.insertar(a);
+    const contenido = { ...(d.contenido && typeof d.contenido === 'object' ? d.contenido : {}), ...(fecha ? { __rspFechaPublicacion: fecha } : {}), ...(d.portadaUrl ? { __rspPortadaUrl: d.portadaUrl } : {}) };
+    const a = { id: `ACT-${Date.now()}`, titulo: String(d.titulo).trim(), descripcion: String(d.descripcion || ''), categoria: String(d.categoria || 'General'), tipo: String(d.tipo || 'test'), contenido, edadRecomendada: `${Number(d.edadMin) || 6}-${Number(d.edadMax) || 17}`, dificultad: String(d.complejidad || d.dificultad || 'Media'), precioLicencia: Number(d.precioLicencia) || 0, precioIntento: Number(d.precioIntento) || 0, recompensa: Number(d.recompensa) || 0, estado: publica ? 'aprobada' : (d.estado || 'en_revision'), publica, autorNombre: d.colaborador || req.user?.dip || 'RSP', creadoEn: AHORA() };
+    const insertado = await store.juniorActividadesDb.insertar(a);
+    if (insertado?.__dbError) return res.status(500).json({ error: insertado.__dbError });
     res.status(201).json(a);
   });
   router.post('/rsp/junior/api/actividades/:id', async (req, res) => {
     const a = await store.juniorActividadesDb.obtener(req.params.id);
     if (!a) return res.status(404).json({ error: 'Actividad no encontrada' });
-    const d = req.body || {}; const patch = { ...d };
+    const d = req.body || {};
+    const contenido = d.contenido && typeof d.contenido === 'object' ? d.contenido : a.contenido || {};
+    if (d.fechaPublicacion !== undefined) contenido.__rspFechaPublicacion = d.fechaPublicacion || null;
+    const patch = {};
+    ['titulo', 'descripcion', 'categoria', 'tipo', 'dificultad', 'recompensa', 'subvencionada', 'destacada', 'precioLicencia', 'precioIntento'].forEach((key) => { if (d[key] !== undefined) patch[key] = d[key]; });
+    if (d.portadaUrl !== undefined) contenido.__rspPortadaUrl = d.portadaUrl || null;
+    if (d.edadMin !== undefined || d.edadMax !== undefined) patch.edadRecomendada = `${Number(d.edadMin ?? a.edadMin ?? 6)}-${Number(d.edadMax ?? a.edadMax ?? 17)}`;
+    patch.contenido = contenido;
     if (d.fechaPublicacion !== undefined) patch.publica = a.estado === 'aprobada' && (!d.fechaPublicacion || new Date(d.fechaPublicacion) <= new Date());
-    await store.juniorActividadesDb.actualizar(req.params.id, patch);
+    const resultado = await store.juniorActividadesDb.actualizar(req.params.id, patch);
+    if (resultado?.ok === false) return res.status(500).json({ error: resultado.error });
     res.json({ success: true });
   });
 
