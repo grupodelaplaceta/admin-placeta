@@ -237,10 +237,12 @@ export function juniorRouter({ getBankState, postBanco }) {
       const bloques = Array.isArray(contenido.bloques) ? contenido.bloques : [];
       const niveles = contenido.niveles || contenido.diapositivas;
       if (!bloques.length && !Array.isArray(niveles)) return res.status(400).json({ error: 'La actividad debe tener bloques o diapositivas' });
-      const fila = {
-        titulo, descripcion,
-        categoria: String(b.categoria || 'General'),
-        tipo: String(b.tipo || 'otro'),
+      // `junior_actividades` se comparte con instalaciones que tienen un
+      // esquema mínimo. Los campos de catálogo no son columnas garantizadas
+      // (por ejemplo, `subvencionada`), así que se conservan en JSON para no
+      // hacer fallar el alta cuando el esquema cacheado no los conoce.
+      const contenidoConMetadatos = {
+        ...contenido,
         edad_recomendada: String(b.edad_recomendada || '6-12'),
         dificultad: String(b.dificultad || 'media'),
         tiempo_estimado: Number(b.tiempo_estimado) || 10,
@@ -250,11 +252,16 @@ export function juniorRouter({ getBankState, postBanco }) {
         subvencionada: b.subvencionada === true,
         num_preguntas: Number(b.num_preguntas) || 0,
         num_fases: Number(b.num_fases) || (Array.isArray(niveles) ? niveles.length : bloques.length),
-        contenido,
+      };
+      const fila = {
+        // Estas son las columnas que usa el catálogo público y que existen en
+        // el esquema actual. El resto vive dentro de `contenido`.
+        titulo, descripcion,
+        categoria: String(b.categoria || 'General'),
+        tipo: String(b.tipo || 'otro'),
+        contenido: contenidoConMetadatos,
         estado: 'en_revision',
         publica: false,
-        tipo_titular: 'anonimo',
-        autor_nombre: 'DevAI · envío anónimo',
         creado_en: new Date().toISOString(),
       };
       const { data, error } = await supabase.from('junior_actividades').insert(fila).select('id,titulo,estado').single();

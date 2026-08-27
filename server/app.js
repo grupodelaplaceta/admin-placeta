@@ -149,6 +149,11 @@ export function createApp() {
     const c = (typeof a.contenido === 'object' && a.contenido) ? a.contenido : {};
     if (a.subvencionada === undefined && c.subvencionada !== undefined) a.subvencionada = !!c.subvencionada;
     if (a.destacada === undefined && c.destacada !== undefined) a.destacada = !!c.destacada;
+    if (a.edad_recomendada === undefined && c.edad_recomendada !== undefined) a.edad_recomendada = c.edad_recomendada;
+    if (a.dificultad === undefined && c.dificultad !== undefined) a.dificultad = c.dificultad;
+    if (a.tiempo_estimado === undefined && c.tiempo_estimado !== undefined) a.tiempo_estimado = Number(c.tiempo_estimado) || 0;
+    if (a.num_preguntas === undefined && c.num_preguntas !== undefined) a.num_preguntas = Number(c.num_preguntas) || 0;
+    if (a.num_fases === undefined && c.num_fases !== undefined) a.num_fases = Number(c.num_fases) || 0;
     if (a.precio_licencia === undefined && c.precio_licencia !== undefined) a.precio_licencia = Number(c.precio_licencia) || 0;
     if (a.precio_intento === undefined && c.precio_intento !== undefined) a.precio_intento = Number(c.precio_intento) || 0;
     if (a.recompensa === undefined && c.recompensa !== undefined) a.recompensa = Number(c.recompensa) || 0;
