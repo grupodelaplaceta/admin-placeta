@@ -46,6 +46,7 @@ const LOGOS = {
   administracion: '/img/administracion.png',
   banco: '/img/logo-banco.png',
   rsp: '/img/logo-rsp.svg',
+  junior: 'https://junior.laplaceta.org/img/PJ-BLANCO-LOGO.png',
 };
 
 /** Logo de la entidad pública que subvenciona; Administración si es otra. */
@@ -78,9 +79,9 @@ async function rasterizar(src: string): Promise<{ url: string; w: number; h: num
   }
 }
 
-async function nuevoDoc(): Promise<jsPDF> {
+async function nuevoDoc(orientation: 'portrait' | 'landscape' = 'portrait'): Promise<jsPDF> {
   const { jsPDF } = await import('jspdf');
-  const doc = new jsPDF();
+  const doc = new jsPDF({ orientation, unit: 'mm', format: 'a4' });
   try {
     const f = await obtenerFuentes();
     doc.addFileToVFS('PJS-Regular.ttf', f.regular!);
@@ -577,36 +578,32 @@ export async function generarPdfNomina(n: Nomina): Promise<void> {
 
 /* ── Diploma de Placeta Junior (verificable vía URL pública) ───────────── */
 export async function generarPdfDiplomaJunior(d: DiplomaJunior): Promise<void> {
-  const doc = await nuevoDoc();
-  await cabecera(doc, 'Diploma de Placeta Junior', `${d.id} · ${d.fecha}`, LOGOS.rsp);
-
+  const doc = await nuevoDoc('landscape');
+  const W = 297; const H = 210;
+  const colores = [[239, 68, 68], [249, 115, 22], [59, 130, 246], [34, 197, 94]] as [number, number, number][];
   const urlVerificacion = `${window.location.origin}/publico/diplomas/verificar/${encodeURIComponent(d.id)}`;
 
-  // Franja decorativa del diploma.
-  doc.setFillColor(...C.soft);
-  doc.roundedRect(14, 56, 182, 24, 4, 4, 'F');
-  doc.setFont(FONT, 'bold');
-  doc.setFontSize(20);
-  doc.setTextColor(...C.primary);
-  doc.text('DIPLOMA', 105, 73, { align: 'center' });
-
-  let y = 96;
-  y = fila(doc, y, 'Otorgado a', d.nombre, 44);
-  y = fila(doc, y, 'DIP', d.dip, 44);
-  y = fila(doc, y, 'Actividad', d.actividad, 44);
-  y = fila(doc, y, 'Fecha', d.fecha, 44);
-  y += 6;
-
-  y = seccion(doc, y, 'Verificación');
-  y = fila(doc, y, 'Código', d.id, 44);
-  doc.setFont(FONT, 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...C.muted);
-  doc.text('Verifica la autenticidad de este diploma en:', 16, y);
-  doc.setFont(FONT, 'bold');
-  doc.setTextColor(...C.primary);
-  doc.text(urlVerificacion, 16, y + 6, { maxWidth: 180 });
-
-  pie(doc);
+  // Marco y banda alegre con los cuatro colores de Placeta Junior.
+  doc.setFillColor(255, 255, 255); doc.rect(0, 0, W, H, 'F');
+  doc.setDrawColor(226, 232, 240); doc.setLineWidth(1.2); doc.roundedRect(8, 8, W - 16, H - 16, 5, 5, 'S');
+  colores.forEach((c, i) => { doc.setFillColor(...c); doc.rect(8 + i * ((W - 16) / 4), 8, (W - 16) / 4 + 1, 8, 'F'); });
+  doc.setFillColor(109, 40, 217); doc.rect(8, H - 18, W - 16, 10, 'F');
+  const logo = await rasterizar(LOGOS.junior);
+  if (logo) { const h = 18; doc.addImage(logo.url, 'PNG', 22, 25, Math.min((logo.w / logo.h) * h, 72), h); }
+  else { doc.setFont(FONT, 'bold'); doc.setFontSize(16); doc.setTextColor(...C.primary); doc.text('PLACETA JUNIOR', 22, 38); }
+  doc.setFont(FONT, 'bold'); doc.setFontSize(28); doc.setTextColor(...C.primary); doc.text('DIPLOMA', W / 2, 48, { align: 'center' });
+  doc.setFont(FONT, 'normal'); doc.setFontSize(11); doc.setTextColor(...C.muted); doc.text('POR APRENDER JUGANDO', W / 2, 56, { align: 'center' });
+  // Medallones decorativos.
+  colores.forEach((c, i) => { doc.setFillColor(...c); doc.circle(26 + i * 16, 70, 3, 'F'); });
+  doc.setFont(FONT, 'normal'); doc.setFontSize(12); doc.setTextColor(...C.muted); doc.text('Se reconoce a', W / 2, 76, { align: 'center' });
+  doc.setFont(FONT, 'bold'); doc.setFontSize(25); doc.setTextColor(...C.dark); doc.text(doc.splitTextToSize(d.nombre || 'Alumno/a', 210), W / 2, 91, { align: 'center' });
+  doc.setDrawColor(226, 232, 240); doc.setLineWidth(.5); doc.line(62, 101, W - 62, 101);
+  doc.setFont(FONT, 'normal'); doc.setFontSize(11); doc.setTextColor(...C.muted); doc.text('por completar satisfactoriamente la actividad', W / 2, 113, { align: 'center' });
+  doc.setFont(FONT, 'bold'); doc.setFontSize(17); doc.setTextColor(...C.primary); doc.text(doc.splitTextToSize(d.actividad || 'Actividad educativa', 210), W / 2, 126, { align: 'center' });
+  doc.setFont(FONT, 'normal'); doc.setFontSize(10); doc.setTextColor(...C.muted); doc.text(`Fecha: ${d.fecha || '—'}   ·   DIP: ${d.dip || '—'}`, W / 2, 140, { align: 'center' });
+  doc.setFillColor(240, 253, 244); doc.setDrawColor(187, 247, 208); doc.roundedRect(W / 2 - 37, 148, 74, 16, 4, 4, 'FD');
+  doc.setFont(FONT, 'bold'); doc.setFontSize(11); doc.setTextColor(...C.success); doc.text('¡RETO SUPERADO!', W / 2, 158, { align: 'center' });
+  doc.setFont(FONT, 'normal'); doc.setFontSize(7.5); doc.setTextColor(255, 255, 255); doc.text(`Código verificable: ${d.id}`, 18, H - 11); doc.text('Placeta Junior · Grupo de La Placeta', W - 18, H - 11, { align: 'right' });
+  doc.setFont(FONT, 'normal'); doc.setFontSize(7); doc.setTextColor(...C.muted); doc.text(`Verificación: ${urlVerificacion}`, W / 2, 177, { align: 'center', maxWidth: 240 });
   doc.save(`diploma-${d.id}.pdf`);
 }
