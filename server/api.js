@@ -8,11 +8,13 @@
    lectura). Las reglas de cierre/reparto replican el motor del SPA.
    ═══════════════════════════════════════════════════════════════════════ */
 import { Router } from 'express';
+import { randomBytes } from 'crypto';
 import { calcularContribuyentes } from './tributos.js';
 import { coleccion } from './db.js';
 import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacionPlacetaID } from './firmas.js';
 import { CATALOGO_BASE } from './tramites-catalogo.js';
 import { CATALOGO_EDU_BASE } from './edu-cursos.js';
+import PDFDocument from 'pdfkit';
 
 const AHORA = () => new Date().toISOString();
 const BOP_URL = (process.env.BOP_URL || 'https://bop.laplaceta.org').replace(/\/+$/, '');
@@ -89,7 +91,69 @@ export function createApiRouter({ getBankState }) {
     juniorColaboradores: [],
     juniorDiplomas: [],
     solicitudes2fa: new Map(),
+    documentosPublicos: new Map(),
   };
+
+  // Fachada pública para integraciones de confianza (GDLP Web). La clave
+  // evita que cualquiera pueda crear trámites en nombre de otra persona.
+  const gdlpKey = process.env.GDLP_RSP_API_KEY || '';
+  const esGdlp = (req) => Boolean(gdlpKey) && req.headers['x-gdlp-api-key'] === gdlpKey;
+  const pdfEnvio = (tramite) => new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 52 });
+    const chunks = [];
+    doc.on('data', (chunk) => chunks.push(chunk));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    doc.fontSize(20).fillColor('#3f00d8').text('RED DE SERVICIOS DE LA PLACETA', { align: 'center' });
+    doc.moveDown().fontSize(16).fillColor('#111').text('Justificante de envío');
+    doc.moveDown().fontSize(11).text(`Número: ${tramite.id}`);
+    doc.text(`Trámite: ${tramite.titulo}`);
+    doc.text(`Identidad: ${tramite.dip}`);
+    doc.text(`Fecha: ${tramite.actualizadoEn}`);
+    doc.text(`Estado: ${tramite.estado}`);
+    doc.moveDown().text('Datos declarados:');
+    doc.fontSize(10).text(JSON.stringify(tramite.datosEspecificos || {}, null, 2));
+    doc.end();
+  });
+
+  router.get('/publico/oportunidades', async (_req, res) => {
+    const [subvenciones, bonos] = await Promise.all([store.subvenciones.listar(), store.bonos.listar()]);
+    res.json({
+      subvenciones: subvenciones.filter((s) => s.publicada === true && !['cerrada', 'agotada'].includes(s.estado)),
+      bonos: bonos.filter((b) => b.publicada === true && !['cerrado', 'agotado'].includes(b.estado)),
+    });
+  });
+
+  router.get('/publico/oportunidades/:tipo/:id', async (req, res) => {
+    const collection = req.params.tipo === 'bono' ? store.bonos : store.subvenciones;
+    const item = await collection.obtener(req.params.id);
+    if (!item || item.publicada !== true) return res.status(404).json({ error: 'Oportunidad no encontrada o no publicada' });
+    res.json({ ...item, ...(req.params.tipo === 'bono' ? (store.bonosDetalle[item.id] || {}) : (store.subvencionesDetalle[item.id] || {})) });
+  });
+
+  router.post('/publico/tramites', async (req, res) => {
+    if (!esGdlp(req)) return res.status(401).json({ error: 'Integración GDLP no autorizada' });
+    const d = req.body || {};
+    const dip = String(d.dip || '').trim().toUpperCase();
+    if (!dip || !d.tipo) return res.status(400).json({ error: 'Identidad y tipo de trámite requeridos' });
+    if (d.oportunidadId) {
+      const collection = d.tipo === 'bono' ? store.bonos : store.subvenciones;
+      const oportunidad = await collection.obtener(d.oportunidadId);
+      if (!oportunidad || oportunidad.publicada !== true) return res.status(404).json({ error: 'La convocatoria no está publicada o ya no está disponible' });
+    }
+    const t = { id: `TR-${Date.now()}`, tipo: d.tipo, titulo: d.titulo || d.tipo, dip, nombreCiudadano: d.nombre || dip, estado: 'inicio', plazo: Number(d.plazo) || 10, servicio: 'GDLP / RSP', actualizadoEn: AHORA(), datosEspecificos: d.datos || {}, oportunidadId: d.oportunidadId || null };
+    await store.tramites.insertar(t);
+    const pdf = await pdfEnvio(t);
+    const pdfToken = `${t.id}-${Math.random().toString(36).slice(2)}`;
+    store.documentosPublicos.set(pdfToken, pdf);
+    res.status(201).json({ ok: true, tramite: t, pdf_url: `/publico/documentos/${encodeURIComponent(pdfToken)}` });
+  });
+
+  router.get('/publico/documentos/:token', (req, res) => {
+    const pdf = store.documentosPublicos.get(req.params.token);
+    if (!pdf) return res.status(404).json({ error: 'Documento no encontrado' });
+    res.type('application/pdf').set('Content-Disposition', 'inline; filename="justificante-rsp.pdf"').send(pdf);
+  });
 
   // CNIC reales del BOP (fallback si la tabla rsp_cnic aún no está migrada).
   const CNIC_BASE = [
@@ -761,7 +825,7 @@ export function createApiRouter({ getBankState }) {
       id: `BONO-${Date.now()}`, nombre: d.nombre, emisorEip: d.emisorEip, emisorNombre: d.emisorEip,
       presupuesto: d.presupuesto, maxPorPersona: d.maxPorPersona, baremos: d.baremos || [],
       requisitos: d.requisitos || [],
-      fechaLimite: d.fechaLimite, presupuestoUsado: 0, adscritos: 0, estado: 'activo',
+      fechaLimite: d.fechaLimite, presupuestoUsado: 0, adscritos: 0, estado: 'activo', publicada: d.publicada ?? false, publicadaEn: d.publicada ? AHORA() : undefined,
     };
     await store.bonos.insertar(b);
     store.bonosDetalle[b.id] = { ...b, adscripciones: [], justificaciones: [] };
@@ -962,10 +1026,7 @@ export function createApiRouter({ getBankState }) {
 
   /* ── Códigos Junior (recarga + actividades) ─────────────────────── */
   function genCodigo() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let s = '';
-    for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
-    return `GDLP-${s}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+    return `GDLP-${randomBytes(5).toString('hex').toUpperCase()}`;
   }
 
   router.get('/rsp/junior/api/codigos', async (_req, res) => {
@@ -974,15 +1035,20 @@ export function createApiRouter({ getBankState }) {
 
   router.post('/rsp/junior/api/codigos', async (req, res) => {
     const d = req.body || {};
-    const tipo = d.tipo === 'recarga' ? 'recarga' : 'actividades';
+    const tipo = ['recarga', 'un_uso', 'actividades'].includes(d.tipo) ? d.tipo : 'actividades';
     if (tipo === 'recarga' && !Number(d.valor)) return res.status(400).json({ error: 'Valor de recarga requerido' });
-    if (tipo === 'actividades' && (!Array.isArray(d.actividadIds) || d.actividadIds.length === 0)) return res.status(400).json({ error: 'Selecciona al menos una actividad' });
+    if (['un_uso', 'actividades'].includes(tipo) && (!Array.isArray(d.actividadIds) || d.actividadIds.length === 0)) return res.status(400).json({ error: 'Selecciona al menos una actividad' });
+    const codigoSolicitado = String(d.codigo || '').trim().toUpperCase();
+    if (codigoSolicitado && !/^GDLP-[A-Z0-9-]{4,40}$/.test(codigoSolicitado)) return res.status(400).json({ error: 'Formato de código inválido' });
+    const existentes = await store.juniorCodigosDb.listar();
+    const codigoFinal = codigoSolicitado || genCodigo();
+    if (existentes.some((c) => String(c.codigo).toUpperCase() === codigoFinal)) return res.status(409).json({ error: 'Ese código ya existe' });
     const codigo = {
       id: `COD-${Date.now()}`,
-      codigo: String(d.codigo || genCodigo()).trim().toUpperCase(),
+      codigo: codigoFinal,
       tipo,
       valor: tipo === 'recarga' ? Number(d.valor) : 0,
-      actividadIds: tipo === 'actividades' ? d.actividadIds.map(String) : [],
+      actividadIds: ['un_uso', 'actividades'].includes(tipo) ? [...new Set(d.actividadIds.map(String))] : [],
       estado: 'disponible',
       dipVinculado: null,
       creadoEn: AHORA(),
@@ -997,7 +1063,10 @@ export function createApiRouter({ getBankState }) {
     if (!c) return res.status(404).json({ error: 'Código no encontrado' });
     const accion = req.body?.accion;
     if (accion === 'revocar') await store.juniorCodigosDb.actualizar(req.params.id, { estado: 'revocado' });
-    else if (accion === 'desvincular') await store.juniorCodigosDb.actualizar(req.params.id, { estado: 'disponible', dipVinculado: null, canjeadoEn: null });
+    else if (accion === 'desvincular') {
+      if (c.tipo !== 'actividades') return res.status(400).json({ error: 'Los códigos de un uso no se pueden desvincular' });
+      await store.juniorCodigosDb.actualizar(req.params.id, { estado: 'disponible', dipVinculado: null, canjeadoEn: null, desvinculadoEn: AHORA() });
+    }
     else return res.status(400).json({ error: 'Acción inválida' });
     res.json({ success: true, id: req.params.id, accion });
   });

@@ -38,16 +38,24 @@ import Votaciones from './pages/votaciones/Votaciones';
 import Juntas from './pages/juntas/Juntas';
 import Encuestas from './pages/encuestas/Encuestas';
 import Informes from './pages/informes/Informes';
+import { useAuth } from './auth/AuthContext';
 
 function permiso(perm: string, element: ReactNode) {
   return <RequirePermiso entidad={RSP_ENTIDAD} permiso={perm}>{element}</RequirePermiso>;
 }
 
+function AuthLoading() {
+  const { loading } = useAuth();
+  if (!loading) return null;
+  return <div className="rsp-app-loading" role="status" aria-live="polite"><div className="rsp-app-loading-mark">RSP</div><div className="rsp-spinner" /><p>Conectando con La Placeta…</p></div>;
+}
+
 export default function App() {
   return (
     <ToastProvider>
-      <AuthProvider>
+        <AuthProvider>
         <BrowserRouter>
+          <AuthLoading />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route

@@ -325,6 +325,33 @@
   .rsp-topbar { padding: 0 var(--sp-4); }
   .rsp-content { padding: var(--sp-4); }
 }
+.rsp-app-loading { position: fixed; inset: 0; z-index: 999; display: grid; place-items: center; align-content: center; gap: 14px; background: var(--bg); color: var(--text-2); }
+.rsp-app-loading-mark { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 22px; background: var(--grad); color: #fff; font-weight: 900; font-family: var(--font-display); font-size: 1.25rem; box-shadow: var(--sh-lg); animation: rsp-loading-pulse 1.2s ease-in-out infinite; }
+.rsp-app-loading p { margin: 0; font-size: var(--fs-sm); }
+@keyframes rsp-loading-pulse { 50% { transform: translateY(-4px) scale(1.04); } }
+
+@media (max-width: 560px) {
+  .rsp-content { padding: 14px 12px; }
+  .rsp-page-title { font-size: var(--fs-2xl); }
+  .rsp-page-subtitle { font-size: var(--fs-sm); line-height: 1.45; }
+  .rsp-page-header { margin-bottom: var(--sp-4); }
+  .rsp-page-header > :last-child { width: 100%; }
+  .rsp-page-header > :last-child .rsp-btn { width: 100%; justify-content: center; }
+  .rsp-card { padding: var(--sp-4); border-radius: var(--r-md); }
+  .rsp-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .rsp-kpi { padding: 10px; gap: 8px; }
+  .rsp-kpi-icon { width: 32px; height: 32px; font-size: 1rem; }
+  .rsp-kpi-value { font-size: var(--fs-xl); }
+  .rsp-kpi-label { font-size: var(--fs-xs); }
+  .rsp-modal-backdrop { padding: 8px; place-items: end center; }
+  .rsp-modal { max-height: 94vh; border-radius: 20px 20px 0 0; }
+  .rsp-modal-body { padding: var(--sp-4); }
+  .rsp-modal-footer { padding: var(--sp-3) var(--sp-4); flex-direction: column-reverse; }
+  .rsp-modal-footer .rsp-btn { width: 100%; justify-content: center; }
+  .rsp-table th, .rsp-table td { padding: 10px 12px; white-space: nowrap; }
+  .rsp-topbar { height: 58px; }
+  .rsp-userchip span:not(.rsp-avatar) { display: none; }
+}
 .rsp-hamburger { display: none; }
 @media (max-width: 900px) {
   .rsp-hamburger { display: inline-flex; }

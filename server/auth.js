@@ -13,7 +13,7 @@ const TTL = 1000 * 60 * 60 * 24; // 24 horas
 // El token de sesión va firmado (HMAC) dentro de la cookie httpOnly, de modo
 // que sobrevive a los reinicios/escalado de instancias. Un Map en memoria se
 // perdía entre peticiones y el panel «perdía» la sesión → sin datos reales.
-const SECRETO_SESION = process.env.SESSION_SECRET || process.env.PLACETAID_JWT_SECRET || 'rsp-bff-sesion-2026';
+const SECRETO_SESION = process.env.SESSION_SECRET || process.env.PLACETAID_JWT_SECRET || '';
 const REVOCADOS = new Set();
 
 function firmarSesion(payload) {
@@ -67,7 +67,7 @@ function cargarUsuarios() {
   if (!yaPresi) {
     lista.push({
       dip: '23749931M',
-      password: process.env.ADMIN_PASSWORD || 'demo',
+      password: process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'demo'),
       nombre: process.env.ADMIN_NOMBRE || 'Mikel Alegre Marcos',
       roles: ['superadmin', 'rsp_admin'],
     });
@@ -117,6 +117,7 @@ function verificarFirmaJwt(token) {
 }
 
 function verificarPassword(entrada, esperado) {
+  if (!esperado) return false;
   const a = createHash('sha256').update(String(entrada)).digest();
   const b = createHash('sha256').update(String(esperado)).digest();
   return a.length === b.length && timingSafeEqual(a, b);
@@ -150,6 +151,9 @@ export function authRouter() {
   const router = Router();
 
   router.post('/login', (req, res) => {
+    if (process.env.NODE_ENV === 'production' && !SECRETO_SESION) {
+      return res.status(503).json({ error: 'El backend no tiene SESSION_SECRET configurado.' });
+    }
     const dip = String(req.body?.dip || '').trim().toUpperCase();
     const password = req.body?.password || '';
     const usuario = USUARIOS.find((u) => String(u.dip).toUpperCase() === dip);
@@ -261,6 +265,13 @@ export function authRouter() {
 
 /** Middleware que protege las rutas de API: exige sesión válida. */
 export function requiereSesion(req, res, next) {
+  // Estos endpoints solo exponen catálogo/oportunidades o aceptan peticiones
+  // autenticadas por la clave de integración de GDLP (la validación se hace
+  // dentro de createApiRouter).
+  if (req.path.startsWith('/publico/oportunidades') || req.path.startsWith('/publico/tramites') || req.path.startsWith('/publico/documentos')) return next();
+  // DevAI es un formulario público de envío a moderación. La excepción es
+  // deliberadamente exacta: no abre ninguna otra mutación del API.
+  if (req.method === 'POST' && req.path === '/api/junior/actividades') return next();
   const token = parseCookies(req)[COOKIE];
   const s = !REVOCADOS.has(token) && verificarSesion(token);
   if (!s) {

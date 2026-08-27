@@ -85,7 +85,12 @@ export function createApp() {
   // para que el callback de PlacetaID use https correctamente.
   app.set('trust proxy', 1);
 
-  app.use(cors({ origin: true, credentials: true }));
+  const allowedOrigins = (process.env.CORS_ORIGINS || 'https://rsp.laplaceta.org,https://junior.laplaceta.org')
+    .split(',').map((origin) => origin.trim()).filter(Boolean);
+  app.use(cors({ credentials: true, origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') return callback(null, true);
+    return callback(new Error('Origen no permitido por CORS'));
+  } }));
   app.use(express.json());
 
   // Público: health check (lo usa Vercel / uptime).
@@ -134,6 +139,7 @@ export function createApp() {
   // se restaura aquí como lectura pública desde Supabase (filas crudas,
   // el mismo contrato que consumía la web: { success, actividades }).
   const DEMO_DIP = '16381756J';
+  const demoActivo = process.env.NODE_ENV !== 'production';
   const esDipDemo = (dip) => String(dip || '').trim().toUpperCase() === DEMO_DIP;
   const esActividadPublica = (a) => !!a && a.estado === 'aprobada' && a.publica === true;
   // Promueve los campos económicos que viven como respaldo en `contenido`
@@ -154,7 +160,7 @@ export function createApp() {
   app.get('/api/junior/actividades', async (req, res) => {
     try {
       const { solo_publicas = '1', categoria, dip } = req.query;
-      const esDemo = esDipDemo(dip);
+      const esDemo = demoActivo && esDipDemo(dip);
       if (!supabase) return res.status(503).json({ error: 'Supabase no configurado' });
       let q = supabase.from('junior_actividades').select('*');
       if (esDemo) q = q.in('estado', ['aprobada', 'en_revision']);
@@ -184,7 +190,7 @@ export function createApp() {
       if (error) throw error;
       const actividad = normalizarActividad(data);
       if (!actividad) return res.status(404).json({ error: 'Actividad no encontrada' });
-      const esDemo = esDipDemo(req.query.dip);
+      const esDemo = demoActivo && esDipDemo(req.query.dip);
       if (!esActividadPublica(actividad) && !esDemo) {
         return res.status(404).json({ error: 'Actividad no encontrada' });
       }
@@ -236,7 +242,7 @@ export function createApp() {
       if (data.tipo === 'recarga') {
         if (origen !== 'app') return res.status(400).json({ error: 'Los códigos de recarga solo se canjean desde la app' });
         if (!dipN) return res.status(400).json({ error: 'DIP requerido' });
-      } else if (data.dip_vinculado && data.dip_vinculado !== dipN) {
+      } else if (data.dip_vinculado && String(data.dip_vinculado).toUpperCase() !== dipN) {
         return res.status(403).json({ error: 'Este código ya está vinculado a otra cuenta' });
       }
       const dipVinculado = data.dip_vinculado || dipN || null;
@@ -245,7 +251,7 @@ export function createApp() {
         .eq('id', data.id).eq('estado', 'disponible').select('id').maybeSingle();
       if (errorCanje) throw errorCanje;
       if (!canjeado) return res.status(409).json({ error: 'El código ya no está disponible' });
-      res.json({ success: true, tipo: data.tipo, valor: data.valor || 0, actividadIds: data.actividad_ids || [], dipVinculado, offlinePermitido: data.tipo === 'actividades' });
+      res.json({ success: true, tipo: data.tipo, valor: data.valor || 0, actividadIds: data.actividad_ids || data.actividadIds || [], dipVinculado, offlinePermitido: ['actividades', 'un_uso'].includes(data.tipo) });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
@@ -273,6 +279,38 @@ export function createApp() {
       res.json({ success: true, codigo: code, offlineInvalidated: true, actividadIds: data.actividad_ids || [] });
     } catch (e) {
       res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Compra real de una actividad: primero valida catálogo y cuenta Junior y
+  // después liquida el cargo contra Capitalia. No se concede acceso si el
+  // banco no confirma la operación.
+  app.post('/api/junior/actividades/:id/pagar', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: 'Supabase no configurado' });
+      const dip = String(req.body?.dip || '').trim().toUpperCase();
+      const modo = req.body?.modo === 'intento' ? 'intento' : 'licencia';
+      if (!dip) return res.status(400).json({ error: 'DIP requerido' });
+      const [{ data: actividad }, { data: junior }] = await Promise.all([
+        supabase.from('junior_actividades').select('*').eq('id', req.params.id).maybeSingle(),
+        supabase.from('junior_menores').select('*').eq('dip', dip).maybeSingle(),
+      ]);
+      if (!actividad || !esActividadPublica(normalizarActividad(actividad))) return res.status(404).json({ error: 'Actividad no disponible' });
+      if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
+      const contenido = actividad.contenido && typeof actividad.contenido === 'object' ? actividad.contenido : {};
+      const precio = Number(modo === 'intento' ? (actividad.precio_intento ?? contenido.precio_intento) : (actividad.precio_licencia ?? contenido.precio_licencia)) || 0;
+      if (precio <= 0) return res.json({ success: true, gratuito: true, modo });
+      const accountId = junior.cuenta_banco || `u-${dip.toLowerCase().replace(/-/g, '')}`;
+      const iva = Math.round((precio * 12 / 112) * 100) / 100;
+      const banco = await postBanco('transferir', {
+        from: accountId, to: 'CAPITALIA_BANK', cantidad: precio,
+        iva, concepto: `Placeta Junior · ${actividad.titulo || req.params.id} · ${modo}`,
+        juniorDip: dip, tutorDip: junior.tutor_dip || '',
+      });
+      if (!banco?.success) return res.status(502).json({ success: false, error: banco?.error || 'El banco no confirmó el cargo' });
+      res.json({ success: true, modo, precio, iva, transactionId: banco.transactionId, fromBalance: banco.fromBalance });
+    } catch (e) {
+      res.status(502).json({ success: false, error: e.message });
     }
   });
 

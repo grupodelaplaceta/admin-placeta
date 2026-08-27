@@ -76,7 +76,7 @@ export interface Provider {
 
   // Códigos Junior (recarga + actividades)
   listarCodigosJunior(): Promise<CodigoJunior[]>;
-  crearCodigoJunior(datos: { tipo: 'recarga' | 'actividades'; valor?: number; actividadIds?: string[]; codigo?: string }): Promise<CodigoJunior>;
+  crearCodigoJunior(datos: { tipo: 'recarga' | 'un_uso' | 'actividades'; valor?: number; actividadIds?: string[]; codigo?: string }): Promise<CodigoJunior>;
   accionCodigoJunior(id: string, accion: 'revocar' | 'desvincular'): Promise<void>;
 
   // Subapartados de actividades (diapositivas progresivas)

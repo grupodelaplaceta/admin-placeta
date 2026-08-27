@@ -615,7 +615,7 @@ export interface DiplomaJunior {
 export interface CodigoJunior {
   id: string;
   codigo: string;
-  tipo: 'recarga' | 'actividades';
+  tipo: 'recarga' | 'un_uso' | 'actividades';
   valor: number;
   actividadIds: string[];
   estado: 'disponible' | 'canjeado' | 'revocado';

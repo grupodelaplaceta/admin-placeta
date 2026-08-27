@@ -28,7 +28,7 @@ export default function Junior() {
   const [vistaPrevia, setVistaPrevia] = useState(false);
   const [fCat, setFCat] = useState({ nombre: '', descripcion: '' });
   const [fBundle, setFBundle] = useState({ nombre: '', descripcion: '', precioLicencia: '0', precioIntento: '0', actividadIds: [] as string[], fechaPublicacion: '' });
-  const [fCod, setFCod] = useState({ tipo: 'recarga' as 'recarga' | 'actividades', valor: '0', actividadIds: [] as string[] });
+  const [fCod, setFCod] = useState({ tipo: 'recarga' as 'recarga' | 'un_uso' | 'actividades', valor: '0', actividadIds: [] as string[] });
   const [fSub, setFSub] = useState({ titulo: '', tipo: 'diapositiva', recompensa: '0', contenidoJson: '{\n  "version": 2,\n  "bloques": []\n}' });
   const [tab, setTab] = useState('actividades');
   const { toast } = useToast();
@@ -154,7 +154,7 @@ export default function Junior() {
 
   const colsCod: Column<CodigoJunior>[] = [
     { key: 'codigo', header: 'Código', render: (c) => <span className="u-mono">{c.codigo}</span> },
-    { key: 'tipo', header: 'Tipo', render: (c) => <Badge tone={c.tipo === 'recarga' ? 'info' : 'brand'}>{c.tipo}</Badge> },
+    { key: 'tipo', header: 'Tipo', render: (c) => <Badge tone={c.tipo === 'recarga' ? 'info' : c.tipo === 'un_uso' ? 'warning' : 'brand'}>{c.tipo === 'un_uso' ? 'un uso' : c.tipo}</Badge> },
     { key: 'valor', header: 'Valor', render: (c) => c.tipo === 'recarga' ? `${c.valor} Pz` : `${c.actividadIds.length} act.` },
     { key: 'estado', header: 'Estado', render: (c) => <Badge tone={c.estado === 'disponible' ? 'success' : c.estado === 'canjeado' ? 'warning' : 'neutral'}>{c.estado}</Badge> },
     { key: 'dip', header: 'Cuenta vinculada', render: (c) => c.dipVinculado ? <span className="u-mono">{c.dipVinculado}</span> : '—' },
@@ -242,9 +242,10 @@ export default function Junior() {
 
       <Modal open={modal === 'codigo'} title="Crear código" onClose={() => setModal(null)} footer={<Button onClick={crearCodigo}>Crear código</Button>}>
         <Field label="Tipo">
-          <select className="rsp-select" value={fCod.tipo} onChange={(e) => setFCod({ ...fCod, tipo: e.target.value as 'recarga' | 'actividades' })}>
+          <select className="rsp-select" value={fCod.tipo} onChange={(e) => setFCod({ ...fCod, tipo: e.target.value as 'recarga' | 'un_uso' | 'actividades' })}>
             <option value="recarga">Recarga (solo app)</option>
-            <option value="actividades">Actividades</option>
+            <option value="un_uso">Placetas de un uso</option>
+            <option value="actividades">Multi-actividad (desvinculable)</option>
           </select>
         </Field>
         {fCod.tipo === 'recarga' ? (
