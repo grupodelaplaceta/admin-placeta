@@ -884,7 +884,7 @@ export function createApiRouter({ getBankState }) {
           precio: Number(a.precioLicencia || 0) + Number(a.precioIntento || 0),
           precioLicencia: Number(a.precioLicencia || 0), precioIntento: Number(a.precioIntento || 0),
           recompensa: Number(a.recompensa || 0),
-          descripcion: a.descripcion || '', categoria: a.categoria || 'General', portadaUrl: a.portadaUrl || a.contenido?.__rspPortadaUrl || '', fechaPublicacion: a.fechaPublicacion || a.contenido?.__rspFechaPublicacion || null, tipo: a.tipo || 'test', contenido: a.contenido || {},
+          descripcion: a.descripcion || '', categoria: a.categoria || 'General', portadaUrl: a.portadaUrl || a.portada_url || a.contenido?.__rspPortadaUrl || '', fechaPublicacion: a.fechaPublicacion || a.contenido?.__rspFechaPublicacion || null, tipo: a.tipo || 'test', contenido: a.contenido || {},
           estado: a.publica ? 'aprobada' : (a.estado === 'rechazada' ? 'rechazada' : 'en_revision'),
           colaborador: a.autorNombre || '—',
         };
@@ -1110,7 +1110,7 @@ export function createApiRouter({ getBankState }) {
     const fecha = d.fechaPublicacion || d.fecha_publicacion || null;
     const publica = d.estado === 'aprobada' && (!fecha || new Date(fecha) <= new Date());
     const contenido = { ...(d.contenido && typeof d.contenido === 'object' ? d.contenido : {}), ...(fecha ? { __rspFechaPublicacion: fecha } : {}), ...(d.portadaUrl ? { __rspPortadaUrl: d.portadaUrl } : {}) };
-    const a = { id: `ACT-${Date.now()}`, titulo: String(d.titulo).trim(), descripcion: String(d.descripcion || ''), categoria: String(d.categoria || 'General'), tipo: String(d.tipo || 'test'), contenido, edadRecomendada: `${Number(d.edadMin) || 6}-${Number(d.edadMax) || 17}`, dificultad: String(d.complejidad || d.dificultad || 'Media'), precioLicencia: Number(d.precioLicencia) || 0, precioIntento: Number(d.precioIntento) || 0, recompensa: Number(d.recompensa) || 0, estado: publica ? 'aprobada' : (d.estado || 'en_revision'), publica, autorNombre: d.colaborador || req.user?.dip || 'RSP', creadoEn: AHORA() };
+    const a = { id: `ACT-${Date.now()}`, titulo: String(d.titulo).trim(), descripcion: String(d.descripcion || ''), categoria: String(d.categoria || 'General'), tipo: String(d.tipo || 'test'), contenido, edadRecomendada: `${Number(d.edadMin) || 6}-${Number(d.edadMax) || 17}`, dificultad: String(d.complejidad || d.dificultad || 'Media'), precioLicencia: Number(d.precioLicencia) || 0, precioIntento: Number(d.precioIntento) || 0, recompensa: Number(d.recompensa) || 0, portadaUrl: d.portadaUrl || null, estado: publica ? 'aprobada' : (d.estado || 'en_revision'), publica, autorNombre: d.colaborador || req.user?.dip || 'RSP', creadoEn: AHORA() };
     const insertado = await store.juniorActividadesDb.insertar(a);
     if (insertado?.__dbError) return res.status(500).json({ error: insertado.__dbError });
     res.status(201).json(a);
@@ -1123,11 +1123,17 @@ export function createApiRouter({ getBankState }) {
     if (d.fechaPublicacion !== undefined) contenido.__rspFechaPublicacion = d.fechaPublicacion || null;
     const patch = {};
     ['titulo', 'descripcion', 'categoria', 'tipo', 'dificultad', 'recompensa', 'subvencionada', 'destacada', 'precioLicencia', 'precioIntento'].forEach((key) => { if (d[key] !== undefined) patch[key] = d[key]; });
-    if (d.portadaUrl !== undefined) contenido.__rspPortadaUrl = d.portadaUrl || null;
+    if (d.portadaUrl !== undefined) { contenido.__rspPortadaUrl = d.portadaUrl || null; patch.portadaUrl = d.portadaUrl || null; }
     if (d.edadMin !== undefined || d.edadMax !== undefined) patch.edadRecomendada = `${Number(d.edadMin ?? a.edadMin ?? 6)}-${Number(d.edadMax ?? a.edadMax ?? 17)}`;
     patch.contenido = contenido;
     if (d.fechaPublicacion !== undefined) patch.publica = a.estado === 'aprobada' && (!d.fechaPublicacion || new Date(d.fechaPublicacion) <= new Date());
-    const resultado = await store.juniorActividadesDb.actualizar(req.params.id, patch);
+    let resultado = await store.juniorActividadesDb.actualizar(req.params.id, patch);
+    // Compatibilidad con instalaciones cuyo esquema aún no tiene
+    // `portada_url`: el valor queda igualmente disponible en contenido.
+    if (resultado?.ok === false && d.portadaUrl !== undefined) {
+      const { portadaUrl: _portadaUrl, ...patchSinColumna } = patch;
+      resultado = await store.juniorActividadesDb.actualizar(req.params.id, patchSinColumna);
+    }
     if (resultado?.ok === false) return res.status(500).json({ error: resultado.error });
     res.json({ success: true });
   });
