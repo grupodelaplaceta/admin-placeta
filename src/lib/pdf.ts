@@ -19,7 +19,7 @@ const C = {
 };
 
 let FONT = 'helvetica';
-const cacheFuentes: { regular?: string; bold?: string } = {};
+const cacheFuentes: { regular?: string; bold?: string; fredoka?: string } = {};
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((res, rej) => {
@@ -32,12 +32,16 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 async function obtenerFuentes() {
   if (cacheFuentes.regular && cacheFuentes.bold) return cacheFuentes;
-  const [regular, bold] = await Promise.all([
+  const [regular, bold, fredoka] = await Promise.all([
     fetch('/fonts/PlusJakartaSans-Regular.ttf').then((r) => r.blob()).then(blobToBase64),
     fetch('/fonts/PlusJakartaSans-Bold.ttf').then((r) => r.blob()).then(blobToBase64),
+    // Variable font oficial de Google Fonts; si no está disponible se usa
+    // Jakarta como fallback y el diploma sigue siendo descargable.
+    fetch('https://raw.githubusercontent.com/google/fonts/main/ofl/fredoka/Fredoka%5Bwdth,wght%5D.ttf').then((r) => r.ok ? r.blob() : Promise.reject(new Error('Fredoka no disponible'))).then(blobToBase64).catch(() => undefined),
   ]);
   cacheFuentes.regular = regular;
   cacheFuentes.bold = bold;
+  cacheFuentes.fredoka = fredoka;
   return cacheFuentes;
 }
 
@@ -88,6 +92,10 @@ async function nuevoDoc(orientation: 'portrait' | 'landscape' = 'portrait'): Pro
     doc.addFont('PJS-Regular.ttf', 'PlusJakartaSans', 'normal');
     doc.addFileToVFS('PJS-Bold.ttf', f.bold!);
     doc.addFont('PJS-Bold.ttf', 'PlusJakartaSans', 'bold');
+    if (f.fredoka) {
+      doc.addFileToVFS('Fredoka.ttf', f.fredoka);
+      doc.addFont('Fredoka.ttf', 'Fredoka One', 'normal');
+    }
     FONT = 'PlusJakartaSans';
   } catch {
     FONT = 'helvetica';
@@ -588,18 +596,19 @@ export async function generarPdfDiplomaJunior(d: DiplomaJunior): Promise<void> {
   doc.setDrawColor(226, 232, 240); doc.setLineWidth(1.2); doc.roundedRect(8, 8, W - 16, H - 16, 5, 5, 'S');
   colores.forEach((c, i) => { doc.setFillColor(...c); doc.rect(8 + i * ((W - 16) / 4), 8, (W - 16) / 4 + 1, 8, 'F'); });
   doc.setFillColor(109, 40, 217); doc.rect(8, H - 18, W - 16, 10, 'F');
-  const logo = await rasterizar(LOGOS.junior);
+  const logo = await rasterizar('https://junior.laplaceta.org/img/PJ-COLOR-LOGO.png');
   if (logo) { const h = 18; doc.addImage(logo.url, 'PNG', 22, 25, Math.min((logo.w / logo.h) * h, 72), h); }
   else { doc.setFont(FONT, 'bold'); doc.setFontSize(16); doc.setTextColor(...C.primary); doc.text('PLACETA JUNIOR', 22, 38); }
-  doc.setFont(FONT, 'bold'); doc.setFontSize(28); doc.setTextColor(...C.primary); doc.text('DIPLOMA', W / 2, 48, { align: 'center' });
-  doc.setFont(FONT, 'normal'); doc.setFontSize(11); doc.setTextColor(...C.muted); doc.text('POR APRENDER JUGANDO', W / 2, 56, { align: 'center' });
+  const diplomaFont = cacheFuentes.fredoka ? 'Fredoka One' : FONT;
+  doc.setFont(diplomaFont, 'normal'); doc.setFontSize(28); doc.setTextColor(...C.primary); doc.text('DIPLOMA', W / 2, 48, { align: 'center' });
+  doc.setFont(diplomaFont, 'normal'); doc.setFontSize(11); doc.setTextColor(...C.muted); doc.text('POR APRENDER JUGANDO', W / 2, 56, { align: 'center' });
   // Medallones decorativos.
   colores.forEach((c, i) => { doc.setFillColor(...c); doc.circle(26 + i * 16, 70, 3, 'F'); });
   doc.setFont(FONT, 'normal'); doc.setFontSize(12); doc.setTextColor(...C.muted); doc.text('Se reconoce a', W / 2, 76, { align: 'center' });
-  doc.setFont(FONT, 'bold'); doc.setFontSize(25); doc.setTextColor(...C.dark); doc.text(doc.splitTextToSize(d.nombre || 'Alumno/a', 210), W / 2, 91, { align: 'center' });
+  doc.setFont(diplomaFont, 'normal'); doc.setFontSize(25); doc.setTextColor(...C.dark); doc.text(doc.splitTextToSize(d.nombre || 'Alumno/a', 210), W / 2, 91, { align: 'center' });
   doc.setDrawColor(226, 232, 240); doc.setLineWidth(.5); doc.line(62, 101, W - 62, 101);
   doc.setFont(FONT, 'normal'); doc.setFontSize(11); doc.setTextColor(...C.muted); doc.text('por completar satisfactoriamente la actividad', W / 2, 113, { align: 'center' });
-  doc.setFont(FONT, 'bold'); doc.setFontSize(17); doc.setTextColor(...C.primary); doc.text(doc.splitTextToSize(d.actividad || 'Actividad educativa', 210), W / 2, 126, { align: 'center' });
+  doc.setFont(diplomaFont, 'normal'); doc.setFontSize(17); doc.setTextColor(...C.primary); doc.text(doc.splitTextToSize(d.actividad || 'Actividad educativa', 210), W / 2, 126, { align: 'center' });
   doc.setFont(FONT, 'normal'); doc.setFontSize(10); doc.setTextColor(...C.muted); doc.text(`Fecha: ${d.fecha || '—'}   ·   DIP: ${d.dip || '—'}`, W / 2, 140, { align: 'center' });
   doc.setFillColor(240, 253, 244); doc.setDrawColor(187, 247, 208); doc.roundedRect(W / 2 - 37, 148, 74, 16, 4, 4, 'FD');
   doc.setFont(FONT, 'bold'); doc.setFontSize(11); doc.setTextColor(...C.success); doc.text('¡RETO SUPERADO!', W / 2, 158, { align: 'center' });
