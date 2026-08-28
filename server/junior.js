@@ -203,12 +203,32 @@ export function juniorRouter({ getBankState, postBanco }) {
   });
 
   router.get('/tutor-info/:dip', async (req, res) => {
+    const tutorDip = String(req.params.dip || '').trim().toUpperCase();
     const junior = await buscarJunior(req.params.dip);
-    if (junior) return res.json({ success: true, tutor: { dip: junior.tutor_dip || '', nombre: junior.tutor_nombre || '' } });
+    if (junior) return res.json({ success: true, tutor: { dip: junior.tutor_dip || '', nombre: junior.tutor_nombre || '', email: junior.tutor_email || junior.email || '', fecha_nacimiento: junior.fecha_nacimiento_tutor || '' } });
+
+    // El tutor puede no tener todavía ningún menor: en ese caso la fuente de
+    // verdad es PlacetaID, no `junior_menores`.
+    try {
+      const base = process.env.PLACETAID_AUTH_URL || 'https://id.laplaceta.org';
+      const respuesta = await fetch(`${base}/api/mobil/status/${encodeURIComponent(tutorDip)}`);
+      const body = await respuesta.json().catch(() => ({}));
+      const r = body.registro || body.usuario || body;
+      if (respuesta.ok && r && (r.dip || r.placeid || r.nombre || r.nombreCompleto)) {
+        return res.json({ success: true, tutor: {
+          dip: tutorDip,
+          nombre: r.nombre || r.nombreCompleto || '',
+          apellidos: r.apellidos || '',
+          email: r.email || r.correo || r.emailContacto || '',
+          fecha_nacimiento: r.fecha_nacimiento || r.fechaNacimiento || r.birthDate || '',
+        } });
+      }
+    } catch { /* se intenta la copia local como respaldo */ }
+
     if (!supabase) return res.status(404).json({ error: 'Tutor no encontrado' });
-    const { data, error } = await supabase.from('junior_menores').select('tutor_dip,tutor_nombre').eq('tutor_dip', String(req.params.dip).trim().toUpperCase()).limit(1).maybeSingle();
+    const { data, error } = await supabase.from('junior_menores').select('tutor_dip,tutor_nombre').eq('tutor_dip', tutorDip).limit(1).maybeSingle();
     if (error || !data) return res.status(404).json({ error: 'Tutor no encontrado' });
-    res.json({ success: true, tutor: { dip: data.tutor_dip, nombre: data.tutor_nombre || '' } });
+    res.json({ success: true, tutor: { dip: data.tutor_dip, nombre: data.tutor_nombre || '', email: '', fecha_nacimiento: '' } });
   });
 
   // Juniors vinculados al tutor. Esta ruta es pública de lectura porque la
@@ -220,7 +240,10 @@ export function juniorRouter({ getBankState, postBanco }) {
     if (!tutorDip) return res.status(400).json({ error: 'Tutor requerido' });
     const { data, error } = await supabase
       .from('junior_menores')
-      .select('id,dip,alias,tutor_dip,cuenta_banco,nombre,apellidos,creado_en,estado')
+      // La tabla compartida no siempre tiene alias/cuenta_banco. Seleccionar
+      // las columnas explícitas hacía que PostgREST devolviese 500 y PlacetaID
+      // terminase mostrando una lista vacía.
+      .select('*')
       .eq('tutor_dip', tutorDip)
       .not('estado', 'in', '(revocado,bloqueado)')
       .order('creado_en', { ascending: false });
@@ -313,7 +336,7 @@ export function juniorRouter({ getBankState, postBanco }) {
       const dip = `JUNIOR-${randomBytes(4).toString('hex').toUpperCase()}`;
       const ahora = new Date().toISOString();
       const tutorNombre = `${b.nombre_tutor || ''} ${b.apellidos_tutor || ''}`.trim();
-      const filaBase = { dip, nombre, apellidos, tutor_dip: tutorDip, estado: 'pendiente', creado_en: ahora };
+      const filaBase = { dip, nombre, apellidos, tutor_dip: tutorDip, modalidad: 'estandar', estado: 'pendiente', creado_en: ahora };
       const filaCompleta = { ...filaBase, fecha_nacimiento: b.fecha_nacimiento || null, tutor_nombre: tutorNombre, placetas_saldo: 0, nivel_academia: 1 };
       let { data, error } = await supabase.from('junior_menores').insert(filaCompleta).select('*').single();
       // Algunas instalaciones mantienen una tabla Junior mínima. PostgREST
