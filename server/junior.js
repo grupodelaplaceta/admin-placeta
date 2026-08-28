@@ -20,6 +20,7 @@ import { supabase } from './supabase.js';
 
 const RBU_DIARIO = 5;               // Pz diarios de la Renta Básica Universal
 const RBU_FUNDACION = 'AGLDP';      // Fundación del Banco de La Placeta
+const CAPITALIA = 'CAPITALIA_BANK'; // Cuenta real que financia recompensas/IVA
 const TUTOR_DEMO = '11111111D';
 
 const cuentaDeJunior = (junior) =>
@@ -610,6 +611,79 @@ export function juniorRouter({ getBankState, postBanco }) {
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
+  });
+
+  // ── PROGRESO Y PUNTOS ───────────────────────────────────────────────
+  // La app Android y la web comparten el mismo registro de resultados. Se
+  // guardan como movimientos de puntos, sin crear saldos ficticios.
+  router.get('/puntos/:dip', async (req, res) => {
+    try {
+      const junior = await buscarJunior(req.params.dip);
+      if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
+      const filas = await historial(junior.id, 500);
+      const verdes = filas.filter(t => t.tipo === 'punto_verde').reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const rojos = filas.filter(t => t.tipo === 'punto_rojo').reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const canjeado = filas.filter(t => t.tipo === 'canje_puntos').reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      res.json({ success: true, puntos: { puntos_verdes: verdes, puntos_rojos: rojos, canjeado }, tabla_canje: [{ puntos_verdes: 10, placetas: 1 }, { puntos_verdes: 50, placetas: 5 }], tabla_canje_rojos: [{ puntos_rojos: 10, placetas: 1 }, { puntos_rojos: 50, placetas: 5 }] });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  router.post('/actividades/:id/realizar', async (req, res) => {
+    try {
+      const junior = await buscarJunior(req.body?.dip);
+      if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
+      const respuestas = Array.isArray(req.body?.respuestas) ? req.body.respuestas : [];
+      const verdes = respuestas.filter(r => r?.correcta === true).length;
+      const rojos = respuestas.filter(r => r?.correcta === false).length;
+      for (const [tipo, cantidad] of [['punto_verde', verdes], ['punto_rojo', rojos]]) {
+        if (cantidad) await crearTransaccion({ junior_id: junior.id, tipo, concepto: `Actividad ${req.params.id}`, cantidad, saldo_resultante: junior.placetas_saldo || 0, ip: ipDe(req) });
+      }
+      res.json({ success: true, puntos_verdes: verdes, puntos_rojos: rojos });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  router.post('/puntos/canjear', async (req, res) => {
+    try {
+      const junior = await buscarJunior(req.body?.dip);
+      if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
+      const rojos = req.body?.tipo === 'rojos';
+      const puntos = Math.max(0, parseInt(rojos ? req.body?.puntos_rojos : req.body?.puntos_verdes, 10) || 0);
+      const placetas = Math.floor(puntos / 10);
+      if (!placetas) return res.status(400).json({ error: 'Necesitas al menos 10 puntos para canjearlos' });
+      const filas = await historial(junior.id, 500);
+      const etiquetaPuntos = rojos ? 'rojos' : 'verdes';
+      const usados = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').includes(etiquetaPuntos)).reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const disponibles = (filas.filter(t => t.tipo === (rojos ? 'punto_rojo' : 'punto_verde')).reduce((n, t) => n + Number(t.cantidad || 0), 0) - usados);
+      if (puntos > disponibles) return res.status(400).json({ error: 'No tienes suficientes puntos disponibles' });
+      const banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaDeJunior(junior), cantidad: placetas, concepto: `Canje de ${puntos} puntos — Placeta Junior`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
+      if (!banco?.success) return res.status(502).json({ error: banco?.error || 'El banco no confirmó el abono' });
+      await crearTransaccion({ junior_id: junior.id, tipo: 'canje_puntos', concepto: `Canje de ${puntos} puntos ${etiquetaPuntos}`, cantidad: puntos, saldo_resultante: junior.placetas_saldo || 0, ip: ipDe(req) });
+      res.json({ success: true, placetas_obtenidas: placetas });
+    } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+
+  router.get('/amigos', async (req, res) => {
+    try {
+      const dip = String(resolverDip(req)).toUpperCase();
+      if (!supabase || !dip) return res.json({ success: true, amigos: [] });
+      const { data, error } = await supabase.from('junior_amigos').select('*').or(`dip.eq.${dip},dip_amigo.eq.${dip}`).eq('estado', 'aceptada');
+      if (error) return res.json({ success: true, amigos: [] });
+      const otros = (data || []).map(a => String(a.dip).toUpperCase() === dip ? a.dip_amigo : a.dip).filter(Boolean);
+      const perfiles = await Promise.all(otros.map(d => buscarJunior(d)));
+      res.json({ success: true, amigos: perfiles.filter(Boolean).map(p => ({ dip: p.dip, nombre: `${p.nombre || ''} ${p.apellidos || ''}`.trim(), placetas: p.placetas_saldo || 0 })) });
+    } catch (e) { res.json({ success: true, amigos: [] }); }
+  });
+
+  router.post('/amigos/solicitar', async (req, res) => {
+    try {
+      const origen = await buscarJunior(req.body?.dip);
+      const destino = await buscarJunior(req.body?.dip_amigo);
+      if (!origen || !destino) return res.status(404).json({ success: false, error: 'Solo puedes añadir cuentas Junior existentes' });
+      if (!supabase) return res.status(503).json({ success: false, error: 'Servicio de amistades no disponible' });
+      const { error } = await supabase.from('junior_amigos').upsert({ dip: origen.dip, dip_amigo: destino.dip, estado: 'aceptada', creado_en: new Date().toISOString() }, { onConflict: 'dip,dip_amigo' });
+      if (error) return res.status(503).json({ success: false, error: 'Servicio de amistades no disponible' });
+      res.json({ success: true, mensaje: 'Amistad añadida.' });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
 
   return router;
