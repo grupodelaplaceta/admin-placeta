@@ -112,9 +112,11 @@ export function coleccion(tabla, { idCol = 'id', orderCol = 'created_at' } = {})
       if (i >= 0) memoria.splice(i, 1);
       if (supabase) {
         try {
-          await supabase.from(tabla).delete().eq(idCol, id);
-        } catch { /* sin persistencia */ }
+          const { error } = await supabase.from(tabla).delete().eq(idCol, id);
+          if (error) return { ok: false, error: error.message };
+        } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
       }
+      return { ok: true };
     },
 
     // Para compatibilidad con el código que mutaba arrays en memoria.

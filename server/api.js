@@ -1070,6 +1070,7 @@ export function createApiRouter({ getBankState }) {
       dipVinculado: null,
       creadoEn: AHORA(),
       canjeadoEn: null,
+      demo: d.demo === true,
     };
     await store.juniorCodigosDb.insertar(codigo);
     res.status(201).json(codigo);
@@ -1079,7 +1080,11 @@ export function createApiRouter({ getBankState }) {
     const c = await store.juniorCodigosDb.obtener(req.params.id);
     if (!c) return res.status(404).json({ error: 'Código no encontrado' });
     const accion = req.body?.accion;
-    if (accion === 'revocar') await store.juniorCodigosDb.actualizar(req.params.id, { estado: 'revocado' });
+    if (accion === 'eliminar') {
+      if (c.demo !== true) return res.status(400).json({ error: 'Solo se pueden eliminar códigos demo' });
+      const resultado = await store.juniorCodigosDb.borrar(req.params.id);
+      if (resultado?.ok === false) return res.status(500).json({ error: resultado.error });
+    } else if (accion === 'revocar') await store.juniorCodigosDb.actualizar(req.params.id, { estado: 'revocado' });
     else if (accion === 'desvincular') {
       if (c.tipo !== 'actividades') return res.status(400).json({ error: 'Los códigos de un uso no se pueden desvincular' });
       await store.juniorCodigosDb.actualizar(req.params.id, { estado: 'disponible', dipVinculado: null, canjeadoEn: null, desvinculadoEn: AHORA() });

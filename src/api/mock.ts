@@ -226,53 +226,9 @@ const FACTURAS_EMITIDAS: Record<string, FacturaEmitida[]> = {
   ],
 };
 
-// ── Banco real: se lee el estado en vivo del banco a través del BFF ──
-// (/api/bank/state). En desarrollo el proxy de Vite reenvía /api al BFF;
-// si no está disponible (offline/tests), se usa el seed de abajo.
-let cacheBancoLive: { cuentas: CuentaBancaria[]; tarjetas: TarjetaDigital[] } | null = null;
-async function estadoBancoLive() {
-  if (cacheBancoLive) return cacheBancoLive;
-  try {
-    const r = await fetch('/api/bank/state', { credentials: 'include' });
-    if (!r.ok) return null;
-    const state = await r.json();
-    const cuentas: CuentaBancaria[] = (state.accounts || []).map((a: any) => {
-      const nombre = String(a.displayName || a.name || '').replace(/\s*\(.*\)\s*$/, '').trim();
-      const esFund = /fundacion|fundación/i.test(String(a.displayName || '')) || /^FUND-/.test(String(a.id || ''));
-      const holders: { dip: string; nombre: string; pct: number }[] = (a.accountHolders || [])
-        .filter((h: any) => Number(h.ownershipPercent || h.pct || 0) > 0)
-        .map((h: any) => ({
-          dip: String(h.placetaId || h.dip || '').toUpperCase(),
-          nombre: String(h.displayName || h.name || h.placetaId || h.dip || '').replace(/\s*\(.*\)\s*$/, '').trim(),
-          pct: Number(h.ownershipPercent || h.pct || 0),
-        }));
-      return {
-        id: a.id,
-        nombre,
-        tipo: a.type || 'Current',
-        dip: (a.placetaId || '').toUpperCase(),
-        saldo: Number(a.balancePz || 0),
-        estado: a.closedAt ? 'cerrada' : 'activa',
-        esFundacion: esFund,
-        eip: String(a.eip || '').toUpperCase(),
-        participaciones: holders,
-      };
-    });
-    const tarjetas: TarjetaDigital[] = (state.digitalCards || state.cards || []).map((d: any) => {
-      const num = String(d.cardNumber || d.id || '').replace(/\D/g, '').padStart(6, '0').slice(-6);
-      return {
-        id: d.id, alias: d.alias || 'Tarjeta', accountId: d.accountId || '',
-        tier: d.tier || 'Standard', frozen: !!d.frozen, cardNumber: num,
-        promoPhysical: !!d.promoPhysical, pin: d.pin || '0000',
-        contactlessLimitPz: 500, weeklyLimitPz: 1000,
-      };
-    });
-    cacheBancoLive = { cuentas, tarjetas };
-    return cacheBancoLive;
-  } catch {
-    return null;
-  }
-}
+// El proveedor mock no consulta el estado bancario global: ese recurso queda
+// reservado al servidor. En local/tests usa únicamente el snapshot de abajo.
+async function estadoBancoLive(): Promise<{ cuentas: CuentaBancaria[]; tarjetas: TarjetaDigital[] } | null> { return null; }
 async function arrayCuentas(): Promise<CuentaBancaria[]> {
   const live = await estadoBancoLive();
   return live ? live.cuentas : CUENTAS;
@@ -1144,6 +1100,7 @@ export const mockProvider: Provider = {
       dipVinculado: null,
       creadoEn: new Date().toISOString(),
       canjeadoEn: null,
+      demo: datos.demo === true,
     };
     JUNIOR_CODIGOS.unshift(c);
     return c;
@@ -1151,7 +1108,10 @@ export const mockProvider: Provider = {
   async accionCodigoJunior(id, accion) {
     const c = JUNIOR_CODIGOS.find((x) => x.id === id);
     if (!c) throw new Error('Código no encontrado');
-    if (accion === 'revocar') c.estado = 'revocado';
+    if (accion === 'eliminar') {
+      if (c.demo !== true) throw new Error('Solo se pueden eliminar códigos demo');
+      const i = JUNIOR_CODIGOS.indexOf(c); if (i >= 0) JUNIOR_CODIGOS.splice(i, 1);
+    } else if (accion === 'revocar') c.estado = 'revocado';
     else { c.estado = 'disponible'; c.dipVinculado = null; c.canjeadoEn = null; }
   },
   async listarSubapartados(actividadId) {

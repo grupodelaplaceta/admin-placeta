@@ -626,6 +626,7 @@ export interface CodigoJunior {
   dipVinculado: string | null;
   creadoEn: string;
   canjeadoEn: string | null;
+  demo?: boolean;
 }
 
 export interface Subapartado {

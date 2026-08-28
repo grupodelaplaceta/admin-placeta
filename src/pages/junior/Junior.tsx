@@ -28,7 +28,7 @@ export default function Junior() {
   const [vistaPrevia, setVistaPrevia] = useState(false);
   const [fCat, setFCat] = useState({ nombre: '', descripcion: '' });
   const [fBundle, setFBundle] = useState({ nombre: '', descripcion: '', precioLicencia: '0', precioIntento: '0', actividadIds: [] as string[], fechaPublicacion: '' });
-  const [fCod, setFCod] = useState({ tipo: 'recarga' as 'recarga' | 'un_uso' | 'actividades', valor: '0', actividadIds: [] as string[] });
+  const [fCod, setFCod] = useState({ tipo: 'recarga' as 'recarga' | 'un_uso' | 'actividades', valor: '0', actividadIds: [] as string[], demo: false });
   const [fSub, setFSub] = useState({ titulo: '', tipo: 'diapositiva', recompensa: '0', contenidoJson: '{\n  "version": 2,\n  "bloques": []\n}' });
   const [tab, setTab] = useState('actividades');
   const { toast } = useToast();
@@ -75,18 +75,18 @@ export default function Junior() {
 
   async function crearCodigo() {
     try {
-      await provider.crearCodigoJunior({ tipo: fCod.tipo, valor: Number(fCod.valor), actividadIds: fCod.actividadIds });
+      await provider.crearCodigoJunior({ tipo: fCod.tipo, valor: Number(fCod.valor), actividadIds: fCod.actividadIds, demo: fCod.demo });
       toast('Código creado', 'success');
       setModal(null);
-      setFCod({ tipo: 'recarga', valor: '0', actividadIds: [] });
+      setFCod({ tipo: 'recarga', valor: '0', actividadIds: [], demo: false });
       cargarCodigos();
     } catch { toast('No se pudo crear el código', 'error'); }
   }
 
-  async function accionCodigo(id: string, accion: 'revocar' | 'desvincular') {
+  async function accionCodigo(id: string, accion: 'revocar' | 'desvincular' | 'eliminar') {
     try {
       await provider.accionCodigoJunior(id, accion);
-      toast(accion === 'revocar' ? 'Código revocado' : 'Código desvinculado', 'success');
+      toast(accion === 'revocar' ? 'Código revocado' : accion === 'desvincular' ? 'Código desvinculado' : 'Código demo eliminado', 'success');
       cargarCodigos();
     } catch { toast('No se pudo aplicar la acción', 'error'); }
   }
@@ -157,11 +157,13 @@ export default function Junior() {
     { key: 'tipo', header: 'Tipo', render: (c) => <Badge tone={c.tipo === 'recarga' ? 'info' : c.tipo === 'un_uso' ? 'warning' : 'brand'}>{c.tipo === 'un_uso' ? 'un uso' : c.tipo}</Badge> },
     { key: 'valor', header: 'Valor', render: (c) => c.tipo === 'recarga' ? `${c.valor} Pz` : `${c.actividadIds.length} act.` },
     { key: 'estado', header: 'Estado', render: (c) => <Badge tone={c.estado === 'disponible' ? 'success' : c.estado === 'canjeado' ? 'warning' : 'neutral'}>{c.estado}</Badge> },
+    { key: 'demo', header: 'Entorno', render: (c) => c.demo ? <Badge tone="info">demo</Badge> : 'producción' },
     { key: 'dip', header: 'Cuenta vinculada', render: (c) => c.dipVinculado ? <span className="u-mono">{c.dipVinculado}</span> : '—' },
     { key: 'acciones', header: '', render: (c) => (
       <div style={{ display: 'flex', gap: '0.25rem' }}>
         {c.estado === 'canjeado' && <Button size="sm" variant="outline" onClick={() => accionCodigo(c.id, 'desvincular')}>Desvincular</Button>}
         {c.estado !== 'revocado' && <Button size="sm" variant="outline" onClick={() => accionCodigo(c.id, 'revocar')}>Revocar</Button>}
+        {c.demo && <Button size="sm" variant="outline" onClick={() => accionCodigo(c.id, 'eliminar')}>Eliminar</Button>}
       </div>
     ) },
   ];
@@ -262,6 +264,7 @@ export default function Junior() {
             </div>
           </Field>
         )}
+        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.75rem' }}><input type="checkbox" checked={fCod.demo} onChange={e => setFCod({ ...fCod, demo: e.target.checked })} /> Código demo (se podrá eliminar después)</label>
       </Modal>
 
       <Modal open={modal === 'actividad'} title={editActividad ? 'Edición completa de actividad' : 'Crear actividad'} onClose={() => setModal(null)} footer={<Button onClick={guardarActividad}>Guardar borrador</Button>}>

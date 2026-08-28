@@ -6,7 +6,7 @@ Servidor ligero que hace que **rsp-web** sea autónomo y `admin-placeta` pueda d
 1. Sirve el SPA compilado (`dist/`) en producción (solo en el arranque standalone `server/index.js`).
 2. Expone los datos reales agregados:
    - `GET /api/transparencia` → CNIC vigentes + tarifas RSP (Boletín Oficial, `rsp.laplaceta.org`).
-   - `GET /api/bank/state` → estado real del banco (`api.banco.laplaceta.org`, cuentas, transacciones, tarjetas, contratos).
+- `GET /api/bank/state` → estado real del banco para compatibilidad interna; requiere sesión de administrador. El panel usa las rutas protegidas `/rsp/banco/api/*` y el servidor consulta el banco con la clave privada.
    - `GET /api/tributos/contribuyentes` · `GET /api/tributos/declaraciones` · `GET /api/tributos/reconciliacion` → motor fiscal **en vivo** (IRM por IA real, IGF con escala del BOP, exención IVA de empresas).
    - `GET /api/health`.
 3. **Autenticación** (`server/auth.js`): SSO con **PlacetaID móvil** (`POST /login/placetaid` → redirige a PlacetaID → `GET /login/callback`) y fallback de credenciales `POST /login` contra `ADMIN_USERS`. **Solo entran administradores** (`ADMIN_DIPS` / `ADMIN_USERS`). La sesión es un token aleatorio en cookie **httpOnly** y **todas las rutas de API exigen sesión** salvo `/api/health`, `/login*`, `/logout` y `/api/sesion`.

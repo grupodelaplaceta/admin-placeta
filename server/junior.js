@@ -253,6 +253,27 @@ export function juniorRouter({ getBankState, postBanco }) {
     res.json({ success: true, tutor: { dip: '', nombre: data.tutor_nombre || '', email: '', fecha_nacimiento: '' } });
   });
 
+  // Configuración pública que consume la app al iniciar. No contiene
+  // secretos: solo límites funcionales del producto que también tienen
+  // valores por defecto en el cliente para soportar una caída temporal.
+  router.get('/config', (_req, res) => {
+    res.json({
+      success: true,
+      rbu: { cantidad: 5 },
+      control_parental: {
+        niveles: {
+          'PJ-N1': { diario: 0, semanal: 0, aprobacion_tutor: 0 },
+          'PJ-N2': { diario: 10, semanal: 50, aprobacion_tutor: 5 },
+          'PJ-N3': { diario: 25, semanal: 100, aprobacion_tutor: 10 },
+          'PJ-N4': { diario: 50, semanal: 250, aprobacion_tutor: 50 },
+          'PJ-N5': { diario: 100, semanal: 500, aprobacion_tutor: 100 },
+        },
+      },
+      academia: { examen_umbral_preguntas: 10, aprobado_min: 70 },
+      offline: { max_actividades: 10 },
+    });
+  });
+
   // Juniors vinculados al tutor. Esta ruta es pública de lectura porque la
   // app PlacetaID ya ha seleccionado la identidad del tutor; nunca devuelve
   // datos sensibles ni perfiles de otros tutores.
@@ -352,6 +373,7 @@ export function juniorRouter({ getBankState, postBanco }) {
       const nombre = String(b.nombre || '').trim();
       const apellidos = String(b.apellidos || '').trim();
       const dniTutor = String(b.dni_tutor || '').trim().toUpperCase();
+      const tutorDip = String(b.tutor_dip || '').trim().toUpperCase();
       const edadTutor = edadEnFecha(b.fecha_nacimiento_tutor);
       if (!nombre || !apellidos || !dniTutor) return res.status(400).json({ success: false, message: 'Nombre, apellidos y DNI del tutor son obligatorios' });
       if (edadTutor === null || edadTutor < 16) return res.status(400).json({ success: false, message: 'El tutor debe tener al menos 16 años' });
@@ -364,7 +386,16 @@ export function juniorRouter({ getBankState, postBanco }) {
       const ahora = new Date().toISOString();
       const tutorNombre = `${b.nombre_tutor || ''} ${b.apellidos_tutor || ''}`.trim();
       const filaBase = { dip, nombre, apellidos, tutor_dni_hash: tutorHash, modalidad: 'estandar', estado: 'pendiente', creado_en: ahora };
-      const filaCompleta = { ...filaBase, fecha_nacimiento: b.fecha_nacimiento || null, tutor_nombre: tutorNombre, placetas_saldo: 0, nivel_academia: 1 };
+      const filaCompleta = {
+        ...filaBase,
+        fecha_nacimiento: b.fecha_nacimiento || null,
+        tutor_nombre: tutorNombre,
+        tutor_dip: tutorDip || null,
+        tutor_email: String(b.email || '').trim() || null,
+        fecha_nacimiento_tutor: b.fecha_nacimiento_tutor || null,
+        placetas_saldo: 0,
+        nivel_academia: 1,
+      };
       let { data, error } = await supabase.from('junior_menores').insert(filaCompleta).select('*').single();
       // Algunas instalaciones mantienen una tabla Junior mínima. PostgREST
       // rechaza toda la fila si una columna opcional no está en su cache.
@@ -372,7 +403,7 @@ export function juniorRouter({ getBankState, postBanco }) {
         ({ data, error } = await supabase.from('junior_menores').insert(filaBase).select('*').single());
       }
       if (error) return res.status(500).json({ success: false, message: `No se pudo guardar el registro: ${error.message}` });
-      res.status(201).json({ success: true, dip: data.dip, junior_id: data.id, tutor_dip: '', tutor_nombre: data.tutor_nombre || tutorNombre, necesita_firma_tutor: true, placetaid_codigo: null, message: 'Registro creado. El tutor debe autorizarlo desde PlacetaID.' });
+      res.status(201).json({ success: true, dip: data.dip, junior_id: data.id, tutor_dip: data.tutor_dip || tutorDip || '', tutor_nombre: data.tutor_nombre || tutorNombre, necesita_firma_tutor: true, placetaid_codigo: null, message: tutorDip ? 'Registro creado. El tutor debe firmar los documentos para activarlo.' : 'Registro creado. El tutor debe completar su alta en PlacetaID y autorizarlo.' });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
   });
 

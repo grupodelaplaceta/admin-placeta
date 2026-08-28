@@ -107,7 +107,7 @@ export function createApp() {
 
   // Público (lectura): estado real del banco — lo usa el SPA para listar
   // TODAS las cuentas y tarjetas (las mutaciones siguen protegidas).
-  app.get('/api/bank/state', async (_req, res) => {
+  app.get('/api/bank/state', requiereSesion, async (_req, res) => {
     try {
       const data = await obtenerEstadoBanco();
       res.json(data);
