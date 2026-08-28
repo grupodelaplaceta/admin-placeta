@@ -69,6 +69,7 @@ export const NAV_SECTIONS: NavSection[] = [
     links: [
       { to: '/ciudadanos', label: 'Ciudadanos', icon: 'users', permiso: 'ver_ciudadanos' },
       { to: '/entidades', label: 'Entidades', icon: 'building', permiso: 'ver_entidades' },
+      { to: '/placetaid', label: 'Administrar PlacetaID', icon: 'shield', permiso: 'ver_ciudadanos' },
     ],
   },
   {

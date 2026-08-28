@@ -8,7 +8,7 @@
    lectura). Las reglas de cierre/reparto replican el motor del SPA.
    ═══════════════════════════════════════════════════════════════════════ */
 import { Router } from 'express';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { calcularContribuyentes } from './tributos.js';
 import { coleccion } from './db.js';
 import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacionPlacetaID } from './firmas.js';
@@ -299,16 +299,47 @@ export function createApiRouter({ getBankState }) {
     }
     return out;
   }
-  // Ciudadanos REALES derivados de las cuentas del banco (placetaId = DIP).
+  // PlacetaID es la fuente canónica del censo. El banco solo aporta cuentas
+  // personales que todavía no estén reflejadas en el registro de identidad.
+  async function identidadesPlacetaID() {
+    const base = process.env.PLACETAID_API_URL || process.env.PLACETAID_URL || 'https://id.laplaceta.org/api';
+    const key = process.env.PLACETAID_ADMIN_KEY || process.env.PLACETAID_CRM_CLIENT_KEY || '';
+    try {
+      const r = await fetch(`${base}/admin/registros`, { headers: key ? { 'X-API-Key': key } : {} });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    } catch { return []; }
+  }
+
+  // Ciudadanos REALES: PlacetaID manda (incluidos juniors) y el banco
+  // completa únicamente personas con cuentas personales sin duplicarlas.
   async function ciudadanosDelBanco() {
     const cuentas = await listarCuentas();
     const DIP = /^[XYZ0-9][0-9]{7,8}[A-Z]$/;
     const map = new Map();
+    for (const r of await identidadesPlacetaID()) {
+      const dip = String(r.dip || r.placeid || r.placetaId || '').trim().toUpperCase();
+      if (!dip) continue;
+      const nombre = [r.nombre, r.apellidos].filter(Boolean).join(' ').trim() || r.empresaNombre || dip;
+      map.set(dip, {
+        dip,
+        nombre,
+        nivel: r.bloqueado || r.activo === false ? 'N1' : 'N3',
+        cuentas: 0,
+        expedientesActivos: 0,
+        estado: r.bloqueado || r.activo === false ? 'inactivo' : 'activo',
+        junior: Number(r.edad) < 18 || r.rol === 'junior',
+      });
+    }
     for (const c of cuentas) {
-      if (!DIP.test(c.dip)) continue;
-      const e = map.get(c.dip) || { dip: c.dip, nombre: c.nombre, nivel: 'N1', cuentas: 0, expedientesActivos: 0, estado: 'activo' };
+      const dip = String(c.dip || '').trim().toUpperCase();
+      if (!DIP.test(dip) || c.esFundacion || c.tipo === 'Business' || c.tipo === 'Investment') continue;
+      const e = map.get(dip) || { dip, nombre: c.nombre, nivel: 'N1', cuentas: 0, expedientesActivos: 0, estado: 'activo', junior: c.tipo === 'Child' };
       e.cuentas += 1;
-      map.set(c.dip, e);
+      if (!e.nombre || e.nombre === e.dip) e.nombre = c.nombre;
+      if (c.tipo === 'Child') e.junior = true;
+      map.set(dip, e);
     }
     return Array.from(map.values());
   }
@@ -632,6 +663,19 @@ export function createApiRouter({ getBankState }) {
       if (error) return res.json([]);
       res.json((data || []).map(d => ({ id: d.id, nombre: d.documento_id, tipo: 'Placeta Junior', estado: 'firmado', fecha: d.firmado_en, version: d.version, tutor: d.tutor_nombre || '' })));
     } catch { res.json([]); }
+  });
+  // Administración de PlacetaID desde RSP: el backend nunca expone claves ni
+  // hashes, solo el registro oficial necesario para su gestión.
+  router.get('/rsp/api/placetaid/registros', async (_req, res) => {
+    try {
+      const registros = await identidadesPlacetaID();
+      res.json(registros.map((r) => ({
+        dip: r.dip || r.placeid || r.placetaId || '',
+        nombre: [r.nombre, r.apellidos].filter(Boolean).join(' ').trim() || r.empresaNombre || '',
+        edad: r.edad ?? null, rol: r.rol || 'miembro', activo: r.activo !== false,
+        bloqueado: !!r.bloqueado, creadoEn: r.creadoEn || r.createdAt || null,
+      })));
+    } catch (e) { res.status(502).json({ error: e.message }); }
   });
   router.get('/rsp/api/ciudadanos/:dip/firmas', async (req, res) => {
     try {
@@ -962,9 +1006,10 @@ export function createApiRouter({ getBankState }) {
           edadMin: Number.isFinite(rango[0]) ? rango[0] : 6,
           edadMax: Number.isFinite(rango[1]) ? rango[1] : 17,
           complejidad: a.dificultad || 'Media',
-          precio: Number(a.precioLicencia || 0) + Number(a.precioIntento || 0),
-          precioLicencia: Number(a.precioLicencia || 0), precioIntento: Number(a.precioIntento || 0),
-          recompensa: Number(a.recompensa || 0),
+          precio: (a.subvencionada === true || a.contenido?.subvencionada === true) ? 0 : Number(a.precioLicencia || 0) + Number(a.precioIntento || 0),
+          precioLicencia: (a.subvencionada === true || a.contenido?.subvencionada === true) ? 0 : Number(a.precioLicencia || 0), precioIntento: (a.subvencionada === true || a.contenido?.subvencionada === true) ? 0 : Number(a.precioIntento || 0),
+          recompensa: Number(a.recompensa || a.contenido?.recompensa || 0),
+          subvencionada: a.subvencionada === true || a.contenido?.subvencionada === true,
           descripcion: a.descripcion || '', categoria: a.categoria || 'General', portadaUrl: a.portadaUrl || a.portada_url || a.contenido?.__rspPortadaUrl || '', fechaPublicacion: a.fechaPublicacion || a.contenido?.__rspFechaPublicacion || null, tipo: a.tipo || 'test', contenido: a.contenido || {},
           estado: a.publica ? 'aprobada' : (a.estado === 'rechazada' ? 'rechazada' : 'en_revision'),
           colaborador: a.autorNombre || '—',
@@ -1200,8 +1245,9 @@ export function createApiRouter({ getBankState }) {
     if (!String(d.titulo || '').trim()) return res.status(400).json({ error: 'Título requerido' });
     const fecha = d.fechaPublicacion || d.fecha_publicacion || null;
     const publica = d.estado === 'aprobada' && (!fecha || new Date(fecha) <= new Date());
-    const contenido = { ...(d.contenido && typeof d.contenido === 'object' ? d.contenido : {}), ...(fecha ? { __rspFechaPublicacion: fecha } : {}), ...(d.portadaUrl ? { __rspPortadaUrl: d.portadaUrl } : {}) };
-    const a = { id: `ACT-${Date.now()}`, titulo: String(d.titulo).trim(), descripcion: String(d.descripcion || ''), categoria: String(d.categoria || 'General'), tipo: String(d.tipo || 'test'), contenido, edadRecomendada: `${Number(d.edadMin) || 6}-${Number(d.edadMax) || 17}`, dificultad: String(d.complejidad || d.dificultad || 'Media'), precioLicencia: Number(d.precioLicencia) || 0, precioIntento: Number(d.precioIntento) || 0, recompensa: Number(d.recompensa) || 0, portadaUrl: d.portadaUrl || null, estado: publica ? 'aprobada' : (d.estado || 'en_revision'), publica, autorNombre: d.colaborador || req.user?.dip || 'RSP', creadoEn: AHORA() };
+    const contenido = { ...(d.contenido && typeof d.contenido === 'object' ? d.contenido : {}), ...(fecha ? { __rspFechaPublicacion: fecha } : {}), ...(d.portadaUrl ? { __rspPortadaUrl: d.portadaUrl } : {}), subvencionada: d.subvencionada === true };
+    const subvencionada = d.subvencionada === true;
+    const a = { id: randomUUID(), titulo: String(d.titulo).trim(), descripcion: String(d.descripcion || ''), categoria: String(d.categoria || 'General'), tipo: String(d.tipo || 'test'), contenido, edadRecomendada: `${Number(d.edadMin) || 6}-${Number(d.edadMax) || 17}`, dificultad: String(d.complejidad || d.dificultad || 'Media'), precioLicencia: subvencionada ? 0 : Number(d.precioLicencia) || 0, precioIntento: subvencionada ? 0 : Number(d.precioIntento) || 0, recompensa: Number(d.recompensa) || 0, portadaUrl: d.portadaUrl || null, estado: publica ? 'aprobada' : (d.estado || 'en_revision'), publica, autorNombre: d.colaborador || req.user?.dip || 'RSP', creadoEn: AHORA() };
     const insertado = await store.juniorActividadesDb.insertar(a);
     if (insertado?.__dbError) return res.status(500).json({ error: insertado.__dbError });
     res.status(201).json(a);
@@ -1213,7 +1259,8 @@ export function createApiRouter({ getBankState }) {
     const contenido = d.contenido && typeof d.contenido === 'object' ? d.contenido : a.contenido || {};
     if (d.fechaPublicacion !== undefined) contenido.__rspFechaPublicacion = d.fechaPublicacion || null;
     const patch = {};
-    ['titulo', 'descripcion', 'categoria', 'tipo', 'dificultad', 'recompensa', 'subvencionada', 'destacada', 'precioLicencia', 'precioIntento'].forEach((key) => { if (d[key] !== undefined) patch[key] = d[key]; });
+    ['titulo', 'descripcion', 'categoria', 'tipo', 'dificultad', 'recompensa', 'destacada', 'precioLicencia', 'precioIntento'].forEach((key) => { if (d[key] !== undefined) patch[key] = d[key]; });
+    if (d.subvencionada !== undefined) contenido.subvencionada = d.subvencionada === true;
     if (d.portadaUrl !== undefined) { contenido.__rspPortadaUrl = d.portadaUrl || null; patch.portadaUrl = d.portadaUrl || null; }
     if (d.edadMin !== undefined || d.edadMax !== undefined) patch.edadRecomendada = `${Number(d.edadMin ?? a.edadMin ?? 6)}-${Number(d.edadMax ?? a.edadMax ?? 17)}`;
     patch.contenido = contenido;

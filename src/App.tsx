@@ -13,6 +13,7 @@ import Expedientes from './pages/expedientes/Expedientes';
 import ExpedienteDetail from './pages/expedientes/ExpedienteDetail';
 import Ciudadanos from './pages/ciudadanos/Ciudadanos';
 import CiudadanoDetail from './pages/ciudadanos/CiudadanoDetail';
+import PlacetaID from './pages/placetaid/PlacetaID';
 import Tramites from './pages/tramites/Tramites';
 import TramiteDetail from './pages/tramites/TramiteDetail';
 import Entidades from './pages/entidades/Entidades';
@@ -73,6 +74,7 @@ export default function App() {
               <Route path="/expedientes/:id" element={permiso('ver_expedientes', <ExpedienteDetail />)} />
               <Route path="/ciudadanos" element={permiso('ver_ciudadanos', <Ciudadanos />)} />
               <Route path="/ciudadanos/:dip" element={permiso('ver_ciudadanos', <CiudadanoDetail />)} />
+              <Route path="/placetaid" element={permiso('ver_ciudadanos', <PlacetaID />)} />
               <Route path="/entidades" element={permiso('ver_entidades', <Entidades />)} />
               <Route path="/operaciones" element={permiso('ver_operaciones', <Operaciones />)} />
               <Route path="/auditoria" element={permiso('ver_auditoria', <Auditoria />)} />

@@ -17,7 +17,7 @@ export default function Ciudadanos() {
   }, [q]);
 
   const columns: Column<CiudadanoResumen>[] = [
-    { key: 'nombre', header: 'Ciudadano', render: (c) => <strong>{c.nombre}</strong> },
+    { key: 'nombre', header: 'Ciudadano', render: (c) => <span className="u-row"><strong>{c.nombre}</strong>{c.junior && <Badge tone="success">Junior</Badge>}</span> },
     { key: 'dip', header: 'DIP', render: (c) => <span className="u-mono">{c.dip}</span> },
     { key: 'nivel', header: 'Verificación', render: (c) => <Badge tone={c.nivel === 'N3' ? 'success' : 'info'}>{c.nivel}</Badge> },
     { key: 'cuentas', header: 'Cuentas', render: (c) => c.cuentas },

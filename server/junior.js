@@ -15,7 +15,7 @@
      GET  /academy/rbu?dip=X
    ═══════════════════════════════════════════════════════════════════════ */
 import { Router } from 'express';
-import { randomBytes, createHmac } from 'crypto';
+import { randomBytes, randomUUID, createHmac } from 'crypto';
 import { supabase } from './supabase.js';
 
 const RBU_DIARIO = 5;               // Pz diarios de la Renta Básica Universal
@@ -350,6 +350,9 @@ export function juniorRouter({ getBankState, postBanco }) {
         num_fases: Number(b.num_fases) || (Array.isArray(niveles) ? niveles.length : bloques.length),
       };
       const fila = {
+        // La tabla no tiene valor por defecto en todas las instalaciones.
+        // Generarlo aquí evita el error de NOT NULL al publicar desde DevAI.
+        id: randomUUID(),
         // Estas son las columnas que usa el catálogo público y que existen en
         // el esquema actual. El resto vive dentro de `contenido`.
         titulo, descripcion,

@@ -136,6 +136,7 @@ export interface CiudadanoResumen {
   cuentas: number;
   expedientesActivos: number;
   estado: 'activo' | 'suspendido';
+  junior?: boolean;
 }
 
 export interface BloqueContexto {
