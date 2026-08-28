@@ -165,6 +165,36 @@ export function juniorRouter({ getBankState, postBanco }) {
     } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
 
+  // Cierra el segundo paso del login: PlacetaID autoriza la solicitud, pero
+  // la cuenta Junior vive en Supabase y necesita reflejar ese consentimiento
+  // antes de poder devolver una sesión activa.
+  router.post('/activar', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ success: false, error: 'Supabase no configurado' });
+      const dip = String(req.body?.dip || '').trim().toUpperCase();
+      const requestId = String(req.body?.requestId || req.body?.request_id || '').trim();
+      if (!dip || !requestId) return res.status(400).json({ success: false, error: 'DIP y requestId son obligatorios' });
+      const junior = await buscarJunior(dip);
+      if (!junior) return res.status(404).json({ success: false, error: 'Perfil no encontrado' });
+      const base = process.env.PLACETAID_AUTH_URL || 'https://id.laplaceta.org';
+      const comprobacion = await fetch(`${base}/api/mobil/poll/${encodeURIComponent(requestId)}`);
+      const estado = await comprobacion.json().catch(() => ({}));
+      const autorizado = comprobacion.ok && (
+        estado.autorizado === true || estado.estado === 'authorized' ||
+        (estado.ok === true && estado.estado === 'authorized')
+      );
+      if (!autorizado) return res.status(403).json({ success: false, error: 'La autorización del tutor aún no consta como aprobada' });
+      const { data, error } = await supabase
+        .from('junior_menores')
+        .update({ estado: 'activo' })
+        .eq('id', junior.id)
+        .select('*')
+        .single();
+      if (error) return res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true, junior: datosJunior(data) });
+    } catch (e) { res.status(502).json({ success: false, error: e.message }); }
+  });
+
   router.get('/perfil', async (req, res) => {
     const junior = await buscarJunior(resolverDip(req));
     if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
@@ -281,10 +311,18 @@ export function juniorRouter({ getBankState, postBanco }) {
       const { data: existente } = await supabase.from('junior_menores').select('id,dip').eq('nombre', nombre).eq('apellidos', apellidos).eq('tutor_dip', tutorDip).limit(1).maybeSingle();
       if (existente) return res.status(409).json({ success: false, message: 'Ya existe un registro Junior vinculado a ese tutor', dip: existente.dip });
       const dip = `JUNIOR-${randomBytes(4).toString('hex').toUpperCase()}`;
-      const fila = { dip, nombre, apellidos, fecha_nacimiento: b.fecha_nacimiento || null, tutor_dip: tutorDip, tutor_nombre: `${b.nombre_tutor || ''} ${b.apellidos_tutor || ''}`.trim(), estado: 'pendiente', placetas_saldo: 0, nivel_academia: 1, creado_en: new Date().toISOString() };
-      const { data, error } = await supabase.from('junior_menores').insert(fila).select('*').single();
+      const ahora = new Date().toISOString();
+      const tutorNombre = `${b.nombre_tutor || ''} ${b.apellidos_tutor || ''}`.trim();
+      const filaBase = { dip, nombre, apellidos, tutor_dip: tutorDip, estado: 'pendiente', creado_en: ahora };
+      const filaCompleta = { ...filaBase, fecha_nacimiento: b.fecha_nacimiento || null, tutor_nombre: tutorNombre, placetas_saldo: 0, nivel_academia: 1 };
+      let { data, error } = await supabase.from('junior_menores').insert(filaCompleta).select('*').single();
+      // Algunas instalaciones mantienen una tabla Junior mínima. PostgREST
+      // rechaza toda la fila si una columna opcional no está en su cache.
+      if (error && /column .* does not exist|schema cache/i.test(error.message || '')) {
+        ({ data, error } = await supabase.from('junior_menores').insert(filaBase).select('*').single());
+      }
       if (error) return res.status(500).json({ success: false, message: `No se pudo guardar el registro: ${error.message}` });
-      res.status(201).json({ success: true, dip: data.dip, junior_id: data.id, tutor_dip: data.tutor_dip, tutor_nombre: data.tutor_nombre, necesita_firma_tutor: true, placetaid_codigo: null, message: 'Registro creado. El tutor debe autorizarlo desde PlacetaID.' });
+      res.status(201).json({ success: true, dip: data.dip, junior_id: data.id, tutor_dip: data.tutor_dip, tutor_nombre: data.tutor_nombre || tutorNombre, necesita_firma_tutor: true, placetaid_codigo: null, message: 'Registro creado. El tutor debe autorizarlo desde PlacetaID.' });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
   });
 
