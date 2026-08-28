@@ -15,6 +15,7 @@ import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacion
 import { CATALOGO_BASE } from './tramites-catalogo.js';
 import { CATALOGO_EDU_BASE } from './edu-cursos.js';
 import PDFDocument from 'pdfkit';
+import { supabase } from './supabase.js';
 
 const AHORA = () => new Date().toISOString();
 const BOP_URL = (process.env.BOP_URL || 'https://bop.laplaceta.org').replace(/\/+$/, '');
@@ -623,8 +624,24 @@ export function createApiRouter({ getBankState }) {
       res.status(502).json({ error: e.message });
     }
   });
-  router.get('/rsp/api/ciudadanos/:dip/documentos', (_req, res) => res.json([]));
-  router.get('/rsp/api/ciudadanos/:dip/firmas', (_req, res) => res.json([]));
+  router.get('/rsp/api/ciudadanos/:dip/documentos', async (req, res) => {
+    try {
+      if (!supabase) return res.json([]);
+      const dip = String(req.params.dip || '').trim().toUpperCase();
+      const { data, error } = await supabase.from('junior_documentos_firmados').select('id,documento_id,version,firmado_en,tutor_nombre').eq('dip_menor', dip).order('firmado_en', { ascending: false });
+      if (error) return res.json([]);
+      res.json((data || []).map(d => ({ id: d.id, nombre: d.documento_id, tipo: 'Placeta Junior', estado: 'firmado', fecha: d.firmado_en, version: d.version, tutor: d.tutor_nombre || '' })));
+    } catch { res.json([]); }
+  });
+  router.get('/rsp/api/ciudadanos/:dip/firmas', async (req, res) => {
+    try {
+      if (!supabase) return res.json([]);
+      const dip = String(req.params.dip || '').trim().toUpperCase();
+      const { data, error } = await supabase.from('junior_documentos_firmados').select('id,documento_id,version,firmado_en,tutor_nombre,texto').eq('dip_menor', dip).order('firmado_en', { ascending: false });
+      if (error) return res.json([]);
+      res.json((data || []).map(d => ({ id: d.id, documento: d.documento_id, firmante: d.tutor_nombre || 'Tutor legal', estado: 'completada', fecha: d.firmado_en, version: d.version, texto: d.texto })));
+    } catch { res.json([]); }
+  });
   router.get('/rsp/api/ciudadanos/:dip/obligaciones', (_req, res) => res.json([]));
   router.get('/rsp/api/cuentas/buscar', async (req, res) => {
     try {

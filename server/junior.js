@@ -15,13 +15,34 @@
      GET  /academy/rbu?dip=X
    ═══════════════════════════════════════════════════════════════════════ */
 import { Router } from 'express';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHmac } from 'crypto';
 import { supabase } from './supabase.js';
 
 const RBU_DIARIO = 5;               // Pz diarios de la Renta Básica Universal
 const RBU_FUNDACION = 'AGLDP';      // Fundación del Banco de La Placeta
 const CAPITALIA = 'CAPITALIA_BANK'; // Cuenta real que financia recompensas/IVA
 const TUTOR_DEMO = '11111111D';
+
+// Huella irreversible del DNI: permite comparar sin conservar el documento.
+const huellaDni = (dni) => createHmac('sha256', process.env.DNI_HASH_SECRET || process.env.SESSION_SECRET || 'placeta-junior-dni-2026')
+  .update(String(dni || '').trim().toUpperCase().replace(/\s+/g, ''))
+  .digest('hex');
+
+function edadEnFecha(fecha) {
+  const valor = String(fecha || '').trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
+  const es = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor);
+  if (!iso && !es) return null;
+  const year = Number(iso ? iso[1] : es[3]);
+  const month = Number(iso ? iso[2] : es[2]) - 1;
+  const day = Number(iso ? iso[3] : es[1]);
+  const nacimiento = new Date(Date.UTC(year, month, day));
+  if (Number.isNaN(nacimiento.getTime())) return null;
+  const hoy = new Date();
+  let edad = hoy.getUTCFullYear() - year;
+  if (hoy.getUTCMonth() < month || (hoy.getUTCMonth() === month && hoy.getUTCDate() < day)) edad--;
+  return edad;
+}
 
 const cuentaDeJunior = (junior) =>
   junior?.cuenta_banco || `u-${String(junior?.dip || '').toLowerCase().replace(/-/g, '')}`;
@@ -227,9 +248,9 @@ export function juniorRouter({ getBankState, postBanco }) {
     } catch { /* se intenta la copia local como respaldo */ }
 
     if (!supabase) return res.status(404).json({ error: 'Tutor no encontrado' });
-    const { data, error } = await supabase.from('junior_menores').select('tutor_dip,tutor_nombre').eq('tutor_dip', tutorDip).limit(1).maybeSingle();
+      const { data, error } = await supabase.from('junior_menores').select('tutor_dni_hash,tutor_nombre').eq('tutor_dni_hash', huellaDni(tutorDip)).limit(1).maybeSingle();
     if (error || !data) return res.status(404).json({ error: 'Tutor no encontrado' });
-    res.json({ success: true, tutor: { dip: data.tutor_dip, nombre: data.tutor_nombre || '', email: '', fecha_nacimiento: '' } });
+    res.json({ success: true, tutor: { dip: '', nombre: data.tutor_nombre || '', email: '', fecha_nacimiento: '' } });
   });
 
   // Juniors vinculados al tutor. Esta ruta es pública de lectura porque la
@@ -245,7 +266,7 @@ export function juniorRouter({ getBankState, postBanco }) {
       // las columnas explícitas hacía que PostgREST devolviese 500 y PlacetaID
       // terminase mostrando una lista vacía.
       .select('*')
-      .eq('tutor_dip', tutorDip)
+      .eq('tutor_dni_hash', huellaDni(tutorDip))
       .not('estado', 'in', '(revocado,bloqueado)')
       .order('creado_en', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
@@ -330,14 +351,19 @@ export function juniorRouter({ getBankState, postBanco }) {
       const b = req.body || {};
       const nombre = String(b.nombre || '').trim();
       const apellidos = String(b.apellidos || '').trim();
-      const tutorDip = String(b.dni_tutor || '').trim().toUpperCase();
-      if (!nombre || !apellidos || !tutorDip) return res.status(400).json({ success: false, message: 'Nombre, apellidos y DIP/DNI del tutor son obligatorios' });
-      const { data: existente } = await supabase.from('junior_menores').select('id,dip').eq('nombre', nombre).eq('apellidos', apellidos).eq('tutor_dip', tutorDip).limit(1).maybeSingle();
+      const dniTutor = String(b.dni_tutor || '').trim().toUpperCase();
+      const edadTutor = edadEnFecha(b.fecha_nacimiento_tutor);
+      if (!nombre || !apellidos || !dniTutor) return res.status(400).json({ success: false, message: 'Nombre, apellidos y DNI del tutor son obligatorios' });
+      if (edadTutor === null || edadTutor < 16) return res.status(400).json({ success: false, message: 'El tutor debe tener al menos 16 años' });
+      if (process.env.NODE_ENV === 'production' && !process.env.DNI_HASH_SECRET) return res.status(503).json({ success: false, message: 'El servidor no tiene configurada la clave de protección del DNI' });
+      // Este hash corresponde exclusivamente al DNI del adulto tutor.
+      const tutorHash = huellaDni(dniTutor);
+      const { data: existente } = await supabase.from('junior_menores').select('id,dip').eq('nombre', nombre).eq('apellidos', apellidos).eq('tutor_dni_hash', tutorHash).limit(1).maybeSingle();
       if (existente) return res.status(409).json({ success: false, message: 'Ya existe un registro Junior vinculado a ese tutor', dip: existente.dip });
       const dip = `JUNIOR-${randomBytes(4).toString('hex').toUpperCase()}`;
       const ahora = new Date().toISOString();
       const tutorNombre = `${b.nombre_tutor || ''} ${b.apellidos_tutor || ''}`.trim();
-      const filaBase = { dip, nombre, apellidos, tutor_dip: tutorDip, modalidad: 'estandar', estado: 'pendiente', creado_en: ahora };
+      const filaBase = { dip, nombre, apellidos, tutor_dni_hash: tutorHash, modalidad: 'estandar', estado: 'pendiente', creado_en: ahora };
       const filaCompleta = { ...filaBase, fecha_nacimiento: b.fecha_nacimiento || null, tutor_nombre: tutorNombre, placetas_saldo: 0, nivel_academia: 1 };
       let { data, error } = await supabase.from('junior_menores').insert(filaCompleta).select('*').single();
       // Algunas instalaciones mantienen una tabla Junior mínima. PostgREST
@@ -346,8 +372,28 @@ export function juniorRouter({ getBankState, postBanco }) {
         ({ data, error } = await supabase.from('junior_menores').insert(filaBase).select('*').single());
       }
       if (error) return res.status(500).json({ success: false, message: `No se pudo guardar el registro: ${error.message}` });
-      res.status(201).json({ success: true, dip: data.dip, junior_id: data.id, tutor_dip: data.tutor_dip, tutor_nombre: data.tutor_nombre || tutorNombre, necesita_firma_tutor: true, placetaid_codigo: null, message: 'Registro creado. El tutor debe autorizarlo desde PlacetaID.' });
+      res.status(201).json({ success: true, dip: data.dip, junior_id: data.id, tutor_dip: '', tutor_nombre: data.tutor_nombre || tutorNombre, necesita_firma_tutor: true, placetaid_codigo: null, message: 'Registro creado. El tutor debe autorizarlo desde PlacetaID.' });
     } catch (e) { res.status(500).json({ success: false, message: e.message }); }
+  });
+
+  // Instantánea legal inmutable: una actualización futura nunca modifica
+  // el texto, versión ni fecha de una firma ya registrada.
+  router.post('/legal/firmas', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ success: false, error: 'Supabase no configurado' });
+      const dip = String(req.body?.dip_menor || '').trim().toUpperCase();
+      const documento = String(req.body?.documento_id || '').trim();
+      const version = String(req.body?.version || '').trim();
+      const texto = String(req.body?.texto || '');
+      if (!dip || !documento || !version || !texto) return res.status(400).json({ success: false, error: 'Documento legal incompleto' });
+      const junior = await buscarJunior(dip);
+      if (!junior) return res.status(404).json({ success: false, error: 'Perfil Junior no encontrado' });
+      const id = `PJ-FIRMA-${dip}-${documento}`;
+      const fila = { id, dip_menor: dip, junior_id: junior.id, documento_id: documento, version, texto, tutor_nombre: String(req.body?.tutor_nombre || '').slice(0, 160), firmado_en: new Date().toISOString() };
+      const { error } = await supabase.from('junior_documentos_firmados').upsert(fila, { onConflict: 'id', ignoreDuplicates: true });
+      if (error) return res.status(500).json({ success: false, error: error.message });
+      res.json({ success: true, id, version });
+    } catch (e) { res.status(500).json({ success: false, error: e.message }); }
   });
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -635,11 +681,70 @@ export function juniorRouter({ getBankState, postBanco }) {
       const respuestas = Array.isArray(req.body?.respuestas) ? req.body.respuestas : [];
       const verdes = respuestas.filter(r => r?.correcta === true).length;
       const rojos = respuestas.filter(r => r?.correcta === false).length;
+      let actividadMeta = null;
+      try { actividadMeta = (await supabase.from('junior_actividades').select('titulo,es_reto_semanal,fecha_fin_reto,contenido').eq('id', req.params.id).maybeSingle()).data; } catch { /* opcional */ }
+      const contenidoMeta = actividadMeta?.contenido || {};
+      const esReto = actividadMeta?.es_reto_semanal === true || contenidoMeta.es_reto_semanal === true;
+      const fechaFin = actividadMeta?.fecha_fin_reto || contenidoMeta.fecha_fin_reto || null;
+      const retoCerrado = esReto && fechaFin && Date.parse(fechaFin) < Date.now();
+      // La clasificación se congela al llegar la fecha límite. La actividad
+      // sigue disponible y sus puntos educativos se conservan.
+      if (esReto && !retoCerrado && supabase) {
+        try { await supabase.from('junior_reto_intentos').insert({ actividad_id: req.params.id, junior_id: junior.id, puntos_verdes: verdes, puntos_rojos: rojos, tiempo_ms: Math.max(0, Number(req.body?.tiempo_ms) || 0), creado_en: new Date().toISOString() }); } catch { /* tabla opcional durante migración */ }
+      }
       for (const [tipo, cantidad] of [['punto_verde', verdes], ['punto_rojo', rojos]]) {
         if (cantidad) await crearTransaccion({ junior_id: junior.id, tipo, concepto: `Actividad ${req.params.id}`, cantidad, saldo_resultante: junior.placetas_saldo || 0, ip: ipDe(req) });
       }
-      res.json({ success: true, puntos_verdes: verdes, puntos_rojos: rojos });
+      // Los diplomas se generan únicamente al superar un examen sin errores.
+      // Si la tabla aún no está disponible, el registro de puntos no falla.
+      let diploma = null;
+      if (supabase && rojos === 0 && verdes > 0) {
+        try {
+          const { data: actividad } = await supabase.from('junior_actividades').select('titulo,es_examen').eq('id', req.params.id).maybeSingle();
+          if (actividad?.es_examen === true) {
+            const idDiploma = `DIP-${String(junior.dip).toUpperCase()}-${req.params.id}`;
+            const fila = {
+              id: idDiploma,
+              dip: junior.dip,
+              nombre: nombreCompleto(junior),
+              actividad: actividad.titulo || req.params.id,
+              fecha: new Date().toISOString().slice(0, 10),
+              juniorDip: junior.dip,
+              juniorNombre: nombreCompleto(junior),
+              actividadTitulo: actividad.titulo || req.params.id,
+              creado_en: new Date().toISOString(),
+            };
+            const insertado = await supabase.from('junior_diplomas').upsert(fila, { onConflict: 'id' }).select('*').maybeSingle();
+            if (!insertado.error) diploma = insertado.data || fila;
+          }
+        } catch { /* El diploma es adicional; nunca invalida la puntuación. */ }
+      }
+      res.json({ success: true, puntos_verdes: verdes, puntos_rojos: rojos, diploma });
     } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
+  // Ranking de retos: nunca devuelve menores ajenos; solo el propio perfil y
+  // amistades aceptadas. El orden queda inmutable porque filtra por la fecha
+  // de cierre del reto.
+  router.get('/retos/:id/ranking', async (req, res) => {
+    try {
+      const yo = await buscarJunior(resolverDip(req));
+      if (!yo || !supabase) return res.json({ success: true, ranking: [], cerrado: false });
+      const { data: actividad } = await supabase.from('junior_actividades').select('fecha_fin_reto,contenido').eq('id', req.params.id).maybeSingle();
+      const fin = actividad?.fecha_fin_reto || actividad?.contenido?.fecha_fin_reto || null;
+      const query = supabase.from('junior_reto_intentos').select('junior_id,puntos_verdes,puntos_rojos,tiempo_ms,creado_en').eq('actividad_id', req.params.id);
+      const { data: intentos } = fin ? await query.lte('creado_en', fin) : await query;
+      const { data: amigos } = await supabase.from('junior_amigos').select('dip,dip_amigo').or(`dip.eq.${yo.dip},dip_amigo.eq.${yo.dip}`).eq('estado', 'aceptada');
+      const dps = new Set([yo.dip, ...(amigos || []).flatMap(a => [a.dip, a.dip_amigo]).filter(Boolean)]);
+      const perfilesPermitidos = await Promise.all([...dps].map(d => buscarJunior(d)));
+      const idsPermitidos = new Set(perfilesPermitidos.filter(Boolean).map(p => p.id));
+      const permitidos = (intentos || []).filter(i => idsPermitidos.has(i.junior_id));
+      const ids = [...new Set(permitidos.map(i => i.junior_id))];
+      const perfiles = perfilesPermitidos;
+      const nombres = new Map(perfiles.filter(Boolean).map(p => [p.id, `${p.nombre || ''} ${p.apellidos || ''}`.trim()]));
+      const ranking = permitidos.map(i => ({ nombre: nombres.get(i.junior_id) || 'Jugador', puntos_verdes: Number(i.puntos_verdes || 0), puntos_rojos: Number(i.puntos_rojos || 0), tiempo_medio_ms: Number(i.tiempo_ms || 0), es_propio: i.junior_id === yo.id })).sort((a,b) => b.puntos_verdes - a.puntos_verdes || a.puntos_rojos - b.puntos_rojos || a.tiempo_medio_ms - b.tiempo_medio_ms);
+      res.json({ success: true, cerrado: !!(fin && Date.parse(fin) < Date.now()), fecha_fin: fin, ranking });
+    } catch (e) { res.json({ success: true, ranking: [], cerrado: false }); }
   });
 
   router.post('/puntos/canjear', async (req, res) => {

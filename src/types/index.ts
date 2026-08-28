@@ -355,6 +355,8 @@ export interface DocumentoCiudadano {
   tipo: string;
   estado: 'emitido' | 'firmado' | 'pendiente';
   fecha: string;
+  version?: string;
+  tutor?: string;
 }
 
 export interface FirmaCiudadano {
@@ -363,6 +365,8 @@ export interface FirmaCiudadano {
   firmante: string;
   estado: 'pendiente' | 'completada';
   fecha?: string;
+  version?: string;
+  texto?: string;
 }
 
 export interface Obligacion {

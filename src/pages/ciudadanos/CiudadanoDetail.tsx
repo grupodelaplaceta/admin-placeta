@@ -70,6 +70,7 @@ export default function CiudadanoDetail() {
     { key: 'documento', header: 'Documento', render: (f) => <strong>{f.documento}</strong> },
     { key: 'firmante', header: 'Firmante', render: (f) => f.firmante },
     { key: 'estado', header: 'Estado', render: (f) => <Badge tone={f.estado === 'completada' ? 'success' : 'warning'}>{f.estado}</Badge> },
+    { key: 'version', header: 'Versión firmada', render: (f) => f.version ?? '—' },
     { key: 'fecha', header: 'Fecha', render: (f) => f.fecha ?? '—' },
   ];
 
