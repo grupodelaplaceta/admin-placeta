@@ -1490,6 +1490,48 @@ export function createApiRouter({ getBankState }) {
       firma: documentoFirma,
     };
     await store.expedientes.insertar(expediente);
+
+    // El alta de un menor requiere dos consentimientos independientes. Se
+    // envían al tutor como documentos separados para que pueda leerlos y
+    // firmarlos por separado desde PlacetaID Móvil.
+    let firmas = [];
+    if (completo) {
+      const sujetoFirma = tutorDip || dip;
+      const datosTutor = tutorDip ? `Tutor legal identificado con DIP ${tutorDip}` : 'Tutor legal identificado en PlacetaID';
+      const base = { dip: sujetoFirma, tramiteId: tramite.id, accion: 'alta_menor' };
+      firmas = await Promise.all([
+        crearYEnviarFirma({
+          ...base,
+          tipo: 'autorizacion_parental',
+          titulo: `Autorización parental para el alta de ${nombre}`,
+          contenido: [
+            'AUTORIZACIÓN PARENTAL — ALTA EN PLACETA JUNIOR',
+            '',
+            `Menor: ${nombre} · DIP: ${dip}`,
+            datosTutor,
+            '',
+            'La persona firmante declara que ejerce la tutela legal del menor y autoriza su alta en Placeta Junior, así como la vinculación de su perfil con el tutor indicado. La autorización permite gestionar el acceso educativo, el progreso y las funciones de cuenta previstas para menores.',
+            '',
+            'La autorización se presta para este alta y queda registrada con la versión, fecha, CSV y huella del documento. Podrá solicitarse su revisión o retirada conforme a la normativa aplicable.',
+          ].join('\\n'),
+        }),
+        crearYEnviarFirma({
+          ...base,
+          tipo: 'consentimiento_informado_menor',
+          titulo: `Consentimiento informado y condiciones de ${nombre}`,
+          contenido: [
+            'CONSENTIMIENTO INFORMADO Y CONDICIONES DE USO — MENOR',
+            '',
+            `Menor: ${nombre} · DIP: ${dip}`,
+            datosTutor,
+            '',
+            'La persona firmante declara haber leído la información sobre privacidad, seguridad, actividades educativas, progreso, recompensas y gestión de la cuenta Junior. Confirma que ha explicado al menor las normas de uso y que supervisará su utilización.',
+            '',
+            'Los datos se tratarán únicamente para prestar el servicio, mantener la cuenta, registrar el progreso y cumplir las obligaciones legales. El tutor podrá ejercer los derechos que correspondan y solicitar la baja conforme a la política de privacidad vigente.',
+          ].join('\\n'),
+        }),
+      ]);
+    }
     await store.auditoria.insertar({
       id: `AUD-${Date.now()}`, usuario: req.user?.dip || 'RSP', servicio: 'Placeta Junior',
       accion: 'migrar_usuario', objetoTipo: 'expediente', objetoId: expediente.id,
@@ -1504,7 +1546,7 @@ export function createApiRouter({ getBankState }) {
       if (cuenta) mutarCuenta(cuenta.id, { tipo: 'Child', tutorDip: tutorDip || null, migradoAJunior: true, migradoEn: AHORA() });
     } catch { /* banco offline */ }
 
-    res.status(201).json({ success: true, tramite, expediente, requiereTutor: !completo, requiereFirma: true });
+    res.status(201).json({ success: true, tramite, expediente, firmas, requiereTutor: !completo, requiereFirma: true });
   });
 
   /* ── Tributos: censo + declaraciones con cálculo DETALLADO y trazable ── */

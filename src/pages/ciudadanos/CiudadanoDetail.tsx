@@ -19,6 +19,7 @@ export default function CiudadanoDetail() {
   const [nombre, setNombre] = useState('');
   const [tutorDip, setTutorDip] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [documentosAlta, setDocumentosAlta] = useState<Array<{ id: string; titulo: string; tipo: string; contenido?: string; enviado?: boolean }>>([]);
 
   useEffect(() => {
     if (!dip) return;
@@ -50,6 +51,7 @@ export default function CiudadanoDetail() {
     if (!ctx) return;
     try {
       const r = await provider.migrarJunior(ctx.dip, ctx.nombre, tutorDip);
+      setDocumentosAlta(r.firmas ?? []);
       toast(r.requiereTutor ? 'Trámite iniciado: falta el DIP del tutor legal.' : `Migración a Placeta Junior: ${String(r.tramite.id ?? '')}`, r.requiereTutor ? 'info' : 'success');
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -113,6 +115,16 @@ export default function CiudadanoDetail() {
         </div>
         <Button icon="check" onClick={guardarDatos} style={{ marginTop: 'var(--sp-3)' }}>Guardar</Button>
       </Card>
+
+      {documentosAlta.length > 0 && <Card style={{ marginBottom: 'var(--sp-4)' }}>
+        <CardHeader title="Documentos nuevos para firmar" subtitle="Vista previa del contenido que recibirá el tutor en PlacetaID Móvil" />
+        <div className="rsp-grid rsp-grid-2">
+          {documentosAlta.map((doc) => <Card key={doc.id}>
+            <CardHeader title={doc.titulo} subtitle={doc.enviado ? 'Enviado a PlacetaID Móvil' : 'Pendiente de envío'} />
+            <pre style={{ whiteSpace: 'pre-wrap', margin: 0, maxHeight: 260, overflow: 'auto', fontFamily: 'inherit', fontSize: 'var(--fs-sm)' }}>{doc.contenido || 'Contenido disponible en PlacetaID Móvil.'}</pre>
+          </Card>)}
+        </div>
+      </Card>}
 
       <Card>
         <Tabs

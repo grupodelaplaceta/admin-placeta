@@ -21,7 +21,7 @@ const PLACETAID_ADMIN_KEY = process.env.PLACETAID_ADMIN_KEY || '';
 const documentos = coleccion('rsp_documentos');
 
 /** Crea un documento de firma y lo envía a PlacetaID Móvil. */
-export async function crearYEnviarFirma({ titulo, tipo = 'resolucion', dip, tramiteId, accion, entidad = 'rsp' }) {
+export async function crearYEnviarFirma({ titulo, tipo = 'resolucion', dip, tramiteId, accion, entidad = 'rsp', contenido }) {
   const docId = `doc-${Date.now()}-${randomUUID().slice(0, 6)}`;
   const hash = createHash('sha256').update(`${docId}${Date.now()}`).digest('hex');
   const csv = hash.slice(0, 20).toUpperCase();
@@ -55,7 +55,7 @@ export async function crearYEnviarFirma({ titulo, tipo = 'resolucion', dip, tram
           entidad,
           csv,
           destinatariosDIP: dip ? [dip] : [],
-          contenido: `Documento oficial de ${entidad}: ${titulo}. Firme desde PlacetaID Móvil para dar validez al trámite.\n\nCSV: ${csv}\nHash: ${hash.slice(0, 16)}`,
+          contenido: `${contenido || `Documento oficial de ${entidad}: ${titulo}. Firme desde PlacetaID Móvil para dar validez al trámite.`}\n\nCSV: ${csv}\nHash: ${hash.slice(0, 16)}`,
         }),
         signal: AbortSignal.timeout(8000),
       });
@@ -67,7 +67,7 @@ export async function crearYEnviarFirma({ titulo, tipo = 'resolucion', dip, tram
     console.warn('[FirmaPlacetaID] PLACETAID_ADMIN_KEY no configurada: el documento no se envía a la app móvil.');
   }
   if (enviado) await documentos.actualizar(docId, { estado: 'enviada' });
-  return { id: docId, csv, hash, enviado };
+  return { id: docId, csv, hash, enviado, titulo, tipo, contenido: contenido || '' };
 }
 
 /** Consulta el estado de firma de un documento. */

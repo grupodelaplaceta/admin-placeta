@@ -321,7 +321,7 @@ export function juniorRouter({ getBankState, postBanco }) {
     if (!supabase) return res.json([]);
     const tutorDip = String(req.params.tutorDip || '').trim().toUpperCase();
     if (!tutorDip) return res.status(400).json({ error: 'Tutor requerido' });
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('junior_menores')
       // La tabla compartida no siempre tiene alias/cuenta_banco. Seleccionar
       // las columnas explícitas hacía que PostgREST devolviese 500 y PlacetaID
@@ -333,8 +333,23 @@ export function juniorRouter({ getBankState, postBanco }) {
     if (error) return res.status(500).json({ error: error.message });
     // Backfill every legacy Junior lazily, and provision future profiles on
     // their first tutor listing. One failed account must not hide the others.
-    await Promise.all((data || []).map((j) => asegurarCuentaJunior(j)));
-    res.json(data || []);
+    const enriquecidos = await Promise.all((data || []).map(async (j) => {
+      const cuenta = await asegurarCuentaJunior(j);
+      return { ...j, alias: j.alias || `${j.nombre || ''} ${j.apellidos || ''}`.trim() || j.dip, cuenta_banco: j.cuenta_banco || cuenta?.id || null };
+    }));
+    // Some old installations did not fill tutor_dni_hash. Include those
+    // records as a backwards-compatible fallback for PlacetaID Mobile.
+    if (!enriquecidos.length && tutorDip) {
+      const fallback = await supabase.from('junior_menores').select('*').eq('tutor_dip', tutorDip).not('estado', 'in', '(revocado,bloqueado)').order('creado_en', { ascending: false });
+      if (!fallback.error) {
+        const rows = await Promise.all((fallback.data || []).map(async (j) => {
+          const cuenta = await asegurarCuentaJunior(j);
+          return { ...j, alias: j.alias || `${j.nombre || ''} ${j.apellidos || ''}`.trim() || j.dip, cuenta_banco: j.cuenta_banco || cuenta?.id || null };
+        }));
+        return res.json(rows);
+      }
+    }
+    res.json(enriquecidos);
   });
 
   // Backfill operable from RCPA after deployment. It provisions every legacy

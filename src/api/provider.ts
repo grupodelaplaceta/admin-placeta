@@ -110,7 +110,7 @@ export interface Provider {
   obligacionesDeCiudadano(dip: string): Promise<Obligacion[]>;
   buscarCuentas(q: string): Promise<CuentaSugerencia[]>;
   actualizarCiudadano(dip: string, datos: { email?: string; telefono?: string; nombre?: string }): Promise<void>;
-  migrarJunior(dip: string, nombre?: string, tutorDip?: string): Promise<{ success: boolean; requiereTutor?: boolean; requiereFirma?: boolean; tramite: Record<string, unknown>; expediente: Record<string, unknown> }>;
+  migrarJunior(dip: string, nombre?: string, tutorDip?: string): Promise<{ success: boolean; requiereTutor?: boolean; requiereFirma?: boolean; tramite: Record<string, unknown>; expediente: Record<string, unknown>; firmas?: Array<{ id: string; titulo: string; tipo: string; contenido?: string; enviado?: boolean }> }>;
 
   // Entidades
   listarEntidades(): Promise<EntidadRegistral[]>;

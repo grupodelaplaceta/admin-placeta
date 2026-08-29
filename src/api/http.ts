@@ -198,7 +198,7 @@ export const httpProvider: Provider = {
     return http.post<void>(`/rsp/api/ciudadanos/${dip}`, datos);
   },
   async migrarJunior(dip, nombre, tutorDip) {
-    return http.post<{ success: boolean; requiereTutor?: boolean; requiereFirma?: boolean; tramite: Record<string, unknown>; expediente: Record<string, unknown> }>('/rsp/normativo/api/migrar-junior', { dip, nombre, tutorDip });
+    return http.post<{ success: boolean; requiereTutor?: boolean; requiereFirma?: boolean; tramite: Record<string, unknown>; expediente: Record<string, unknown>; firmas?: Array<{ id: string; titulo: string; tipo: string; contenido?: string; enviado?: boolean }> }>('/rsp/normativo/api/migrar-junior', { dip, nombre, tutorDip });
   },
   async getEntidad(eip) {
     return http.get<EntidadDetalle>(`/rsp/api/entidades/${eip}`);
