@@ -75,6 +75,9 @@ async function postBanco(action, data = {}) {
   });
   const body = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(body.error || `Banco responde ${r.status}`);
+  // crm-state is also cached for reads; invalidate it after every successful
+  // mutation so Junior never sees the balance from before the operation.
+  cache.delete('bank-state');
   return body;
 }
 
@@ -142,6 +145,33 @@ export function createApp() {
   const demoActivo = process.env.NODE_ENV !== 'production';
   const esDipDemo = (dip) => String(dip || '').trim().toUpperCase() === DEMO_DIP;
   const esActividadPublica = (a) => !!a && a.estado === 'aprobada' && a.publica === true;
+
+  // Public read, controlled centrally from RCPA/Vercel environment variables.
+  // A POST below changes these values without shipping a new APK.
+  let juniorVersion = {
+    version_code: Number(process.env.JUNIOR_VERSION_CODE || 260801),
+    version_name: process.env.JUNIOR_VERSION_NAME || '26.8.1',
+    min_version_code: Number(process.env.JUNIOR_MIN_VERSION_CODE || 0),
+    force_update: String(process.env.JUNIOR_FORCE_UPDATE || '').toLowerCase() === 'true',
+    update_url: process.env.JUNIOR_UPDATE_URL || 'https://junior.laplaceta.org',
+    update_message: process.env.JUNIOR_UPDATE_MESSAGE || 'Hay una nueva versión de Placeta Junior. Actualiza la aplicación para continuar.',
+  };
+  app.get('/api/junior/version', (_req, res) => res.json({ success: true, ...juniorVersion }));
+  app.post('/api/junior/version', (req, res) => {
+    const key = process.env.RCPA_UPDATE_KEY || '';
+    if (!key || req.headers['x-rcpa-update-key'] !== key) return res.status(401).json({ error: 'No autorizado' });
+    const b = req.body || {};
+    juniorVersion = {
+      ...juniorVersion,
+      ...(b.version_code != null ? { version_code: Math.max(0, Number(b.version_code) || 0) } : {}),
+      ...(b.version_name != null ? { version_name: String(b.version_name).slice(0, 40) } : {}),
+      ...(b.min_version_code != null ? { min_version_code: Math.max(0, Number(b.min_version_code) || 0) } : {}),
+      ...(b.force_update != null ? { force_update: b.force_update === true } : {}),
+      ...(b.update_url != null ? { update_url: String(b.update_url).slice(0, 500) } : {}),
+      ...(b.update_message != null ? { update_message: String(b.update_message).slice(0, 500) } : {}),
+    };
+    res.json({ success: true, ...juniorVersion });
+  });
   // Promueve los campos económicos que viven como respaldo en `contenido`
   // a nivel superior (subvencionada, destacada, precios, recompensa).
   function normalizarActividad(a) {
@@ -306,6 +336,18 @@ export function createApp() {
       const precio = Number(modo === 'intento' ? (actividad.precio_intento ?? contenido.precio_intento) : (actividad.precio_licencia ?? contenido.precio_licencia)) || 0;
       if (precio <= 0) return res.json({ success: true, gratuito: true, modo });
       const accountId = junior.cuenta_banco || `u-${dip.toLowerCase().replace(/-/g, '')}`;
+      // Legacy profiles may not yet have been opened in Banco. The same
+      // deterministic account creation used by the wallet is safe here too.
+      const bankState = await obtenerEstadoBanco();
+      if (!(bankState.accounts || []).some((a) => a.id === accountId)) {
+        const alta = await postBanco('crear-cuenta-infantil', {
+          juniorDip: dip,
+          juniorNombre: `${junior.nombre || ''} ${junior.apellidos || ''}`.trim() || dip,
+          tutorDip: junior.tutor_dip || 'TUTOR-LEGAL',
+          sendLimitPz: 50,
+        });
+        if (alta?.accountId && !junior.cuenta_banco) await supabase.from('junior_menores').update({ cuenta_banco: alta.accountId }).eq('id', junior.id);
+      }
       const iva = Math.round((precio * 12 / 112) * 100) / 100;
       const banco = await postBanco('transferir', {
         from: accountId, to: 'CAPITALIA_BANK', cantidad: precio,
