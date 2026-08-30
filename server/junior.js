@@ -857,8 +857,18 @@ export function juniorRouter({ getBankState, postBanco }) {
       const junior = await buscarJunior(req.body?.dip);
       if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
       const respuestas = Array.isArray(req.body?.respuestas) ? req.body.respuestas : [];
-      const verdes = respuestas.filter(r => r?.correcta === true).length;
-      const rojos = respuestas.filter(r => r?.correcta === false).length;
+      // Aceptamos ambos formatos: la lista histórica de respuestas y los
+      // contadores que envían los reproductores actuales. Si llega la lista,
+      // es la fuente prioritaria; si no, no se pierden los puntos por una
+      // serialización distinta del cliente.
+      const verdesCalculados = respuestas.filter(r => r?.correcta === true).length;
+      const rojosCalculados = respuestas.filter(r => r?.correcta === false).length;
+      const verdes = respuestas.length
+        ? verdesCalculados
+        : Math.max(0, parseInt(req.body?.puntos_verdes ?? req.body?.verdes, 10) || 0);
+      const rojos = respuestas.length
+        ? rojosCalculados
+        : Math.max(0, parseInt(req.body?.puntos_rojos ?? req.body?.rojos, 10) || 0);
       let actividadMeta = null;
       try { actividadMeta = (await supabase.from('junior_actividades').select('titulo,recompensa,es_reto_semanal,fecha_fin_reto,contenido').eq('id', req.params.id).maybeSingle()).data; } catch { /* opcional */ }
       const contenidoMeta = actividadMeta?.contenido || {};
@@ -882,7 +892,7 @@ export function juniorRouter({ getBankState, postBanco }) {
       const marcaResultado = resultadoId ? ` · resultado:${resultadoId}` : '';
       const puntos = [['punto_verde', verdes], ['punto_rojo', rojos]].filter(([, cantidad]) => cantidad).map(([tipo, cantidad]) => ({
         junior_id: junior.id, tipo, concepto: `Actividad ${req.params.id}${unidadLabel}${marcaResultado}`,
-        cantidad, saldo_resultante: junior.placetas_saldo || 0, ip: ipDe(req)
+        cantidad, saldo_resultante: junior.placetas_saldo || 0, creado_en: new Date().toISOString(), ip: ipDe(req)
       }));
       for (const tx of puntos) {
         const guardado = await crearTransaccion(tx);
