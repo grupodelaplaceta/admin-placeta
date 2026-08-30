@@ -19,7 +19,9 @@ import { randomBytes, randomUUID, createHmac } from 'crypto';
 import { supabase } from './supabase.js';
 
 const RBU_DIARIO = 5;               // Pz diarios de la Renta Básica Universal
-const RBU_FUNDACION = 'AGLDP';      // Fundación del Banco de La Placeta
+// La RBU sale de la cuenta propia de la Fundación, no de la cuenta general
+// de Administración/Tributos.
+const RBU_FUNDACION = 'FOUNDATION_RBU';
 const CAPITALIA = 'CAPITALIA_BANK'; // Cuenta real que financia recompensas/IVA
 const TUTOR_DEMO = '11111111D';
 
@@ -804,25 +806,36 @@ export function juniorRouter({ getBankState, postBanco }) {
       const verdes = respuestas.filter(r => r?.correcta === true).length;
       const rojos = respuestas.filter(r => r?.correcta === false).length;
       let actividadMeta = null;
-      try { actividadMeta = (await supabase.from('junior_actividades').select('titulo,es_reto_semanal,fecha_fin_reto,contenido').eq('id', req.params.id).maybeSingle()).data; } catch { /* opcional */ }
+      try { actividadMeta = (await supabase.from('junior_actividades').select('titulo,recompensa,es_reto_semanal,fecha_fin_reto,contenido').eq('id', req.params.id).maybeSingle()).data; } catch { /* opcional */ }
       const contenidoMeta = actividadMeta?.contenido || {};
       const esReto = actividadMeta?.es_reto_semanal === true || contenidoMeta.es_reto_semanal === true;
       const fechaFin = actividadMeta?.fecha_fin_reto || contenidoMeta.fecha_fin_reto || null;
       const retoCerrado = esReto && fechaFin && Date.parse(fechaFin) < Date.now();
+      const resultadoId = String(req.body?.resultado_id || '').trim().slice(0, 160);
+      if (resultadoId) {
+        const previas = await historial(junior.id, 500);
+        const marca = `resultado:${resultadoId}`;
+        if (previas.some(t => String(t.concepto || '').includes(marca))) {
+          return res.json({ success: true, duplicado: true, puntos_verdes: 0, puntos_rojos: 0, recompensa: 0, recompensa_max: 0, diploma: null });
+        }
+      }
       // La clasificación se congela al llegar la fecha límite. La actividad
       // sigue disponible y sus puntos educativos se conservan.
       if (esReto && !retoCerrado && supabase) {
         try { await supabase.from('junior_reto_intentos').insert({ actividad_id: req.params.id, junior_id: junior.id, puntos_verdes: verdes, puntos_rojos: rojos, tiempo_ms: Math.max(0, Number(req.body?.tiempo_ms) || 0), creado_en: new Date().toISOString() }); } catch { /* tabla opcional durante migración */ }
       }
       const unidadLabel = req.body?.unidad !== undefined ? ` · Unidad ${Number(req.body.unidad) + 1}` : '';
+      const marcaResultado = resultadoId ? ` · resultado:${resultadoId}` : '';
       for (const [tipo, cantidad] of [['punto_verde', verdes], ['punto_rojo', rojos]]) {
-        if (cantidad) await crearTransaccion({ junior_id: junior.id, tipo, concepto: `Actividad ${req.params.id}${unidadLabel}`, cantidad, saldo_resultante: junior.placetas_saldo || 0, ip: ipDe(req) });
+        if (cantidad) await crearTransaccion({ junior_id: junior.id, tipo, concepto: `Actividad ${req.params.id}${unidadLabel}${marcaResultado}`, cantidad, saldo_resultante: junior.placetas_saldo || 0, ip: ipDe(req) });
       }
-      // La web muestra la recompensa estimada y, al guardar con DIP, se abona
-      // la parte conseguida: 1 Pz por cada 10 puntos verdes, limitada por la
-      // recompensa configurada para la actividad.
-      const recompensaMax = Math.max(0, Number(req.body?.recompensa_unidad || actividadMeta?.contenido?.recompensa || 0));
-      const recompensa = Math.min(recompensaMax || Math.floor(verdes / 10), Math.floor(verdes / 10));
+      // La recompensa es proporcional a los puntos verdes logrados frente al
+      // máximo posible y queda limitada por la recompensa de la actividad.
+      const recompensaMax = Math.max(0, Number(req.body?.recompensa_unidad || actividadMeta?.recompensa || actividadMeta?.contenido?.recompensa || 0));
+      const maxPuntos = Math.max(0, Number(req.body?.puntos_maximos) || 0);
+      const resultadoFinal = req.body?.resultado_final !== false;
+      const proporcion = maxPuntos > 0 ? Math.min(1, verdes / maxPuntos) : 0;
+      const recompensa = resultadoFinal ? Math.min(recompensaMax, Math.round(recompensaMax * proporcion)) : 0;
       if (recompensa > 0) {
         const esDemo = junior.tutor_dip === TUTOR_DEMO || (junior.dip || '').includes('DEMO');
         if (!esDemo) {
@@ -831,7 +844,7 @@ export function juniorRouter({ getBankState, postBanco }) {
         }
         const estadoDespues = esDemo ? null : await getBankState().catch(() => null);
         const saldoNuevo = Number(estadoDespues?.accounts?.find(a => a.id === cuentaDeJunior(junior))?.balancePz ?? ((junior.placetas_saldo || 0) + recompensa));
-        await crearTransaccion({ junior_id: junior.id, tipo: 'recompensa_actividad', concepto: `Recompensa actividad ${req.params.id}`, cantidad: recompensa, saldo_resultante: saldoNuevo, ip: ipDe(req) });
+        await crearTransaccion({ junior_id: junior.id, tipo: 'recompensa_actividad', concepto: `Recompensa actividad ${req.params.id}${marcaResultado}`, cantidad: recompensa, saldo_resultante: saldoNuevo, ip: ipDe(req) });
       }
       // Los diplomas se generan únicamente al superar un examen sin errores.
       // Si la tabla aún no está disponible, el registro de puntos no falla.
@@ -857,7 +870,7 @@ export function juniorRouter({ getBankState, postBanco }) {
           }
         } catch { /* El diploma es adicional; nunca invalida la puntuación. */ }
       }
-      res.json({ success: true, puntos_verdes: verdes, puntos_rojos: rojos, recompensa, recompensa_max: recompensaMax || Math.floor(verdes / 10), diploma });
+      res.json({ success: true, puntos_verdes: verdes, puntos_rojos: rojos, recompensa, recompensa_max: recompensaMax, diploma });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
