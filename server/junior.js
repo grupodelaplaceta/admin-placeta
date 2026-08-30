@@ -141,6 +141,7 @@ export function juniorRouter({ getBankState, postBanco }) {
       .eq('junior_id', juniorId)
       .order('creado_en', { ascending: false })
       .limit(limit);
+    if (error) console.error('[junior] No se pudo leer junior_transacciones:', error.message);
     return error ? [] : (data || []);
   }
 
@@ -150,8 +151,21 @@ export function juniorRouter({ getBankState, postBanco }) {
   }
 
   async function crearTransaccion(tx) {
-    if (!supabase) return;
-    await supabase.from('junior_transacciones').insert(tx);
+    if (!supabase) return { ok: false, error: 'Supabase no configurado' };
+    let { error } = await supabase.from('junior_transacciones').insert(tx);
+    // Algunas instalaciones antiguas no tienen la columna técnica `ip`.
+    // El movimiento educativo sigue siendo válido sin ese campo, así que
+    // reintentamos únicamente ante un error de esquema/cache.
+    if (error && tx.ip && /column .* does not exist|schema cache/i.test(error.message || '')) {
+      const compatible = { ...tx };
+      delete compatible.ip;
+      ({ error } = await supabase.from('junior_transacciones').insert(compatible));
+    }
+    if (error) {
+      console.error('[junior] No se pudo guardar transacción:', error.message);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
   }
 
   const resolverDip = (req) =>
@@ -520,6 +534,34 @@ export function juniorRouter({ getBankState, postBanco }) {
       const efectivos = limitesEfectivos(limites);
 
       const filas = await historial(junior.id);
+      const movimientosBanco = [];
+      try {
+        const estadoBanco = await getBankState();
+        const idsCuenta = new Set([cuentaDeJunior(junior), cuentaReal?.id].filter(Boolean));
+        (estadoBanco?.transactions || [])
+          .filter((t) => idsCuenta.has(t.fromAccountId) || idsCuenta.has(t.toAccountId))
+          .slice(0, 50)
+          .forEach((t) => {
+            const concepto = t.concept || t.note || 'Movimiento bancario';
+            const cantidad = Number(t.amountPz || 0);
+            // Las recompensas/canjes ya tienen un movimiento CRM asociado.
+            // No duplicarlas al mezclar la fuente bancaria con la educativa.
+            const yaRegistrado = filas.some((f) =>
+              String(f.concepto || '').trim().toLowerCase() === String(concepto).trim().toLowerCase() &&
+              Number(f.cantidad || 0) === cantidad
+            );
+            if (!yaRegistrado) movimientosBanco.push({
+              id: `bank:${t.id || t.transactionId || `${t.createdAt || ''}:${cantidad}`}`,
+              junior_id: junior.id,
+              tipo: idsCuenta.has(t.toAccountId) ? 'ganar' : 'gastar',
+              concepto, cantidad, saldo_resultante: null,
+              creado_en: t.createdAt || new Date().toISOString(),
+            });
+          });
+      } catch { /* historial bancario opcional */ }
+      const historialCompleto = [...filas, ...movimientosBanco]
+        .sort((a, b) => String(b.creado_en || '').localeCompare(String(a.creado_en || '')))
+        .slice(0, 100);
       const hoy = new Date().toISOString().slice(0, 10);
       const inicioSemana = new Date();
       inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
@@ -580,7 +622,7 @@ export function juniorRouter({ getBankState, postBanco }) {
         limites: efectivos,
         saldo_disponible_hoy: Math.max(0, efectivos.gasto_diario - gastoHoy),
         saldo_disponible_semana: Math.max(0, efectivos.gasto_semanal - gastoSemana),
-        historial: filas,
+        historial: historialCompleto,
         nivel_academia: junior.nivel_academia || 1,
         nombre_menor: titular,
         tutor_nombre: junior.tutor_nombre || '',
@@ -793,8 +835,15 @@ export function juniorRouter({ getBankState, postBanco }) {
       const filas = await historial(junior.id, 500);
       const verdes = filas.filter(t => t.tipo === 'punto_verde').reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const rojos = filas.filter(t => t.tipo === 'punto_rojo').reduce((n, t) => n + Number(t.cantidad || 0), 0);
-      const canjeado = filas.filter(t => t.tipo === 'canje_puntos').reduce((n, t) => n + Number(t.cantidad || 0), 0);
-      res.json({ success: true, puntos: { puntos_verdes: verdes, puntos_rojos: rojos, canjeado }, tabla_canje: [{ puntos_verdes: 10, placetas: 1 }, { puntos_verdes: 50, placetas: 5 }], tabla_canje_rojos: [{ puntos_rojos: 10, placetas: 1 }, { puntos_rojos: 50, placetas: 5 }] });
+      const canjesVerdes = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes('verdes')).reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const canjesRojos = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes('rojos')).reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const canjeado = canjesVerdes + canjesRojos;
+      const disponiblesVerdes = Math.max(0, verdes - canjesVerdes);
+      const disponiblesRojos = Math.max(0, rojos - canjesRojos);
+      res.json({ success: true, puntos: {
+        puntos_verdes: verdes, puntos_rojos: rojos, canjeado,
+        puntos_verdes_disponibles: disponiblesVerdes, puntos_rojos_disponibles: disponiblesRojos
+      }, tabla_canje: [{ puntos_verdes: 10, placetas: 1 }, { puntos_verdes: 50, placetas: 5 }], tabla_canje_rojos: [{ puntos_rojos: 10, placetas: 1 }, { puntos_rojos: 50, placetas: 5 }] });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -826,8 +875,13 @@ export function juniorRouter({ getBankState, postBanco }) {
       }
       const unidadLabel = req.body?.unidad !== undefined ? ` · Unidad ${Number(req.body.unidad) + 1}` : '';
       const marcaResultado = resultadoId ? ` · resultado:${resultadoId}` : '';
-      for (const [tipo, cantidad] of [['punto_verde', verdes], ['punto_rojo', rojos]]) {
-        if (cantidad) await crearTransaccion({ junior_id: junior.id, tipo, concepto: `Actividad ${req.params.id}${unidadLabel}${marcaResultado}`, cantidad, saldo_resultante: junior.placetas_saldo || 0, ip: ipDe(req) });
+      const puntos = [['punto_verde', verdes], ['punto_rojo', rojos]].filter(([, cantidad]) => cantidad).map(([tipo, cantidad]) => ({
+        junior_id: junior.id, tipo, concepto: `Actividad ${req.params.id}${unidadLabel}${marcaResultado}`,
+        cantidad, saldo_resultante: junior.placetas_saldo || 0, ip: ipDe(req)
+      }));
+      for (const tx of puntos) {
+        const guardado = await crearTransaccion(tx);
+        if (!guardado.ok) return res.status(503).json({ success: false, error: 'No se pudieron guardar los puntos. Inténtalo de nuevo.' });
       }
       // La recompensa es proporcional a los puntos verdes logrados frente al
       // máximo posible y queda limitada por la recompensa de la actividad.
@@ -908,7 +962,7 @@ export function juniorRouter({ getBankState, postBanco }) {
       if (!placetas) return res.status(400).json({ error: 'Necesitas al menos 10 puntos para canjearlos' });
       const filas = await historial(junior.id, 500);
       const etiquetaPuntos = rojos ? 'rojos' : 'verdes';
-      const usados = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').includes(etiquetaPuntos)).reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const usados = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes(etiquetaPuntos)).reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const disponibles = (filas.filter(t => t.tipo === (rojos ? 'punto_rojo' : 'punto_verde')).reduce((n, t) => n + Number(t.cantidad || 0), 0) - usados);
       if (puntos > disponibles) return res.status(400).json({ error: 'No tienes suficientes puntos disponibles' });
       const banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaDeJunior(junior), cantidad: placetas, iva: 0, concepto: `Canje de ${puntos} puntos — Placeta Junior`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
