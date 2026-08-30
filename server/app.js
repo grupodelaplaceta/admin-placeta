@@ -277,6 +277,17 @@ export function createApp() {
       if (data.tipo === 'recarga') {
         if (origen !== 'app') return res.status(400).json({ error: 'Los códigos de recarga solo se canjean desde la app' });
         if (!dipN) return res.status(400).json({ error: 'DIP requerido' });
+        const { data: junior } = await supabase.from('junior_menores').select('*').eq('dip', dipN).maybeSingle();
+        if (!junior) return res.status(404).json({ error: 'Perfil de menor no encontrado' });
+        const accountId = junior.cuenta_banco || `u-${dipN.toLowerCase().replace(/-/g, '')}`;
+        const bankState = await obtenerEstadoBanco();
+        if (!(bankState.accounts || []).some((a) => a.id === accountId)) {
+          await postBanco('crear-cuenta-infantil', { juniorDip: dipN, juniorNombre: `${junior.nombre || ''} ${junior.apellidos || ''}`.trim() || dipN, tutorDip: junior.tutor_dip || 'TUTOR-LEGAL', sendLimitPz: 50 });
+        }
+        const recarga = Math.max(0, Math.round(Number(data.valor) || 0));
+        if (!recarga) return res.status(400).json({ error: 'El código no tiene una recarga válida' });
+        const banco = await postBanco('transferir', { from: 'CAPITALIA_BANK', to: accountId, cantidad: recarga, iva: 0, concepto: `Recarga por código ${code}`, juniorDip: dipN, tutorDip: junior.tutor_dip || '' });
+        if (!banco?.success) return res.status(502).json({ error: banco?.error || 'El banco no confirmó la recarga' });
       } else if (data.dip_vinculado && String(data.dip_vinculado).toUpperCase() !== dipN) {
         return res.status(403).json({ error: 'Este código ya está vinculado a otra cuenta' });
       }
@@ -317,6 +328,28 @@ export function createApp() {
     }
   });
 
+  // Comprueba el acceso efectivo antes de mostrar el selector de pago.
+  app.get('/api/junior/actividades/:id/acceso', async (req, res) => {
+    try {
+      if (!supabase) return res.status(503).json({ error: 'Supabase no configurado' });
+      const dip = String(req.query?.dip || '').trim().toUpperCase();
+      const [{ data: actividad }, { data: junior }] = await Promise.all([
+        supabase.from('junior_actividades').select('*').eq('id', req.params.id).maybeSingle(),
+        supabase.from('junior_menores').select('id').eq('dip', dip).maybeSingle(),
+      ]);
+      if (!actividad || !esActividadPublica(normalizarActividad(actividad))) return res.status(404).json({ error: 'Actividad no disponible' });
+      const contenido = actividad.contenido && typeof actividad.contenido === 'object' ? actividad.contenido : {};
+      const precioLicencia = Math.max(0, Math.round(Number(actividad.precio_licencia ?? contenido.precio_licencia) || 0));
+      const precioIntento = Math.max(0, Math.round(Number(actividad.precio_intento ?? contenido.precio_intento) || 0));
+      if (!junior || precioLicencia <= 0 && precioIntento <= 0) return res.json({ success: true, desbloqueada: true, precio_licencia: precioLicencia, precio_intento: precioIntento });
+      const { data: compras } = await supabase.from('junior_transacciones').select('concepto').eq('junior_id', junior.id).eq('tipo', 'compra_actividad');
+      const comprada = (compras || []).some((t) => String(t.concepto || '').includes(`actividad:${req.params.id}`) && String(t.concepto || '').includes('licencia'));
+      const { data: codigos } = await supabase.from('junior_codigos').select('actividad_ids,dip_vinculado,estado').eq('dip_vinculado', dip).eq('estado', 'canjeado');
+      const porCodigo = (codigos || []).some((c) => (c.actividad_ids || c.actividadIds || []).map(String).includes(String(req.params.id)));
+      res.json({ success: true, desbloqueada: comprada || porCodigo, precio_licencia: precioLicencia, precio_intento: precioIntento });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+  });
+
   // Compra real de una actividad: primero valida catálogo y cuenta Junior y
   // después liquida el cargo contra Capitalia. No se concede acceso si el
   // banco no confirma la operación.
@@ -333,9 +366,15 @@ export function createApp() {
       if (!actividad || !esActividadPublica(normalizarActividad(actividad))) return res.status(404).json({ error: 'Actividad no disponible' });
       if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
       const contenido = actividad.contenido && typeof actividad.contenido === 'object' ? actividad.contenido : {};
-      const precio = Number(modo === 'intento' ? (actividad.precio_intento ?? contenido.precio_intento) : (actividad.precio_licencia ?? contenido.precio_licencia)) || 0;
+      const precio = Math.max(0, Math.round(Number(modo === 'intento' ? (actividad.precio_intento ?? contenido.precio_intento) : (actividad.precio_licencia ?? contenido.precio_licencia)) || 0));
       if (precio <= 0) return res.json({ success: true, gratuito: true, modo });
       const accountId = junior.cuenta_banco || `u-${dip.toLowerCase().replace(/-/g, '')}`;
+      if (modo === 'licencia') {
+        const { data: previos } = await supabase.from('junior_transacciones').select('concepto').eq('junior_id', junior.id).eq('tipo', 'compra_actividad');
+        if ((previos || []).some((t) => String(t.concepto || '').includes(`actividad:${req.params.id}`) && String(t.concepto || '').includes('licencia'))) {
+          return res.json({ success: true, ya_comprada: true, modo, precio: 0, fromBalance: null });
+        }
+      }
       // Legacy profiles may not yet have been opened in Banco. The same
       // deterministic account creation used by the wallet is safe here too.
       const bankState = await obtenerEstadoBanco();
@@ -348,13 +387,16 @@ export function createApp() {
         });
         if (alta?.accountId && !junior.cuenta_banco) await supabase.from('junior_menores').update({ cuenta_banco: alta.accountId }).eq('id', junior.id);
       }
-      const iva = Math.round((precio * 12 / 112) * 100) / 100;
+      // El menor paga el importe bruto a Capitalia; Capitalia liquida el IVA
+      // a Tributos mediante la operación bancaria.
+      const iva = Math.round(precio * 12 / 112);
       const banco = await postBanco('transferir', {
         from: accountId, to: 'CAPITALIA_BANK', cantidad: precio,
-        iva, concepto: `Placeta Junior · ${actividad.titulo || req.params.id} · ${modo}`,
+        iva, concepto: `Placeta Junior · actividad:${req.params.id} · ${actividad.titulo || req.params.id} · ${modo}`,
         juniorDip: dip, tutorDip: junior.tutor_dip || '',
       });
       if (!banco?.success) return res.status(502).json({ success: false, error: banco?.error || 'El banco no confirmó el cargo' });
+      await supabase.from('junior_transacciones').insert({ junior_id: junior.id, tipo: 'compra_actividad', concepto: `Compra actividad:${req.params.id} · ${modo}`, cantidad: precio, saldo_resultante: banco.fromBalance || 0, creado_en: new Date().toISOString() });
       res.json({ success: true, modo, precio, iva, transactionId: banco.transactionId, fromBalance: banco.fromBalance });
     } catch (e) {
       res.status(502).json({ success: false, error: e.message });

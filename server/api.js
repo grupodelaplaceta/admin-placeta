@@ -630,9 +630,24 @@ export function createApiRouter({ getBankState }) {
   });
   router.get('/rsp/api/contexto/:dip', async (req, res) => {
     try {
-      const c = (await ciudadanosDelBanco()).find((x) => x.dip === req.params.dip);
+      const dip = String(req.params.dip || '').trim().toUpperCase();
+      const c = (await ciudadanosDelBanco()).find((x) => x.dip === dip);
       if (!c) return res.status(404).json({ error: 'Ciudadano no encontrado' });
-      res.json({ ...c, email: `${c.dip.toLowerCase()}@laplaceta.org`, bloques: [{ clave: 'identidad', etiqueta: 'Identidad', icono: 'user', items: [{ clave: 'nivel', etiqueta: 'Nivel', valor: c.nivel }] }] });
+      const identidad = (await identidadesPlacetaID()).find((x) => String(x.dip || x.placeid || x.placetaId || '').toUpperCase() === dip) || {};
+      const cuentas = (await listarCuentas()).filter((x) => String(x.dip || '').toUpperCase() === dip);
+      const nombre = [identidad.nombre, identidad.apellidos].filter(Boolean).join(' ').trim() || c.nombre;
+      const cuentaItems = cuentas.flatMap((x, i) => [
+        { clave: `cuenta-${i}`, etiqueta: `Cuenta ${i + 1}`, valor: x.id || '—' },
+        { clave: `iban-${i}`, etiqueta: 'IBAN', valor: x.iban || '—' },
+        { clave: `saldo-${i}`, etiqueta: 'Saldo', valor: `${Number(x.saldo ?? x.balancePz ?? 0)} Pz` },
+      ]);
+      res.json({ ...c, nombre, email: identidad.email || `${dip.toLowerCase()}@laplaceta.org`, telefono: identidad.telefono || identidad.phone || '', bloques: [
+        { clave: 'identidad', etiqueta: 'Identidad', icono: 'user', items: [
+          { clave: 'dip', etiqueta: 'DIP', valor: dip }, { clave: 'nombre', etiqueta: 'Nombre completo', valor: nombre },
+          { clave: 'nivel', etiqueta: 'Nivel', valor: c.nivel }, { clave: 'rol', etiqueta: 'Rol', valor: identidad.rol || (c.junior ? 'Junior' : 'Ciudadano') },
+        ] },
+        ...(cuentaItems.length ? [{ clave: 'banco', etiqueta: 'Banco de La Placeta', icono: 'wallet', items: cuentaItems }] : []),
+      ] });
     } catch (e) {
       res.status(502).json({ error: e.message });
     }
@@ -675,6 +690,22 @@ export function createApiRouter({ getBankState }) {
         edad: r.edad ?? null, rol: r.rol || 'miembro', activo: r.activo !== false,
         bloqueado: !!r.bloqueado, creadoEn: r.creadoEn || r.createdAt || null,
       })));
+    } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+  // Restablecimiento administrativo de credenciales PlacetaID. Nunca se
+  // devuelve ni se almacena la contraseña en RSP; PlacetaID aplica sus
+  // propias reglas, invalida sesiones y conserva el hash en su dominio.
+  router.post('/rsp/api/placetaid/:dip/password', async (req, res) => {
+    try {
+      const dip = String(req.params.dip || '').trim().toUpperCase();
+      const password = String(req.body?.password || '');
+      if (!dip || password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres, letras y números' });
+      const base = process.env.PLACETAID_API_URL || process.env.PLACETAID_URL || 'https://id.laplaceta.org/api';
+      const key = process.env.PLACETAID_ADMIN_KEY || process.env.PLACETAID_CRM_CLIENT_KEY || '';
+      const response = await fetch(`${base}/admin/cambiar-password`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { 'X-API-Key': key } : {}) }, body: JSON.stringify({ dip, passwordNueva: password, password }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) return res.status(response.status).json({ error: payload.error || 'PlacetaID no pudo cambiar la contraseña' });
+      res.json({ success: true, dip });
     } catch (e) { res.status(502).json({ error: e.message }); }
   });
   router.get('/rsp/api/ciudadanos/:dip/firmas', async (req, res) => {
