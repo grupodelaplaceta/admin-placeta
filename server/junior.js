@@ -88,6 +88,14 @@ export function juniorRouter({ getBankState, postBanco }) {
     return { ...account, balancePz: Number(account.balancePz || 0) };
   }
 
+  // Todas las operaciones que mueven dinero deben usar el id devuelto por el
+  // banco. `cuenta_banco` puede contener el id de una instalación antigua y
+  // usarlo directamente provoca que el banco rechace el canje.
+  async function cuentaOperativaJunior(junior) {
+    const cuenta = await saldoCuentaJunior(junior);
+    return cuenta?.id || null;
+  }
+
   // ── Acceso a Supabase (junior) ────────────────────────────────────────
   async function buscarJunior(dip) {
     if (!supabase || !dip) return null;
@@ -537,20 +545,14 @@ export function juniorRouter({ getBankState, postBanco }) {
       const movimientosBanco = [];
       try {
         const estadoBanco = await getBankState();
-        const idsCuenta = new Set([cuentaDeJunior(junior), cuentaReal?.id].filter(Boolean));
+        const idsCuenta = new Set([cuentaReal?.id].filter(Boolean));
         (estadoBanco?.transactions || [])
           .filter((t) => idsCuenta.has(t.fromAccountId) || idsCuenta.has(t.toAccountId))
           .slice(0, 50)
           .forEach((t) => {
             const concepto = t.concept || t.note || 'Movimiento bancario';
             const cantidad = Number(t.amountPz || 0);
-            // Las recompensas/canjes ya tienen un movimiento CRM asociado.
-            // No duplicarlas al mezclar la fuente bancaria con la educativa.
-            const yaRegistrado = filas.some((f) =>
-              String(f.concepto || '').trim().toLowerCase() === String(concepto).trim().toLowerCase() &&
-              Number(f.cantidad || 0) === cantidad
-            );
-            if (!yaRegistrado) movimientosBanco.push({
+            movimientosBanco.push({
               id: `bank:${t.id || t.transactionId || `${t.createdAt || ''}:${cantidad}`}`,
               junior_id: junior.id,
               tipo: idsCuenta.has(t.toAccountId) ? 'ganar' : 'gastar',
@@ -559,7 +561,10 @@ export function juniorRouter({ getBankState, postBanco }) {
             });
           });
       } catch { /* historial bancario opcional */ }
-      const historialCompleto = [...filas, ...movimientosBanco]
+      // El historial visible es exclusivamente el libro mayor del banco.
+      // junior_transacciones conserva puntos y metadatos internos, pero no es
+      // un movimiento bancario y no debe aparecer en el monedero.
+      const historialCompleto = movimientosBanco
         .sort((a, b) => String(b.creado_en || '').localeCompare(String(a.creado_en || '')))
         .slice(0, 100);
       const hoy = new Date().toISOString().slice(0, 10);
@@ -892,13 +897,16 @@ export function juniorRouter({ getBankState, postBanco }) {
       const recompensa = resultadoFinal ? Math.min(recompensaMax, Math.round(recompensaMax * proporcion)) : 0;
       if (recompensa > 0) {
         const esDemo = junior.tutor_dip === TUTOR_DEMO || (junior.dip || '').includes('DEMO');
+        const cuentaId = await cuentaOperativaJunior(junior);
+        if (!cuentaId && !esDemo) return res.status(502).json({ error: 'No se pudo localizar la cuenta Child real en Banco' });
         if (!esDemo) {
-          const banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaDeJunior(junior), cantidad: recompensa, iva: 0, concepto: `Recompensa actividad ${req.params.id}`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
+          const banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaId, cantidad: recompensa, iva: 0, concepto: `Recompensa actividad ${req.params.id}`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
           if (!banco?.success) return res.status(502).json({ error: banco?.error || 'El banco no confirmó la recompensa' });
         }
         const estadoDespues = esDemo ? null : await getBankState().catch(() => null);
-        const saldoNuevo = Number(estadoDespues?.accounts?.find(a => a.id === cuentaDeJunior(junior))?.balancePz ?? ((junior.placetas_saldo || 0) + recompensa));
-        await crearTransaccion({ junior_id: junior.id, tipo: 'recompensa_actividad', concepto: `Recompensa actividad ${req.params.id}${marcaResultado}`, cantidad: recompensa, saldo_resultante: saldoNuevo, ip: ipDe(req) });
+        const saldoNuevo = Number(estadoDespues?.accounts?.find(a => a.id === (cuentaId || cuentaDeJunior(junior)))?.balancePz ?? ((junior.placetas_saldo || 0) + recompensa));
+        const guardadoRecompensa = await crearTransaccion({ junior_id: junior.id, tipo: 'recompensa_actividad', concepto: `Recompensa actividad ${req.params.id}${marcaResultado}`, cantidad: recompensa, saldo_resultante: saldoNuevo, ip: ipDe(req) });
+        if (!guardadoRecompensa.ok) return res.status(503).json({ success: false, banco_confirmado: !esDemo, error: 'La recompensa se abonó, pero no se pudo registrar en el historial. Contacta con soporte.' });
       }
       // Los diplomas se generan únicamente al superar un examen sin errores.
       // Si la tabla aún no está disponible, el registro de puntos no falla.
@@ -965,12 +973,16 @@ export function juniorRouter({ getBankState, postBanco }) {
       const usados = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes(etiquetaPuntos)).reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const disponibles = (filas.filter(t => t.tipo === (rojos ? 'punto_rojo' : 'punto_verde')).reduce((n, t) => n + Number(t.cantidad || 0), 0) - usados);
       if (puntos > disponibles) return res.status(400).json({ error: 'No tienes suficientes puntos disponibles' });
-      const banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaDeJunior(junior), cantidad: placetas, iva: 0, concepto: `Canje de ${puntos} puntos — Placeta Junior`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
+      const cuentaId = await cuentaOperativaJunior(junior);
+      const esDemo = junior.tutor_dip === TUTOR_DEMO || (junior.dip || '').includes('DEMO');
+      if (!cuentaId && !esDemo) return res.status(502).json({ error: 'No se pudo localizar la cuenta Child real en Banco' });
+      const banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaId || cuentaDeJunior(junior), cantidad: placetas, iva: 0, concepto: `Canje de ${puntos} puntos — Placeta Junior`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
       if (!banco?.success) return res.status(502).json({ error: banco?.error || 'El banco no confirmó el abono' });
       const estadoDespues = await getBankState().catch(() => null);
-      const saldo = Number(estadoDespues?.accounts?.find(a => a.id === cuentaDeJunior(junior))?.balancePz ?? junior.placetas_saldo ?? 0);
-      await crearTransaccion({ junior_id: junior.id, tipo: 'canje_puntos', concepto: `Canje de ${puntos} puntos ${etiquetaPuntos}`, cantidad: puntos, saldo_resultante: saldo, ip: ipDe(req) });
-      res.json({ success: true, placetas_obtenidas: placetas, saldo_actual: saldo });
+      const saldo = Number(estadoDespues?.accounts?.find(a => a.id === (cuentaId || cuentaDeJunior(junior)))?.balancePz ?? banco.toBalance ?? junior.placetas_saldo ?? 0);
+      const guardado = await crearTransaccion({ junior_id: junior.id, tipo: 'canje_puntos', concepto: `Canje de ${puntos} puntos ${etiquetaPuntos}`, cantidad: puntos, saldo_resultante: saldo, ip: ipDe(req) });
+      if (!guardado.ok) return res.status(503).json({ success: false, banco_confirmado: true, error: 'El banco confirmó el abono, pero no se pudo registrar el canje. Contacta con soporte antes de repetirlo.' });
+      res.json({ success: true, placetas_obtenidas: placetas, saldo_actual: saldo, transaction_id: banco.transactionId || null });
     } catch (e) { res.status(502).json({ error: e.message }); }
   });
 
