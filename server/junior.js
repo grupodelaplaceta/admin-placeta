@@ -24,6 +24,8 @@ const RBU_DIARIO = 5;               // Pz diarios de la Renta Básica Universal
 const RBU_FUNDACION = 'FOUNDATION_RBU';
 const CAPITALIA = 'CAPITALIA_BANK'; // Cuenta real que financia recompensas/IVA
 const TUTOR_DEMO = '11111111D';
+const PUNTOS_POR_NIVEL = 50;
+const nivelDePuntos = (verdes) => Math.max(1, Math.floor(Math.max(0, Number(verdes) || 0) / PUNTOS_POR_NIVEL) + 1);
 
 // Huella irreversible del DNI: permite comparar sin conservar el documento.
 const huellaDni = (dni) => createHmac('sha256', process.env.DNI_HASH_SECRET || process.env.SESSION_SECRET || 'placeta-junior-dni-2026')
@@ -152,6 +154,13 @@ export function juniorRouter({ getBankState, postBanco }) {
     if (error) console.error('[junior] No se pudo leer junior_transacciones:', error.message);
     return error ? [] : (data || []);
   }
+
+  // Compatibilidad con las partidas guardadas por versiones antiguas de la
+  // app. Antes se registraban como `ganar` con concepto `Actividad: ...` en
+  // vez de como `punto_verde`/`punto_rojo`.
+  const esPuntoVerde = (t) => t?.tipo === 'punto_verde'
+    || (t?.tipo === 'ganar' && /^actividad\s*:/i.test(String(t?.concepto || '')));
+  const esPuntoRojo = (t) => t?.tipo === 'punto_rojo';
 
   async function actualizarSaldo(juniorId, saldo) {
     if (!supabase) return;
@@ -837,18 +846,26 @@ export function juniorRouter({ getBankState, postBanco }) {
     try {
       const junior = await buscarJunior(req.params.dip);
       if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
-      const filas = await historial(junior.id, 500);
-      const verdes = filas.filter(t => t.tipo === 'punto_verde').reduce((n, t) => n + Number(t.cantidad || 0), 0);
-      const rojos = filas.filter(t => t.tipo === 'punto_rojo').reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const filas = await historial(junior.id, 5000);
+      const verdes = filas.filter(esPuntoVerde).reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const rojos = filas.filter(esPuntoRojo).reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const canjesVerdes = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes('verdes')).reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const canjesRojos = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes('rojos')).reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const canjeado = canjesVerdes + canjesRojos;
       const disponiblesVerdes = Math.max(0, verdes - canjesVerdes);
       const disponiblesRojos = Math.max(0, rojos - canjesRojos);
+      const nivel = nivelDePuntos(verdes);
+      const enNivel = verdes % PUNTOS_POR_NIVEL;
+      // El nivel se calcula a partir de puntos verdes guardados, no de un
+      // valor antiguo de perfil que podía quedarse siempre en nivel 1.
+      if (Number(junior.nivel_academia || 0) !== nivel && supabase) {
+        await supabase.from('junior_menores').update({ nivel_academia: nivel }).eq('id', junior.id);
+      }
       res.json({ success: true, puntos: {
-        puntos_verdes: verdes, puntos_rojos: rojos, canjeado,
+        puntos_verdes: verdes, puntos_rojos: rojos, canjeado, nivel_actual: nivel,
+        puntos_para_siguiente_nivel: PUNTOS_POR_NIVEL - enNivel,
         puntos_verdes_disponibles: disponiblesVerdes, puntos_rojos_disponibles: disponiblesRojos
-      }, tabla_canje: [{ puntos_verdes: 10, placetas: 1 }, { puntos_verdes: 50, placetas: 5 }], tabla_canje_rojos: [{ puntos_rojos: 10, placetas: 1 }, { puntos_rojos: 50, placetas: 5 }] });
+      }, niveles: { puntos_por_nivel: PUNTOS_POR_NIVEL, nivel_actual: nivel, progreso: enNivel / PUNTOS_POR_NIVEL }, tabla_canje: [{ puntos_verdes: 10, placetas: 1 }, { puntos_verdes: 50, placetas: 5 }], tabla_canje_rojos: [{ puntos_rojos: 10, placetas: 1 }, { puntos_rojos: 50, placetas: 5 }] });
     } catch (e) { res.status(500).json({ error: e.message }); }
   });
 
@@ -898,6 +915,9 @@ export function juniorRouter({ getBankState, postBanco }) {
         const guardado = await crearTransaccion(tx);
         if (!guardado.ok) return res.status(503).json({ success: false, error: 'No se pudieron guardar los puntos. Inténtalo de nuevo.' });
       }
+      const puntosTotales = (await historial(junior.id, 5000)).filter(esPuntoVerde).reduce((n, t) => n + Number(t.cantidad || 0), 0);
+      const nivelActual = nivelDePuntos(puntosTotales);
+      if (supabase) await supabase.from('junior_menores').update({ nivel_academia: nivelActual }).eq('id', junior.id);
       // La recompensa es proporcional a los puntos verdes logrados frente al
       // máximo posible y queda limitada por la recompensa de la actividad.
       const recompensaMax = Math.max(0, Number(req.body?.recompensa_unidad || actividadMeta?.recompensa || actividadMeta?.contenido?.recompensa || 0));
@@ -976,23 +996,32 @@ export function juniorRouter({ getBankState, postBanco }) {
       if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
       const rojos = req.body?.tipo === 'rojos';
       const puntos = Math.max(0, parseInt(rojos ? req.body?.puntos_rojos : req.body?.puntos_verdes, 10) || 0);
+      if (puntos < 10 || puntos % 10 !== 0) return res.status(400).json({ error: 'Elige una cantidad de puntos de 10 en 10' });
       const placetas = Math.floor(puntos / 10);
       if (!placetas) return res.status(400).json({ error: 'Necesitas al menos 10 puntos para canjearlos' });
-      const filas = await historial(junior.id, 500);
+      const filas = await historial(junior.id, 5000);
       const etiquetaPuntos = rojos ? 'rojos' : 'verdes';
       const usados = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes(etiquetaPuntos)).reduce((n, t) => n + Number(t.cantidad || 0), 0);
-      const disponibles = (filas.filter(t => t.tipo === (rojos ? 'punto_rojo' : 'punto_verde')).reduce((n, t) => n + Number(t.cantidad || 0), 0) - usados);
+      const disponibles = (filas.filter(rojos ? esPuntoRojo : esPuntoVerde).reduce((n, t) => n + Number(t.cantidad || 0), 0) - usados);
       if (puntos > disponibles) return res.status(400).json({ error: 'No tienes suficientes puntos disponibles' });
-      const cuentaId = await cuentaOperativaJunior(junior);
       const esDemo = junior.tutor_dip === TUTOR_DEMO || (junior.dip || '').includes('DEMO');
+      const cuentaId = esDemo ? null : await cuentaOperativaJunior(junior);
       if (!cuentaId && !esDemo) return res.status(502).json({ error: 'No se pudo localizar la cuenta Child real en Banco' });
-      const banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaId || cuentaDeJunior(junior), cantidad: placetas, iva: 0, concepto: `Canje de ${puntos} puntos — Placeta Junior`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
-      if (!banco?.success) return res.status(502).json({ error: banco?.error || 'El banco no confirmó el abono' });
-      const estadoDespues = await getBankState().catch(() => null);
-      const saldo = Number(estadoDespues?.accounts?.find(a => a.id === (cuentaId || cuentaDeJunior(junior)))?.balancePz ?? banco.toBalance ?? junior.placetas_saldo ?? 0);
+      let banco = null;
+      let saldo = Number(junior.placetas_saldo || 0);
+      if (!esDemo) {
+        banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaId, cantidad: placetas, iva: 0, concepto: `Canje de ${puntos} puntos — Placeta Junior`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
+        if (!banco?.success) return res.status(502).json({ error: banco?.error || 'El banco no confirmó el abono' });
+        const estadoDespues = await getBankState().catch(() => null);
+        saldo = Number(estadoDespues?.accounts?.find(a => a.id === cuentaId)?.balancePz ?? banco.toBalance ?? saldo);
+      } else {
+        saldo += placetas;
+      }
       const guardado = await crearTransaccion({ junior_id: junior.id, tipo: 'canje_puntos', concepto: `Canje de ${puntos} puntos ${etiquetaPuntos}`, cantidad: puntos, saldo_resultante: saldo, ip: ipDe(req) });
       if (!guardado.ok) return res.status(503).json({ success: false, banco_confirmado: true, error: 'El banco confirmó el abono, pero no se pudo registrar el canje. Contacta con soporte antes de repetirlo.' });
-      res.json({ success: true, placetas_obtenidas: placetas, saldo_actual: saldo, transaction_id: banco.transactionId || null });
+      res.json({ success: true, placetas_obtenidas: placetas, puntos_canjeados: puntos,
+        puntos_disponibles: Math.max(0, disponibles - puntos), saldo_actual: saldo,
+        transaction_id: banco?.transactionId || null });
     } catch (e) { res.status(502).json({ error: e.message }); }
   });
 
