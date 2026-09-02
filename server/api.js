@@ -1741,7 +1741,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       return { ...row, actualizado: true };
     }
     await store.facturacion.insertar(row);
-    return { ...row, actualizado: true };
+    return { ...row, actualizado: true, creado: true };
   }
 
   // Aviso del ciclo (recibo emitido / cobrado / impagado) al panel RSP.
@@ -1784,7 +1784,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
           cuentaDebito: r.cuentaDebito || null, pagos: r.pagos || [],
         });
         persistidos.push(guardado);
-        if (guardado.actualizado && r.importe > 0 && ['emitida', 'vencida', 'parcial'].includes(r.estado)) {
+        if (guardado.creado && r.importe > 0 && ['emitida', 'vencida', 'parcial'].includes(r.estado)) {
           await avisoFacturacion({
             nivel: 'accion',
             titulo: 'Recibo de Tributos emitido',
