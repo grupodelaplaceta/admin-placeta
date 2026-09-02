@@ -1001,10 +1001,11 @@ export function createApiRouter({ getBankState, mutarBanco }) {
   });
 
   // Reversión/devolución: si se detecta que una justificación no corresponde
-  // al fin de la subvención, se revierte el gasto y se restituye el importe al
-  // fondo (importeRestante). El dinero vuelve al Banco de La Placeta y el
-  // beneficiario no retiene un cobro indebido. (Registro contable; si se
-  // quiere una transferencia real de retorno se usa la API bancaria aparte.)
+  // al fin de la subvención (fraude / no conforme), se revierte el gasto y el
+  // importe vuelve a la EMPRESA EIP que la concedió (emisor) — el beneficiario
+  // no retiene el cobro indebido. Se restituye también el importeRestante del
+  // fondo. (Registro contable con devueltoA=emisorEip; si se quiere el retorno
+  // real por el Banco se ejecuta con la API bancaria aparte.)
   router.post('/rsp/subvenciones/api/:id/revertir', (req, res) => {
     const s = store.subvencionesDetalle[req.params.id];
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
@@ -1019,11 +1020,11 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     s.justificaciones = s.justificaciones.filter((j) => j.gastoId !== gastoId);
     const fecha = AHORA().slice(0, 10);
     const revId = `REV-${s.id}-${Date.now()}`;
-    s.reversiones.push({ id: revId, gastoId, justificacionId: jids[0], importe, fecha, motivo });
+    s.reversiones.push({ id: revId, gastoId, justificacionId: jids[0], importe, fecha, motivo, devueltoA: s.emisorEip });
     s.importeRestante = round2(Math.max(0, s.importeRestante + importe));
     s.estado = 'concedida';
     store.subvenciones.actualizar(s.id, { importeRestante: s.importeRestante, estado: s.estado }).catch(() => {});
-    res.json({ ok: true, reversionId: revId, importe, importeRestante: s.importeRestante, justificacionIds: jids });
+    res.json({ ok: true, reversionId: revId, importe, importeRestante: s.importeRestante, justificacionIds: jids, devueltoA: s.emisorEip });
   });
 
   // Trazabilidad por beneficiario: cada empresa y cada particular subvencionado

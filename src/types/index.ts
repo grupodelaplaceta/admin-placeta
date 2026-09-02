@@ -578,7 +578,9 @@ export interface ReversionPago {
   importe: number;
   fecha: string;
   motivo: string;
-  /** Si el dinero se devolvió al Banco/emisor con una transferencia real. */
+  /** EIP a la que se devuelve el dinero (la empresa que concedió la subvención). */
+  devueltoA?: string;
+  /** Si el dinero se devolvió con una transferencia real del Banco. */
   transferenciaId?: string;
 }
 

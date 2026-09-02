@@ -57,7 +57,7 @@ export default function BeneficiariosSubvenciones() {
       <div className="rsp-kpi-grid">
         <KPI label="Concedido" value={fmt(payload.resumen.concedido)} icon="banknote" tone="info" />
         <KPI label="Justificado" value={fmt(payload.resumen.justificado)} icon="check" tone="success" />
-        <KPI label="Devuelto al Banco" value={fmt(payload.resumen.devuelto)} icon="alert" tone="danger" />
+        <KPI label="Devuelto al emisor EIP" value={fmt(payload.resumen.devuelto)} icon="alert" tone="danger" />
         <KPI label="Pendiente justificar" value={fmt(payload.resumen.pendiente)} icon="receipt" tone="warning" />
       </div>
 

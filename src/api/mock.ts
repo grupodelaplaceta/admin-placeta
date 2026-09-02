@@ -1030,7 +1030,7 @@ export const mockProvider: Provider = {
     g.justificado = false;
     g.excluido = true; // no se vuelve a justificar
     d.justificaciones = d.justificaciones.filter((j) => j.gastoId !== gastoId);
-    const rev = { id: `REV-${Date.now()}`, gastoId, importe, fecha: new Date().toISOString().slice(0, 10), motivo: motivo || 'No corresponde al fin de la subvención' };
+    const rev = { id: `REV-${Date.now()}`, gastoId, importe, fecha: new Date().toISOString().slice(0, 10), motivo: motivo || 'No corresponde al fin de la subvención', devueltoA: s.emisorEip };
     d.reversiones.push(rev);
     s.importeRestante = Math.min(s.importe, Math.max(0, s.importeRestante + importe));
     if (s.importeRestante < s.importe) s.estado = 'concedida';

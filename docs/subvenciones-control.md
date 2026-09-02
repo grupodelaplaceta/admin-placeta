@@ -20,8 +20,9 @@
 4. **Devolución/reversión**: si una justificación no corresponde al fin de la
    subvención, `POST /rsp/subvenciones/api/:id/revertir { gastoId, motivo }`
    revierte el gasto (queda excluido), elimina su justificación, registra la
-   devolución y **restituye el importe al fondo** (`importeRestante`). El dinero
-   vuelve al Banco de La Placeta y el beneficiario no retiene un cobro indebido.
+   devolución con **`devueltoA` = la EIP emisora que concedió la subvención** y
+   restituye el importe al `importeRestante`. El beneficiario no retiene un
+   cobro indebido; el dinero vuelve a la empresa EIP que subvencionó.
 
 ## Endpoints nuevos / modificados (`server/api.js`)
 - `POST /rsp/subvenciones/api/conceder` (+ `categoriasCubiertas`).
@@ -35,7 +36,7 @@
 
 ## Notas / pendientes
 - La justificación es **registro contable + trazabilidad**; el movimiento real
-  de fondos (desembolso y retorno al Banco) se hace con la API bancaria
+  de fondos (desembolso y retorno al **emisor EIP**) se hace con la API bancaria
   (acciones `transferir`) cuando se integre el alta de cuenta del emisor, igual
   que en el resto del sistema. `transferenciaId` queda como referencia.
 - El detalle (gastos/justificaciones/reversiones) se guarda en la sesión del BFF
