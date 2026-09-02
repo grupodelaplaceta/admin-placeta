@@ -705,9 +705,12 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       if (!dip || password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres, letras y números' });
       const base = process.env.PLACETAID_API_URL || process.env.PLACETAID_URL || 'https://id.laplaceta.org/api';
       const key = process.env.PLACETAID_ADMIN_KEY || process.env.PLACETAID_CRM_CLIENT_KEY || '';
-      const response = await fetch(`${base}/admin/cambiar-password`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(key ? { 'X-API-Key': key } : {}) }, body: JSON.stringify({ dip, passwordNueva: password, password }) });
+      if (!key) return res.status(503).json({ error: 'El backend no tiene PLACETAID_ADMIN_KEY: no se puede cambiar la contraseña de PlacetaID desde RSP.' });
+      // El cambio lo aplica SIEMPRE el servidor de PlacetaID (guarda el hash en
+      // su dominio). RSP solo reenvía la nueva contraseña; nunca la almacena.
+      const response = await fetch(`${base}/admin/cambiar-password`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-Key': key }, body: JSON.stringify({ dip, passwordNueva: password }) });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) return res.status(response.status).json({ error: payload.error || 'PlacetaID no pudo cambiar la contraseña' });
+      if (!response.ok) return res.status(response.status).json({ error: payload.error || payload.mensaje || `PlacetaID no pudo cambiar la contraseña (HTTP ${response.status})` });
       res.json({ success: true, dip });
     } catch (e) { res.status(502).json({ error: e.message }); }
   });

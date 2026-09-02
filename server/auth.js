@@ -160,8 +160,21 @@ export function authRouter() {
     if (!usuario || !esAdmin(usuario.dip)) {
       return res.status(401).json({ error: `Acceso denegado: ${dip || 'DIP vacío'} no es administrador.` });
     }
+    // Este formulario valida la CONTRASEÑA DE ADMINISTRADOR DEL RSP (variables
+    // ADMIN_USERS / ADMIN_PASSWORD del backend), NO la de PlacetaID. Si no hay
+    // contraseña local configurada se indica claramente (evita el falso
+    // "contraseña incorrecta" cuando el usuario teclea su contraseña PlacetaID).
+    if (!usuario.password) {
+      return res.status(401).json({
+        error: `${dip} no tiene contraseña de administrador configurada (ADMIN_PASSWORD o ADMIN_USERS en el backend). Para entrar con tu identidad PlacetaID usa «Continuar con PlacetaID».`,
+        usaPlacetaID: true,
+      });
+    }
     if (!verificarPassword(password, usuario.password)) {
-      return res.status(401).json({ error: `Contraseña incorrecta para ${dip}.` });
+      return res.status(401).json({
+        error: `Contraseña de administrador incorrecta para ${dip}. Recuerda: este campo NO es tu contraseña de PlacetaID; entra con «Continuar con PlacetaID» o configura ADMIN_PASSWORD/ADMIN_USERS en el backend.`,
+        usaPlacetaID: true,
+      });
     }
     const token = crearTokenSesion(usuario.dip);
     res.cookie(COOKIE, token, {

@@ -99,7 +99,7 @@ export default function Login() {
               />
             </label>
             <label className="rsp-field">
-              <span>Contraseña</span>
+              <span>Contraseña de administrador (RSP)</span>
               <input
                 type="password"
                 value={password}
@@ -109,6 +109,9 @@ export default function Login() {
                 required
               />
             </label>
+            <p className="u-muted" style={{ fontSize: 'var(--fs-xs)' }}>
+              Este campo es la contraseña de administrador del RSP (definida en el backend). <strong>No es tu contraseña de PlacetaID</strong>: para entrar con tu identidad PlacetaID usa el botón «Continuar con PlacetaID» de arriba.
+            </p>
             <Button type="submit" disabled={loading} icon="lock" variant="outline">
               {loading ? 'Verificando…' : 'Entrar'}
             </Button>
@@ -127,8 +130,7 @@ export default function Login() {
               )}
               {errorStatus === 401 && (
                 <p className="u-muted" style={{ margin: '4px 0 0', fontSize: 'var(--fs-xs)' }}>
-                  Verifica el DIP y la contraseña. Si eres el presidente (23749931M) y aun así no entras,
-                  configura ADMIN_PASSWORD en el backend.
+                  Si eres el presidente (23749931M) y no configuras ADMIN_PASSWORD en el backend, el acceso con DIP+contraseña no puede funcionar (es la contraseña del RSP, no la de PlacetaID). Usa «Continuar con PlacetaID» para entrar con tu identidad.
                 </p>
               )}
             </div>
