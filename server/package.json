@@ -6,7 +6,9 @@
   "description": "API/BFF de rsp-web: sirve el SPA y agrega datos reales (BOP + Banco) para sustituir a admin-placeta",
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "test": "node --test",
+    "dry-run": "node scripts/dry-run-emision.mjs"
   },
   "dependencies": {
     "cors": "^2.8.6",
