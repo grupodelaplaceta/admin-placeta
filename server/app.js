@@ -442,7 +442,7 @@ export function createApp() {
 
   // A partir de aquí, todo exige sesión válida (cookie httpOnly).
   app.use(requiereSesion);
-  app.use(createApiRouter({ getBankState: obtenerEstadoBanco }));
+  app.use(createApiRouter({ getBankState: obtenerEstadoBanco, mutarBanco: postBanco }));
 
   // ── Boletín Oficial: CNIC vigentes + tarifas + subvenciones ────────
   app.get('/api/transparencia', async (_req, res) => {

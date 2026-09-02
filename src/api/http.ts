@@ -12,6 +12,7 @@ import type {
   CiudadanoResumen, Notificacion, EventoAuditoria, CNICRegla, Operacion,
   EntidadRegistral, Filtros, Actuacion, TramiteDetalle, NuevoTramite,
   Contribuyente, ContribuyenteDetalle, DeclaracionResumen, DeclaracionDetalle,
+  CicloFacturacion, PlanCierre,
   DocumentoCiudadano, FirmaCiudadano, Obligacion, EntidadDetalle,
   SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
@@ -180,6 +181,20 @@ export const httpProvider: Provider = {
   },
   async accionDeclaracion(id, accion) {
     return http.post<void>(`/rsp/tributos/api/declaraciones/${id}/${accion}`);
+  },
+  // ── Facturación central (RSP + Banco) ───────────────────────────────
+  async cicloFacturacion(mes) {
+    const q = mes ? `?mes=${encodeURIComponent(mes)}` : '';
+    return http.get<CicloFacturacion>(`/rsp/facturacion/api/ciclo${q}`);
+  },
+  async emitirCicloFacturacion(mes) {
+    return http.post<{ ok: boolean; mes: string; persistidos: number }>('/rsp/facturacion/api/emitir', { mes });
+  },
+  async cierreFacturacion(mes, ejecutar = false) {
+    return http.post<{ ok: boolean; mes: string; ejecutar: boolean; accesoBanco: boolean; plan: PlanCierre; resultados: never[] }>('/rsp/facturacion/api/cierre', { mes, ejecutar });
+  },
+  async cambiarEstadoRecibo(id, mes, estado) {
+    return http.post<{ ok: boolean }>(`/rsp/facturacion/api/${encodeURIComponent(id)}/estado`, { estado, mes });
   },
   // ── Detalle de ciudadano / entidad ────────────────────────────────────
   async documentosDeCiudadano(dip) {

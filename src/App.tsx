@@ -26,6 +26,7 @@ import Bop from './pages/bop/Bop';
 import Contribuyentes from './pages/tributos/Contribuyentes';
 import Declaraciones from './pages/tributos/Declaraciones';
 import DeclaracionDetail from './pages/tributos/DeclaracionDetail';
+import Facturacion from './pages/tributos/Facturacion';
 import EntidadDetail from './pages/entidades/EntidadDetail';
 import Subvenciones from './pages/subvenciones/Subvenciones';
 import SubvencionDetail from './pages/subvenciones/SubvencionDetail';
@@ -84,6 +85,7 @@ export default function App() {
               <Route path="/tributos" element={permiso('ver_contribuyentes', <Contribuyentes />)} />
               <Route path="/tributos/declaraciones" element={permiso('ver_declaraciones', <Declaraciones />)} />
               <Route path="/tributos/declaraciones/:id" element={permiso('ver_declaraciones', <DeclaracionDetail />)} />
+              <Route path="/facturacion" element={permiso('ver_declaraciones', <Facturacion />)} />
               <Route path="/subvenciones" element={permiso('ver_subvenciones', <Subvenciones />)} />
               <Route path="/subvenciones/:id" element={permiso('ver_subvenciones', <SubvencionDetail />)} />
               <Route path="/bonos" element={permiso('ver_bonos', <Bonificaciones />)} />

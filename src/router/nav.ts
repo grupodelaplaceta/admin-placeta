@@ -35,6 +35,7 @@ export const NAV_SECTIONS: NavSection[] = [
     links: [
       { to: '/tributos', label: 'Contribuyentes', icon: 'users', permiso: 'ver_contribuyentes' },
       { to: '/tributos/declaraciones', label: 'Declaraciones', icon: 'fileCheck', permiso: 'ver_declaraciones' },
+      { to: '/facturacion', label: 'Facturación', icon: 'receipt', permiso: 'ver_declaraciones' },
       { to: '/subvenciones', label: 'Subvenciones', icon: 'handshake', permiso: 'ver_subvenciones' },
       { to: '/bonos', label: 'Bonificaciones', icon: 'sparkles', permiso: 'ver_bonos' },
     ],

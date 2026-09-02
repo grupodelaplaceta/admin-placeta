@@ -411,6 +411,88 @@ export interface ParticipacionEmpresa {
   pct: number;
 }
 
+// ── Facturación central (RSP + Banco) ───────────────────────────────────
+export type EstadoRecibo =
+  | 'emitida' | 'pagada' | 'parcial' | 'vencida'
+  | 'pendiente_cargo' | 'cobrada' | 'impagada' | 'anulada' | 'sin_cuota';
+
+export interface FacturaCiclo {
+  id: string;
+  eip: string;
+  nombre: string;
+  mes: string;
+  transaccionId: string;
+  concepto: string;
+  cliente: string;
+  fecha: string;
+  bruto: number;
+  base: number;
+  iva: number;
+  tipo: 'venta' | 'servicio';
+  estado: 'abonada';
+}
+
+export interface ReciboTributos {
+  id: string;
+  tipo: 'tributos';
+  eip: string;
+  nombre: string;
+  mes: string;
+  importe: number;
+  irm: number;
+  igf: number;
+  iva: number;
+  ivaExento: boolean;
+  igfExentoReducida: boolean;
+  estadoFiscal: string;
+  patrimonioMedio: number;
+  /** Fecha de vencimiento (fin de mes) en formato YYYY-MM-DD. */
+  vencimiento: string;
+  estado: EstadoRecibo;
+  cuentaDebito: { id: string; saldo: number } | null;
+  pagos?: { transaccionId: string; fecha: string; importe: number; concepto: string }[];
+  totalPagado?: number;
+  cobro?: { fecha: string; transaccionId: string; importe: number; via?: string };
+  aviso?: { fecha: string; motivo: string; saldo?: number; cuenta?: string; detalle?: string };
+}
+
+export interface EmpresaCiclo {
+  eip: string;
+  nombre: string;
+  saldoTotal: number;
+  cuentas: string[];
+  recibo: ReciboTributos;
+  facturas: FacturaCiclo[];
+  totalVentas: number;
+  totalIvaVentas: number;
+  persistido?: boolean;
+}
+
+export interface CicloFacturacion {
+  resumen: {
+    mes: string;
+    fechaGeneracion: string;
+    vencimiento: string;
+    tipoIvaPct: number;
+    empresas: number;
+    recibosPendientes: number;
+    recibosPagados: number;
+    facturas: number;
+    totalTributos: number;
+    totalPagado: number;
+    totalVentas: number;
+  };
+  empresas: EmpresaCiclo[];
+}
+
+export interface PlanCierre {
+  fecha: string;
+  cobros: { reciboId: string; eip: string; nombre: string; concepto: string; from: string; to: string; cantidad: number; fecha: string }[];
+  impagados: { reciboId: string; eip: string; nombre: string; importe: number; saldo: number; cuenta: string; motivo: string }[];
+  totalCobrar: number;
+  totalImpagado: number;
+}
+
 export interface Nomina {
   id: string;
   dip: string;

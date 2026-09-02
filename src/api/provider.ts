@@ -10,6 +10,7 @@ import type {
   CiudadanoResumen, Notificacion, EventoAuditoria, CNICRegla, Operacion,
   EntidadRegistral, Filtros, Actuacion, TramiteDetalle, NuevoTramite,
   Contribuyente, ContribuyenteDetalle, DeclaracionResumen, DeclaracionDetalle,
+  CicloFacturacion, PlanCierre, EmpresaCiclo,
   DocumentoCiudadano, FirmaCiudadano, Obligacion, EntidadDetalle,
   SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, Baremo, CuentaBancaria, TarjetaDigital,
@@ -122,6 +123,19 @@ export interface Provider {
   listarDeclaraciones(filtros?: Filtros): Promise<DeclaracionResumen[]>;
   getDeclaracion(id: string): Promise<DeclaracionDetalle>;
   accionDeclaracion(id: string, accion: string): Promise<void>;
+
+  // Facturación central (RSP + Banco): ciclo mensual de recibos/facturas
+  cicloFacturacion(mes?: string): Promise<CicloFacturacion>;
+  emitirCicloFacturacion(mes?: string): Promise<{ ok: boolean; mes: string; persistidos: number }>;
+  cierreFacturacion(mes: string, ejecutar?: boolean): Promise<{
+    ok: boolean;
+    mes: string;
+    ejecutar: boolean;
+    accesoBanco: boolean;
+    plan: PlanCierre;
+    resultados: EmpresaCiclo[];
+  }>;
+  cambiarEstadoRecibo(id: string, mes: string, estado: 'anulada' | 'pagada' | 'cobrada' | 'impagada'): Promise<{ ok: boolean }>;
 
   // Operaciones
   listarOperaciones(): Promise<Operacion[]>;

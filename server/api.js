@@ -10,6 +10,7 @@
 import { Router } from 'express';
 import { randomBytes, randomUUID } from 'crypto';
 import { calcularContribuyentes } from './tributos.js';
+import { calcularCicloFacturacion, planCierreMes } from './facturacion.js';
 import { coleccion } from './db.js';
 import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacionPlacetaID } from './firmas.js';
 import { CATALOGO_BASE } from './tramites-catalogo.js';
@@ -22,7 +23,7 @@ const BOP_URL = (process.env.BOP_URL || 'https://bop.laplaceta.org').replace(/\/
 const round2 = (n) => Math.round(n * 100) / 100;
 const limpiar = (s = '') => String(s).replace(/\s*\(.*\)\s*$/, '').trim();
 
-export function createApiRouter({ getBankState }) {
+export function createApiRouter({ getBankState, mutarBanco }) {
   const router = Router();
 
   // El catálogo oficial vive en BOP. RSP solo lo cachea para resiliencia:
@@ -85,6 +86,8 @@ export function createApiRouter({ getBankState }) {
     juntas: coleccion('rsp_reuniones'),
     encuestas: coleccion('rsp_encuestas'),
     nominas: coleccion('rsp_nominas'),
+    // Facturación central (RSP + Banco): ciclo mensual de recibos/facturas.
+    facturacion: coleccion('rsp_facturacion'),
     // En memoria (sesión): detalle de subvenciones/bonos y estado 2FA.
     subvencionesDetalle: {},
     bonosDetalle: {},
@@ -1692,6 +1695,142 @@ export function createApiRouter({ getBankState }) {
     if (!siguiente) return res.status(400).json({ error: `Acción desconocida: ${accion}` });
     declaracionesEstado.set(id, siguiente);
     res.json({ ok: true, estado: siguiente });
+  });
+
+  /* ── Facturación central (RSP + Banco) ────────────────────────────
+     Ciclo mensual automático por empresa: recibo de Tributos (IRM+IGF)
+     + facturas de venta/servicio. Cobro a fin de mes con cargo en la
+     cuenta BLP (domiciliación) hacia Tributos/TGLP; si no hay saldo,
+     queda impagada. La ejecución bancaria solo ocurre si el BFF tiene
+     `mutarBanco` (misma llave CRM que Junior) y se pide `ejecutar`. */
+  const ESTADOS_TERMINALES_RECIBO = ['pagada', 'cobrada', 'impagada', 'anulada', 'pendiente_cargo'];
+
+  async function cicloFacturacionConPersistencia(mes) {
+    const state = await getBankState();
+    const cnic = await cargarCnicVigentes();
+    const contribuyentes = calcularContribuyentes(state, mes, cnic);
+    const ciclo = calcularCicloFacturacion({ state, contribuyentes, mes, cnic });
+    const rows = await store.facturacion.listar({ filtros: { mes } });
+    const recibos = new Map((rows || []).filter((r) => r.documento === 'recibo').map((r) => [r.id, r]));
+    for (const e of ciclo.empresas) {
+      const row = recibos.get(e.recibo.id);
+      if (!row) continue;
+      e.persistido = true;
+      if (ESTADOS_TERMINALES_RECIBO.includes(row.estado)) e.recibo.estado = row.estado;
+      if (row.cobro) e.recibo.cobro = row.cobro;
+      if (row.aviso) e.recibo.aviso = row.aviso;
+      if (Array.isArray(row.pagos) && row.pagos.length) {
+        e.recibo.pagos = row.pagos;
+        e.recibo.totalPagado = row.pagos.reduce((s, p) => s + Number(p.importe || 0), 0);
+      }
+    }
+    return { state, cnic, ciclo };
+  }
+
+  // Guarda un documento del ciclo sin rebajar recibos ya cerrados.
+  async function guardarDocumento(row) {
+    const existe = await store.facturacion.obtener(row.id);
+    const cerrado = existe && ['cobrada', 'impagada', 'anulada'].includes(existe.estado);
+    if (existe) {
+      if (cerrado && !['cobrada', 'impagada', 'anulada'].includes(row.estado)) {
+        return { ...existe, actualizado: false }; // no rebajar
+      }
+      const patch = { ...row };
+      delete patch.id;
+      await store.facturacion.actualizar(row.id, patch);
+      return { ...row, actualizado: true };
+    }
+    await store.facturacion.insertar(row);
+    return { ...row, actualizado: true };
+  }
+
+  router.get('/rsp/facturacion/api/ciclo', async (req, res) => {
+    try {
+      const mes = String(req.query.mes || mesActual());
+      const { ciclo } = await cicloFacturacionConPersistencia(mes);
+      res.json(ciclo);
+    } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+
+  router.post('/rsp/facturacion/api/emitir', async (req, res) => {
+    try {
+      const mes = String((req.body || {}).mes || mesActual());
+      const { ciclo } = await cicloFacturacionConPersistencia(mes);
+      const persistidos = [];
+      for (const e of ciclo.empresas) {
+        const r = e.recibo;
+        persistidos.push(await guardarDocumento({
+          id: r.id, documento: 'recibo', tipo: r.tipo, eip: e.eip, nombre: e.nombre, mes: r.mes,
+          importe: r.importe, irm: r.irm, igf: r.igf, iva: r.iva,
+          ivaExento: !!r.ivaExento, estadoFiscal: r.estadoFiscal,
+          vencimiento: r.vencimiento, estado: r.estado,
+          cuentaDebito: r.cuentaDebito || null, pagos: r.pagos || [],
+        }));
+        for (const f of e.facturas || []) {
+          persistidos.push(await guardarDocumento({
+            id: f.id, documento: 'factura', tipo: f.tipo, eip: e.eip, nombre: e.nombre, mes: f.mes,
+            concepto: f.concepto, cliente: f.cliente, importe: f.bruto, base: f.base, iva: f.iva,
+            transaccionId: f.transaccionId, fecha: f.fecha, estado: f.estado,
+          }));
+        }
+      }
+      res.json({ ok: true, mes, persistidos: persistidos.length });
+    } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+
+  router.post('/rsp/facturacion/api/cierre', async (req, res) => {
+    try {
+      const b = req.body || {};
+      const mes = String(b.mes || mesActual());
+      const ejecutar = b.ejecutar === true;
+      const { ciclo } = await cicloFacturacionConPersistencia(mes);
+      const plan = planCierreMes(ciclo, { hoy: b.hoy });
+      const resultados = [];
+      for (const c of plan.cobros) {
+        const fila = { ...c, documento: 'recibo', mes };
+        if (ejecutar && mutarBanco) {
+          try {
+            const banco = await mutarBanco('transferir', {
+              from: c.from, to: c.to, cantidad: c.cantidad, concepto: c.concepto,
+              ref: c.reciboId, mes,
+            });
+            const txId = (banco && (banco.transactionId || banco.id || banco.txId)) || `TX-${Date.now()}`;
+            const cobro = { fecha: c.fecha, transaccionId: txId, importe: c.cantidad, via: 'domiciliacion' };
+            await guardarDocumento({ ...fila, estado: 'cobrada', cobro, pagos: [], aviso: null });
+            resultados.push({ ...c, ejecutado: true, transaccionId: txId });
+          } catch (err) {
+            await guardarDocumento({ ...fila, estado: 'impagada', aviso: { fecha: c.fecha, motivo: 'cargo_fallido', detalle: String(err?.message || err) } });
+            resultados.push({ ...c, ejecutado: false, error: String(err?.message || err) });
+          }
+        } else {
+          await guardarDocumento({ ...fila, estado: 'pendiente_cargo', aviso: { fecha: c.fecha, motivo: ejecutar ? 'sin_acceso_banco' : 'simulacion' } });
+          resultados.push({ ...c, ejecutado: false, simulado: !ejecutar });
+        }
+      }
+      for (const im of plan.impagados) {
+        const fila = await store.facturacion.obtener(im.reciboId);
+        const aviso = { fecha: plan.fecha, motivo: im.motivo, saldo: im.saldo, cuenta: im.cuenta };
+        if (fila) await store.facturacion.actualizar(im.reciboId, { estado: 'impagada', aviso });
+        else await store.facturacion.insertar({ id: im.reciboId, documento: 'recibo', mes, eip: im.eip, nombre: im.nombre, importe: im.importe, estado: 'impagada', aviso });
+      }
+      res.json({ ok: true, mes, ejecutar, accesoBanco: !!mutarBanco, plan, resultados });
+    } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+
+  router.post('/rsp/facturacion/api/:id/estado', async (req, res) => {
+    try {
+      const id = req.params.id;
+      const estado = String((req.body || {}).estado || '');
+      if (!['anulada', 'pagada', 'cobrada', 'impagada'].includes(estado)) {
+        return res.status(400).json({ error: `Estado no permitido: ${estado}` });
+      }
+      const existe = await store.facturacion.obtener(id);
+      const patch = { estado };
+      if (estado === 'anulada') patch.aviso = { fecha: new Date().toISOString().slice(0, 10), motivo: 'anulada_manual' };
+      if (existe) await store.facturacion.actualizar(id, patch);
+      else await store.facturacion.insertar({ id, documento: 'recibo', estado, mes: mesActual() });
+      res.json({ ok: true, id, estado });
+    } catch (e) { res.status(502).json({ error: e.message }); }
   });
 
   /* ── Votaciones / Juntas / Encuestas ────────────────────────────── */

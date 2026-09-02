@@ -14,6 +14,7 @@ import type {
   DesgloseFiscal, CuentaSugerencia, RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa, Nomina, RequisitoBono, BopDocumento,
+  CicloFacturacion, EmpresaCiclo, PlanCierre,
 } from '../types';
 import { TIPOS_TRAMITE, ANONIMATO_DIAS } from '../types';
 import type { Provider } from './provider';
@@ -492,6 +493,57 @@ function filtro<T>(items: T[], f?: Filtros): T[] {
   return out;
 }
 
+/** Ciclo de facturación demo coherente con el snapshot del banco (VITE_USE_MOCK). */
+function cicloFacturacionDemo(mes: string): CicloFacturacion {
+  const [yy, mm] = mes.split('-').map(Number);
+  const hoy = new Date().toISOString().slice(0, 10);
+  const ultimo = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const vencimiento = `${mes}-${String(ultimo).padStart(2, '0')}`;
+  const empresas: EmpresaCiclo[] = [];
+  let seq = 0;
+  for (const c of CUENTAS) {
+    if (c.tipo !== 'Business' || SISTEMA_CUENTAS.test(c.id)) continue;
+    const eip = eipDeCuenta(c);
+    if (!eip) continue;
+    const contrib = CONTRIBUYENTES.find((x) => x.id === eip);
+    if (!contrib) continue;
+    seq += 1;
+    // Snapshot sin movimientos mensuales: cuota representativa de la Red
+    // (declaración real de julio) y el resto sin cuota. No se inventa: es demo.
+    const irm = eip === 'EIP-X4NGQU' ? 7 : 0;
+    const igf = eip === 'EIP-X4NGQU' ? 671 : 0;
+    const importe = irm + igf;
+    const estado = importe === 0 ? ('sin_cuota' as const) : (hoy > vencimiento ? ('vencida' as const) : ('emitida' as const));
+    const nombre = NOMBRE_ENTIDAD_POR_EIP[eip] ?? c.nombre;
+    empresas.push({
+      eip,
+      nombre,
+      saldoTotal: c.saldo,
+      cuentas: [c.id],
+      recibo: {
+        id: `RCB-${mes}-${String(seq).padStart(3, '0')}`,
+        tipo: 'tributos', eip, nombre, mes,
+        importe, irm, igf, iva: 0, ivaExento: true, igfExentoReducida: true,
+        estadoFiscal: contrib.estadoFiscal, patrimonioMedio: c.saldo,
+        vencimiento, estado, cuentaDebito: { id: c.id, saldo: c.saldo },
+      },
+      facturas: [], totalVentas: 0, totalIvaVentas: 0,
+    });
+  }
+  return {
+    resumen: {
+      mes, fechaGeneracion: new Date().toISOString(), vencimiento, tipoIvaPct: 12,
+      empresas: empresas.length,
+      recibosPendientes: empresas.filter((e) => ['emitida', 'vencida', 'parcial'].includes(e.recibo.estado)).length,
+      recibosPagados: empresas.filter((e) => e.recibo.estado === 'pagada').length,
+      facturas: 0,
+      totalTributos: empresas.reduce((s, e) => s + e.recibo.importe, 0),
+      totalPagado: 0, totalVentas: 0,
+    },
+    empresas,
+  };
+}
+
 export const mockProvider: Provider = {
   async login(_dip, password) {
     if (password !== 'demo') throw new Error('Contraseña incorrecta (modo demo: usa "demo")');
@@ -762,6 +814,36 @@ export const mockProvider: Provider = {
       rechazar: 'borrador',
     };
     if (map[accion]) d.estado = map[accion];
+  },
+  // ── Facturación central (RSP + Banco) ────────────────────────────────
+  async cicloFacturacion(mes) {
+    return cicloFacturacionDemo(mes || new Date().toISOString().slice(0, 7));
+  },
+  async emitirCicloFacturacion(mes) {
+    const m = mes || new Date().toISOString().slice(0, 7);
+    const ciclo = cicloFacturacionDemo(m);
+    return { ok: true, mes: m, persistidos: ciclo.empresas.length };
+  },
+  async cierreFacturacion(mes, ejecutar = false) {
+    const m = mes || new Date().toISOString().slice(0, 7);
+    const ciclo = cicloFacturacionDemo(m);
+    const plan: PlanCierre = { fecha: new Date().toISOString().slice(0, 10), cobros: [], impagados: [], totalCobrar: 0, totalImpagado: 0 };
+    for (const e of ciclo.empresas) {
+      const r = e.recibo;
+      if (r.estado === 'vencida' || r.estado === 'parcial') {
+        plan.cobros.push({
+          reciboId: r.id, eip: e.eip, nombre: e.nombre,
+          concepto: `Domiciliación Tributos ${m} · ${r.id}`,
+          from: r.cuentaDebito?.id ?? '', to: 'TGLP',
+          cantidad: r.importe - (r.totalPagado ?? 0), fecha: plan.fecha,
+        });
+      }
+    }
+    plan.totalCobrar = plan.cobros.reduce((s, c) => s + c.cantidad, 0);
+    return { ok: true, mes: m, ejecutar, accesoBanco: true, plan, resultados: [] };
+  },
+  async cambiarEstadoRecibo(id, mes, estado) {
+    return { ok: true, id, mes, estado };
   },
   // ── Detalle de ciudadano / entidad ────────────────────────────────────
   async documentosDeCiudadano() {
