@@ -136,6 +136,11 @@ export interface Provider {
     resultados: EmpresaCiclo[];
   }>;
   conciliarFacturacion(mes?: string): Promise<{ ok: boolean; mes: string; conciliados: number }>;
+  /** Paga el IVA de las facturas de una empresa (todas o las seleccionadas) a Tributos/TGLP. */
+  pagarIvaFacturacion(mes: string, eip: string, facturaIds?: string[]): Promise<{
+    ok: boolean; mes: string; eip: string; pagadas: number; importe: number;
+    transaccionId?: string; nadaQuePagar?: boolean; facturas?: string[];
+  }>;
   cambiarEstadoRecibo(id: string, mes: string, estado: 'anulada' | 'pagada' | 'cobrada' | 'impagada'): Promise<{ ok: boolean }>;
 
   // Operaciones

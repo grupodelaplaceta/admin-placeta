@@ -35,10 +35,20 @@ create table if not exists public.rsp_facturacion (
   estado_fiscal   text,                         -- al_dia | pendiente | inhibido
   vencimiento     text,                         -- 'YYYY-MM-DD' fin de mes
   iva_exento      boolean not null default false,
+  -- Pago del IVA de cada factura de venta (se ingresa a TGLP por factura,
+  -- nunca automático ni con PlaceZum; evita cobrar dos veces).
+  iva_pagado       boolean not null default false,
+  fecha_pago_iva   text,
+  transaccion_pago_iva text,
   fecha           text,                         -- fecha del movimiento (facturas)
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
+
+-- Compatibilidad con tablas ya creadas antes de añadir el pago de IVA por factura
+ALTER TABLE public.rsp_facturacion ADD COLUMN IF NOT EXISTS iva_pagado boolean not null default false;
+ALTER TABLE public.rsp_facturacion ADD COLUMN IF NOT EXISTS fecha_pago_iva text;
+ALTER TABLE public.rsp_facturacion ADD COLUMN IF NOT EXISTS transaccion_pago_iva text;
 
 -- Índices de consulta habituales del panel (ciclo por mes / empresa / estado)
 create index if not exists rsp_facturacion_mes_idx        on public.rsp_facturacion (mes);

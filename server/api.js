@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import { randomBytes, randomUUID } from 'crypto';
 import { calcularContribuyentes } from './tributos.js';
-import { calcularCicloFacturacion, planCierreMes, CUENTA_TRIBUTOS } from './facturacion.js';
+import { calcularCicloFacturacion, planCierreMes, seleccionarPagoIva, CUENTA_TRIBUTOS } from './facturacion.js';
 import { coleccion } from './db.js';
 import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacionPlacetaID } from './firmas.js';
 import { CATALOGO_BASE } from './tramites-catalogo.js';
@@ -1729,8 +1729,20 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const ciclo = calcularCicloFacturacion({ state, contribuyentes, mes, cnic });
     const rows = await store.facturacion.listar({ filtros: { mes } });
     const recibos = new Map((rows || []).filter((r) => r.documento === 'recibo').map((r) => [r.id, r]));
+    const filasFactura = new Map((rows || []).filter((r) => r.documento === 'factura').map((r) => [r.id, r]));
     let conciliados = 0;
     for (const e of ciclo.empresas) {
+      // IVA por factura: si una factura ya se ingresó a TGLP, se refleja como
+      // pagada (nunca se vuelve a cobrar).
+      for (const f of e.facturas) {
+        const fr = filasFactura.get(f.id);
+        if (!fr || !fr.ivaPagado) continue;
+        f.ivaPagado = true;
+        f.fechaPagoIva = fr.fechaPagoIva || null;
+        f.transaccionPagoIva = fr.transaccionPagoIva || null;
+      }
+      e.ivaAIngresar = round2(e.facturas.reduce((s, f) => s + (f.ivaPagado ? 0 : f.iva), 0));
+      e.totalIvaPagado = round2(e.facturas.reduce((s, f) => s + (f.ivaPagado ? f.iva : 0), 0));
       const row = recibos.get(e.recibo.id);
       if (!row) continue;
       // Conciliación diaria: si el recibo estaba «pendiente de cargo» o
@@ -1751,6 +1763,9 @@ export function createApiRouter({ getBankState, mutarBanco }) {
         e.recibo.totalPagado = row.pagos.reduce((s, p) => s + Number(p.importe || 0), 0);
       }
     }
+    // Totales de IVA a ingresar tras reflejar lo ya pagado por factura.
+    ciclo.resumen.totalIvaAIngresar = round2(ciclo.empresas.reduce((s, e) => s + e.ivaAIngresar, 0));
+    ciclo.resumen.totalIvaPagado = round2(ciclo.empresas.reduce((s, e) => s + e.totalIvaPagado, 0));
     return { state, cnic, ciclo, conciliados };
   }
 
@@ -1854,6 +1869,63 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     }
   }
 
+  // Pago de IVA POR FACTURAS (empresa → TGLP). El IVA de cada factura de
+  // venta se ingresa cuando la empresa lo decide: selecciona facturas
+  // (facturaIds) o las paga TODAS de golpe. Es SIEMPRE una transferencia del
+  // Banco (nunca PlaceZum) y deja las facturas «pagadas» en RSP para que no
+  // se vuelvan a cobrar. Idempotente: las facturas con IVA ya ingresado se
+  // ignoran y nunca se paga dos veces la misma.
+  router.post('/rsp/facturacion/api/pagar-iva', async (req, res) => {
+    try {
+      const b = req.body || {};
+      const mes = String(b.mes || mesActual());
+      const eip = String(b.eip || '').toUpperCase();
+      const facturaIds = Array.isArray(b.facturaIds) ? b.facturaIds.map((x) => String(x)) : undefined;
+      if (!eip) return res.status(400).json({ error: 'eip_requerido' });
+      const { ciclo } = await cicloFacturacionConPersistencia(mes);
+      const emp = (ciclo.empresas || []).find((x) => x.eip === eip);
+      if (!emp) return res.status(404).json({ error: 'empresa_no_en_ciclo', eip, mes });
+      const sel = seleccionarPagoIva(emp, facturaIds);
+      if (!sel.totalIva || sel.pendientes.length === 0) {
+        return res.json({ ok: true, mes, eip, pagadas: 0, importe: 0, nadaQuePagar: true });
+      }
+      if (!mutarBanco) {
+        return res.status(502).json({ error: 'Sin acceso de escritura al Banco (CRM): no se puede pagar el IVA.' });
+      }
+      const cuenta = emp.recibo.cuentaDebito?.id || (emp.cuentas && emp.cuentas[0]);
+      const saldo = Number(emp.recibo.cuentaDebito?.saldo ?? emp.saldoTotal ?? 0);
+      if (!cuenta || saldo < sel.totalIva - 0.01) {
+        return res.status(409).json({
+          error: `Saldo insuficiente en ${cuenta || 'cuenta BLP'} (${saldo} Pz) para ingresar IVA ${sel.totalIva} Pz`,
+          saldo, importe: sel.totalIva,
+        });
+      }
+      const hoy = new Date().toISOString().slice(0, 10);
+      const banco = await mutarBanco('transferir', {
+        from: cuenta, to: CUENTA_TRIBUTOS, cantidad: sel.totalIva, iva: 0,
+        concepto: `Pago IVA facturas ${mes} · ${emp.nombre} · ${sel.pendientes.length} facturas`,
+        refs: sel.pendientes.map((f) => f.id), mes, eip,
+      });
+      const txId = (banco && (banco.transactionId || banco.id || banco.txId)) || `TX-${Date.now()}`;
+      for (const f of sel.pendientes) {
+        const fila = await store.facturacion.obtener(f.id);
+        const patch = { ivaPagado: true, fechaPagoIva: hoy, transaccionPagoIva: txId };
+        if (fila) await store.facturacion.actualizar(f.id, patch);
+        else await store.facturacion.insertar({
+          id: f.id, documento: 'factura', tipo: f.tipo, eip, nombre: f.nombre, mes: f.mes,
+          concepto: f.concepto, cliente: f.cliente, importe: f.bruto, base: f.base, iva: f.iva,
+          transaccionId: f.transaccionId, fecha: f.fecha, estado: 'abonada', ...patch,
+        });
+      }
+      await avisoFacturacion({
+        nivel: 'completado',
+        titulo: 'IVA ingresado a Tributos (pago de facturas)',
+        mensaje: `${emp.nombre} (${eip}): ${sel.totalIva} Pz de IVA por ${sel.pendientes.length} facturas (tx ${txId}).`,
+      });
+      res.json({ ok: true, mes, eip, pagadas: sel.pendientes.length, importe: sel.totalIva, transaccionId: txId, facturas: sel.pendientes.map((f) => f.id) });
+    } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  });
+
   router.get('/rsp/facturacion/api/ciclo', async (req, res) => {
     try {
       const mes = String(req.query.mes || mesActual());
@@ -1897,6 +1969,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
             id: f.id, documento: 'factura', tipo: f.tipo, eip: e.eip, nombre: e.nombre, mes: f.mes,
             concepto: f.concepto, cliente: f.cliente, importe: f.bruto, base: f.base, iva: f.iva,
             transaccionId: f.transaccionId, fecha: f.fecha, estado: f.estado,
+            ivaPagado: !!f.ivaPagado, fechaPagoIva: f.fechaPagoIva || null, transaccionPagoIva: f.transaccionPagoIva || null,
           }));
         }
       }

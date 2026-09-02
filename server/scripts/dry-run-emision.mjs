@@ -43,8 +43,7 @@ console.log(`  Empresas del ciclo        : ${r.empresas}`);
 console.log(`  Recibos pendientes        : ${r.recibosPendientes}`);
 console.log(`  Recibos abonados          : ${r.recibosPagados}`);
 console.log(`  Tributos del mes (IRM+IGF): ${r.totalTributos.toLocaleString('es-ES')} Pz`);
-console.log(`  Abonado hasta el corte    : ${r.totalPagado.toLocaleString('es-ES')} Pz`);
-console.log(`  Ventas del mes            : ${r.totalVentas.toLocaleString('es-ES')} Pz`);
+console.log(`  Abonado hasta el corte    : ${r.totalPagado.toLocaleString('es-ES')} Pz`);  console.log(`  IVA a ingresar por factura: ${(r.totalIvaAIngresar || 0).toLocaleString('es-ES')} Pz  (se paga con «Pagar IVA» en RSP; nunca automático ni PlaceZum)`);console.log(`  Ventas del mes            : ${r.totalVentas.toLocaleString('es-ES')} Pz`);
 console.log(`  Facturas automáticas      : ${r.facturas}`);
 console.log(`  Tipo IVA aplicado (CNIC)  : ${r.tipoIvaPct} %\n`);
 

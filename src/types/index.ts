@@ -430,6 +430,10 @@ export interface FacturaCiclo {
   iva: number;
   tipo: 'venta' | 'servicio';
   estado: 'abonada';
+  /** El IVA repercutido de esta factura se ingresa a TGLP aparte (por factura). */
+  ivaPagado: boolean;
+  fechaPagoIva?: string | null;
+  transaccionPagoIva?: string | null;
 }
 
 export interface ReciboTributos {
@@ -465,6 +469,9 @@ export interface EmpresaCiclo {
   facturas: FacturaCiclo[];
   totalVentas: number;
   totalIvaVentas: number;
+  /** IVA pendiente de ingresar a Tributos (facturas sin pagar su IVA). */
+  ivaAIngresar: number;
+  totalIvaPagado: number;
   persistido?: boolean;
 }
 
@@ -481,6 +488,9 @@ export interface CicloFacturacion {
     totalTributos: number;
     totalPagado: number;
     totalVentas: number;
+    totalIvaVentas: number;
+    totalIvaAIngresar: number;
+    totalIvaPagado: number;
   };
   empresas: EmpresaCiclo[];
 }

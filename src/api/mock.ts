@@ -527,7 +527,7 @@ function cicloFacturacionDemo(mes: string): CicloFacturacion {
         estadoFiscal: contrib.estadoFiscal, patrimonioMedio: c.saldo,
         vencimiento, estado, cuentaDebito: { id: c.id, saldo: c.saldo },
       },
-      facturas: [], totalVentas: 0, totalIvaVentas: 0,
+      facturas: [], totalVentas: 0, totalIvaVentas: 0, ivaAIngresar: 0, totalIvaPagado: 0,
     });
   }
   return {
@@ -538,7 +538,7 @@ function cicloFacturacionDemo(mes: string): CicloFacturacion {
       recibosPagados: empresas.filter((e) => e.recibo.estado === 'pagada').length,
       facturas: 0,
       totalTributos: empresas.reduce((s, e) => s + e.recibo.importe, 0),
-      totalPagado: 0, totalVentas: 0,
+      totalPagado: 0, totalVentas: 0, totalIvaVentas: 0, totalIvaAIngresar: 0, totalIvaPagado: 0,
     },
     empresas,
   };
@@ -845,6 +845,10 @@ export const mockProvider: Provider = {
   async conciliarFacturacion(mes) {
     const m = mes || new Date().toISOString().slice(0, 7);
     return { ok: true, mes: m, conciliados: 0 };
+  },
+  async pagarIvaFacturacion(mes, eip) {
+    const m = mes || new Date().toISOString().slice(0, 7);
+    return { ok: true, mes: m, eip, pagadas: 0, importe: 0, nadaQuePagar: true };
   },
   async cambiarEstadoRecibo(id, mes, estado) {
     return { ok: true, id, mes, estado };

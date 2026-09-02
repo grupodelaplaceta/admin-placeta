@@ -196,6 +196,9 @@ export const httpProvider: Provider = {
   async conciliarFacturacion(mes) {
     return http.post<{ ok: boolean; mes: string; conciliados: number }>('/rsp/facturacion/api/conciliar', { mes });
   },
+  async pagarIvaFacturacion(mes, eip, facturaIds) {
+    return http.post<{ ok: boolean; mes: string; eip: string; pagadas: number; importe: number; transaccionId?: string; nadaQuePagar?: boolean; facturas?: string[] }>('/rsp/facturacion/api/pagar-iva', { mes, eip, facturaIds });
+  },
   async cambiarEstadoRecibo(id, mes, estado) {
     return http.post<{ ok: boolean }>(`/rsp/facturacion/api/${encodeURIComponent(id)}/estado`, { estado, mes });
   },

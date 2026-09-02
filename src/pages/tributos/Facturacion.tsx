@@ -65,6 +65,25 @@ export default function Facturacion() {
     }
   }
 
+  // Paga el IVA pendiente de TODAS las facturas de una empresa a Tributos
+  // (TGLP). Siempre es una transferencia del Banco (nunca PlaceZum) y deja
+  // las facturas marcadas como pagadas en RSP para no cobrarlas dos veces.
+  async function pagarIva(eip: string) {
+    const e = ciclo?.empresas.find((x) => x.eip === eip);
+    const importe = e?.ivaAIngresar ?? 0;
+    if (importe <= 0) return;
+    if (!window.confirm(`¿Pagar ${fmt(importe)} de IVA de ${e?.nombre} (${eip}) a Tributos (TGLP)? Es una transferencia real.`)) return;
+    setOcupado(true);
+    try {
+      const r = await provider.pagarIvaFacturacion(mes, eip);
+      toast(`IVA ingresado a TGLP: ${r.pagadas} facturas · ${fmt(r.importe)}`, 'success');
+      await cargar(mes);
+    } catch (err) {
+      toast((err as Error).message, 'error');
+      setOcupado(false);
+    }
+  }
+
   async function cierre(ejecutar: boolean) {
     if (ejecutar && !window.confirm('¿Ejecutar el cargo (domiciliación) de los recibos vencidos en las cuentas BLP? Esta acción mueve dinero real.')) return;
     setOcupado(true);
@@ -85,6 +104,9 @@ export default function Facturacion() {
     { key: 'irm', header: 'IRM', render: (e) => fmt(e.recibo.irm) },
     { key: 'igf', header: 'IGF', render: (e) => fmt(e.recibo.igf) },
     { key: 'iva', header: 'IVA ventas', render: (e) => fmt(e.totalIvaVentas) },
+    { key: 'ivaAIngresar', header: 'IVA a ingresar', render: (e) => (e.ivaAIngresar > 0
+      ? <span className="u-row" style={{ gap: 6 }}><Badge tone="warning">{fmt(e.ivaAIngresar)}</Badge><Button size="sm" variant="outline" onClick={() => pagarIva(e.eip)} disabled={ocupado}>Pagar IVA</Button></span>
+      : <Badge tone="success">al día</Badge>) },
     { key: 'importe', header: 'Importe', render: (e) => <strong>{fmt(e.recibo.importe)}</strong> },
     { key: 'pagado', header: 'Abonado', render: (e) => e.recibo.totalPagado ? fmt(e.recibo.totalPagado) : <span className="u-muted">—</span> },
     { key: 'vencimiento', header: 'Vencimiento', render: (e) => <span className="u-mono">{e.recibo.vencimiento}</span> },
@@ -102,6 +124,9 @@ export default function Facturacion() {
     { key: 'fecha', header: 'Fecha', render: (f) => f.fecha },
     { key: 'base', header: 'Base', render: (f) => fmt(f.base) },
     { key: 'iva', header: 'IVA', render: (f) => fmt(f.iva) },
+    { key: 'ivaPagado', header: 'Ingreso IVA', render: (f) => (f.ivaPagado
+      ? <Badge tone="success">{f.fechaPagoIva ? `pagado ${f.fechaPagoIva}` : 'pagado'}</Badge>
+      : <Badge tone="warning">pendiente</Badge>) },
     { key: 'total', header: 'Total', render: (f) => <strong>{fmt(f.bruto)}</strong> },
     { key: 'estado', header: 'Estado', render: (f) => <Badge tone="success">{f.estado}</Badge> },
   ];
@@ -152,6 +177,7 @@ export default function Facturacion() {
           <KPI label="Abonado hasta hoy" value={fmt(r.totalPagado)} icon="check" tone="success" />
           <KPI label="Facturas auto (venta/servicio)" value={r.facturas} icon="fileCheck" tone="info" />
           <KPI label="Ventas del mes" value={fmt(r.totalVentas)} icon="wallet" tone="info" />
+          <KPI label="IVA a ingresar" value={fmt(r.totalIvaAIngresar ?? 0)} icon="banknote" tone="warning" />
         </div>
       )}
 
@@ -168,7 +194,7 @@ export default function Facturacion() {
 
       {facturas.length > 0 && (
         <Card>
-          <CardHeader title={`Facturas automáticas de venta y servicio · ${mes}`} subtitle="Se emiten automáticamente cuando la empresa cobra una venta/servicio en el Banco (IVA según CNIC-IVA). Estado abonada: el pago ya llegó." />
+          <CardHeader title={`Facturas automáticas de venta y servicio · ${mes}`} subtitle="Se emiten automáticamente cuando la empresa cobra una venta/servicio en el Banco (IVA según CNIC-IVA). Su IVA se ingresa a Tributos/TGLP por factura (botón «Pagar IVA»), nunca con PlaceZum ni automáticamente." />
           <Table columns={colsFact} rows={facturas} rowKey={(f) => f.id} />
         </Card>
       )}

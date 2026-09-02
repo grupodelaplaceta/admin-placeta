@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import {
   finalMes, inicioMesSiguiente, tipoIvaDesdeCnic, desglosarBruto,
   cuentasPorEmpresa, pagosTributosDeEmpresa, ventasDelMes,
-  calcularCicloFacturacion, planCierreMes, CUENTA_TRIBUTOS,
+  calcularCicloFacturacion, planCierreMes, seleccionarPagoIva, CUENTA_TRIBUTOS,
 } from './facturacion.js';
 import { calcularContribuyentes } from './tributos.js';
 import {
@@ -145,6 +145,39 @@ test('ciclo: facturas automáticas por empresa', () => {
   assert.equal(red.facturas.length, 1);
   assert.equal(tel.facturas.length, 2);
   assert.ok(tel.facturas.every((f) => f.estado === 'abonada'));
+});
+
+// IVA POR FACTURA: el IVA no se descuenta automáticamente; se ingresa a TGLP
+// cuando la empresa paga sus facturas (selectivo o de golpe).
+test('ciclo: facturas con IVA a ingresar (pago por factura, nunca automático)', () => {
+  const { empresas, resumen } = cicloSintetico();
+  const tel = empresas.find((e) => e.eip === 'EIP-PTTELECOM');
+  const red = empresas.find((e) => e.eip === 'EIP-X4NGQU');
+  assert.ok(tel.facturas.every((f) => f.ivaPagado === false), 'facturas nacen con IVA pendiente');
+  assert.equal(tel.ivaAIngresar, r2(226.29));   // 214.29 (servicio) + 12 (venta)
+  assert.equal(tel.totalIvaPagado, 0);
+  assert.equal(red.ivaAIngresar, 120);
+  assert.equal(resumen.totalIvaVentas, r2(226.29 + 120 + 24));
+  assert.equal(resumen.totalIvaAIngresar, r2(226.29 + 120 + 24));
+  assert.equal(resumen.totalIvaPagado, 0);
+});
+
+test('seleccionarPagoIva: agrupado, selectivo y nunca repite pagadas', () => {
+  const { empresas } = cicloSintetico();
+  const tel = empresas.find((e) => e.eip === 'EIP-PTTELECOM');
+  // Todas de golpe (sin facturaIds)
+  const todas = seleccionarPagoIva(tel, undefined);
+  assert.equal(todas.pendientes.length, 2);
+  assert.equal(todas.totalIva, r2(226.29));
+  // Selectivo: solo una factura
+  const una = seleccionarPagoIva(tel, [tel.facturas[0].id]);
+  assert.equal(una.pendientes.length, 1);
+  assert.equal(una.totalIva, r2(tel.facturas[0].iva));
+  // Una factura cuyo IVA ya se ingresó no se vuelve a incluir
+  const conPagada = { ...tel, facturas: tel.facturas.map((f, i) => (i === 0 ? { ...f, ivaPagado: true } : f)) };
+  const restante = seleccionarPagoIva(conPagada, undefined);
+  assert.equal(restante.pendientes.length, 1);
+  assert.equal(restante.totalIva, r2(tel.facturas[1].iva));
 });
 
 // ── Plan de cierre a fin de mes ────────────────────────────────────────

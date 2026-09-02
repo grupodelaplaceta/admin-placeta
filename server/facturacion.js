@@ -254,8 +254,14 @@ export function calcularCicloFacturacion({ state, contribuyentes, mes, cnic, hoy
       eip,
       nombre: c.nombre || grupo.nombre || eip,
       mes: periodo,
+      // El IVA repercutido de esta factura se PAGA aparte (a Tributos/TGLP)
+      // cuando la empresa lo decide; nunca se descuenta solo al liquidar.
+      ivaPagado: false,
+      fechaPagoIva: null,
+      transaccionPagoIva: null,
       ...v,
     }));
+    const totalIvaVentas = round2(ventas.reduce((s, v) => s + v.iva, 0));
 
     lista.push({
       eip,
@@ -265,7 +271,11 @@ export function calcularCicloFacturacion({ state, contribuyentes, mes, cnic, hoy
       recibo,
       facturas,
       totalVentas: round2(ventas.reduce((s, v) => s + v.bruto, 0)),
-      totalIvaVentas: round2(ventas.reduce((s, v) => s + v.iva, 0)),
+      totalIvaVentas,
+      // IVA pendiente de ingresar a Tributos (todas las facturas al crearse;
+      // la capa de persistencia ajusta con las ya pagadas).
+      ivaAIngresar: round2(facturas.reduce((s, f) => s + (f.ivaPagado ? 0 : f.iva), 0)),
+      totalIvaPagado: round2(facturas.reduce((s, f) => s + (f.ivaPagado ? f.iva : 0), 0)),
     });
   }
 
@@ -289,9 +299,28 @@ export function calcularCicloFacturacion({ state, contribuyentes, mes, cnic, hoy
     totalTributos: round2(lista.reduce((s, e) => s + e.recibo.importe, 0)),
     totalPagado: round2(lista.reduce((s, e) => s + (e.recibo.totalPagado || 0), 0)),
     totalVentas: round2(lista.reduce((s, e) => s + e.totalVentas, 0)),
+    totalIvaVentas: round2(lista.reduce((s, e) => s + e.totalIvaVentas, 0)),
+    totalIvaAIngresar: round2(lista.reduce((s, e) => s + e.ivaAIngresar, 0)),
+    totalIvaPagado: round2(lista.reduce((s, e) => s + e.totalIvaPagado, 0)),
   };
 
   return { resumen, empresas: lista };
+}
+
+/**
+ * IVA repercutido PENDIENTE de ingresar a Tributos de una empresa, con su
+ * facturación de venta. Permite pagar el IVA por FACTURAS: si se pasa
+ * `facturaIds` solo se incluyen esas facturas (pago selectivo); si no, todas
+ * las no pagadas (pago agrupado de golpe). Nunca incluye una factura cuyo
+ * IVA ya se ingresó (evita pagos dobles). No mueve dinero: solo selecciona.
+ */
+export function seleccionarPagoIva(empresa, facturaIds) {
+  const set = Array.isArray(facturaIds) ? new Set(facturaIds.map((x) => String(x))) : null;
+  const pendientes = (empresa?.facturas || []).filter((f) => !f.ivaPagado && (!set || set.has(f.id)));
+  return {
+    pendientes,
+    totalIva: round2(pendientes.reduce((s, f) => s + (Number(f.iva) || 0), 0)),
+  };
 }
 
 /**
