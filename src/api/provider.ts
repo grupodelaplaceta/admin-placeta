@@ -135,6 +135,7 @@ export interface Provider {
     plan: PlanCierre;
     resultados: EmpresaCiclo[];
   }>;
+  conciliarFacturacion(mes?: string): Promise<{ ok: boolean; mes: string; conciliados: number }>;
   cambiarEstadoRecibo(id: string, mes: string, estado: 'anulada' | 'pagada' | 'cobrada' | 'impagada'): Promise<{ ok: boolean }>;
 
   // Operaciones

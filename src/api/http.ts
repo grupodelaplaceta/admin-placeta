@@ -193,6 +193,9 @@ export const httpProvider: Provider = {
   async cierreFacturacion(mes, ejecutar = false) {
     return http.post<{ ok: boolean; mes: string; ejecutar: boolean; accesoBanco: boolean; plan: PlanCierre; resultados: never[] }>('/rsp/facturacion/api/cierre', { mes, ejecutar });
   },
+  async conciliarFacturacion(mes) {
+    return http.post<{ ok: boolean; mes: string; conciliados: number }>('/rsp/facturacion/api/conciliar', { mes });
+  },
   async cambiarEstadoRecibo(id, mes, estado) {
     return http.post<{ ok: boolean }>(`/rsp/facturacion/api/${encodeURIComponent(id)}/estado`, { estado, mes });
   },

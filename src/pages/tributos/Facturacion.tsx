@@ -53,6 +53,18 @@ export default function Facturacion() {
     }
   }
 
+  async function conciliar() {
+    setOcupado(true);
+    try {
+      const r = await provider.conciliarFacturacion(mes);
+      toast(r.conciliados > 0 ? `Conciliados ${r.conciliados} recibos con pagos del banco` : 'Nada que conciliar: todo al día', r.conciliados > 0 ? 'success' : 'info');
+      await cargar(mes);
+    } catch (e) {
+      toast((e as Error).message, 'error');
+      setOcupado(false);
+    }
+  }
+
   async function cierre(ejecutar: boolean) {
     if (ejecutar && !window.confirm('¿Ejecutar el cargo (domiciliación) de los recibos vencidos en las cuentas BLP? Esta acción mueve dinero real.')) return;
     setOcupado(true);
@@ -105,6 +117,7 @@ export default function Facturacion() {
           <div className="u-row" style={{ gap: 8 }}>
             <input type="month" value={mes} onChange={(e) => { setMes(e.target.value || MES_ACTUAL); cargar(e.target.value || MES_ACTUAL); }} aria-label="Mes del ciclo" />
             <Button icon="send" onClick={emitir} disabled={ocupado}>Emitir mes</Button>
+            <Button variant="outline" icon="circleCheck" onClick={conciliar} disabled={ocupado}>Conciliar</Button>
             <Button variant="outline" icon="eye" onClick={() => cierre(false)} disabled={ocupado}>Simular cobro fin de mes</Button>
             <Button variant="danger" icon="banknote" onClick={() => cierre(true)} disabled={ocupado}>Ejecutar cobro</Button>
           </div>

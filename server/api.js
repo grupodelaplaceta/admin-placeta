@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import { randomBytes, randomUUID } from 'crypto';
 import { calcularContribuyentes } from './tributos.js';
-import { calcularCicloFacturacion, planCierreMes } from './facturacion.js';
+import { calcularCicloFacturacion, planCierreMes, CUENTA_TRIBUTOS } from './facturacion.js';
 import { coleccion } from './db.js';
 import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacionPlacetaID } from './firmas.js';
 import { CATALOGO_BASE } from './tramites-catalogo.js';
@@ -1688,11 +1688,28 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       });
     } catch (e) { res.status(502).json({ error: e.message }); }
   });
-  router.post('/rsp/tributos/api/declaraciones/:id/:accion', (req, res) => {
+  router.post('/rsp/tributos/api/declaraciones/:id/:accion', async (req, res) => {
     const { id, accion } = req.params;
     const estados = { publicar: 'pendiente_aprobacion', aprobar: 'aprobada', rechazar: 'borrador', emitir: 'emitida', cobrar: 'cobrada' };
     const siguiente = estados[accion];
     if (!siguiente) return res.status(400).json({ error: `Acción desconocida: ${accion}` });
+
+    // Empresas: «cobrar» se resuelve a través de su recibo de facturación
+    // central (una única vía de dinero hacia Tributos/TGLP). Si el recibo ya
+    // está abonado solo se refleja; si está pendiente se domicilia en la
+    // cuenta BLP (la acción es crítica y ya pasa por 2FA en el panel).
+    const empresa = /^DEC-(\d{4})-(\d{2})-(EIP-.+)$/.exec(id);
+    if (empresa && accion === 'cobrar') {
+      try {
+        const mes = `${empresa[1]}-${empresa[2]}`;
+        const r = await cobrarReciboEmpresa(empresa[3], mes);
+        declaracionesEstado.set(id, r.estadoDeclaracion);
+        return res.json({ ok: true, estado: r.estadoDeclaracion, aviso: r.aviso, cobro: r.cobro || undefined });
+      } catch (e) {
+        return res.status(e.status || 409).json({ error: e.message });
+      }
+    }
+
     declaracionesEstado.set(id, siguiente);
     res.json({ ok: true, estado: siguiente });
   });
@@ -1712,9 +1729,19 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const ciclo = calcularCicloFacturacion({ state, contribuyentes, mes, cnic });
     const rows = await store.facturacion.listar({ filtros: { mes } });
     const recibos = new Map((rows || []).filter((r) => r.documento === 'recibo').map((r) => [r.id, r]));
+    let conciliados = 0;
     for (const e of ciclo.empresas) {
       const row = recibos.get(e.recibo.id);
       if (!row) continue;
+      // Conciliación diaria: si el recibo estaba «pendiente de cargo» o
+      // «impagado» pero el Banco ya refleja un pago que lo cubre, se
+      // reconcilia a «pagada» automáticamente (sin mover dinero).
+      const cubierto = (e.recibo.totalPagado || 0) >= e.recibo.importe - 0.01;
+      if ((row.estado === 'pendiente_cargo' || row.estado === 'impagada') && cubierto) {
+        await store.facturacion.actualizar(row.id, { estado: 'pagada', aviso: null, cobro: null });
+        row.estado = 'pagada';
+        conciliados += 1;
+      }
       e.persistido = true;
       if (ESTADOS_TERMINALES_RECIBO.includes(row.estado)) e.recibo.estado = row.estado;
       if (row.cobro) e.recibo.cobro = row.cobro;
@@ -1724,7 +1751,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
         e.recibo.totalPagado = row.pagos.reduce((s, p) => s + Number(p.importe || 0), 0);
       }
     }
-    return { state, cnic, ciclo };
+    return { state, cnic, ciclo, conciliados };
   }
 
   // Guarda un documento del ciclo sin rebajar recibos ya cerrados.
@@ -1761,11 +1788,85 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     } catch { /* best-effort */ }
   }
 
+  // Cobra el recibo de Tributos de una EMPRESA. Es la ÚNICA vía de dinero
+  // de una declaración hacia Tributos/TGLP: si el recibo ya está abonado lo
+  // refleja, si está pendiente domicilia en la cuenta BLP (2FA ya confirmado
+  // por el cliente en el panel) y si no hay saldo lo deja impagado. Evita
+  // cobrar dos veces el mismo recibo (las personas conservan el estado
+  // declarativo, sin cargo automático).
+  async function cobrarReciboEmpresa(eip, mes) {
+    const { ciclo } = await cicloFacturacionConPersistencia(mes);
+    const ent = (ciclo.empresas || []).find((x) => x.eip === eip);
+    if (!ent) return { estadoDeclaracion: 'cobrada', aviso: 'Sin recibo del mes para esta empresa (0 Pz).' };
+    const r = ent.recibo;
+    if (r.importe <= 0 || r.estado === 'sin_cuota') {
+      return { estadoDeclaracion: 'cobrada', aviso: 'Sin cuota del mes (0 Pz).' };
+    }
+    if (r.estado === 'cobrada' || r.estado === 'pagada') {
+      return { estadoDeclaracion: 'cobrada', aviso: `Recibo ${r.id} ya abonado (${r.estado}).`, cobro: r.cobro };
+    }
+    if (r.estado === 'anulada') {
+      const err = new Error(`El recibo ${r.id} está anulado. Reviértelo desde Facturación antes de cobrar la declaración.`);
+      err.status = 409;
+      throw err;
+    }
+    // emitida / parcial / vencida / pendiente_cargo / impagada → se cobra (o se
+    // reintenta si antes quedó impagado y ahora hay saldo) contra la cuenta BLP.
+    const base = {
+      id: r.id, documento: 'recibo', tipo: r.tipo, eip, nombre: r.nombre, mes: r.mes,
+      importe: r.importe, irm: r.irm, igf: r.igf, iva: r.iva, ivaExento: !!r.ivaExento,
+      estadoFiscal: r.estadoFiscal, vencimiento: r.vencimiento,
+      cuentaDebito: r.cuentaDebito || null, pagos: r.pagos || [],
+    };
+    const hoy = new Date().toISOString().slice(0, 10);
+    if (!mutarBanco) {
+      await guardarDocumento({ ...base, estado: 'pendiente_cargo', aviso: { fecha: hoy, motivo: 'sin_acceso_banco' } });
+      return { estadoDeclaracion: 'cobrada', aviso: 'Sin acceso de escritura al Banco: recibo en «pendiente de cargo». Completa el cobro desde Facturación.' };
+    }
+    const restante = round2(Math.max(0, r.importe - (r.totalPagado || 0)));
+    const saldo = Number(r.cuentaDebito?.saldo) || 0;
+    if (!r.cuentaDebito?.id || saldo < restante - 0.01) {
+      await guardarDocumento({ ...base, estado: 'impagada', aviso: { fecha: hoy, motivo: 'saldo_insuficiente', saldo, cuenta: r.cuentaDebito?.id } });
+      const err = new Error(`Saldo insuficiente en ${r.cuentaDebito?.id || 'cuenta BLP'} (${saldo} Pz) para domiciliar ${restante} Pz del recibo ${r.id}.`);
+      err.status = 409;
+      throw err;
+    }
+    try {
+      const banco = await mutarBanco('transferir', {
+        from: r.cuentaDebito.id, to: CUENTA_TRIBUTOS, cantidad: restante,
+        concepto: `Domiciliación Tributos ${r.mes} · ${r.id}`, ref: r.id, mes: r.mes,
+      });
+      const txId = (banco && (banco.transactionId || banco.id || banco.txId)) || `TX-${Date.now()}`;
+      const cobro = { fecha: hoy, transaccionId: txId, importe: restante, via: 'domiciliacion' };
+      await guardarDocumento({ ...base, estado: 'cobrada', cobro, aviso: null });
+      await avisoFacturacion({
+        nivel: 'completado',
+        titulo: 'Declaración cobrada (recibo domiciliado)',
+        mensaje: `${r.nombre} (${eip}): cobrado ${restante} Pz de ${r.id} (tx ${txId}).`,
+      });
+      return { estadoDeclaracion: 'cobrada', aviso: `Cobrado ${restante} Pz (tx ${txId}).`, cobro };
+    } catch (err) {
+      await guardarDocumento({ ...base, estado: 'impagada', aviso: { fecha: hoy, motivo: 'cargo_fallido', detalle: String(err?.message || err) } });
+      await avisoFacturacion({ nivel: 'pendiente', titulo: 'Recibo impagado (cargo fallido)', mensaje: `${r.nombre} (${eip}): ${restante} Pz de ${r.id}.` });
+      const e2 = new Error(`Cargo fallido: ${String(err?.message || err)}`);
+      e2.status = 409;
+      throw e2;
+    }
+  }
+
   router.get('/rsp/facturacion/api/ciclo', async (req, res) => {
     try {
       const mes = String(req.query.mes || mesActual());
-      const { ciclo } = await cicloFacturacionConPersistencia(mes);
-      res.json(ciclo);
+      const { ciclo, conciliados } = await cicloFacturacionConPersistencia(mes);
+      res.json(conciliados > 0 ? { ...ciclo, conciliados } : ciclo);
+    } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+
+  router.post('/rsp/facturacion/api/conciliar', async (req, res) => {
+    try {
+      const mes = String((req.body || {}).mes || mesActual());
+      const { conciliados } = await cicloFacturacionConPersistencia(mes);
+      res.json({ ok: true, mes, conciliados });
     } catch (e) { res.status(502).json({ error: e.message }); }
   });
 

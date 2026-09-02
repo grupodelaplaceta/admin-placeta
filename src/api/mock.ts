@@ -842,6 +842,10 @@ export const mockProvider: Provider = {
     plan.totalCobrar = plan.cobros.reduce((s, c) => s + c.cantidad, 0);
     return { ok: true, mes: m, ejecutar, accesoBanco: true, plan, resultados: [] };
   },
+  async conciliarFacturacion(mes) {
+    const m = mes || new Date().toISOString().slice(0, 7);
+    return { ok: true, mes: m, conciliados: 0 };
+  },
   async cambiarEstadoRecibo(id, mes, estado) {
     return { ok: true, id, mes, estado };
   },
