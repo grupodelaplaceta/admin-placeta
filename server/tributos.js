@@ -1,5 +1,6 @@
 /* Motor fiscal (BFF): IRM/IGF reales según CNIC, calculados en vivo desde el
    estado del banco. Sustituye al seed del SPA cuando se usa el API. */
+import { ventasDelMes, tipoIvaDesdeCnic } from './facturacion.js';
 
 // ── Escalas según el BOP (CNIC, CNI-IV § 7) ────────────────────────────
 // IRM (Art. 4.8-4.11): base imponible = patrimonio medio; el tipo lo fija el
@@ -235,12 +236,19 @@ function reconstruirPatrimonioMedio(state, cuentas, mes) {
 export function calcularContribuyentes(state, mes = new Date().toISOString().slice(0, 7), cnic = null) {
   const { personas, empresas } = agruparPatrimonio(state);
   const escalas = escalasDesdeCnic(cnic);
+  const tipoIva = tipoIvaDesdeCnic(cnic); // CNIC-IVA vigente del BOP
   const out = [];
 
   function entrada(clave, datos, tipo, tiposIrm, escalaIgf, igfUmbralReducida) {
     const ids = datos.cuentas.map((c) => c.id);
     const recon = reconstruirPatrimonioMedio(state, datos.cuentas, mes);
     const fl = flujosDelMes(state, ids, mes);
+    // IVA por movimientos (solo empresas): IVA repercutido en las ventas y
+    // servicios cobrados en el mes (CNIC-IVA). Mismo cálculo compartido con
+    // el motor de facturación central (no se duplica lógica).
+    const ventas = tipo === 'empresa' ? ventasDelMes(state, ids, mes, tipoIva) : [];
+    const ventasMes = round2(ventas.reduce((s, v) => s + v.base, 0));
+    const ivaRepercutido = round2(ventas.reduce((s, v) => s + v.iva, 0));
     // Índice de Acumulación (Art. 4.9) y tipo IRM (Art. 4.10).
     const acumulacionNeta = round2(fl.ingresos - fl.pagos);
     const ia = recon.patrimonioMedio > 0 ? acumulacionNeta / recon.patrimonioMedio : 0;
@@ -274,6 +282,9 @@ export function calcularContribuyentes(state, mes = new Date().toISOString().sli
       cuotaIgf: igf.cuota,
       ivaExento: tipo === 'empresa',
       igfExentoReducida: empresaReducida,
+      ventasMes,
+      ivaRepercutido,
+      ivaSoportado: 0,
       estadoFiscal,
       ultimaDeclaracion: undefined,
       desglose: {
@@ -318,6 +329,9 @@ export function calcularReconciliacion(state, cnic = null) {
     movimientos: (state.transactions || []).length,
     totalCuotaIrm: round2(lista.reduce((s, c) => s + c.cuotaIrm, 0)),
     totalCuotaIgf: round2(lista.reduce((s, c) => s + c.cuotaIgf, 0)),
+    totalCuotaIva: round2(lista.reduce((s, c) => s + (c.ivaExento ? 0 : c.ivaRepercutido), 0)),
+    totalIvaRepercutido: round2(lista.reduce((s, c) => s + c.ivaRepercutido, 0)),
+    totalVentasMes: round2(lista.reduce((s, c) => s + c.ventasMes, 0)),
     totalPatrimonio: round2(lista.reduce((s, c) => s + c.saldoTotalPz, 0)),
   };
 }

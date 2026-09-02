@@ -7,7 +7,7 @@ Servidor ligero que hace que **rsp-web** sea autónomo y `admin-placeta` pueda d
 2. Expone los datos reales agregados:
    - `GET /api/transparencia` → CNIC vigentes + tarifas RSP (Boletín Oficial, `rsp.laplaceta.org`).
 - `GET /api/bank/state` → estado real del banco para compatibilidad interna; requiere sesión de administrador. El panel usa las rutas protegidas `/rsp/banco/api/*` y el servidor consulta el banco con la clave privada.
-   - `GET /api/tributos/contribuyentes` · `GET /api/tributos/declaraciones` · `GET /api/tributos/reconciliacion` → motor fiscal **en vivo** (IRM por IA real, IGF con escala del BOP, exención IVA de empresas).
+   - `GET /api/tributos/contribuyentes` · `GET /api/tributos/declaraciones` · `GET /api/tributos/reconciliacion` → motor fiscal **en vivo** (IRM por IA real, IGF con escala del BOP, exención IVA de empresas, IVA por movimientos reales: `ventasMes`/`ivaRepercutido` por empresa y totales de conciliación `totalIvaRepercutido`/`totalVentasMes`).
    - **Facturación central** (`server/facturacion.js`, tras sesión de administrador): `GET /rsp/facturacion/api/ciclo?mes=` (ciclo mensual por empresa: recibo de Tributos IRM+IGF con vencimiento a fin de mes + facturas de venta/servicio abonadas) · `POST /rsp/facturacion/api/emitir` (persiste el ciclo en `rsp_facturacion`) · `POST /rsp/facturacion/api/cierre` (`{ mes, ejecutar }` → plan de cobro por domiciliación hacia TGLP; solo mueve dinero si `ejecutar:true` y hay llave CRM) · `POST /rsp/facturacion/api/:id/estado`. Las cuotas proceden del motor fiscal y del estado real del banco; el IVA sale del CNIC `CNIC-IVA` del BOP.
    - `GET /api/health`.
 3. **Autenticación** (`server/auth.js`): SSO con **PlacetaID móvil** (`POST /login/placetaid` → redirige a PlacetaID → `GET /login/callback`) y fallback de credenciales `POST /login` contra `ADMIN_USERS`. **Solo entran administradores** (`ADMIN_DIPS` / `ADMIN_USERS`). La sesión es un token aleatorio en cookie **httpOnly** y **todas las rutas de API exigen sesión** salvo `/api/health`, `/login*`, `/logout` y `/api/sesion`.
@@ -41,4 +41,5 @@ npm start            # http://localhost:4000  (o `npm run dev`)
 
 ## Pendiente para reemplazar del todo a admin-placeta
 - Persistencia real (Supabase/Postgres) en `server/api.js` y autenticación PlacetaID.
-- Motor fiscal: ya calcula IRM/IGF en vivo; falta IVA por movimientos y conciliación diaria por transacciones.
+- Motor fiscal: ya calcula IRM/IGF en vivo y ahora **IVA por movimientos** (repercutido del mes por empresa, CNIC-IVA). Conciliación diaria por transacciones y automatización del ciclo `cobrar` de declaraciones (hoy el cobro real de recibos vive en `/rsp/facturacion/api/cierre`).
+- Tabla nueva `rsp_facturacion`: migración en `server/sql/rsp_facturacion.sql` (crear en Supabase antes del primer `POST /rsp/facturacion/api/emitir` en producción; sin la tabla, `coleccion()` opera en memoria).

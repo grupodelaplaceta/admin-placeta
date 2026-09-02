@@ -1667,9 +1667,9 @@ export function createApiRouter({ getBankState, mutarBanco }) {
           patrimonioExento: 5000,
           baseIgf: Math.max(0, (c.patrimonioMedio ?? c.patrimonio) - 5000),
           tipoIgf: c.desglose.igf.tramos[0]?.tipoPct ?? 0,
-          ivaRepercutido: 0,
-          ivaSoportado: 0,
-          cuotaIva: 0,
+          ivaRepercutido: c.ivaRepercutido ?? 0,
+          ivaSoportado: c.ivaSoportado ?? 0,
+          cuotaIva: c.ivaExento ? 0 : (c.ivaRepercutido ?? 0),
           ia: c.indiceAcumulacion ?? 0,
           ingresosMes: c.ingresosMes ?? 0,
           pagosMes: c.pagosMes ?? 0,
@@ -1744,6 +1744,23 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     return { ...row, actualizado: true };
   }
 
+  // Aviso del ciclo (recibo emitido / cobrado / impagado) al panel RSP.
+  // Los avisos nunca rompen la operación principal (best-effort).
+  async function avisoFacturacion({ nivel, titulo, mensaje, dip = '' }) {
+    try {
+      await store.notificaciones.insertar({
+        id: `NTF-${randomUUID().slice(0, 8).toUpperCase()}`,
+        nivel,
+        titulo,
+        mensaje,
+        destinatarioDip: dip,
+        leida: false,
+        acuseRecibido: false,
+        creadaEn: AHORA(),
+      });
+    } catch { /* best-effort */ }
+  }
+
   router.get('/rsp/facturacion/api/ciclo', async (req, res) => {
     try {
       const mes = String(req.query.mes || mesActual());
@@ -1759,13 +1776,21 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       const persistidos = [];
       for (const e of ciclo.empresas) {
         const r = e.recibo;
-        persistidos.push(await guardarDocumento({
+        const guardado = await guardarDocumento({
           id: r.id, documento: 'recibo', tipo: r.tipo, eip: e.eip, nombre: e.nombre, mes: r.mes,
           importe: r.importe, irm: r.irm, igf: r.igf, iva: r.iva,
           ivaExento: !!r.ivaExento, estadoFiscal: r.estadoFiscal,
           vencimiento: r.vencimiento, estado: r.estado,
           cuentaDebito: r.cuentaDebito || null, pagos: r.pagos || [],
-        }));
+        });
+        persistidos.push(guardado);
+        if (guardado.actualizado && r.importe > 0 && ['emitida', 'vencida', 'parcial'].includes(r.estado)) {
+          await avisoFacturacion({
+            nivel: 'accion',
+            titulo: 'Recibo de Tributos emitido',
+            mensaje: `${e.nombre} (${e.eip}): recibo ${r.id} por ${r.importe} Pz, vence el ${r.vencimiento}.`, ref: r.id,
+          });
+        }
         for (const f of e.facturas || []) {
           persistidos.push(await guardarDocumento({
             id: f.id, documento: 'factura', tipo: f.tipo, eip: e.eip, nombre: e.nombre, mes: f.mes,
@@ -1797,9 +1822,19 @@ export function createApiRouter({ getBankState, mutarBanco }) {
             const txId = (banco && (banco.transactionId || banco.id || banco.txId)) || `TX-${Date.now()}`;
             const cobro = { fecha: c.fecha, transaccionId: txId, importe: c.cantidad, via: 'domiciliacion' };
             await guardarDocumento({ ...fila, estado: 'cobrada', cobro, pagos: [], aviso: null });
+            await avisoFacturacion({
+              nivel: 'completado',
+              titulo: 'Recibo cobrado por domiciliación',
+              mensaje: `${c.nombre} (${c.eip}): cobrado ${c.cantidad} Pz de ${c.reciboId} (tx ${txId}).`, ref: c.reciboId,
+            });
             resultados.push({ ...c, ejecutado: true, transaccionId: txId });
           } catch (err) {
             await guardarDocumento({ ...fila, estado: 'impagada', aviso: { fecha: c.fecha, motivo: 'cargo_fallido', detalle: String(err?.message || err) } });
+            await avisoFacturacion({
+              nivel: 'pendiente',
+              titulo: 'Recibo impagado (cargo fallido)',
+              mensaje: `${c.nombre} (${c.eip}): no se pudo domiciliar ${c.cantidad} Pz de ${c.reciboId}.`, ref: c.reciboId,
+            });
             resultados.push({ ...c, ejecutado: false, error: String(err?.message || err) });
           }
         } else {
@@ -1812,6 +1847,11 @@ export function createApiRouter({ getBankState, mutarBanco }) {
         const aviso = { fecha: plan.fecha, motivo: im.motivo, saldo: im.saldo, cuenta: im.cuenta };
         if (fila) await store.facturacion.actualizar(im.reciboId, { estado: 'impagada', aviso });
         else await store.facturacion.insertar({ id: im.reciboId, documento: 'recibo', mes, eip: im.eip, nombre: im.nombre, importe: im.importe, estado: 'impagada', aviso });
+        await avisoFacturacion({
+          nivel: 'pendiente',
+          titulo: 'Recibo impagado (saldo insuficiente)',
+          mensaje: `${im.nombre} (${im.eip}): ${im.importe} Pz pendientes de ${im.reciboId}; saldo ${im.saldo} Pz en ${im.cuenta}.`, ref: im.reciboId,
+        });
       }
       res.json({ ok: true, mes, ejecutar, accesoBanco: !!mutarBanco, plan, resultados });
     } catch (e) { res.status(502).json({ error: e.message }); }
