@@ -82,9 +82,16 @@
   `/api/v1/tributos/facturacion` (ya expuesto) en lugar de los datos locales.
 
 ## Pendiente (requiere tu OK)
-1. **Banco APP (Kotlin)**: re-apuntar `BusinessInvoicePanel` a las facturas
-   reales (gateway `/api/v1/tributos/facturacion` ya expuesto) — requiere ciclo
-   de build Android.
+1. **Banco APP (Kotlin)**: ya implementado y compilado (BUILD SUCCESSFUL):
+   - `DocumentActionsClient`: `consultarFacturas(eip, mes)` (GET gateway
+     `/api/v1/tributos/facturacion`) y `pagarIvaFacturas(eip, from, mes,
+     facturaIds)` (POST `/facturacion/pagar-iva` → crea el Pending a TGLP).
+   - `BusinessInvoicePanel` (`Sociedades → Facturación`): ahora muestra las
+     **facturas reales** del mes + IVA pendiente/pagado, permite seleccionar
+     facturas y pagar su IVA **de golpe** (muestra el código de ejecución para
+     confirmar en PlacetaID Móvil). Se conservan enlaces de pago y TPV NFC.
+   - OJO: `banco-app` vive en el monorepo divergido `grupodelaplaceta/
+     grupodelaplaceta` (NO se empuja); los cambios están en el working tree.
 2. `bankCollections.js` (escrituras app-driven de `Consumption/Placezum/
    PLJUNIOR_PAYMENT`): decidir si también deja de auto-abonar el IVA a TGLP y
    pasa a factura (no tocado: afecta al flujo de la app y a Capitalia).
