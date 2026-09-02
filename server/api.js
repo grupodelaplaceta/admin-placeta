@@ -882,12 +882,48 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     return 'otro';
   };
 
+  // Persistencia del detalle de subvenciones en `rsp_subvenciones.detalle`
+  // (JSONB). Al primer uso se hidrata el detalle desde la BD; cada mutación
+  // guarda el detalle completo para que no se pierda entre reinicios.
+  let _detSubPromise = null;
+  async function asegurarDetalleSubvenciones() {
+    if (!_detSubPromise) {
+      _detSubPromise = (async () => {
+        try {
+          const filas = await store.subvenciones.listar();
+          for (const f of filas || []) {
+            if (!f.detalle || typeof f.detalle !== 'object') continue;
+            const { id, detalle, createdAt, updatedAt, ...resto } = f;
+            store.subvencionesDetalle[f.id] = { ...resto, ...detalle, id: f.id };
+          }
+        } catch { /* sin Supabase: queda en memoria */ }
+      })();
+    }
+    return _detSubPromise;
+  }
+  async function guardarDetalleSubvencion(id) {
+    const d = store.subvencionesDetalle[id];
+    if (!d) return;
+    try {
+      await store.subvenciones.actualizar(id, {
+        importeRestante: d.importeRestante,
+        estado: d.estado,
+        emisorNombre: d.emisorNombre,
+        receptorNombre: d.receptorNombre,
+        detalle: d,
+      });
+    } catch { /* sin persistencia */ }
+  }
+
   router.get('/rsp/subvenciones/api', async (_req, res) => res.json(await store.subvenciones.listar()));
-  router.get('/rsp/subvenciones/api/:id', (req, res, next) => {
+  router.get('/rsp/subvenciones/api/:id', async (req, res, next) => {
     if (req.params.id === 'beneficiarios') return next(); // ruta propia más abajo
-    const s = store.subvencionesDetalle[req.params.id];
-    if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
-    res.json(s);
+    try {
+      await asegurarDetalleSubvenciones();
+      const s = store.subvencionesDetalle[req.params.id];
+      if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
+      res.json(s);
+    } catch (e) { res.status(502).json({ error: e.message }); }
   });
   router.post('/rsp/subvenciones/api/conceder', async (req, res) => {
     const d = req.body || {};
@@ -899,8 +935,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       concepto: d.concepto, estado: 'concedida', fechaConcesion: AHORA().slice(0, 10),
       publicada: d.publicada ?? false,
     };
-    await store.subvenciones.insertar(s);
-    store.subvencionesDetalle[s.id] = {
+    const detalle = {
       ...s, documentosRequeridos: [], gastos: [], justificaciones: [], reversiones: [],
       excluirTipos: ['Tax', 'IrmCharge', 'IvaAdjustment'],
       tiposAptos: d.tiposAptos || [],
@@ -911,19 +946,24 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       publicadaEn: d.publicada ? AHORA() : undefined,
       bopUrl: d.publicada ? `https://gdlp.laplaceta.org/subvenciones.html?codigo=${s.id}` : undefined,
     };
+    await store.subvenciones.insertar({ ...s, detalle });
+    store.subvencionesDetalle[s.id] = detalle;
     res.status(201).json(s);
   });
-  router.post('/rsp/subvenciones/api/:id/requerir-documentos', (req, res) => {
+  router.post('/rsp/subvenciones/api/:id/requerir-documentos', async (req, res) => {
+    try { await asegurarDetalleSubvenciones(); } catch { /* memoria */ }
     const s = store.subvencionesDetalle[req.params.id];
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
     s.documentosRequeridos = (req.body?.documentos || []).map((nombre, i) => ({ id: `DOC-${i}`, nombre, tipo: 'anexo', aportado: false }));
+    await guardarDetalleSubvencion(s.id);
     res.json({ ok: true });
   });
 
   // Registra gastos justificables del receptor. Pueden ser OPERACIONES del
   // banco (con kind) o FACTURAS (con facturaId/base/iva); cada gasto se
   // clasifica en factura/iva/tributos/irm_igf/operacion/otro.
-  router.post('/rsp/subvenciones/api/:id/gastos', (req, res) => {
+  router.post('/rsp/subvenciones/api/:id/gastos', async (req, res) => {
+    try { await asegurarDetalleSubvenciones(); } catch { /* memoria */ }
     const s = store.subvencionesDetalle[req.params.id];
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
     const lista = Array.isArray(req.body?.gastos) ? req.body.gastos : [];
@@ -947,13 +987,15 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       });
       añadidos += 1;
     }
+    await guardarDetalleSubvencion(s.id);
     res.json({ ok: true, añadidos, total: s.gastos.length });
   });
 
   // Justifica los gastos seleccionados (se ejecuta tras confirmar 2FA). Solo
   // son aptos los que la subvención cubre (categorías y tipos), nunca superan
   // el importe restante y no están excluidos. Devuelve el desglose por categoría.
-  router.post('/rsp/subvenciones/api/:id/justificar', (req, res) => {
+  router.post('/rsp/subvenciones/api/:id/justificar', async (req, res) => {
+    try { await asegurarDetalleSubvenciones(); } catch { /* memoria */ }
     const s = store.subvencionesDetalle[req.params.id];
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
     const gastoIds = Array.isArray(req.body?.gastoIds) ? req.body.gastoIds.map(String) : [];
@@ -992,7 +1034,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     s.justificaciones.push(...justificaciones);
     s.importeRestante = round2(Math.max(0, s.importeRestante - total));
     s.estado = s.importeRestante === 0 ? 'justificada' : 'concedida';
-    store.subvenciones.actualizar(s.id, { importeRestante: s.importeRestante, estado: s.estado }).catch(() => {});
+    await guardarDetalleSubvencion(s.id);
     res.json({
       ok: true, importe: total, importeRestante: s.importeRestante, estado: s.estado,
       categorias: Array.from(porCategoria.entries()).map(([categoria, importe]) => ({ categoria, importe })),
@@ -1006,7 +1048,8 @@ export function createApiRouter({ getBankState, mutarBanco }) {
   // no retiene el cobro indebido. Se restituye también el importeRestante del
   // fondo. (Registro contable con devueltoA=emisorEip; si se quiere el retorno
   // real por el Banco se ejecuta con la API bancaria aparte.)
-  router.post('/rsp/subvenciones/api/:id/revertir', (req, res) => {
+  router.post('/rsp/subvenciones/api/:id/revertir', async (req, res) => {
+    try { await asegurarDetalleSubvenciones(); } catch { /* memoria */ }
     const s = store.subvencionesDetalle[req.params.id];
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
     const gastoId = String(req.body?.gastoId || '');
@@ -1023,7 +1066,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     s.reversiones.push({ id: revId, gastoId, justificacionId: jids[0], importe, fecha, motivo, devueltoA: s.emisorEip });
     s.importeRestante = round2(Math.max(0, s.importeRestante + importe));
     s.estado = 'concedida';
-    store.subvenciones.actualizar(s.id, { importeRestante: s.importeRestante, estado: s.estado }).catch(() => {});
+    await guardarDetalleSubvencion(s.id);
     res.json({ ok: true, reversionId: revId, importe, importeRestante: s.importeRestante, justificacionIds: jids, devueltoA: s.emisorEip });
   });
 
@@ -1031,6 +1074,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
   // con todas sus operaciones justificadas (para control y detección de fraude).
   router.get('/rsp/subvenciones/api/beneficiarios', async (_req, res) => {
     try {
+      await asegurarDetalleSubvenciones();
       const filas = await store.subvenciones.listar();
       const mapa = new Map();
       const aporta = (id) => store.subvencionesDetalle[id];

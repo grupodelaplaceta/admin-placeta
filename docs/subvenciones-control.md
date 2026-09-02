@@ -39,8 +39,8 @@
   de fondos (desembolso y retorno al **emisor EIP**) se hace con la API bancaria
   (acciones `transferir`) cuando se integre el alta de cuenta del emisor, igual
   que en el resto del sistema. `transferenciaId` queda como referencia.
-- El detalle (gastos/justificaciones/reversiones) se guarda en la sesión del BFF
-  (mismo patrón que bonos/subvenciones); persistir la tabla nueva
-  (`rsp_subvenciones_gastos`) en Supabase es el siguiente paso.
+- **Persistencia:** el detalle (gastos/justificaciones/reversiones) se guarda en
+  `rsp_subvenciones.detalle` (JSONB). Aplicar `server/sql/rsp_subvenciones.sql`
+  (crea/actualiza la tabla con la columna `detalle`).
 - Los `Tax/IrmCharge/IvaAdjustment` dejan de excluirse en bloque: ahora se
   clasifican y solo se justifican si la subvención los cubre (categorías).
