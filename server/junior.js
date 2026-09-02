@@ -185,6 +185,23 @@ export function juniorRouter({ getBankState, postBanco }) {
     return { ok: true };
   }
 
+  // Consulta LIGERA de solo los movimientos que cuentan para puntos y canjes.
+  // Trae solo las columnas necesarias y filtra por tipo, mucho más rápido que
+  // `historial` (que trae todas las columnas) en los canjes y la consulta de
+  // puntos, que se ejecutan varias veces por sesión.
+  async function historialPuntos(juniorId, limit = 5000) {
+    if (!supabase) return [];
+    const { data, error } = await supabase
+      .from('junior_transacciones')
+      .select('tipo, concepto, cantidad, creado_en')
+      .eq('junior_id', juniorId)
+      .in('tipo', ['punto_verde', 'punto_rojo', 'ganar', 'canje_puntos'])
+      .order('creado_en', { ascending: false })
+      .limit(limit);
+    if (error) { console.error('[junior] No se pudo leer historial de puntos:', error.message); return []; }
+    return data || [];
+  }
+
   const resolverDip = (req) =>
     String(req.query.dip || req.body?.dip || req.headers['x-junior-dip'] || '').trim();
 
@@ -846,7 +863,7 @@ export function juniorRouter({ getBankState, postBanco }) {
     try {
       const junior = await buscarJunior(req.params.dip);
       if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
-      const filas = await historial(junior.id, 5000);
+      const filas = await historialPuntos(junior.id, 5000);
       const verdes = filas.filter(esPuntoVerde).reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const rojos = filas.filter(esPuntoRojo).reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const canjesVerdes = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes('verdes')).reduce((n, t) => n + Number(t.cantidad || 0), 0);
@@ -894,7 +911,9 @@ export function juniorRouter({ getBankState, postBanco }) {
       const retoCerrado = esReto && fechaFin && Date.parse(fechaFin) < Date.now();
       const resultadoId = String(req.body?.resultado_id || '').trim().slice(0, 160);
       if (resultadoId) {
-        const previas = await historial(junior.id, 500);
+        // La idempotencia debe cubrir todo el historial; con 500 registros,
+        // una actividad antigua podía volver a pagar puntos/recompensa.
+        const previas = await historial(junior.id, 5000);
         const marca = `resultado:${resultadoId}`;
         if (previas.some(t => String(t.concepto || '').includes(marca))) {
           return res.json({ success: true, duplicado: true, puntos_verdes: 0, puntos_rojos: 0, recompensa: 0, recompensa_max: 0, diploma: null });
@@ -931,7 +950,13 @@ export function juniorRouter({ getBankState, postBanco }) {
         if (!cuentaId && !esDemo) return res.status(502).json({ error: 'No se pudo localizar la cuenta Child real en Banco' });
         if (!esDemo) {
           const banco = await postBanco('transferir', { from: CAPITALIA, to: cuentaId, cantidad: recompensa, iva: 0, concepto: `Recompensa actividad ${req.params.id}`, juniorDip: junior.dip, tutorDip: junior.tutor_dip });
-          if (!banco?.success) return res.status(502).json({ error: banco?.error || 'El banco no confirmó la recompensa' });
+          if (!banco?.success) {
+            // Los puntos YA se han guardado arriba. Devolver un error haría que
+            // la app pensara que la actividad no se registró (y bloqueara al
+            // menor). Se confirma el guardado y se avisa de que la recompensa
+            // quedó pendiente para reintentarla.
+            return res.json({ success: true, puntos_verdes: verdes, puntos_rojos: rojos, recompensa: 0, recompensa_max: recompensaMax, recompensa_pendiente: recompensa, warning: 'Tus puntos se guardaron, pero la recompensa no se pudo abonar ahora. Inténtalo de nuevo en unos minutos.', diploma: null });
+          }
         }
         const estadoDespues = esDemo ? null : await getBankState().catch(() => null);
         const saldoNuevo = Number(estadoDespues?.accounts?.find(a => a.id === (cuentaId || cuentaDeJunior(junior)))?.balancePz ?? ((junior.placetas_saldo || 0) + recompensa));
@@ -999,8 +1024,21 @@ export function juniorRouter({ getBankState, postBanco }) {
       if (puntos < 10 || puntos % 10 !== 0) return res.status(400).json({ error: 'Elige una cantidad de puntos de 10 en 10' });
       const placetas = Math.floor(puntos / 10);
       if (!placetas) return res.status(400).json({ error: 'Necesitas al menos 10 puntos para canjearlos' });
-      const filas = await historial(junior.id, 5000);
+      const filas = await historialPuntos(junior.id, 5000);
       const etiquetaPuntos = rojos ? 'rojos' : 'verdes';
+      // Idempotencia: si el cliente reintenta un canje que ya se procesó (por
+      // ejemplo tras un timeout), no se descuentan los puntos dos veces ni se
+      // abonan las Placetas dos veces.
+      const requestId = String(req.body?.request_id || req.body?.canje_id || '').trim().slice(0, 120);
+      const marcaCanje = requestId ? `canje:${requestId}` : '';
+      if (marcaCanje) {
+        const previos = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').includes(marcaCanje));
+        if (previos.length) {
+          const yaUsados = previos.reduce((n, t) => n + Number(t.cantidad || 0), 0);
+          const disponiblesPrevios = (filas.filter(rojos ? esPuntoRojo : esPuntoVerde).reduce((n, t) => n + Number(t.cantidad || 0), 0) - (filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes(etiquetaPuntos)).reduce((n, t) => n + Number(t.cantidad || 0), 0)));
+          return res.json({ success: true, duplicado: true, placetas_obtenidas: placetas, puntos_canjeados: puntos, puntos_disponibles: Math.max(0, disponiblesPrevios), saldo_actual: Number(junior.placetas_saldo || 0), transaction_id: null });
+        }
+      }
       const usados = filas.filter(t => t.tipo === 'canje_puntos' && String(t.concepto || '').toLowerCase().includes(etiquetaPuntos)).reduce((n, t) => n + Number(t.cantidad || 0), 0);
       const disponibles = (filas.filter(rojos ? esPuntoRojo : esPuntoVerde).reduce((n, t) => n + Number(t.cantidad || 0), 0) - usados);
       if (puntos > disponibles) return res.status(400).json({ error: 'No tienes suficientes puntos disponibles' });
@@ -1017,7 +1055,7 @@ export function juniorRouter({ getBankState, postBanco }) {
       } else {
         saldo += placetas;
       }
-      const guardado = await crearTransaccion({ junior_id: junior.id, tipo: 'canje_puntos', concepto: `Canje de ${puntos} puntos ${etiquetaPuntos}`, cantidad: puntos, saldo_resultante: saldo, ip: ipDe(req) });
+      const guardado = await crearTransaccion({ junior_id: junior.id, tipo: 'canje_puntos', concepto: `Canje de ${puntos} puntos ${etiquetaPuntos}${marcaCanje ? ` · ${marcaCanje}` : ''}`, cantidad: puntos, saldo_resultante: saldo, ip: ipDe(req) });
       if (!guardado.ok) return res.status(503).json({ success: false, banco_confirmado: true, error: 'El banco confirmó el abono, pero no se pudo registrar el canje. Contacta con soporte antes de repetirlo.' });
       res.json({ success: true, placetas_obtenidas: placetas, puntos_canjeados: puntos,
         puntos_disponibles: Math.max(0, disponibles - puntos), saldo_actual: saldo,
