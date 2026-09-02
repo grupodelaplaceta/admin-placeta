@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import {
   finalMes, inicioMesSiguiente, tipoIvaDesdeCnic, desglosarBruto,
   cuentasPorEmpresa, pagosTributosDeEmpresa, ventasDelMes,
-  calcularCicloFacturacion, planCierreMes, seleccionarPagoIva, CUENTA_TRIBUTOS,
+  calcularCicloFacturacion, planCierreMes, seleccionarPagoIva, pagosIvaExternosDeEmpresa, CUENTA_TRIBUTOS,
 } from './facturacion.js';
 import { calcularContribuyentes } from './tributos.js';
 import {
@@ -241,4 +241,53 @@ test('integración tributos → ciclo: recibo = cuotas reales del motor fiscal',
   const red = ciclo.empresas.find((x) => x.eip === 'EIP-X4NGQU');
   assert.ok(red, 'Red del Grupo debe estar en el ciclo');
   assert.ok(red.recibo.iva > 0, 'Red debe tener IVA de ventas en el mes');
+});
+
+// ── IVA pagado por el CIUDADANO (transferencia real a TGLP que referencia
+//    las facturas en el concepto) → esas facturas se marcan pagadas ────────
+test('pagosIvaExternosDeEmpresa: detecta transferencia real a TGLP que paga facturas', () => {
+  const state = estadoProduccion();
+  const red = cicloSintetico().empresas.find((e) => e.eip === 'EIP-X4NGQU');
+  const factId = red.facturas[0].id; // FAC-2026-08-…-01
+  const desde = red.cuentas[0];
+  // Pago ciudadano: transferencia Settled empresa→TGLP con refs en el concepto.
+  state.transactions.push({
+    id: 'TX-IVA-WEB-1', kind: 'Transfer', fromAccountId: desde, toAccountId: CUENTA_TRIBUTOS,
+    amountPz: 120, ivaPz: 0, status: 'Settled', createdAt: `${MES}-28T10:00:00Z`,
+    concept: `Pago IVA facturas ${MES} · Red de La Placeta · refs:${factId}`,
+  });
+  const pagos = pagosIvaExternosDeEmpresa(state, red);
+  assert.equal(pagos.size, 1);
+  assert.equal(pagos.get(factId).transaccionId, 'TX-IVA-WEB-1');
+  assert.equal(pagos.get(factId).fecha, `${MES}-28`);
+  // Un segundo pago de la misma factura no la paga dos veces (vale el primero).
+  state.transactions.push({
+    id: 'TX-IVA-WEB-2', kind: 'Transfer', fromAccountId: desde, toAccountId: CUENTA_TRIBUTOS,
+    amountPz: 120, ivaPz: 0, status: 'Settled', createdAt: `${MES}-29T09:00:00Z`,
+    concept: `Pago IVA facturas ${MES} · Red de La Placeta · refs:${factId}`,
+  });
+  const otraVez = pagosIvaExternosDeEmpresa(state, red);
+  assert.equal(otraVez.size, 1);
+  assert.equal(otraVez.get(factId).transaccionId, 'TX-IVA-WEB-1');
+});
+
+test('pagosIvaExternosDeEmpresa: ignora Pending, no-TGLP, sin refs, otra cuenta y repetidos', () => {
+  const state = estadoProduccion();
+  const red = cicloSintetico().empresas.find((e) => e.eip === 'EIP-X4NGQU');
+  const factId = red.facturas[0].id;
+  const desde = red.cuentas[0];
+  state.transactions.push(
+    // Pendiente (no liquidada): no cuenta.
+    { id: 'TX-PEND', kind: 'Transfer', fromAccountId: desde, toAccountId: CUENTA_TRIBUTOS, amountPz: 120, status: 'Pending', createdAt: `${MES}-28`, concept: `Pago IVA facturas ${MES} · refs:${factId}` },
+    // No va a TGLP.
+    { id: 'TX-OTRO', kind: 'Transfer', fromAccountId: desde, toAccountId: 'AGLDP', amountPz: 120, status: 'Settled', createdAt: `${MES}-28`, concept: `Pago IVA facturas ${MES} · refs:${factId}` },
+    // Sin referencia a factura de la empresa.
+    { id: 'TX-SINREF', kind: 'Transfer', fromAccountId: desde, toAccountId: CUENTA_TRIBUTOS, amountPz: 90, status: 'Settled', createdAt: `${MES}-28`, concept: 'Pago IVA facturas varias' },
+    // Sale de otra cuenta (no de la empresa).
+    { id: 'TX-AJENA', kind: 'Transfer', fromAccountId: 'acc-ajena', toAccountId: CUENTA_TRIBUTOS, amountPz: 120, status: 'Settled', createdAt: `${MES}-28`, concept: `Pago IVA facturas ${MES} · refs:${factId}` },
+    // No es un pago de IVA.
+    { id: 'TX-DOM', kind: 'Transfer', fromAccountId: desde, toAccountId: CUENTA_TRIBUTOS, amountPz: 450, status: 'Settled', createdAt: `${MES}-28`, concept: `Domiciliación Tributos ${MES} · RCB-${MES}-001` },
+  );
+  const pagos = pagosIvaExternosDeEmpresa(state, red);
+  assert.equal(pagos.size, 0, 'ninguna de las anteriores paga una factura de la empresa');
 });

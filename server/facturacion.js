@@ -138,6 +138,42 @@ export function pagosTributosDeEmpresa(state, cuentaIds, mes, hastaDia) {
   return pagos;
 }
 
+// Formato de id de factura: FAC-<YYYY>-<MM>-<seq>-<nn>.
+const RE_FACTURA = /\bFAC-\d{4}-\d{2}-\d{3}-\d{2}\b/g;
+
+/**
+ * Pagos de IVA POR FACTURAS llegados por el BANCO (canal ciudadano, web/APP
+ * o manual), no por el panel RSP. Son transferencias REALES (Settled) de la
+ * empresa a TGLP cuyo concepto referencia las facturas:
+ *   `Pago IVA facturas <mes> · … · refs:FAC-…,FAC-…`
+ * Devuelve un Map facturaId → { transaccionId, fecha }. Las facturas que ya
+ * tienen su IVA pagado o las transferencias sin referencia a una factura de
+ * la empresa no se tienen en cuenta. (Puro: quien decide marcar «pagada»
+ * cada factura es la capa de persistencia, usando este resultado.)
+ */
+export function pagosIvaExternosDeEmpresa(state, emp) {
+  const refs = new Map();
+  if (!emp || !emp.cuentas) return refs;
+  const idsCuenta = new Set(emp.cuentas || []);
+  const facturasPorId = new Set((emp.facturas || []).map((f) => f.id));
+  for (const t of state.transactions || []) {
+    if (!esSettled(t)) continue;
+    const to = t.toAccountId || t.toIban || '';
+    if (to !== CUENTA_TRIBUTOS) continue; // solo el ingreso va a Tesorería/TGLP
+    const from = t.fromAccountId || t.fromIban || '';
+    if (!idsCuenta.has(from)) continue; // sale de una cuenta de la empresa
+    const concepto = String(t.concept || '');
+    if (!/Pago IVA/i.test(concepto)) continue; // es un ingreso de IVA
+    const tokens = concepto.match(RE_FACTURA) || [];
+    for (const id of tokens) {
+      if (!facturasPorId.has(id)) continue;
+      if (refs.has(id)) continue; // primera transferencia que paga la factura
+      refs.set(id, { transaccionId: t.id, fecha: diaDe(t) });
+    }
+  }
+  return refs;
+}
+
 // ── Facturas de venta / servicio interno desde los movimientos ─────────
 // Una empresa "vende" cuando RECIBE dinero de un tercero. Si el emisor es
 // otra empresa del Grupo es un servicio interno; si no, una venta.

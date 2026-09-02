@@ -10,7 +10,7 @@
 import { Router } from 'express';
 import { randomBytes, randomUUID } from 'crypto';
 import { calcularContribuyentes } from './tributos.js';
-import { calcularCicloFacturacion, planCierreMes, seleccionarPagoIva, CUENTA_TRIBUTOS } from './facturacion.js';
+import { calcularCicloFacturacion, planCierreMes, seleccionarPagoIva, pagosIvaExternosDeEmpresa, CUENTA_TRIBUTOS } from './facturacion.js';
 import { coleccion } from './db.js';
 import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacionPlacetaID } from './firmas.js';
 import { CATALOGO_BASE } from './tramites-catalogo.js';
@@ -1954,6 +1954,28 @@ export function createApiRouter({ getBankState, mutarBanco }) {
         f.ivaPagado = true;
         f.fechaPagoIva = fr.fechaPagoIva || null;
         f.transaccionPagoIva = fr.transaccionPagoIva || null;
+      }
+      // Conciliación del IVA pagado por el CIUDADANO (Banco web/APP o manual):
+      // una transferencia real Settled a TGLP que referencia facturas marca
+      // esas facturas como pagadas (idempotente), aunque no haya pasado por el
+      // panel. Así nunca se vuelve a ofrecer ni a cobrar ese IVA.
+      const pagosIva = pagosIvaExternosDeEmpresa(state, e);
+      for (const [fid, pago] of pagosIva) {
+        const f = e.facturas.find((x) => x.id === fid);
+        if (!f || f.ivaPagado) continue;
+        const patch = { ivaPagado: true, fechaPagoIva: pago.fecha || null, transaccionPagoIva: pago.transaccionId };
+        const fila = filasFactura.get(fid);
+        if (fila) await store.facturacion.actualizar(fid, patch);
+        else await store.facturacion.insertar({
+          id: f.id, documento: 'factura', tipo: f.tipo, eip: e.eip, nombre: e.nombre, mes: f.mes,
+          concepto: f.concepto, cliente: f.cliente, importe: f.bruto, base: f.base, iva: f.iva,
+          transaccionId: f.transaccionId, fecha: f.fecha, estado: 'abonada', ...patch,
+        });
+        filasFactura.set(fid, { id: fid, ...patch });
+        f.ivaPagado = true;
+        f.fechaPagoIva = patch.fechaPagoIva;
+        f.transaccionPagoIva = patch.transaccionPagoIva;
+        conciliados += 1;
       }
       e.ivaAIngresar = round2(e.facturas.reduce((s, f) => s + (f.ivaPagado ? 0 : f.iva), 0));
       e.totalIvaPagado = round2(e.facturas.reduce((s, f) => s + (f.ivaPagado ? f.iva : 0), 0));

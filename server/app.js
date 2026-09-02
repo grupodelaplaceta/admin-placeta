@@ -9,6 +9,7 @@ import cors from 'cors';
 import { authRouter, requiereSesion } from './auth.js';
 import { createApiRouter } from './api.js';
 import { juniorRouter } from './junior.js';
+import { facturacionPublicoRouter } from './facturacion-publico.js';
 import { calcularContribuyentes, calcularReconciliacion } from './tributos.js';
 import { registrarFirma } from './firmas.js';
 import { supabase, probarSupabase } from './supabase.js';
@@ -436,6 +437,15 @@ export function createApp() {
       res.status(500).json({ error: e.message });
     }
   });
+
+  // ── Facturación CIUDADANA (Banco web / APP) — solo lectura por EIP ──
+  // Validada con X-API-Key (=TRIBUTOS_API_KEY). No mueve dinero: devuelve
+  // las facturas del mes de una empresa y su IVA pendiente, y concilia los
+  // pagos de IVA hechos por el ciudadano (transferencia real a TGLP).
+  app.use('/api/v1/tributos', facturacionPublicoRouter({
+    getBankState: obtenerEstadoBanco,
+    cargarCnic: cargarCnicVigentes,
+  }));
 
   // Autenticación: POST /login, POST /logout, GET /api/sesion.
   app.use(authRouter());
