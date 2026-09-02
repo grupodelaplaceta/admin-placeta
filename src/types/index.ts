@@ -543,11 +543,19 @@ export interface DocumentoRequerido {
   aportado: boolean;
 }
 
+export type CategoriaGasto = 'factura' | 'iva' | 'tributos' | 'irm_igf' | 'operacion' | 'otro';
+
 export interface GastoJustificable {
   id: string;
   concepto: string;
   importe: number;
   fecha: string;
+  /** Categoría del gasto: factura (con su IVA/base), IVA, tributos, IRM/IGF… */
+  categoria: CategoriaGasto;
+  base?: number;
+  iva?: number;
+  facturaId?: string;
+  transaccionId?: string;
   kind?: string;
   excluido?: boolean;
   justificado: boolean;
@@ -559,21 +567,59 @@ export interface JustificacionPago {
   importe: number;
   fecha: string;
   transferenciaId: string;
+  /** Desglose por categoría del pago justificado. */
+  categorias?: { categoria: CategoriaGasto; importe: number }[];
+}
+
+export interface ReversionPago {
+  id: string;
+  gastoId: string;
+  justificacionId?: string;
+  importe: number;
+  fecha: string;
+  motivo: string;
+  /** Si el dinero se devolvió al Banco/emisor con una transferencia real. */
+  transferenciaId?: string;
 }
 
 export interface SubvencionDetalle extends SubvencionResumen {
   documentosRequeridos: DocumentoRequerido[];
   gastos: GastoJustificable[];
   justificaciones: JustificacionPago[];
+  reversiones: ReversionPago[];
   /** Tipos de gasto excluibles (impuestos/comisiones) según el sistema real. */
   excluirTipos: string[];
   /** Tipos de transacción del banco que SÍ se pueden justificar (aptos). */
   tiposAptos: string[];
+  /** Categorías de gasto que cubre esta subvención (vacío = todas). */
+  categoriasCubiertas: CategoriaGasto[];
   /** Baremos automáticos para empresas que quieran optar. */
   baremos?: Baremo[];
   publicada?: boolean;
   publicadaEn?: string;
   bopUrl?: string;
+}
+
+/** Resumen por beneficiario (empresa o particular) de lo subvencionado/justificado. */
+export interface BeneficiarioSubvenciones {
+  id: string;            // EIP o DIP
+  nombre: string;
+  tipo: 'empresa' | 'particular';
+  concedido: number;
+  justificado: number;
+  pendienteJustificar: number;
+  devuelto: number;
+  subvenciones: number;
+  /** Todas las operaciones justificadas por este beneficiario (trazabilidad). */
+  operaciones: {
+    subvencionId: string;
+    concepto: string;
+    gastoId: string;
+    categoria: CategoriaGasto;
+    importe: number;
+    fecha: string;
+    justificacionId: string;
+  }[];
 }
 
 export interface CampoTramite {

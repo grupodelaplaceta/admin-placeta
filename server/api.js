@@ -867,8 +867,24 @@ export function createApiRouter({ getBankState, mutarBanco }) {
   });
 
   /* ── Subvenciones ────────────────────────────────────────────────── */
+  const CATEGORIA_GASTO_VALIDA = new Set(['factura', 'iva', 'tributos', 'irm_igf', 'operacion', 'otro']);
+  // Clasifica un tipo de transacción del banco en categoría de gasto.
+  const CATEGORIA_POR_KIND = {
+    TAX: 'tributos', IRMCHARGE: 'irm_igf', IRM: 'irm_igf', IGF: 'irm_igf',
+    IVAADJUSTMENT: 'iva', FORCEDVATREGULARIZATION: 'iva', LATETAXINTEREST: 'tributos',
+    CONSUMPTION: 'operacion', PLACEZUM: 'operacion', OPERATIONALFEE: 'operacion', SERVICE: 'operacion',
+  };
+  const clasificarCategoria = (g) => {
+    if (g && CATEGORIA_GASTO_VALIDA.has(g.categoria)) return g.categoria;
+    const k = String(g?.kind || '').toUpperCase();
+    if (CATEGORIA_POR_KIND[k]) return CATEGORIA_POR_KIND[k];
+    if (g?.facturaId) return 'factura';
+    return 'otro';
+  };
+
   router.get('/rsp/subvenciones/api', async (_req, res) => res.json(await store.subvenciones.listar()));
-  router.get('/rsp/subvenciones/api/:id', (req, res) => {
+  router.get('/rsp/subvenciones/api/:id', (req, res, next) => {
+    if (req.params.id === 'beneficiarios') return next(); // ruta propia más abajo
     const s = store.subvencionesDetalle[req.params.id];
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
     res.json(s);
@@ -885,9 +901,12 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     };
     await store.subvenciones.insertar(s);
     store.subvencionesDetalle[s.id] = {
-      ...s, documentosRequeridos: [], gastos: [], justificaciones: [],
+      ...s, documentosRequeridos: [], gastos: [], justificaciones: [], reversiones: [],
       excluirTipos: ['Tax', 'IrmCharge', 'IvaAdjustment'],
       tiposAptos: d.tiposAptos || [],
+      // Categorías que cubre la subvención (vacío = todas). Permite subvenciones
+      // para pagar IVA (p.ej. de inversiones), tributos, IRM/IGF, facturas…
+      categoriasCubiertas: d.categoriasCubiertas || [],
       baremos: d.baremos || [],
       publicadaEn: d.publicada ? AHORA() : undefined,
       bopUrl: d.publicada ? `https://gdlp.laplaceta.org/subvenciones.html?codigo=${s.id}` : undefined,
@@ -900,11 +919,156 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     s.documentosRequeridos = (req.body?.documentos || []).map((nombre, i) => ({ id: `DOC-${i}`, nombre, tipo: 'anexo', aportado: false }));
     res.json({ ok: true });
   });
+
+  // Registra gastos justificables del receptor. Pueden ser OPERACIONES del
+  // banco (con kind) o FACTURAS (con facturaId/base/iva); cada gasto se
+  // clasifica en factura/iva/tributos/irm_igf/operacion/otro.
+  router.post('/rsp/subvenciones/api/:id/gastos', (req, res) => {
+    const s = store.subvencionesDetalle[req.params.id];
+    if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
+    const lista = Array.isArray(req.body?.gastos) ? req.body.gastos : [];
+    let añadidos = 0;
+    for (const g of lista) {
+      const id = String(g.id || `G-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+      if (s.gastos.some((x) => x.id === id)) continue;
+      s.gastos.push({
+        id,
+        concepto: String(g.concepto || 'Gasto'),
+        importe: Number(g.importe) || 0,
+        fecha: String(g.fecha || AHORA().slice(0, 10)),
+        categoria: clasificarCategoria(g),
+        ...(g.base != null ? { base: Number(g.base) } : {}),
+        ...(g.iva != null ? { iva: Number(g.iva) } : {}),
+        ...(g.facturaId ? { facturaId: String(g.facturaId) } : {}),
+        ...(g.transaccionId ? { transaccionId: String(g.transaccionId) } : {}),
+        ...(g.kind ? { kind: String(g.kind) } : {}),
+        excluido: false,
+        justificado: false,
+      });
+      añadidos += 1;
+    }
+    res.json({ ok: true, añadidos, total: s.gastos.length });
+  });
+
+  // Justifica los gastos seleccionados (se ejecuta tras confirmar 2FA). Solo
+  // son aptos los que la subvención cubre (categorías y tipos), nunca superan
+  // el importe restante y no están excluidos. Devuelve el desglose por categoría.
   router.post('/rsp/subvenciones/api/:id/justificar', (req, res) => {
     const s = store.subvencionesDetalle[req.params.id];
     if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
-    s.estado = 'justificada';
-    res.json({ ok: true });
+    const gastoIds = Array.isArray(req.body?.gastoIds) ? req.body.gastoIds.map(String) : [];
+    if (!gastoIds.length) return res.status(400).json({ error: 'Selecciona al menos un gasto' });
+    const cubiertas = s.categoriasCubiertas || [];
+    const seleccion = s.gastos.filter((g) => gastoIds.includes(g.id) && !g.justificado && !g.excluido);
+    const noApto = gastoIds.find((id) => {
+      const g = s.gastos.find((x) => x.id === id);
+      if (!g) return true;
+      if (g.justificado || g.excluido) return false;
+      if (cubiertas.length && !cubiertas.includes(g.categoria)) return true;
+      if (s.tiposAptos?.length && g.kind && !s.tiposAptos.includes(g.kind)) return true;
+      return false;
+    });
+    if (noApto) {
+      const g = s.gastos.find((x) => x.id === noApto);
+      return res.status(409).json({ error: `El gasto ${noApto} (${g?.categoria || '?'}) no está cubierto por esta subvención o no existe` });
+    }
+    if (!seleccion.length) return res.status(400).json({ error: 'No hay gastos seleccionables' });
+    const total = round2(seleccion.reduce((sum, g) => sum + (Number(g.importe) || 0), 0));
+    if (total > s.importeRestante) {
+      return res.status(409).json({ error: `La justificación (${total} Pz) supera el importe restante (${s.importeRestante} Pz)` });
+    }
+    const fecha = AHORA().slice(0, 10);
+    const porCategoria = new Map();
+    const justificaciones = [];
+    seleccion.forEach((g, i) => {
+      g.justificado = true;
+      porCategoria.set(g.categoria, round2((porCategoria.get(g.categoria) || 0) + (Number(g.importe) || 0)));
+      const jid = `J-${s.id}-${Date.now()}-${i}`;
+      justificaciones.push({
+        id: jid, gastoId: g.id, importe: Number(g.importe) || 0, fecha, transferenciaId: `TRF-SUB-${jid}`,
+        categorias: [{ categoria: g.categoria, importe: Number(g.importe) || 0 }],
+      });
+    });
+    s.justificaciones.push(...justificaciones);
+    s.importeRestante = round2(Math.max(0, s.importeRestante - total));
+    s.estado = s.importeRestante === 0 ? 'justificada' : 'concedida';
+    store.subvenciones.actualizar(s.id, { importeRestante: s.importeRestante, estado: s.estado }).catch(() => {});
+    res.json({
+      ok: true, importe: total, importeRestante: s.importeRestante, estado: s.estado,
+      categorias: Array.from(porCategoria.entries()).map(([categoria, importe]) => ({ categoria, importe })),
+      justificaciones: justificaciones.map((j) => j.id),
+    });
+  });
+
+  // Reversión/devolución: si se detecta que una justificación no corresponde
+  // al fin de la subvención, se revierte el gasto y se restituye el importe al
+  // fondo (importeRestante). El dinero vuelve al Banco de La Placeta y el
+  // beneficiario no retiene un cobro indebido. (Registro contable; si se
+  // quiere una transferencia real de retorno se usa la API bancaria aparte.)
+  router.post('/rsp/subvenciones/api/:id/revertir', (req, res) => {
+    const s = store.subvencionesDetalle[req.params.id];
+    if (!s) return res.status(404).json({ error: 'Subvención no encontrada' });
+    const gastoId = String(req.body?.gastoId || '');
+    const motivo = String(req.body?.motivo || 'No corresponde al fin de la subvención');
+    const gasto = s.gastos.find((g) => g.id === gastoId);
+    if (!gasto || !gasto.justificado) return res.status(409).json({ error: 'El gasto no está justificado o no existe' });
+    const importe = Number(gasto.importe) || 0;
+    gasto.justificado = false;
+    gasto.excluido = true; // no se puede volver a justificar
+    const jids = s.justificaciones.filter((j) => j.gastoId === gastoId).map((j) => j.id);
+    s.justificaciones = s.justificaciones.filter((j) => j.gastoId !== gastoId);
+    const fecha = AHORA().slice(0, 10);
+    const revId = `REV-${s.id}-${Date.now()}`;
+    s.reversiones.push({ id: revId, gastoId, justificacionId: jids[0], importe, fecha, motivo });
+    s.importeRestante = round2(Math.max(0, s.importeRestante + importe));
+    s.estado = 'concedida';
+    store.subvenciones.actualizar(s.id, { importeRestante: s.importeRestante, estado: s.estado }).catch(() => {});
+    res.json({ ok: true, reversionId: revId, importe, importeRestante: s.importeRestante, justificacionIds: jids });
+  });
+
+  // Trazabilidad por beneficiario: cada empresa y cada particular subvencionado
+  // con todas sus operaciones justificadas (para control y detección de fraude).
+  router.get('/rsp/subvenciones/api/beneficiarios', async (_req, res) => {
+    try {
+      const filas = await store.subvenciones.listar();
+      const mapa = new Map();
+      const aporta = (id) => store.subvencionesDetalle[id];
+      for (const f of filas || []) {
+        const det = aporta(f.id);
+        const receptor = String(det?.receptorEip || f.receptorEip || '');
+        if (!receptor) continue;
+        const nombre = det?.receptorNombre || f.receptorNombre || receptor;
+        const tipo = /^EIP-/i.test(receptor) ? 'empresa' : 'particular';
+        let b = mapa.get(receptor);
+        if (!b) { b = { id: receptor, nombre, tipo, concedido: 0, justificado: 0, devuelto: 0, pendienteJustificar: 0, subvenciones: 0, operaciones: [] }; mapa.set(receptor, b); }
+        b.subvenciones += 1;
+        b.concedido = round2(b.concedido + (Number(det?.importe ?? f.importe) || 0));
+        const jus = det?.justificaciones || [];
+        const rev = det?.reversiones || [];
+        b.justificado = round2(b.justificado + jus.reduce((s, j) => s + (Number(j.importe) || 0), 0));
+        b.devuelto = round2(b.devuelto + rev.reduce((s, r) => s + (Number(r.importe) || 0), 0));
+        b.pendienteJustificar = round2(Math.max(0, (Number(det?.importeRestante ?? f.importeRestante) || 0)));
+        for (const j of jus) {
+          const gasto = det.gastos.find((g) => g.id === j.gastoId);
+          b.operaciones.push({
+            subvencionId: det.id, concepto: gasto?.concepto || det.concepto || '—',
+            gastoId: j.gastoId, categoria: gasto?.categoria || 'otro',
+            importe: Number(j.importe) || 0, fecha: j.fecha, justificacionId: j.id,
+          });
+        }
+      }
+      const lista = Array.from(mapa.values()).map(({ operaciones, ...b }) => ({ ...b, operaciones }));
+      res.json({
+        ok: true, total: lista.length,
+        resumen: {
+          concedido: round2(lista.reduce((s, b) => s + b.concedido, 0)),
+          justificado: round2(lista.reduce((s, b) => s + b.justificado, 0)),
+          devuelto: round2(lista.reduce((s, b) => s + b.devuelto, 0)),
+          pendiente: round2(lista.reduce((s, b) => s + b.pendienteJustificar, 0)),
+        },
+        beneficiarios: lista,
+      });
+    } catch (e) { res.status(502).json({ error: e.message }); }
   });
 
   /* ── Bonificaciones (bonos) ──────────────────────────────────────── */

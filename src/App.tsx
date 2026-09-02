@@ -30,6 +30,7 @@ import Facturacion from './pages/tributos/Facturacion';
 import EntidadDetail from './pages/entidades/EntidadDetail';
 import Subvenciones from './pages/subvenciones/Subvenciones';
 import SubvencionDetail from './pages/subvenciones/SubvencionDetail';
+import BeneficiariosSubvenciones from './pages/subvenciones/BeneficiariosSubvenciones';
 import Bonificaciones from './pages/bonos/Bonificaciones';
 import BonoDetail from './pages/bonos/BonoDetail';
 import Cuentas from './pages/banco/Cuentas';
@@ -87,6 +88,7 @@ export default function App() {
               <Route path="/tributos/declaraciones/:id" element={permiso('ver_declaraciones', <DeclaracionDetail />)} />
               <Route path="/facturacion" element={permiso('ver_declaraciones', <Facturacion />)} />
               <Route path="/subvenciones" element={permiso('ver_subvenciones', <Subvenciones />)} />
+              <Route path="/subvenciones/beneficiarios" element={permiso('ver_subvenciones', <BeneficiariosSubvenciones />)} />
               <Route path="/subvenciones/:id" element={permiso('ver_subvenciones', <SubvencionDetail />)} />
               <Route path="/bonos" element={permiso('ver_bonos', <Bonificaciones />)} />
               <Route path="/bonos/:id" element={permiso('ver_bonos', <BonoDetail />)} />

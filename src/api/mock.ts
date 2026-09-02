@@ -10,7 +10,7 @@ import type {
   EntidadRegistral, Filtros, Actuacion, Requisito, DocumentoVinculado,
   NuevoTramite, EstadoTramite, Contribuyente,
   DeclaracionResumen, DeclaracionDetalle, DocumentoCiudadano, FirmaCiudadano,
-  Obligacion, SubvencionResumen, SubvencionDetalle, Solicitud2FA,
+  Obligacion, SubvencionResumen, SubvencionDetalle, BeneficiarioSubvenciones, Solicitud2FA,
   DesgloseFiscal, CuentaSugerencia, RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa, Nomina, RequisitoBono, BopDocumento,
@@ -929,7 +929,7 @@ export const mockProvider: Provider = {
   async getSubvencion(id) {
     const s = SUBVENCIONES.find((x) => x.id === id);
     if (!s) throw new Error('Subvención no encontrada');
-    return SUBVENCIONES_DETALLE[id] ?? { ...s, documentosRequeridos: [], gastos: [], justificaciones: [], excluirTipos: [], tiposAptos: [] };
+    return SUBVENCIONES_DETALLE[id] ?? { ...s, documentosRequeridos: [], gastos: [], justificaciones: [], reversiones: [], categoriasCubiertas: [], excluirTipos: [], tiposAptos: [] };
   },
   async concederSubvencion(datos) {
     const nueva: SubvencionResumen = {
@@ -951,6 +951,8 @@ export const mockProvider: Provider = {
       documentosRequeridos: [],
       gastos: [],
       justificaciones: [],
+      reversiones: [],
+      categoriasCubiertas: datos.categoriasCubiertas ?? [],
       excluirTipos: ['Tax', 'IrmCharge', 'IvaAdjustment', 'InvestmentTax', 'InvestmentCommission', 'LateTaxInterest'],
       tiposAptos: datos.tiposAptos ?? [],
       baremos: datos.baremos ?? [],
@@ -963,37 +965,102 @@ export const mockProvider: Provider = {
   async requerirDocumentosSubvencion(id, documentos) {
     const s = SUBVENCIONES.find((x) => x.id === id);
     if (!s) throw new Error('Subvención no encontrada');
-    const d: SubvencionDetalle = SUBVENCIONES_DETALLE[id] ?? { ...s, documentosRequeridos: [], gastos: [], justificaciones: [] };
+    const d: SubvencionDetalle = SUBVENCIONES_DETALLE[id] ?? { ...s, documentosRequeridos: [], gastos: [], justificaciones: [], reversiones: [], categoriasCubiertas: [] };
     d.documentosRequeridos = documentos.map((nombre, i) => ({ id: `DR-${i + 1}`, nombre, tipo: 'documento', aportado: false }));
     SUBVENCIONES_DETALLE[id] = d;
+  },
+  async addGastosSubvencion(id, gastos) {
+    const s = SUBVENCIONES.find((x) => x.id === id);
+    if (!s) throw new Error('Subvención no encontrada');
+    const d: SubvencionDetalle = SUBVENCIONES_DETALLE[id] ?? { ...s, documentosRequeridos: [], gastos: [], justificaciones: [], reversiones: [], categoriasCubiertas: [], excluirTipos: [], tiposAptos: [] };
+    let anadidos = 0;
+    for (const g of gastos) {
+      const idg = g.id ?? `G-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      if (d.gastos.some((x) => x.id === idg)) continue;
+      d.gastos.push({
+        id: idg, concepto: g.concepto ?? 'Gasto', importe: Number(g.importe) || 0, fecha: g.fecha ?? new Date().toISOString().slice(0, 10),
+        categoria: g.categoria ?? 'otro', base: g.base, iva: g.iva, facturaId: g.facturaId, transaccionId: g.transaccionId, kind: g.kind,
+        justificado: false,
+      });
+      anadidos += 1;
+    }
+    SUBVENCIONES_DETALLE[id] = d;
+    return { ok: true, anadidos, total: d.gastos.length };
   },
   async justificarPagoSubvencion(id, gastoIds) {
     const s = SUBVENCIONES.find((x) => x.id === id);
     if (!s) throw new Error('Subvención no encontrada');
     const d = SUBVENCIONES_DETALLE[id];
     if (!d) throw new Error('Detalle no encontrado');
+    const cubiertas = d.categoriasCubiertas ?? [];
+    const hoy = new Date().toISOString().slice(0, 10);
     let total = 0;
+    const nuevas = [];
     for (const gid of gastoIds) {
       const g = d.gastos.find((x) => x.id === gid);
       const excluido = g?.excluido || (g?.kind && d.excluirTipos.includes(g.kind));
+      const cubre = cubiertas.length === 0 || (g != null && cubiertas.includes(g.categoria));
       const apto = !g?.kind || d.tiposAptos.length === 0 || d.tiposAptos.includes(g.kind);
-      if (g && !g.justificado && !excluido && apto) {
+      if (g && !g.justificado && !excluido && cubre && apto) {
         g.justificado = true;
         total += g.importe;
+        nuevas.push({
+          id: `J-${d.justificaciones.length + nuevas.length + 1}`,
+          gastoId: g.id, importe: g.importe, fecha: hoy,
+          transferenciaId: `TRF-2026-${Math.floor(100000 + Math.random() * 900000)}`,
+          categorias: [{ categoria: g.categoria, importe: g.importe }],
+        });
       }
     }
     if (total > s.importeRestante) {
       throw new Error(`El importe a justificar (${total}) supera el restante (${s.importeRestante})`);
     }
-    d.justificaciones.push({
-      id: `J-${d.justificaciones.length + 1}`,
-      gastoId: gastoIds.join(','),
-      importe: total,
-      fecha: new Date().toISOString().slice(0, 10),
-      transferenciaId: `TRF-2026-${Math.floor(100000 + Math.random() * 900000)}`,
-    });
+    d.justificaciones.push(...nuevas);
     s.importeRestante = Math.max(0, s.importeRestante - total);
     if (s.importeRestante === 0) s.estado = 'justificada';
+  },
+  async revertirJustificacionSubvencion(id, { gastoId, motivo }) {
+    const s = SUBVENCIONES.find((x) => x.id === id);
+    if (!s) throw new Error('Subvención no encontrada');
+    const d = SUBVENCIONES_DETALLE[id];
+    if (!d) throw new Error('Detalle no encontrado');
+    const g = d.gastos.find((x) => x.id === gastoId);
+    if (!g || !g.justificado) throw new Error('El gasto no está justificado o no existe');
+    const importe = g.importe;
+    g.justificado = false;
+    g.excluido = true; // no se vuelve a justificar
+    d.justificaciones = d.justificaciones.filter((j) => j.gastoId !== gastoId);
+    const rev = { id: `REV-${Date.now()}`, gastoId, importe, fecha: new Date().toISOString().slice(0, 10), motivo: motivo || 'No corresponde al fin de la subvención' };
+    d.reversiones.push(rev);
+    s.importeRestante = Math.min(s.importe, Math.max(0, s.importeRestante + importe));
+    if (s.importeRestante < s.importe) s.estado = 'concedida';
+    return { ok: true, reversionId: rev.id, importe, importeRestante: s.importeRestante };
+  },
+  async listarBeneficiariosSubvenciones() {
+    const byId = new Map<string, BeneficiarioSubvenciones>();
+    for (const s of SUBVENCIONES) {
+      const d = SUBVENCIONES_DETALLE[s.id];
+      const receptor = s.receptorEip;
+      let b = byId.get(receptor);
+      if (!b) {
+        b = { id: receptor, nombre: s.receptorNombre, tipo: /^EIP-/i.test(receptor) ? 'empresa' : 'particular', concedido: 0, justificado: 0, devuelto: 0, pendienteJustificar: 0, subvenciones: 0, operaciones: [] };
+        byId.set(receptor, b);
+      }
+      b.subvenciones += 1;
+      b.concedido += s.importe;
+      const jus = d?.justificaciones ?? [];
+      const rev = d?.reversiones ?? [];
+      b.justificado += jus.reduce((x, j) => x + j.importe, 0);
+      b.devuelto += rev.reduce((x, r) => x + r.importe, 0);
+      b.pendienteJustificar = s.importeRestante;
+      for (const j of jus) {
+        const g = d?.gastos.find((x) => x.id === j.gastoId);
+        b.operaciones.push({ subvencionId: s.id, concepto: g?.concepto ?? s.concepto, gastoId: j.gastoId, categoria: g?.categoria ?? 'otro', importe: j.importe, fecha: j.fecha, justificacionId: j.id });
+      }
+    }
+    const beneficiarios = Array.from(byId.values());
+    const sum = (k: 'concedido' | 'justificado' | 'devuelto' | 'pendienteJustificar') => beneficiarios.reduce((x, b) => x + b[k], 0);
+    return { ok: true, total: beneficiarios.length, resumen: { concedido: sum('concedido'), justificado: sum('justificado'), devuelto: sum('devuelto'), pendiente: sum('pendienteJustificar') }, beneficiarios };
   },
   // ── Bonificaciones (empresa → particular) ────────────────────────────
   async listarBonos() {

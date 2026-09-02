@@ -14,7 +14,7 @@ import type {
   Contribuyente, ContribuyenteDetalle, DeclaracionResumen, DeclaracionDetalle,
   CicloFacturacion, PlanCierre,
   DocumentoCiudadano, FirmaCiudadano, Obligacion, EntidadDetalle,
-  SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
+  SubvencionResumen, SubvencionDetalle, BeneficiarioSubvenciones, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   FacturaEmitida, Nomina,
@@ -239,6 +239,15 @@ export const httpProvider: Provider = {
   },
   async justificarPagoSubvencion(id, gastoIds) {
     return http.post<void>(`/rsp/subvenciones/api/${id}/justificar`, { gastoIds });
+  },
+  async addGastosSubvencion(id, gastos) {
+    return http.post<{ ok: boolean; anadidos: number; total: number }>(`/rsp/subvenciones/api/${id}/gastos`, { gastos });
+  },
+  async revertirJustificacionSubvencion(id, datos) {
+    return http.post<{ ok: boolean; reversionId?: string; importe: number; importeRestante: number }>(`/rsp/subvenciones/api/${id}/revertir`, datos);
+  },
+  async listarBeneficiariosSubvenciones() {
+    return http.get<{ ok: boolean; total: number; resumen: { concedido: number; justificado: number; devuelto: number; pendiente: number }; beneficiarios: BeneficiarioSubvenciones[] }>('/rsp/subvenciones/api/beneficiarios');
   },
   // ── Banco ─────────────────────────────────────────────────────────
   async listarCuentas(f) {

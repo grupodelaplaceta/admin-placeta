@@ -12,7 +12,7 @@ import type {
   Contribuyente, ContribuyenteDetalle, DeclaracionResumen, DeclaracionDetalle,
   CicloFacturacion, PlanCierre, EmpresaCiclo,
   DocumentoCiudadano, FirmaCiudadano, Obligacion, EntidadDetalle,
-  SubvencionResumen, SubvencionDetalle, Solicitud2FA, CuentaSugerencia,
+  SubvencionResumen, SubvencionDetalle, BeneficiarioSubvenciones, CategoriaGasto, GastoJustificable, Solicitud2FA, CuentaSugerencia,
   RegimenBono, BonoDetalle, Baremo, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   FacturaEmitida, ParticipacionEmpresa, Nomina,
@@ -46,9 +46,15 @@ export interface Provider {
   // Subvenciones
   listarSubvenciones(filtros?: Filtros): Promise<SubvencionResumen[]>;
   getSubvencion(id: string): Promise<SubvencionDetalle>;
-  concederSubvencion(datos: { emisorEip: string; receptorEip: string; importe: number; concepto: string; tiposAptos?: string[]; publicada?: boolean; baremos?: Baremo[] }): Promise<SubvencionResumen>;
+  concederSubvencion(datos: { emisorEip: string; receptorEip: string; importe: number; concepto: string; tiposAptos?: string[]; categoriasCubiertas?: CategoriaGasto[]; publicada?: boolean; baremos?: Baremo[] }): Promise<SubvencionResumen>;
   requerirDocumentosSubvencion(id: string, documentos: string[]): Promise<void>;
   justificarPagoSubvencion(id: string, gastoIds: string[]): Promise<void>;
+  /** Registra gastos justificables (operaciones del banco o facturas, con categoría). */
+  addGastosSubvencion(id: string, gastos: Partial<GastoJustificable>[]): Promise<{ ok: boolean; anadidos: number; total: number }>;
+  /** Reversión: revierte una justificación y restituye el importe al fondo (el dinero vuelve al Banco). */
+  revertirJustificacionSubvencion(id: string, datos: { gastoId: string; motivo?: string }): Promise<{ ok: boolean; reversionId?: string; importe: number; importeRestante: number }>;
+  /** Trazabilidad por beneficiario (empresas y particulares) con sus operaciones justificadas. */
+  listarBeneficiariosSubvenciones(): Promise<{ ok: boolean; total: number; resumen: { concedido: number; justificado: number; devuelto: number; pendiente: number }; beneficiarios: BeneficiarioSubvenciones[] }>;
 
   // Banco
   listarCuentas(filtros?: Filtros): Promise<CuentaBancaria[]>;

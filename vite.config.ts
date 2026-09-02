@@ -24,6 +24,9 @@ export default defineConfig({
     globals: true,
     setupFiles: './src/test/setup.ts',
     css: false,
+    // Vitest solo corre los tests del SPA; los del servidor usan node:test
+    // (cd server && npm test / node --test).
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     env: {
       // Los tests usan el proveedor mock (con el snapshot real del banco).
       VITE_USE_MOCK: 'true',
