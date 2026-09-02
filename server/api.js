@@ -915,7 +915,12 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     } catch { /* sin persistencia */ }
   }
 
-  router.get('/rsp/subvenciones/api', async (_req, res) => res.json(await store.subvenciones.listar()));
+  router.get('/rsp/subvenciones/api', async (_req, res) => {
+    const filas = await store.subvenciones.listar();
+    // El listado omite el detalle operativo (gastos/justificaciones/…) para
+    // mantener ligera la respuesta; el detalle se carga por id (GET /:id).
+    res.json((filas || []).map(({ detalle, ...f }) => f));
+  });
   router.get('/rsp/subvenciones/api/:id', async (req, res, next) => {
     if (req.params.id === 'beneficiarios') return next(); // ruta propia más abajo
     try {
