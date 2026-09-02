@@ -26,19 +26,30 @@
     totalIvaPagado`.
   - `seleccionarPagoIva(empresa, facturaIds?)`: devuelve las facturas
     pendientes (todas, o solo las indicadas); nunca una ya pagada.
+  - `pagosIvaExternosDeEmpresa(state, empresa)`: detecta las transferencias
+    REALES Settled empresa→TGLP cuyo concepto referencia facturas
+    (`Pago IVA facturas <mes> · … · refs:FAC-…,FAC-…`) → mapa factura→{tx,fecha}.
+    Es la conciliación de los pagos hechos por el **ciudadano** en Banco web/APP.
 - `server/api.js`:
-  - El ciclo refleja las facturas con IVA ya ingresado (persistido).
+  - El ciclo refleja las facturas con IVA ya ingresado (persistido) y
+    **concilia** los pagos externos detectados (los persiste como `ivaPagado`).
   - **Nuevo `POST /rsp/facturacion/api/pagar-iva`** `{ mes, eip, facturaIds? }`:
     transfiere el IVA pendiente de la empresa → `TGLP` (acción `transferir`
     con `iva:0`, es decir **una transferencia del Banco, nunca PlaceZum**),
     marca las facturas `ivaPagado` en `rsp_facturacion` y emite aviso. Es
     idempotente (las ya pagadas se ignoran).
+- `server/facturacion-publico.js`: **ruta ciudadana SOLO LECTURA**
+  `GET /api/v1/tributos/facturacion?eip=&mes=` (validada por
+  `X-API-Key` = `TRIBUTOS_API_KEY`) → facturas del mes de una empresa + IVA
+  pendiente por factura; concilia y persiste los pagos externos. Se monta en
+  `app.js` ANTES de la sesión de administrador.
 - `server/sql/rsp_facturacion.sql`: columnas `iva_pagado`, `fecha_pago_iva`,
   `transaccion_pago_iva` (+ `ALTER ... IF NOT EXISTS`).
 - Panel `Facturación`: columna “IVA a ingresar” con botón **Pagar IVA** por
   empresa y estado por factura (“pagado/pendiente”); KPI “IVA a ingresar”.
-- Tests (`server/facturacion.test.mjs`): 13/13 — ciclo con IVA por factura,
-  `seleccionarPagoIva` agrupado/selectivo/sin repetir.
+- Tests (`server/facturacion.test.mjs`): 15/15 — ciclo con IVA por factura,
+  `seleccionarPagoIva` agrupado/selectivo/sin repetir y conciliación de pagos
+  externos (Settled a TGLP con refs; ignora Pending/no-TGLP/sin refs/ajenos).
 
 ### backend-banco (`api/crm-state.js`)
 - El IVA automático **solo se descuenta al momento** cuando el destino **no** es
@@ -47,12 +58,33 @@
   (`ivaDiferido:true` en la respuesta) y se gestiona en RSP vía `pagar-iva`.
   Esto evita pagar el IVA dos veces. (El modo demo no cambia.)
 
+### Capa ciudadana (Banco web / APP) — iteración completada
+- `backend-banco/api/web.js` (Bearer PlacetaID, solo datos del titular):
+  - `GET /api/web/facturacion?mes=` → facturas del mes de las cuentas Business
+    del titular/gestor (scope por EIP; lee de RSP).
+  - `POST /api/web/facturacion/pagar-iva { from, mes, facturaIds[] }` →
+    valida propiedad + facturas pendientes, y crea una transferencia **Pending**
+    de la empresa a **TGLP** por el IVA seleccionado (ivaPz 0, concepto con
+    `refs:FAC-…`, `source: banco-web-facturacion`). El abono real se ejecuta al
+    confirmarla en **PlacetaID Móvil** (flujo de firma existente). RSP la
+    concilia al liquidarse.
+  - Env: `ADMIN_PLACETA_URL` + `TRIBUTOS_API_KEY`.
+- `backend-banco/api/v1/tributos/[...ruta].js`: `GET /api/v1/tributos/facturacion`
+  (proxy a RSP por EIP) para la pestaña de la APP.
+- `banco-web`: nueva página `/facturacion` (vista `facturacion.ejs`): por empresa
+  muestra sus facturas del mes (IVA pendiente/pagado), el titular **selecciona**
+  las facturas y paga su IVA **de golpe** (se muestra el código de ejecución para
+  confirmar en la APP). Enlace “Facturación” en el menú.
+- **Banco APP (Kotlin)**: el pago ordenado desde la web se confirma en la APP
+  (firma/execution-code) sin cambios. Pendiente de un siguiente paso: que la
+  pestaña `Sociedades → Facturación` (`BusinessInvoicePanel`,
+  `BancoPlacetaApp.kt` ~L4986) muestre las facturas reales vía el gateway
+  `/api/v1/tributos/facturacion` (ya expuesto) en lugar de los datos locales.
+
 ## Pendiente (requiere tu OK)
-1. **Banco web (banco-web)** y **Banco APP (Kotlin)**: pantalla “Facturas de mi
-   empresa” que consuma el ciclo/`pagar-iva` de RSP y pague el IVA de las
-   facturas seleccionadas (web primero; la APP ya tiene pestaña “Facturación”
-   de empresa en `BancoPlacetaApp.kt` ~L4910/4989). Necesita exponer un API
-   ciudadano (por EIP/titular) — hoy `/rsp/facturacion/*` es de administrador.
+1. **Banco APP (Kotlin)**: re-apuntar `BusinessInvoicePanel` a las facturas
+   reales (gateway `/api/v1/tributos/facturacion` ya expuesto) — requiere ciclo
+   de build Android.
 2. `bankCollections.js` (escrituras app-driven de `Consumption/Placezum/
    PLJUNIOR_PAYMENT`): decidir si también deja de auto-abonar el IVA a TGLP y
    pasa a factura (no tocado: afecta al flujo de la app y a Capitalia).
@@ -62,6 +94,9 @@
 4. Reconciliación: un `Tax` automático antiguo hacia TGLP podría aparecer como
    pago del recibo IRM/IGF; tras desactivar el IVA automático de empresa, vigilar
    que no queden `Tax` residuales de meses previos que “paguen” recibos futuros.
+5. En producción, `TRIBUTOS_API_KEY` debe ser la MISMA en rsp-web (server/.env o
+   Vercel) y en backend-banco, y `ADMIN_PLACETA_URL` debe apuntar al servidor que
+   sirve `rsp-web` (con la migración `rsp_facturacion.sql` ya aplicada).
 
 ## Regla de negocio (objetivo)
 > Todo IVA repercutido por una empresa se ingresa a **TRIBUTOS (TGLP)** cuando
