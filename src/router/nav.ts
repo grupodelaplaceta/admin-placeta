@@ -86,6 +86,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: 'Participación',
     links: [
       { to: '/votaciones', label: 'Votaciones', icon: 'vote', permiso: 'ver_votaciones' },
+      { to: '/propuestas', label: 'Propuestas normativas', icon: 'fileCheck', permiso: 'ver_propuestas' },
       { to: '/juntas', label: 'Juntas', icon: 'users', permiso: 'ver_juntas' },
       { to: '/encuestas', label: 'Encuestas', icon: 'clipboard', permiso: 'ver_encuestas' },
     ],

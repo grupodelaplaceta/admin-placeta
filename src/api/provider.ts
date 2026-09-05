@@ -16,7 +16,7 @@ import type {
   RegimenBono, BonoDetalle, Baremo, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   FacturaEmitida, ParticipacionEmpresa, Nomina,
-  Votacion, VotoRegistro, Junta, Encuesta, RequisitoBono,
+  Votacion, VotoRegistro, Junta, Encuesta, RequisitoBono, Propuesta,
   BopDocumento,
 } from '../types';
 
@@ -167,6 +167,15 @@ export interface Provider {
   getJunta(id: string): Promise<Omit<Junta, 'votaciones'> & { votaciones: Votacion[] }>;
   crearJunta(datos: { titulo: string; fecha: string; asistentes: string[]; ordenDelDia: string[]; votaciones: string[] }): Promise<Junta>;
   emitirActa(id: string, acta: string): Promise<void>;
+
+  // Propuestas normativas (Departamento → Junta → BOLP)
+  listarPropuestas(): Promise<Propuesta[]>;
+  getPropuesta(id: string): Promise<Propuesta>;
+  crearPropuesta(datos: { titulo: string; tipo?: string; departamento?: string; descripcion?: string; contenidoMd?: string; codigoDocumento?: string }): Promise<Propuesta>;
+  editarPropuesta(id: string, datos: Partial<Omit<Propuesta, 'id' | 'estado' | 'historial' | 'creadoEn' | 'actualizadoEn'>>): Promise<Propuesta>;
+  avanzarPropuesta(id: string): Promise<Propuesta>;
+  llevarAVotacionPropuesta(id: string): Promise<Propuesta>;
+  resolverPropuesta(id: string): Promise<{ ok: boolean; estado: string; documento?: { codigo: string; version: number; bopUrl: string } }>;
 
   // Encuestas
   listarEncuestas(): Promise<Encuesta[]>;

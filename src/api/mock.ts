@@ -13,7 +13,7 @@ import type {
   Obligacion, SubvencionResumen, SubvencionDetalle, BeneficiarioSubvenciones, Solicitud2FA,
   DesgloseFiscal, CuentaSugerencia, RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
-  Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa, Nomina, RequisitoBono, BopDocumento,
+  Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa, Nomina, RequisitoBono, BopDocumento, Propuesta, EstadoPropuesta,
   CicloFacturacion, EmpresaCiclo, PlanCierre,
 } from '../types';
 import { TIPOS_TRAMITE, ANONIMATO_DIAS } from '../types';
@@ -317,6 +317,7 @@ const VOTACIONES: Votacion[] = [];
 const VOTOS_REGISTRO: VotoRegistro[] = [];
 const JUNTAS: Junta[] = [];
 const ENCUESTAS: Encuesta[] = [];
+const PROPUESTAS: Propuesta[] = [];
 
 // Contribuyentes REALES del banco (GET /api/crm-state, saldos agregados por DIP/EIP).
 const BOP_DOCUMENTOS: BopDocumento[] = [];
@@ -1410,6 +1411,77 @@ export const mockProvider: Provider = {
     j.acta = acta;
     j.estado = 'acta_emitida';
     j.actaUrl = `https://bop.laplaceta.org/juntas.html?codigo=${id}`;
+  },
+  // ── Propuestas normativas ────────────────────────────────────────
+  async listarPropuestas() {
+    return PROPUESTAS;
+  },
+  async getPropuesta(id) {
+    const p = PROPUESTAS.find((x) => x.id === id);
+    if (!p) throw new Error('Propuesta no encontrada');
+    return p;
+  },
+  async crearPropuesta(datos) {
+    const p: Propuesta = {
+      id: `PRP-2026-${String(PROPUESTAS.length + 1).padStart(4, '0')}`,
+      titulo: datos.titulo,
+      tipo: datos.tipo || 'norma',
+      departamento: datos.departamento || '',
+      descripcion: datos.descripcion || '',
+      contenidoMd: datos.contenidoMd || '',
+      codigoDocumento: datos.codigoDocumento || null,
+      estado: 'borrador',
+      version: 1,
+      votacionId: null,
+      codigoBop: null,
+      bopUrl: null,
+      autorDip: '',
+      notasCambio: '',
+      fechaPropuesta: new Date().toISOString().slice(0, 10),
+      fechaAprobacionJunta: null,
+      historial: [],
+      creadoEn: new Date().toISOString(),
+    };
+    PROPUESTAS.unshift(p);
+    return p;
+  },
+  async editarPropuesta(id, datos) {
+    const p = PROPUESTAS.find((x) => x.id === id);
+    if (!p) throw new Error('Propuesta no encontrada');
+    if (!['borrador', 'en_revision'].includes(p.estado)) throw new Error('Solo se editan propuestas en borrador o en revisión');
+    if (datos.titulo) p.titulo = datos.titulo;
+    if (datos.tipo) p.tipo = datos.tipo;
+    if (datos.departamento !== undefined) p.departamento = datos.departamento;
+    if (datos.descripcion !== undefined) p.descripcion = datos.descripcion;
+    if (datos.codigoDocumento !== undefined) p.codigoDocumento = datos.codigoDocumento;
+    if (datos.notasCambio !== undefined) p.notasCambio = datos.notasCambio;
+    if (datos.contenidoMd !== undefined && datos.contenidoMd !== p.contenidoMd) {
+      (p.historial = p.historial || []).push({ version: p.version, contenidoMd: p.contenidoMd, notas: p.notasCambio || '', desde: p.actualizadoEn || p.creadoEn, autorDip: p.autorDip });
+      p.version += 1;
+      p.contenidoMd = datos.contenidoMd;
+    }
+    return p;
+  },
+  async avanzarPropuesta(id) {
+    const p = PROPUESTAS.find((x) => x.id === id);
+    if (!p) throw new Error('Propuesta no encontrada');
+    const next: Record<string, EstadoPropuesta> = { borrador: 'en_revision', en_revision: 'pendiente_junta' };
+    if (!next[p.estado]) throw new Error(`No se puede avanzar desde «${p.estado}»`);
+    p.estado = next[p.estado];
+    return p;
+  },
+  async llevarAVotacionPropuesta(id) {
+    const p = PROPUESTAS.find((x) => x.id === id);
+    if (!p) throw new Error('Propuesta no encontrada');
+    p.estado = 'en_votacion';
+    p.votacionId = `VOT-DEMO-${p.id}`;
+    return p;
+  },
+  async resolverPropuesta(id) {
+    const p = PROPUESTAS.find((x) => x.id === id);
+    if (!p) throw new Error('Propuesta no encontrada');
+    p.estado = 'rechazada';
+    return { ok: true, estado: 'rechazada' };
   },
   // ── Encuestas ──────────────────────────────────────────────────────
   async listarEncuestas() {

@@ -40,6 +40,8 @@ import VoleyClub from './pages/voleyclub/VoleyClub';
 import Votaciones from './pages/votaciones/Votaciones';
 import Juntas from './pages/juntas/Juntas';
 import Encuestas from './pages/encuestas/Encuestas';
+import Propuestas from './pages/propuestas/Propuestas';
+import PropuestaDetail from './pages/propuestas/PropuestaDetail';
 import Informes from './pages/informes/Informes';
 import { useAuth } from './auth/AuthContext';
 
@@ -97,6 +99,8 @@ export default function App() {
               <Route path="/junior" element={permiso('ver_junior', <Junior />)} />
               <Route path="/voleyclub" element={permiso('ver_voleyclub', <VoleyClub />)} />
               <Route path="/votaciones" element={permiso('ver_votaciones', <Votaciones />)} />
+              <Route path="/propuestas" element={permiso('ver_propuestas', <Propuestas />)} />
+              <Route path="/propuestas/:id" element={permiso('ver_propuestas', <PropuestaDetail />)} />
               <Route path="/juntas" element={permiso('ver_juntas', <Juntas />)} />
               <Route path="/encuestas" element={permiso('ver_encuestas', <Encuestas />)} />
               <Route path="/informes" element={permiso('ver_informes', <Informes />)} />

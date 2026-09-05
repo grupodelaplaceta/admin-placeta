@@ -18,7 +18,7 @@ import type {
   RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   FacturaEmitida, Nomina,
-  Votacion, VotoRegistro, Junta, Encuesta,
+  Votacion, VotoRegistro, Junta, Encuesta, Propuesta,
   BopDocumento,
 } from '../types';
 
@@ -126,6 +126,28 @@ export const httpProvider: Provider = {
   },
   async emitirActa(id, acta) {
     return http.post<void>(`/rsp/juntas/api/${id}/acta`, { acta });
+  },
+  // ── Propuestas normativas ────────────────────────────────────────
+  async listarPropuestas() {
+    return http.get<Propuesta[]>('/rsp/propuestas/api');
+  },
+  async getPropuesta(id) {
+    return http.get<Propuesta>(`/rsp/propuestas/api/${id}`);
+  },
+  async crearPropuesta(datos) {
+    return http.post<Propuesta>('/rsp/propuestas/api', datos);
+  },
+  async editarPropuesta(id, datos) {
+    return http.post<Propuesta>(`/rsp/propuestas/api/${id}`, datos);
+  },
+  async avanzarPropuesta(id) {
+    return http.post<Propuesta>(`/rsp/propuestas/api/${id}/avanzar`);
+  },
+  async llevarAVotacionPropuesta(id) {
+    return http.post<Propuesta>(`/rsp/propuestas/api/${id}/votacion`, {});
+  },
+  async resolverPropuesta(id) {
+    return http.post<{ ok: boolean; estado: string; documento?: { codigo: string; version: number; bopUrl: string } }>(`/rsp/propuestas/api/${id}/resolver`);
   },
   async listarEncuestas() {
     return http.get<Encuesta[]>('/rsp/encuestas/api');
