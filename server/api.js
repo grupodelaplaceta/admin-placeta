@@ -1565,7 +1565,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     };
     if (actual) await store.bopCnic.actualizar(codigo, regla);
     else await store.bopCnic.insertar(regla);
-    bopHttpCache = { at: 0, data: null };
+    valoresBop.limpiarCache();
     res.status(201).json(normalizarBopCnic(regla));
   });
   router.post('/rsp/normativo/api/:codigo/aprobar', async (req, res) => {
@@ -1573,7 +1573,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const actual = await store.bopCnic.obtener(codigo);
     if (!actual) return res.status(404).json({ error: 'CNIC no encontrado' });
     await store.bopCnic.actualizar(codigo, { vigente: true, estado: 'vigente', autorDip: req.user?.dip || actual.autorDip || 'RSP', updatedAt: AHORA() });
-    bopHttpCache = { at: 0, data: null };
+    valoresBop.limpiarCache();
     cnicCache = { t: 0, data: null };
     res.json({ success: true });
   });
