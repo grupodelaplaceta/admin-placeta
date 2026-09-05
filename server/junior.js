@@ -17,6 +17,7 @@
 import { Router } from 'express';
 import { randomBytes, randomUUID, createHmac } from 'crypto';
 import { supabase } from './supabase.js';
+import * as valoresBop from './valores-bop.js';
 
 const RBU_DIARIO = 5;               // Pz diarios de la Renta Básica Universal
 // La RBU sale de la cuenta propia de la Fundación, no de la cuenta general
@@ -787,6 +788,9 @@ export function juniorRouter({ getBankState, postBanco }) {
       const esDemo = junior.tutor_dip === TUTOR_DEMO || (junior.dip || '').includes('DEMO');
       const hoy = new Date().toISOString().slice(0, 10);
 
+      // Cantidad diaria: valor oficial del BOP (CNIC-JUNIOR-RBU-DIARIA).
+      const rbuDiario = await valoresBop.leerNumero('CNIC-JUNIOR-RBU-DIARIA', RBU_DIARIO);
+
       const cuentaRbu = await asegurarCuentaJunior(junior);
       if (!cuentaRbu && !esDemo) return res.status(502).json({ success: false, error: 'No se pudo crear o localizar la cuenta Child del menor' });
 
@@ -821,7 +825,7 @@ export function juniorRouter({ getBankState, postBanco }) {
           const banco = await postBanco('transferir', {
             from: RBU_FUNDACION,
             to: cuentaRbu?.id || cuentaDeJunior(junior),
-            cantidad: RBU_DIARIO,
+            cantidad: rbuDiario,
             concepto: `RBU día ${streak} — Placeta Junior`,
             juniorDip: junior.dip,
             tutorDip: junior.tutor_dip,
@@ -836,19 +840,19 @@ export function juniorRouter({ getBankState, postBanco }) {
       const cuenta = cuentaRbu || await saldoCuentaJunior(junior);
       if (!cuenta && !esDemo) return res.status(502).json({ success: false, error: 'No se pudo localizar la cuenta Child del menor' });
       const estadoDespues = esDemo ? null : await getBankState().catch(() => null);
-      const nuevoSaldo = Number(estadoDespues?.accounts?.find(a => a.id === cuentaDeJunior(junior))?.balancePz ?? ((junior.placetas_saldo || 0) + RBU_DIARIO));
+      const nuevoSaldo = Number(estadoDespues?.accounts?.find(a => a.id === cuentaDeJunior(junior))?.balancePz ?? ((junior.placetas_saldo || 0) + rbuDiario));
       await crearTransaccion({
         junior_id: junior.id, tipo: 'rbu',
         concepto: `RBU día ${streak}${esDemo ? ' (Demo)' : ''}`,
-        cantidad: RBU_DIARIO, saldo_resultante: nuevoSaldo, ip,
+        cantidad: rbuDiario, saldo_resultante: nuevoSaldo, ip,
       });
 
       res.json({
         success: true,
-        cantidad: RBU_DIARIO,
+        cantidad: rbuDiario,
         streak,
         nuevo_saldo: nuevoSaldo,
-        message: `¡RBU reclamada! +${RBU_DIARIO} Pz. Día ${streak} de racha semanal.`,
+        message: `¡RBU reclamada! +${rbuDiario} Pz. Día ${streak} de racha semanal.`,
         es_demo: esDemo,
       });
     } catch (e) {
