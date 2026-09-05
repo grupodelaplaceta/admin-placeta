@@ -883,4 +883,37 @@ export interface Encuesta {
   bopUrl?: string;
 }
 
+export interface PropuestaVersion {
+  version: number;
+  contenidoMd: string;
+  notas: string;
+  desde: string;
+  autorDip: string;
+}
+
+export type EstadoPropuesta = 'borrador' | 'en_revision' | 'pendiente_junta' | 'en_votacion' | 'aprobada' | 'rechazada' | 'publicada';
+
+export interface Propuesta {
+  id: string; // PRP-2026-0001
+  titulo: string;
+  tipo: string; // norma / cni / estatuto / politica / enmienda
+  departamento: string;
+  descripcion: string;
+  contenidoMd: string;
+  cnicRefs?: { codigo: string; etiqueta?: string }[];
+  codigoDocumento?: string | null; // norma que se crea o enmienda
+  estado: EstadoPropuesta;
+  version: number;
+  votacionId?: string | null;
+  codigoBop?: string | null;
+  bopUrl?: string | null;
+  autorDip: string;
+  notasCambio?: string;
+  fechaPropuesta?: string | null;
+  fechaAprobacionJunta?: string | null;
+  historial?: PropuestaVersion[];
+  creadoEn: string;
+  actualizadoEn?: string;
+}
+
 export const ANONIMATO_DIAS = 30;

@@ -71,6 +71,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     votaciones: coleccion('rsp_votaciones'),
     votos: coleccion('rsp_registro_votos'),
     juntas: coleccion('rsp_reuniones'),
+    propuestas: coleccion('rsp_propuestas'),
     encuestas: coleccion('rsp_encuestas'),
     nominas: coleccion('rsp_nominas'),
     // Facturación central (RSP + Banco): ciclo mensual de recibos/facturas.
@@ -2363,6 +2364,180 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     await store.juntas.actualizar(req.params.id, { acta: req.body?.acta || '', estado: 'acta_emitida', actaUrl: `https://bop.laplaceta.org/juntas.html?codigo=${j.id}` });
     res.json({ ok: true });
   });
+
+  /* ── Propuestas normativas (Departamento → RSP → Junta → BOLP) ────── */
+  // Una propuesta es el borrador institucional de una norma/enmienda. Flujo:
+  //   borrador → en_revision → pendiente_junta → en_votacion → (aprobada
+  //   → publicada en BOP) | rechazada. Al aprobarse, el BFF crea la versión
+  //   en bop_documentos/bop_versiones (norma consultable en bop.laplaceta.org).
+  const SIGUIENTE_ESTADO_PROPUESTA = { borrador: 'en_revision', en_revision: 'pendiente_junta' };
+
+  function normalizarPropuesta(p) {
+    return {
+      id: p.id, titulo: p.titulo, tipo: p.tipo || 'norma',
+      departamento: p.departamento || '', descripcion: p.descripcion || '',
+      contenidoMd: p.contenidoMd || '',
+      cnicRefs: Array.isArray(p.cnicRefs) ? p.cnicRefs : [],
+      codigoDocumento: p.codigoDocumento || null,
+      estado: p.estado || 'borrador', version: Number(p.version || 1),
+      votacionId: p.votacionId || null, codigoBop: p.codigoBop || null,
+      bopUrl: p.bopUrl || null, autorDip: p.autorDip || 'RSP',
+      notasCambio: p.notasCambio || '',
+      fechaPropuesta: p.fechaPropuesta || null,
+      fechaAprobacionJunta: p.fechaAprobacionJunta || null,
+      historial: Array.isArray(p.historial) ? p.historial : [],
+      creadoEn: p.creadoEn || AHORA(), actualizadoEn: p.actualizadoEn || AHORA(),
+    };
+  }
+
+  // Publica (o versiona) la propuesta aprobada en bop_documentos + bop_versiones.
+  async function publicarPropuestaEnBop(prop) {
+    const codigo = String(prop.codigoDocumento || prop.codigoBop || '').trim().toUpperCase();
+    if (!codigo) throw new Error('codigo_documento_requerido: indica la norma que se crea o enmienda');
+    const existentes = (await store.bopDocumentos.listar()) || [];
+    const anterior = existentes.find((x) => x.codigo === codigo);
+    const doc = {
+      ...(anterior || {}),
+      id: anterior?.id || `BOP-${Date.now()}`,
+      codigo, titulo: prop.titulo, tipo: prop.tipo || anterior?.tipo || 'cni',
+      categoria: anterior?.categoria || 'capitulo', estado: 'vigente',
+      contenidoMd: prop.contenidoMd || '',
+      version: Number(anterior?.version || 0) + 1,
+      aprobadaEnJunta: true, autorDip: prop.autorDip,
+      notasCambio: prop.notasCambio || '',
+      cnicRefs: Array.isArray(prop.cnicRefs) ? prop.cnicRefs : [],
+      fechaAprobacionJunta: prop.fechaAprobacionJunta || AHORA(),
+      fechaPublicacion: AHORA().slice(0, 10), updatedAt: AHORA(),
+    };
+    if (anterior) {
+      await store.bopVersiones.insertar({
+        documentoId: anterior.id, version: anterior.version, estado: anterior.estado,
+        contenidoMd: anterior.contenidoMd, autorDip: anterior.autorDip, notasCambio: anterior.notasCambio,
+      });
+      await store.bopDocumentos.actualizar(anterior.id, doc);
+    } else {
+      await store.bopDocumentos.insertar(doc);
+    }
+    return doc;
+  }
+
+  router.get('/rsp/propuestas/api', async (_req, res) => {
+    res.json(((await store.propuestas.listar()) || []).map(normalizarPropuesta));
+  });
+  router.get('/rsp/propuestas/api/:id', async (req, res) => {
+    const p = await store.propuestas.obtener(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    res.json(normalizarPropuesta(p));
+  });
+  router.post('/rsp/propuestas/api', async (req, res) => {
+    const d = req.body || {};
+    const titulo = String(d.titulo || '').trim();
+    if (!titulo) return res.status(400).json({ error: 'Título requerido' });
+    const n = (await store.propuestas.listar()).length;
+    const p = {
+      id: `PRP-2026-${String(n + 1).padStart(4, '0')}`,
+      titulo, tipo: String(d.tipo || 'norma'), departamento: String(d.departamento || ''),
+      descripcion: String(d.descripcion || ''), contenidoMd: String(d.contenidoMd || ''),
+      cnicRefs: (Array.isArray(d.cnicRefs) ? d.cnicRefs : []).filter((r) => r && r.codigo).map((r) => ({ codigo: String(r.codigo).trim().toUpperCase(), etiqueta: String(r.etiqueta || r.codigo).trim() })),
+      codigoDocumento: String(d.codigoDocumento || '').trim().toUpperCase() || null,
+      estado: 'borrador', version: 1, votacionId: null, codigoBop: null, bopUrl: null,
+      autorDip: req.user?.dip || 'RSP', notasCambio: String(d.notasCambio || ''),
+      fechaPropuesta: AHORA().slice(0, 10), fechaAprobacionJunta: null,
+      historial: [], creadoEn: AHORA(), actualizadoEn: AHORA(),
+    };
+    await store.propuestas.insertar(p);
+    res.status(201).json(normalizarPropuesta(p));
+  });
+  // Edición: solo en borrador o en revisión. Si cambia el contenido se crea
+  // una versión nueva (el historial nunca se pierde).
+  router.post('/rsp/propuestas/api/:id', async (req, res) => {
+    const p = await store.propuestas.obtener(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    if (!['borrador', 'en_revision'].includes(p.estado)) return res.status(400).json({ error: 'Solo se editan propuestas en borrador o en revisión' });
+    const d = req.body || {};
+    const contenidoNuevo = d.contenidoMd !== undefined ? String(d.contenidoMd) : (p.contenidoMd || '');
+    const historial = Array.isArray(p.historial) ? p.historial.slice() : [];
+    let version = Number(p.version || 1);
+    if (contenidoNuevo !== (p.contenidoMd || '')) {
+      historial.push({ version, contenidoMd: p.contenidoMd || '', notas: String(p.notasCambio || ''), desde: p.actualizadoEn || AHORA(), autorDip: p.autorDip });
+      version += 1;
+    }
+    const patch = {
+      ...(d.titulo !== undefined ? { titulo: String(d.titulo).trim() || p.titulo } : {}),
+      ...(d.tipo !== undefined ? { tipo: String(d.tipo) } : {}),
+      ...(d.departamento !== undefined ? { departamento: String(d.departamento) } : {}),
+      ...(d.descripcion !== undefined ? { descripcion: String(d.descripcion) } : {}),
+      ...(d.codigoDocumento !== undefined ? { codigoDocumento: String(d.codigoDocumento || '').trim().toUpperCase() || null } : {}),
+      contenidoMd: contenidoNuevo, version, historial,
+      ...(d.notasCambio !== undefined ? { notasCambio: String(d.notasCambio) } : {}),
+      actualizadoEn: AHORA(),
+    };
+    await store.propuestas.actualizar(req.params.id, patch);
+    res.json(normalizarPropuesta({ ...p, ...patch }));
+  });
+  router.post('/rsp/propuestas/api/:id/avanzar', async (req, res) => {
+    const p = await store.propuestas.obtener(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    const destino = SIGUIENTE_ESTADO_PROPUESTA[p.estado];
+    if (!destino) return res.status(400).json({ error: `No se puede avanzar desde «${p.estado}»` });
+    await store.propuestas.actualizar(req.params.id, { estado: destino, actualizadoEn: AHORA() });
+    res.json(normalizarPropuesta({ ...p, estado: destino, actualizadoEn: AHORA() }));
+  });
+  // Lleva la propuesta a votación: crea la votación y la vincula.
+  router.post('/rsp/propuestas/api/:id/votacion', async (req, res) => {
+    const p = await store.propuestas.obtener(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    if (p.estado !== 'pendiente_junta' && p.estado !== 'en_revision') {
+      return res.status(400).json({ error: 'Solo se votan propuestas en pendiente de junta o en revisión' });
+    }
+    const d = req.body || {};
+    const n = (await store.votaciones.listar()).length;
+    const v = {
+      id: `VOT-2026-${String(n + 1).padStart(4, '0')}`, titulo: `Aprobar propuesta: ${p.titulo}`,
+      categoria: 'junta', descripcion: p.descripcion || '', reunionId: d.reunionId || null,
+      rango: d.rango || 'junta', opciones: ['A favor', 'En contra', 'Abstención'],
+      estado: 'abierta', resultado: null, aFavor: 0, enContra: 0, abstenciones: 0,
+      totalVotos: 0, propuestaId: p.id, creadaEn: AHORA(),
+    };
+    await store.votaciones.insertar(v);
+    await store.propuestas.actualizar(p.id, { estado: 'en_votacion', votacionId: v.id, actualizadoEn: AHORA() });
+    res.status(201).json(normalizarPropuesta({ ...p, estado: 'en_votacion', votacionId: v.id, actualizadoEn: AHORA() }));
+  });
+  // Resuelve la propuesta según el resultado de su votación. Si se aprueba,
+  // publica la norma en el BOLP (nueva versión de bop_documentos).
+  router.post('/rsp/propuestas/api/:id/resolver', async (req, res) => {
+    const p = await store.propuestas.obtener(req.params.id);
+    if (!p) return res.status(404).json({ error: 'Propuesta no encontrada' });
+    if (p.estado !== 'en_votacion' || !p.votacionId) {
+      return res.status(400).json({ error: 'La propuesta no tiene una votación activa' });
+    }
+    const v = await store.votaciones.obtener(p.votacionId);
+    if (!v || v.estado === 'abierta') {
+      return res.status(400).json({ error: 'La votación aún está abierta o no se encontró' });
+    }
+    const resultado = v.resultado || (v.aFavor > v.enContra ? 'aprobada' : 'rechazada');
+    if (resultado !== 'aprobada') {
+      await store.propuestas.actualizar(p.id, { estado: 'rechazada', actualizadoEn: AHORA() });
+      return res.json({ ok: true, estado: 'rechazada' });
+    }
+    const aprobada = normalizarPropuesta({ ...p, estado: 'aprobada', fechaAprobacionJunta: AHORA().slice(0, 10) });
+    let doc;
+    try {
+      doc = await publicarPropuestaEnBop(aprobada);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+    await store.propuestas.actualizar(p.id, {
+      estado: 'publicada', fechaAprobacionJunta: aprobada.fechaAprobacionJunta,
+      codigoBop: doc.codigo, bopUrl: `https://bop.laplaceta.org/documento?codigo=${encodeURIComponent(doc.codigo)}`,
+      actualizadoEn: AHORA(),
+    });
+    res.json({
+      ok: true, estado: 'publicada',
+      documento: { codigo: doc.codigo, version: doc.version, bopUrl: `https://bop.laplaceta.org/documento?codigo=${encodeURIComponent(doc.codigo)}` },
+    });
+  });
+
   router.get('/rsp/encuestas/api', async (_req, res) => res.json(await store.encuestas.listar()));
   router.post('/rsp/encuestas/api', async (req, res) => {
     const d = req.body || {};
