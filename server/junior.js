@@ -72,12 +72,12 @@ export function juniorRouter({ getBankState, postBanco }) {
         juniorNombre: nombreCompleto(junior) || junior.dip,
         tutorDip: junior.tutor_dip || 'TUTOR-LEGAL',
         tutorAccountId: tutorAccount?.id || undefined,
-        sendLimitPz: limitesEfectivos(await limitesParentales(junior.id)).gasto_diario,
+        sendLimitPz: (await limitesEfectivosBop(junior.id)).gasto_diario,
       });
       if (supabase && creada?.accountId && !junior.cuenta_banco) {
         await supabase.from('junior_menores').update({ cuenta_banco: creada.accountId }).eq('id', junior.id);
       }
-      return { id: creada?.accountId || id, type: 'Child', iban: creada?.iban || '', balancePz: 0, sendLimitPz: 50 };
+      return { id: creada?.accountId || id, type: 'Child', iban: creada?.iban || '', balancePz: 0, sendLimitPz: (await limitesBopPorDefecto()).gasto_diario };
     } catch (e) {
       // Do not hide the real failure from operations; callers can return a
       // clear bank error while legacy/demo installations keep working.
@@ -127,21 +127,44 @@ export function juniorRouter({ getBankState, postBanco }) {
     catch { return []; }
   }
 
-  function limitesEfectivos(limites) {
+  // Por defecto del control parental: valores oficiales del BOP (CNIC).
+  const LIMITES_DEFECTO = { gasto_diario: 10, gasto_semanal: 50, limite_aprobacion_tutor: 1000 };
+
+  function limitesEfectivos(limites, def = LIMITES_DEFECTO) {
+    const base = def || LIMITES_DEFECTO;
+    const porDefecto = (v, d) => Number(v) > 0 ? Number(v) : d;
     if (limites) {
       return {
-        gasto_diario: Number(limites.limite_gasto_diario ?? limites.gasto_diario) || 10,
-        gasto_semanal: Number(limites.limite_gasto_semanal ?? limites.gasto_semanal) || 50,
-        limite_aprobacion_tutor: Number(limites.limite_aprobacion_tutor) || 1000,
+        gasto_diario: porDefecto(limites.limite_gasto_diario ?? limites.gasto_diario, base.gasto_diario),
+        gasto_semanal: porDefecto(limites.limite_gasto_semanal ?? limites.gasto_semanal, base.gasto_semanal),
+        limite_aprobacion_tutor: porDefecto(limites.limite_aprobacion_tutor, base.limite_aprobacion_tutor),
         tiempo_uso: Number(limites.tiempo_uso_diario_minutos ?? limites.tiempo_uso_diario) || 60,
         requiere_aprobacion: limites.requiere_aprobacion_extra !== false,
         categorias_bloqueadas: parseCategorias(limites.categorias_bloqueadas),
       };
     }
     return {
-      gasto_diario: 10, gasto_semanal: 50, limite_aprobacion_tutor: 1000,
+      gasto_diario: base.gasto_diario, gasto_semanal: base.gasto_semanal,
+      limite_aprobacion_tutor: base.limite_aprobacion_tutor,
       tiempo_uso: 60, requiere_aprobacion: true, categorias_bloqueadas: [],
     };
+  }
+
+  // Lee los límites por defecto desde el CNIC oficial del BOP.
+  async function limitesBopPorDefecto() {
+    const [diario, semanal, aprobacion] = await Promise.all([
+      valoresBop.leerNumero('CNIC-JUNIOR-GASTO-DIARIO', LIMITES_DEFECTO.gasto_diario),
+      valoresBop.leerNumero('CNIC-JUNIOR-GASTO-SEMANAL', LIMITES_DEFECTO.gasto_semanal),
+      valoresBop.leerNumero('CNIC-JUNIOR-APROBACION-TUTOR', LIMITES_DEFECTO.limite_aprobacion_tutor),
+    ]);
+    return { gasto_diario: diario, gasto_semanal: semanal, limite_aprobacion_tutor: aprobacion };
+  }
+
+  // Efectivos de un menor: control parental del tutor si existe; si no (o
+  // para campos vacíos) se usan los valores oficiales del BOP.
+  async function limitesEfectivosBop(juniorId) {
+    const [limites, def] = await Promise.all([limitesParentales(juniorId), limitesBopPorDefecto()]);
+    return limitesEfectivos(limites, def);
   }
 
   async function historial(juniorId, limit = 30) {
@@ -311,8 +334,8 @@ export function juniorRouter({ getBankState, postBanco }) {
   router.get('/perfil', async (req, res) => {
     const junior = await buscarJunior(resolverDip(req));
     if (!junior) return res.status(404).json({ error: 'Perfil no encontrado' });
-    const limites = await limitesParentales(junior.id);
-    res.json({ success: true, junior: datosJunior(junior), limites_parentales: limitesEfectivos(limites) });
+    const efectivos = await limitesEfectivosBop(junior.id);
+    res.json({ success: true, junior: datosJunior(junior), limites_parentales: efectivos });
   });
 
   router.get('/tutor-info/:dip', async (req, res) => {
@@ -347,11 +370,21 @@ export function juniorRouter({ getBankState, postBanco }) {
   // Configuración pública que consume la app al iniciar. No contiene
   // secretos: solo límites funcionales del producto que también tienen
   // valores por defecto en el cliente para soportar una caída temporal.
-  router.get('/config', (_req, res) => {
+  router.get('/config', async (_req, res) => {
+    const [rbuDiario, def] = await Promise.all([
+      valoresBop.leerNumero('CNIC-JUNIOR-RBU-DIARIA', 5),
+      limitesBopPorDefecto(),
+    ]);
     res.json({
       success: true,
-      rbu: { cantidad: 5 },
+      rbu: { cantidad: rbuDiario },
       control_parental: {
+        // Por defecto del producto: valores oficiales del BOP (CNIC).
+        por_defecto: {
+          diario: def.gasto_diario,
+          semanal: def.gasto_semanal,
+          aprobacion_tutor: def.limite_aprobacion_tutor,
+        },
         niveles: {
           'PJ-N1': { diario: 0, semanal: 0, aprobacion_tutor: 0 },
           'PJ-N2': { diario: 10, semanal: 50, aprobacion_tutor: 5 },
@@ -426,11 +459,12 @@ export function juniorRouter({ getBankState, postBanco }) {
       if (!junior || String(junior.tutor_dip || '').toUpperCase() !== dipTutor) {
         return res.status(403).json({ error: 'El menor no está vinculado a este tutor' });
       }
+      const def = await limitesBopPorDefecto();
       const fila = {
         junior_id: junior.id,
-        limite_gasto_diario: Math.max(0, Number(b.limite_gasto_diario) || 10),
-        limite_gasto_semanal: Math.max(0, Number(b.limite_gasto_semanal) || 50),
-        limite_aprobacion_tutor: Math.max(0, Number(b.limite_aprobacion_tutor) || 1000),
+        limite_gasto_diario: Math.max(0, Number(b.limite_gasto_diario) || def.gasto_diario),
+        limite_gasto_semanal: Math.max(0, Number(b.limite_gasto_semanal) || def.gasto_semanal),
+        limite_aprobacion_tutor: Math.max(0, Number(b.limite_aprobacion_tutor) || def.limite_aprobacion_tutor),
         tiempo_uso_diario_minutos: Math.max(0, Number(b.tiempo_uso_diario ?? b.tiempo_uso) || 60),
         actualizado_en: new Date().toISOString(),
       };
@@ -565,8 +599,7 @@ export function juniorRouter({ getBankState, postBanco }) {
         return res.status(502).json({ error: 'No se pudo crear o localizar la cuenta Child real en Banco' });
       }
 
-      const limites = await limitesParentales(junior.id);
-      const efectivos = limitesEfectivos(limites);
+      const efectivos = await limitesEfectivosBop(junior.id);
 
       const filas = await historial(junior.id);
       const movimientosBanco = [];
@@ -692,7 +725,7 @@ export function juniorRouter({ getBankState, postBanco }) {
         return res.status(502).json({ success: false, error: 'Una de las cuentas Child no está disponible en Banco' });
       }
 
-      const limites = limitesEfectivos(await limitesParentales(junior.id));
+      const limites = await limitesEfectivosBop(junior.id);
       const filas = await historial(junior.id);
       const hoy = new Date().toISOString().slice(0, 10);
       const inicioSemana = new Date();
