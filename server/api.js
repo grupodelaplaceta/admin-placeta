@@ -17,6 +17,7 @@ import { CATALOGO_BASE } from './tramites-catalogo.js';
 import { CATALOGO_EDU_BASE } from './edu-cursos.js';
 import PDFDocument from 'pdfkit';
 import { supabase } from './supabase.js';
+import * as valoresBop from './valores-bop.js';
 
 const AHORA = () => new Date().toISOString();
 const BOP_URL = (process.env.BOP_URL || 'https://bop.laplaceta.org').replace(/\/+$/, '');
@@ -26,31 +27,17 @@ const limpiar = (s = '') => String(s).replace(/\s*\(.*\)\s*$/, '').trim();
 export function createApiRouter({ getBankState, mutarBanco }) {
   const router = Router();
 
-  // El catálogo oficial vive en BOP. RSP solo lo cachea para resiliencia:
-  // nunca mezcla rsp_cnic ni genera una copia normativa propia.
-  let bopHttpCache = { at: 0, data: null };
+  // El catálogo oficial vive en BOP (API nueva /api/valores?todo=1 vía
+  // valores-bop.js). RSP solo lo cachea para resiliencia: nunca mezcla
+  // rsp_cnic ni genera una copia normativa propia.
   async function cargarCnicOficial() {
-    if (bopHttpCache.data && Date.now() - bopHttpCache.at < 60_000) return bopHttpCache.data;
-    try {
-      const response = await fetch(`${BOP_URL}/api/cnic`, { headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error(`BOP respondió ${response.status}`);
-      const payload = await response.json();
-      const rows = Array.isArray(payload) ? payload : payload.cnic;
-      if (!Array.isArray(rows)) throw new Error('Respuesta CNIC inválida');
-      const data = rows.map((row) => normalizarBopCnic({
-        ...row,
-        codigo: row.codigo || row.cnic,
-        tipoValor: row.tipoValor || row.tipo_valor || row.tipo,
-        valor: row.valor ?? row.valor_vigente,
-        autorDip: row.autorDip || row.autor_dip,
-        updatedAt: row.updatedAt || row.desde,
-        vigente: row.vigente ?? row.estado === 'vigente',
-      }));
-      bopHttpCache = { at: Date.now(), data };
-      return data;
-    } catch {
-      return null;
-    }
+    const vigentes = await valoresBop.cargarVigentes();
+    if (!vigentes) return null;
+    return vigentes.map((r) => ({
+      ...r,
+      version: ((r.historial || []).length || 0) + 1,
+      autor: r.autor || 'BOP',
+    }));
   }
 
   /* ── Almacén persistente (Supabase) con respaldo en memoria ────────── */
@@ -1545,12 +1532,22 @@ export function createApiRouter({ getBankState, mutarBanco }) {
   router.get('/rsp/junior/api/estadisticas', async (_req, res) => res.json(await store.juniorEstadisticasDb.listar()));
   router.get('/rsp/junior/api/finanzas', async (_req, res) => res.json(await store.juniorFinanzasDb.listar()));
   router.post('/rsp/normativo/api/refresh', async (_req, res) => {
-    bopHttpCache = { at: 0, data: null };
+    valoresBop.limpiarCache();
     const oficial = await cargarCnicOficial();
     if (oficial) return res.json({ sincronizado: true, total: oficial.length, fuente: 'BOP · API oficial' });
     const bop = await store.bopCnic.listar();
     if (!(bop || []).length) return res.status(503).json({ error: 'bop_no_disponible' });
     res.json({ sincronizado: true, total: bop.length, fuente: 'BOP · Supabase compartido' });
+  });
+
+  // Estado de la fuente de valores del BOP (API nueva) para diagnóstico.
+  router.get('/rsp/valores/api/diagnostico', async (_req, res) => {
+    try {
+      const d = await valoresBop.diagnostico({ fuerza: true });
+      res.json({ success: true, servicio: 'valores-bop', ...d });
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
   });
   router.post('/rsp/normativo/api/version', async (req, res) => {
     const d = req.body || {};
@@ -1862,6 +1859,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       const cnic = await cargarCnicVigentes();
       const c = calcularContribuyentes(state, undefined, cnic).find((x) => `DEC-${mes}-${x.id}` === id || x.id === id);
       if (!c) return res.status(404).json({ error: 'Declaración no encontrada' });
+      const exentoIgf = await valoresBop.leerNumero('CNIC-IGF-PF-TRAMO-1', 5000);
       const base = declaracionDe(c, mes);
       res.json({
         ...base,
@@ -1881,8 +1879,8 @@ export function createApiRouter({ getBankState, mutarBanco }) {
           retencionesIrm: 0,
           bonificacionesIrm: 0,
           patrimonioBruto: c.patrimonio,
-          patrimonioExento: 5000,
-          baseIgf: Math.max(0, (c.patrimonioMedio ?? c.patrimonio) - 5000),
+          patrimonioExento: exentoIgf,
+          baseIgf: Math.max(0, (c.patrimonioMedio ?? c.patrimonio) - exentoIgf),
           tipoIgf: c.desglose.igf.tramos[0]?.tipoPct ?? 0,
           ivaRepercutido: c.ivaRepercutido ?? 0,
           ivaSoportado: c.ivaSoportado ?? 0,

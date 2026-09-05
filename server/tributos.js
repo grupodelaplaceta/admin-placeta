@@ -63,6 +63,9 @@ function escalasDesdeCnic(cnic) {
     igfPf: escalaIgf('CNIC-IGF-PF', [5000, 20000, 500000], [0, 10, 30], 'CNIC-IGF-PF-TIPO-3', 30),
     igfEmpresa: escalaIgf('CNIC-IGF-EMPRESA', [5000, 20000, 500000], [0, 5, 35], 'CNIC-IGF-EMPRESA-TIPO-4', 85),
     igfUmbralReducida: cnicValor(cnic, 'CNIC-IGF-EMPRESA-REDUCIDA-UMBRAL', IGF_EMPRESA_UMBRAL_REDUCIDA),
+    // Topes de capital que fijan la inhibición fiscal (CNI Art. 4.1).
+    topePersona: cnicValor(cnic, 'CNIC-LIMITE-CAPITAL-PERSONAL', TOPE_PERSONA),
+    topeEmpresa: cnicValor(cnic, 'CNIC-LIMITE-CAPITAL-INSTITUCIONAL', TOPE_EMPRESA),
   };
 }
 
@@ -261,7 +264,7 @@ export function calcularContribuyentes(state, mes = new Date().toISOString().sli
     const igf = empresaReducida
       ? { cuota: 0, tramos: [] }
       : cuotaEscalonadaDetalle(recon.patrimonioMedio, escalaIgf);
-    const tope = tipo === 'empresa' ? TOPE_EMPRESA : TOPE_PERSONA;
+    const tope = tipo === 'empresa' ? escalas.topeEmpresa : escalas.topePersona;
     const estadoFiscal = recon.saldoActual > tope ? 'inhibido' : 'al_dia';
     const iaPct = round2(ia * 100);
     return {

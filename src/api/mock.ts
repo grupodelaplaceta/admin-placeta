@@ -129,9 +129,9 @@ const CNIC: CNICRegla[] = [
   cnic('CNIC-IGF-EMPRESA-TRAMO-3', 'IGF empresa tercer tramo (hasta)', 'numero', 500000, 'Pz'),
   cnic('CNIC-IGF-EMPRESA-TIPO-3', 'IGF empresa tipo tercer tramo', 'porcentaje', 35, '%'),
   cnic('CNIC-IGF-EMPRESA-TIPO-4', 'IGF empresa tipo tramo > 500.000', 'porcentaje', 85, '%'),
-  cnic('CNIC-EXENCION-EMPRESA-PEQUENA', 'Umbral exención IGF empresa pequeña (Art. 4.15)', 'numero', 20000, 'Pz'),
+  cnic('CNIC-IGF-EMPRESA-REDUCIDA-UMBRAL', 'Umbral exención IGF empresa pequeña (Art. 4.15)', 'numero', 20000, 'Pz'),
   // Cotizaciones laborales (Art. 4.5): tramos por sueldo bruto mensual
-  cnic('CNIC-COTIZACION-TRAMO-1-LIMITE', 'Tope tramo 1 cotización (sueldo bruto)', 'numero', 1700, 'Pz'),
+  cnic('CNIC-COTIZACION-TRAMO-1', 'Tope tramo 1 cotización (sueldo bruto)', 'numero', 1700, 'Pz'),
   cnic('CNIC-COTIZACION-TRAMO-2-LIMITE', 'Tope tramo 2 cotización (sueldo bruto)', 'numero', 3000, 'Pz'),
   cnic('CNIC-COTIZACION-TRABAJADOR-TRAMO-1', 'Cotización trabajador tramo 1', 'porcentaje', 7.5, '%'),
   cnic('CNIC-COTIZACION-TRABAJADOR-TRAMO-2', 'Cotización trabajador tramo 2', 'porcentaje', 10.5, '%'),

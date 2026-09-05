@@ -15,7 +15,7 @@ export const NORMATIVA_APLICADA: NormaAplicada[] = [
   { codigo: 'CNIC-IRM-COMPARTIDA-0..4', descripcion: 'Tipos IRM cuenta compartida (por IA)', valor: '0% / 0% / 1% / 3% / 6%' },
   { codigo: 'CNIC-IRM-EMPRESA-0..4', descripcion: 'Tipos IRM cuenta empresa (por IA)', valor: '0% / 0.75% / 2% / 5% / 9%' },
   { codigo: 'CNIC-IGF-EMPRESA-TIPO-1..4', descripcion: 'Tipos IGF empresas por tramos', valor: '0% / 5% / 35% / 85%' },
-  { codigo: 'CNIC-EXENCION-EMPRESA-PEQUENA', descripcion: 'Exención IGF empresa de reducida dimensión', valor: '≤ 20.000 Pz' },
+  { codigo: 'CNIC-IGF-EMPRESA-REDUCIDA-UMBRAL', descripcion: 'Exención IGF empresa de reducida dimensión', valor: '≤ 20.000 Pz' },
   { codigo: 'CNIC-COTIZACION-TRABAJADOR-*', descripcion: 'Cotización a cargo del trabajador (por tramo salarial)', valor: '7.5% / 10.5% / 17.5%' },
   { codigo: 'CNIC-SMI-MENSUAL', descripcion: 'Salario Mínimo Interprofesional', valor: '150 Pz' },
   { codigo: 'CNIC-LIMITE-CAPITAL-PERSONAL', descripcion: 'Límite de capital de la cuenta personal', valor: '500.000 Pz' },

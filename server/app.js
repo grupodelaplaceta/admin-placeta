@@ -15,6 +15,7 @@ import { registrarFirma } from './firmas.js';
 import { supabase, probarSupabase } from './supabase.js';
 import { CATALOGO_BASE } from './tramites-catalogo.js';
 import { CATALOGO_EDU_BASE } from './edu-cursos.js';
+import * as valoresBop from './valores-bop.js';
 const BOP_URL = (process.env.BOP_URL || 'https://bop.laplaceta.org').replace(/\/+$/, '');
 // Nombres compatibles con admin-placeta (BANCO_API_URL / CRM_READ_KEY).
 const BANK_URL = process.env.BANCO_API_URL || process.env.BANK_URL || 'https://api.banco.laplaceta.org';
@@ -44,16 +45,12 @@ async function obtenerEstadoBanco() {
   });
 }
 
-// CNIC vigentes del BOP (tabla bop_cnic) para el motor fiscal.
+// CNIC vigentes del BOP para el motor fiscal. Fuente: API nueva del BOLP
+// (/api/valores?todo=1) vía valores-bop.js (valores tipados). Si el BOP no
+// responde se usa la tabla compartida de Supabase durante una caída temporal.
 async function cargarCnicVigentes() {
-  try {
-    const response = await fetch(`${BOP_URL}/api/cnic`, { headers: { Accept: 'application/json' } });
-    if (response.ok) {
-      const payload = await response.json();
-      const rows = Array.isArray(payload) ? payload : payload.cnic;
-      if (Array.isArray(rows)) return rows.filter((row) => row.vigente ?? row.estado === 'vigente');
-    }
-  } catch { /* usa Supabase compartido durante una caída temporal del BOP */ }
+  const vigentes = await valoresBop.cargarVigentes();
+  if (vigentes) return vigentes;
   if (!supabase) return null;
   try {
     return await conCache('bop-cnic', 60_000, async () => {
@@ -283,7 +280,8 @@ export function createApp() {
         const accountId = junior.cuenta_banco || `u-${dipN.toLowerCase().replace(/-/g, '')}`;
         const bankState = await obtenerEstadoBanco();
         if (!(bankState.accounts || []).some((a) => a.id === accountId)) {
-          await postBanco('crear-cuenta-infantil', { juniorDip: dipN, juniorNombre: `${junior.nombre || ''} ${junior.apellidos || ''}`.trim() || dipN, tutorDip: junior.tutor_dip || 'TUTOR-LEGAL', sendLimitPz: 50 });
+          const sendLimiteJunior = await valoresBop.leerNumero('CNIC-CUENTA-JUNIOR-BASICA-TRANSFERENCIA', 50);
+          await postBanco('crear-cuenta-infantil', { juniorDip: dipN, juniorNombre: `${junior.nombre || ''} ${junior.apellidos || ''}`.trim() || dipN, tutorDip: junior.tutor_dip || 'TUTOR-LEGAL', sendLimitPz: sendLimiteJunior });
         }
         const recarga = Math.max(0, Math.round(Number(data.valor) || 0));
         if (!recarga) return res.status(400).json({ error: 'El código no tiene una recarga válida' });
@@ -378,19 +376,24 @@ export function createApp() {
       }
       // Legacy profiles may not yet have been opened in Banco. The same
       // deterministic account creation used by the wallet is safe here too.
+      // Límite de envío y tipo de IVA: valores oficiales del BOP (CNIC).
+      const [sendLimiteJunior, tipoIvaJunior] = await Promise.all([
+        valoresBop.leerNumero('CNIC-CUENTA-JUNIOR-BASICA-TRANSFERENCIA', 50),
+        valoresBop.leerNumero('CNIC-IVA', 12),
+      ]);
       const bankState = await obtenerEstadoBanco();
       if (!(bankState.accounts || []).some((a) => a.id === accountId)) {
         const alta = await postBanco('crear-cuenta-infantil', {
           juniorDip: dip,
           juniorNombre: `${junior.nombre || ''} ${junior.apellidos || ''}`.trim() || dip,
           tutorDip: junior.tutor_dip || 'TUTOR-LEGAL',
-          sendLimitPz: 50,
+          sendLimitPz: sendLimiteJunior,
         });
         if (alta?.accountId && !junior.cuenta_banco) await supabase.from('junior_menores').update({ cuenta_banco: alta.accountId }).eq('id', junior.id);
       }
       // El menor paga el importe bruto a Capitalia; Capitalia liquida el IVA
-      // a Tributos mediante la operación bancaria.
-      const iva = Math.round(precio * 12 / 112);
+      // a Tributos mediante la operación bancaria (IVA «por dentro»).
+      const iva = Math.round(precio * tipoIvaJunior / (100 + tipoIvaJunior));
       const banco = await postBanco('transferir', {
         from: accountId, to: 'CAPITALIA_BANK', cantidad: precio,
         iva, concepto: `Placeta Junior · actividad:${req.params.id} · ${actividad.titulo || req.params.id} · ${modo}`,
