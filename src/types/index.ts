@@ -211,8 +211,19 @@ export interface BopDocumento {
   version: number;
   aprobadaEnJunta: boolean;
   autorDip?: string;
+  autorNombre?: string;
   notasCambio?: string;
   cnicRefs?: { codigo: string; etiqueta?: string }[];
+  // Taxonomía BOLP (secciones I–VI) y fechas editoriales.
+  seccion?: string;
+  familia?: string;
+  departamento?: string;
+  organoResponsable?: string;
+  fechaPropuesta?: string;
+  fechaAplicacion?: string;
+  fechaPublicacion?: string;
+  fechaAprobacionJunta?: string;
+  fechaEntradaVigor?: string;
 }
 
 export interface Operacion {

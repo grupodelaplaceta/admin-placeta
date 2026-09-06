@@ -99,6 +99,13 @@
 .bop-canvas table { width: 100%; margin: 1rem 0; border-collapse: collapse; font-size: .92em; }
 .bop-canvas th, .bop-canvas td { padding: 9px 11px; border: 1px solid var(--border-strong); text-align: left; }
 .bop-canvas th { background: var(--surface-2); color: var(--text-2); font-weight: 800; }
+/* Taxonomía BOLP del editor CNI (sección/familia/departamento/órgano + fechas) */
+.bop-taxo { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 12px; margin: 0 0 var(--sp-3); padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.bop-taxo label { display: flex; flex-direction: column; gap: 4px; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; color: var(--text-2); }
+.bop-taxo input, .bop-taxo select { width: 100%; font: inherit; font-size: .88rem; font-weight: 500; text-transform: none; letter-spacing: 0; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: 8px; background: #fff; color: var(--text-1); }
+.bop-taxo input:focus, .bop-taxo select:focus { outline: 2px solid var(--c-primary); outline-offset: 0; border-color: var(--c-primary); }
+.bop-taxo select:invalid { color: var(--text-3); }
+@media (max-width: 650px) { .bop-taxo { grid-template-columns: 1fr 1fr; } }
 
 /* Acceso rápido (dashboard) */
 .rsp-acciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-2); }

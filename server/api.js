@@ -1591,7 +1591,13 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     categoria: d.categoria || 'capitulo', estado: d.estado || 'proyecto',
     contenidoMd: d.contenidoMd || '', version: Number(d.version || 1),
     aprobadaEnJunta: Boolean(d.aprobadaEnJunta), autorDip: d.autorDip,
-    notasCambio: d.notasCambio, cnicRefs: d.cnicRefs || [],
+    autorNombre: d.autorNombre || '', notasCambio: d.notasCambio, cnicRefs: d.cnicRefs || [],
+    // Taxonomía BOLP (secciones I–VI) y fechas editoriales.
+    seccion: d.seccion || '', familia: d.familia || '', departamento: d.departamento || '',
+    organoResponsable: d.organoResponsable || '',
+    fechaPropuesta: d.fechaPropuesta || '', fechaAplicacion: d.fechaAplicacion || '',
+    fechaPublicacion: d.fechaPublicacion || '', fechaAprobacionJunta: d.fechaAprobacionJunta || '',
+    fechaEntradaVigor: d.fechaEntradaVigor || '',
   });
   router.get('/rsp/normativo/documentos', async (_req, res) => {
     res.json((await store.bopDocumentos.listar()).map(normalizarBopDocumento));
@@ -1604,7 +1610,9 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     if (!codigo || !titulo || !contenidoMd.trim()) return res.status(400).json({ error: 'codigo, titulo y contenidoMd son obligatorios' });
     const anterior = (await store.bopDocumentos.listar()).find((x) => x.codigo === codigo);
     const cnicRefs = Array.isArray(d.cnicRefs) ? d.cnicRefs.filter((r) => r && r.codigo).map((r) => ({ codigo: String(r.codigo).trim().toUpperCase(), etiqueta: String(r.etiqueta || r.codigo).trim() })) : [];
-    const documento = { ...(anterior || {}), id: anterior?.id || randomUUID(), codigo, titulo, tipo: d.tipo || 'cni', categoria: d.categoria || 'capitulo', estado: 'proyecto', contenidoMd, version: Number(anterior?.version || 0) + 1, aprobadaEnJunta: false, autorDip: req.user?.dip || 'RSP', autorNombre: req.user?.nombre || anterior?.autorNombre || '', notasCambio: String(d.notasCambio || ''), cnicRefs };
+    const documento = { ...(anterior || {}), id: anterior?.id || randomUUID(), codigo, titulo, tipo: d.tipo || 'cni', categoria: d.categoria || 'capitulo', estado: 'proyecto', contenidoMd, version: Number(anterior?.version || 0) + 1, aprobadaEnJunta: false, autorDip: req.user?.dip || 'RSP', autorNombre: req.user?.nombre || anterior?.autorNombre || '', notasCambio: String(d.notasCambio || ''), cnicRefs,
+      seccion: String(d.seccion || anterior?.seccion || ''), familia: String(d.familia || anterior?.familia || ''), departamento: String(d.departamento || anterior?.departamento || ''), organoResponsable: String(d.organoResponsable || anterior?.organoResponsable || ''),
+      fechaPropuesta: d.fechaPropuesta || anterior?.fechaPropuesta || null, fechaAplicacion: d.fechaAplicacion || anterior?.fechaAplicacion || null, fechaEntradaVigor: d.fechaEntradaVigor || anterior?.fechaEntradaVigor || null };
     if (anterior) { await store.bopVersiones.insertar({ documentoId: documento.id, version: anterior.version, estado: anterior.estado, contenidoMd: anterior.contenidoMd, autorDip: anterior.autorDip, notasCambio: anterior.notasCambio }); await store.bopDocumentos.actualizar(anterior.id, documento); }
     else await store.bopDocumentos.insertar(documento);
     res.status(201).json(normalizarBopDocumento(documento));
@@ -1618,6 +1626,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       estado: 'vigente', aprobadaEnJunta: true,
       fechaPublicacion: documento.fechaPublicacion || hoy,
       fechaAprobacionJunta: documento.fechaAprobacionJunta || hoy,
+      fechaEntradaVigor: documento.fechaEntradaVigor || documento.fechaPublicacion || hoy,
       autorNombre: documento.autorNombre || req.user?.nombre || req.user?.dip || '',
       updatedAt: AHORA(),
     });
