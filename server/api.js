@@ -1556,27 +1556,34 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const valor = d.valor;
     const motivo = String(d.motivo || '').trim();
     if (!/^CNIC-[A-Z0-9-]+$/.test(codigo) || valor === undefined || !motivo) return res.status(400).json({ error: 'codigo, valor y motivo son obligatorios' });
-    const actual = await store.bopCnic.obtener(codigo);
+    // bop_cnic usa id uuid y columna `vigente` (no existe `estado`): la fila se
+    // localiza por su código natural y se persiste con vigente=false (borrador).
+    const filas = (await store.bopCnic.listar()) || [];
+    const actual = filas.find((r) => String(r.codigo || '').toUpperCase() === codigo) || null;
     const historial = Array.isArray(actual?.historial) ? actual.historial : [];
+    const previo = actual ? [{ valor: actual.valor, desde: actual.updatedAt || null, autorDip: actual.autorDip || 'BOP', notas: 'Valor anterior' }] : [];
     const regla = {
-      ...(actual || {}), codigo, etiqueta: actual?.etiqueta || codigo,
+      id: actual?.id || randomUUID(),
+      codigo, etiqueta: actual?.etiqueta || codigo,
       tipoValor: actual?.tipoValor || 'porcentaje', valor: String(valor), unidad: actual?.unidad || '%',
-      vigente: false, estado: 'borrador', autorDip: req.user?.dip || 'RSP',
-      historial: [...historial, ...(actual ? [{ valor: actual.valor, desde: actual.updatedAt || null, autorDip: actual.autorDip || 'BOP', notas: 'Valor anterior' }] : []), { valor: String(valor), desde: AHORA(), autorDip: req.user?.dip || 'RSP', notas: motivo }],
+      vigente: false, autorDip: req.user?.dip || 'RSP', updatedAt: AHORA(),
+      historial: [...historial, ...previo, { valor: String(valor), desde: AHORA(), autorDip: req.user?.dip || 'RSP', notas: motivo }],
     };
-    if (actual) await store.bopCnic.actualizar(codigo, regla);
+    if (actual) await store.bopCnic.actualizar(actual.id, regla);
     else await store.bopCnic.insertar(regla);
     valoresBop.limpiarCache();
+    cnicCache = { t: 0, data: null };
     res.status(201).json(normalizarBopCnic(regla));
   });
   router.post('/rsp/normativo/api/:codigo/aprobar', async (req, res) => {
     const codigo = String(req.params.codigo || '').trim().toUpperCase();
-    const actual = await store.bopCnic.obtener(codigo);
+    const filas = (await store.bopCnic.listar()) || [];
+    const actual = filas.find((r) => String(r.codigo || '').toUpperCase() === codigo);
     if (!actual) return res.status(404).json({ error: 'CNIC no encontrado' });
-    await store.bopCnic.actualizar(codigo, { vigente: true, estado: 'vigente', autorDip: req.user?.dip || actual.autorDip || 'RSP', updatedAt: AHORA() });
+    await store.bopCnic.actualizar(actual.id, { vigente: true, autorDip: req.user?.dip || actual.autorDip || 'RSP', updatedAt: AHORA() });
     valoresBop.limpiarCache();
     cnicCache = { t: 0, data: null };
-    res.json({ success: true });
+    res.json({ success: true, codigo });
   });
 
   const normalizarBopDocumento = (d) => ({
@@ -1597,7 +1604,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     if (!codigo || !titulo || !contenidoMd.trim()) return res.status(400).json({ error: 'codigo, titulo y contenidoMd son obligatorios' });
     const anterior = (await store.bopDocumentos.listar()).find((x) => x.codigo === codigo);
     const cnicRefs = Array.isArray(d.cnicRefs) ? d.cnicRefs.filter((r) => r && r.codigo).map((r) => ({ codigo: String(r.codigo).trim().toUpperCase(), etiqueta: String(r.etiqueta || r.codigo).trim() })) : [];
-    const documento = { ...(anterior || {}), id: anterior?.id || `BOP-${Date.now()}`, codigo, titulo, tipo: d.tipo || 'cni', categoria: d.categoria || 'capitulo', estado: 'proyecto', contenidoMd, version: Number(anterior?.version || 0) + 1, aprobadaEnJunta: false, autorDip: req.user?.dip || 'RSP', notasCambio: String(d.notasCambio || ''), cnicRefs };
+    const documento = { ...(anterior || {}), id: anterior?.id || randomUUID(), codigo, titulo, tipo: d.tipo || 'cni', categoria: d.categoria || 'capitulo', estado: 'proyecto', contenidoMd, version: Number(anterior?.version || 0) + 1, aprobadaEnJunta: false, autorDip: req.user?.dip || 'RSP', autorNombre: req.user?.nombre || anterior?.autorNombre || '', notasCambio: String(d.notasCambio || ''), cnicRefs };
     if (anterior) { await store.bopVersiones.insertar({ documentoId: documento.id, version: anterior.version, estado: anterior.estado, contenidoMd: anterior.contenidoMd, autorDip: anterior.autorDip, notasCambio: anterior.notasCambio }); await store.bopDocumentos.actualizar(anterior.id, documento); }
     else await store.bopDocumentos.insertar(documento);
     res.status(201).json(normalizarBopDocumento(documento));
@@ -1606,8 +1613,15 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const id = String(req.params.id);
     const documento = await store.bopDocumentos.obtener(id);
     if (!documento) return res.status(404).json({ error: 'Documento BOP no encontrado' });
-    await store.bopDocumentos.actualizar(id, { estado: 'vigente', aprobadaEnJunta: true, updatedAt: AHORA() });
-    res.json({ success: true });
+    const hoy = AHORA().slice(0, 10);
+    await store.bopDocumentos.actualizar(id, {
+      estado: 'vigente', aprobadaEnJunta: true,
+      fechaPublicacion: documento.fechaPublicacion || hoy,
+      fechaAprobacionJunta: documento.fechaAprobacionJunta || hoy,
+      autorNombre: documento.autorNombre || req.user?.nombre || req.user?.dip || '',
+      updatedAt: AHORA(),
+    });
+    res.json({ success: true, codigo: documento.codigo });
   });
 
   /* ── Cumplimiento normativo (comprobaciones automáticas) ──────────── */
@@ -2398,7 +2412,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const anterior = existentes.find((x) => x.codigo === codigo);
     const doc = {
       ...(anterior || {}),
-      id: anterior?.id || `BOP-${Date.now()}`,
+      id: anterior?.id || randomUUID(),
       codigo, titulo: prop.titulo, tipo: prop.tipo || anterior?.tipo || 'cni',
       categoria: anterior?.categoria || 'capitulo', estado: 'vigente',
       contenidoMd: prop.contenidoMd || '',
