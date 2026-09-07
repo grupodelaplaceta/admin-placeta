@@ -14,7 +14,6 @@ import { calcularCicloFacturacion, planCierreMes, seleccionarPagoIva, pagosIvaEx
 import { coleccion } from './db.js';
 import { crearYEnviarFirma, estadoFirma, enviarVotacionPlacetaID, cerrarVotacionPlacetaID } from './firmas.js';
 import { CATALOGO_BASE } from './tramites-catalogo.js';
-import { CATALOGO_EDU_BASE } from './edu-cursos.js';
 import PDFDocument from 'pdfkit';
 import { supabase } from './supabase.js';
 import * as valoresBop from './valores-bop.js';
@@ -50,6 +49,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     tramites: coleccion('rsp_tramites'),
     tramitesCatalogo: coleccion('rsp_tramites_catalogo'),
     eduCursos: coleccion('rsp_edu_cursos'),
+    eduInscripciones: coleccion('rsp_edu_inscripciones', { orderCol: 'fecha' }),
     subvenciones: coleccion('rsp_subvenciones'),
     bonos: coleccion('rsp_bonos'),
     operaciones: coleccion('rsp_operaciones'),
@@ -521,43 +521,92 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     res.json({ ok: true, id: req.params.id, activo });
   });
 
-  /* ── Cursos de Placeta EDU (RSP como sistema central) ─────────────────── */
-  async function asegurarCursosEdu() {
-    const existentes = await store.eduCursos.listar();
-    if ((existentes || []).length > 0) return;
-    for (const c of CATALOGO_EDU_BASE) await store.eduCursos.insertar({ ...c, creadoEn: AHORA() });
+  /* ── Placeta EDU (RSP como sistema central de PlacetaEDU) ────────────────
+     Cursos e inscripciones viven en Supabase (rsp_edu_cursos, rsp_edu_inscripciones).
+     La web pública edu.laplaceta.org consume los endpoints /publico/edu/* y la
+     administración se hace desde RSP (/rsp/edu/api/*). Las inscripciones
+     procedentes de Placeta Joven llegan con procedencia 'placeta-joven' y el
+     criterio 'placeta-joven' (+20) marcado automáticamente. */
+  // Baremo oficial (espejo de SCORING_CRITERIA de la web de EDU).
+  const EDU_CRITERIA = {
+    desempleo: 40, exclusion: 35, monoparental: 30, estudiante: 25,
+    discapacidad: 20, 'placeta-joven': 20, recualificacion: 15,
+  };
+  const genCodigoEdu = () => 'EDU-' + Date.now().toString(36).toUpperCase() + '-' + randomBytes(3).toString('hex').toUpperCase();
+  const hoy = () => AHORA().slice(0, 10);
+
+  // ── Catálogo (admin RSP) ─────────────────────────────────────────────
+  async function siguienteIdCurso() {
+    const lista = await store.eduCursos.listar();
+    return (lista || []).reduce((m, c) => Math.max(m, Number(c.id) || 0), 0) + 1;
+  }
+  function normalizarCurso(d, existente) {
+    return {
+      ...(existente || {}),
+      titulo: String(d.titulo || existente?.titulo || '').trim(),
+      emoji: String(d.emoji || existente?.emoji || '💻'),
+      descripcion: String(d.descripcion || existente?.descripcion || ''),
+      duracion: String(d.duracion || existente?.duracion || ''),
+      nivel: String(d.nivel || existente?.nivel || 'Principiante'),
+      institucion: String(d.institucion || existente?.institucion || 'La Placeta EDU'),
+      plazas: Number(d.plazas ?? existente?.plazas ?? 0),
+      inscritos: Number(d.inscritos ?? existente?.inscritos ?? 0),
+      oculto: d.oculto === true || existente?.oculto === true,
+      categoria: String(d.categoria || existente?.categoria || 'tech'),
+      categoriaLabel: String(d.categoriaLabel || existente?.categoriaLabel || 'Tecnología'),
+      proveedor: String(d.proveedor || existente?.proveedor || 'La Placeta EDU'),
+      convocatoria: String(d.convocatoria || d.callNumber || existente?.convocatoria || ''),
+      inicioMatricula: d.inicioMatricula || d.enrollStart || existente?.inicioMatricula || null,
+      finMatricula: d.finMatricula || d.enrollEnd || existente?.finMatricula || null,
+      inicioCurso: d.inicioCurso || d.courseStart || existente?.inicioCurso || null,
+      finCurso: d.finCurso || d.courseEnd || existente?.finCurso || null,
+      diasDisponibles: Array.isArray(d.diasDisponibles) ? d.diasDisponibles : Array.isArray(existente?.diasDisponibles) ? existente.diasDisponibles : [],
+      objetivos: Array.isArray(d.objetivos) ? d.objetivos : Array.isArray(d.learningPoints) ? d.learningPoints : Array.isArray(existente?.objetivos) ? existente.objetivos : [],
+      requisitos: Array.isArray(d.requisitos) ? d.requisitos : Array.isArray(existente?.requisitos) ? existente.requisitos : [],
+      descripcionLarga: String(d.descripcionLarga || d.fullDesc || existente?.descripcionLarga || ''),
+      urlSyllabus: String(d.urlSyllabus || d.syllabusUrl || existente?.urlSyllabus || ''),
+      urlBadge: String(d.urlBadge || d.badgeUrl || existente?.urlBadge || ''),
+      activo: d.activo !== false && (existente ? existente.activo !== false : true),
+      orden: Number(d.orden ?? existente?.orden ?? 99),
+      actualizadoEn: AHORA(),
+    };
+  }
+  function cursoPublico(c) {
+    return {
+      id: Number(c.id), title: c.titulo, desc: c.descripcion, duration: c.duracion,
+      level: c.nivel, institution: c.institucion, plazas: Number(c.plazas || 0),
+      isHidden: !!c.oculto, emoji: c.emoji || '💻', cat: c.categoria, catLabel: c.categoriaLabel,
+      provider: c.proveedor, callNumber: c.convocatoria || '',
+      enrollStart: c.inicioMatricula || '', enrollEnd: c.finMatricula || '',
+      courseStart: c.inicioCurso || '', courseEnd: c.finCurso || '',
+      diasDisponibles: c.diasDisponibles || [], learningPoints: c.objetivos || [],
+      requirements: c.requisitos || [], fullDesc: c.descripcionLarga || '',
+      syllabusUrl: c.urlSyllabus || '', badgeUrl: c.urlBadge || '',
+    };
   }
   router.get('/rsp/edu/api/cursos', async (_req, res) => {
-    await asegurarCursosEdu();
     const lista = await store.eduCursos.listar();
     res.json([...lista].sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99)));
   });
+  router.get('/rsp/edu/api/cursos/:id', async (req, res) => {
+    const c = await store.eduCursos.obtener(req.params.id);
+    if (!c) return res.status(404).json({ error: 'Curso no encontrado' });
+    res.json(c);
+  });
   router.post('/rsp/edu/api/cursos', async (req, res) => {
     const d = req.body || {};
-    if (!d.id || !d.titulo) return res.status(400).json({ error: 'id y titulo requeridos' });
-    const curso = {
-      id: String(d.id).trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-      titulo: String(d.titulo),
-      descripcion: String(d.descripcion || ''),
-      categoria: String(d.categoria || 'general'),
-      categoriaLabel: String(d.categoriaLabel || d.categoria || 'General'),
-      plazas: Number(d.plazas || 0),
-      inscritos: Number(d.inscritos || 0),
-      estado: String(d.estado || 'abierta'),
-      precio: String(d.precio || 'Gratis'),
-      duracion: String(d.duracion || ''),
-      fechaInicio: d.fechaInicio || '',
-      fechaFin: d.fechaFin || '',
-      emoji: String(d.emoji || '📚'),
-      requisitos: Array.isArray(d.requisitos) ? d.requisitos.map(String) : [],
-      orden: Number(d.orden ?? 99),
-      activo: d.activo !== false,
-      actualizadoEn: AHORA(),
-    };
-    const prev = await store.eduCursos.obtener(curso.id);
-    if (prev) await store.eduCursos.actualizar(curso.id, curso);
-    else await store.eduCursos.insertar(curso);
-    res.json({ ok: true, id: curso.id });
+    if (!String(d.titulo || '').trim()) return res.status(400).json({ error: 'titulo requerido' });
+    const id = d.id ? String(d.id) : null;
+    const existente = id ? await store.eduCursos.obtener(id) : null;
+    const curso = normalizarCurso(d, existente);
+    if (existente) {
+      await store.eduCursos.actualizar(existente.id, curso);
+    } else {
+      curso.id = await siguienteIdCurso();
+      curso.creadoEn = AHORA();
+      await store.eduCursos.insertar(curso);
+    }
+    res.json({ ok: true, id: Number(curso.id) });
   });
   router.post('/rsp/edu/api/cursos/:id/estado', async (req, res) => {
     const c = await store.eduCursos.obtener(req.params.id);
@@ -565,6 +614,134 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const activo = req.body?.activo !== undefined ? !!req.body.activo : c.activo !== false;
     await store.eduCursos.actualizar(req.params.id, { activo, actualizadoEn: AHORA() });
     res.json({ ok: true, id: req.params.id, activo });
+  });
+
+  // ── Inscripciones (admin RSP: gestión, validación y seguimiento) ─────
+  router.get('/rsp/edu/api/inscripciones', async (req, res) => {
+    let lista = await store.eduInscripciones.listar();
+    const { estado, convocatoria, cursoId, q } = req.query;
+    if (estado) lista = lista.filter((i) => i.estado === estado);
+    if (convocatoria) lista = lista.filter((i) => i.convocatoria === convocatoria);
+    if (cursoId) lista = lista.filter((i) => String(i.cursoId) === String(cursoId));
+    if (q) { const s = String(q).toLowerCase(); lista = lista.filter((i) => (i.nombre || '').toLowerCase().includes(s) || (i.code || '').toLowerCase().includes(s) || (i.dni || '').toLowerCase().includes(s)); }
+    res.json(lista);
+  });
+  router.get('/rsp/edu/api/inscripciones/:code', async (req, res) => {
+    const lista = await store.eduInscripciones.listar();
+    const i = lista.find((x) => String(x.code).toUpperCase() === String(req.params.code).toUpperCase());
+    if (!i) return res.status(404).json({ error: 'Inscripción no encontrada' });
+    res.json(i);
+  });
+  router.post('/rsp/edu/api/inscripciones/:code/validar', async (req, res) => {
+    const lista = await store.eduInscripciones.listar();
+    const i = lista.find((x) => String(x.code).toUpperCase() === String(req.params.code).toUpperCase());
+    if (!i) return res.status(404).json({ error: 'Inscripción no encontrada' });
+    const nota = String(req.body?.nota || 'Validada por RSP');
+    const estados = [...(i.historialEstado || [])];
+    estados.push({ estado: 'en_curso', fecha: AHORA(), nota });
+    await store.eduInscripciones.actualizar(i.id, { estado: 'en_curso', validadoEn: AHORA(), historialEstado: estados, actualizadoEn: AHORA() });
+    res.json({ ok: true, code: i.code, estado: 'en_curso' });
+  });
+  router.post('/rsp/edu/api/inscripciones/:code/estado', async (req, res) => {
+    const lista = await store.eduInscripciones.listar();
+    const i = lista.find((x) => String(x.code).toUpperCase() === String(req.params.code).toUpperCase());
+    if (!i) return res.status(404).json({ error: 'Inscripción no encontrada' });
+    const estado = String(req.body?.estado || '');
+    if (!['pendiente', 'en_curso', 'graduado', 'suspendido', 'rechazado'].includes(estado)) return res.status(400).json({ error: 'estado inválido' });
+    const nota = String(req.body?.nota || '');
+    const estados = [...(i.historialEstado || [])];
+    estados.push({ estado, fecha: AHORA(), nota });
+    const patch = { estado, historialEstado: estados, actualizadoEn: AHORA() };
+    if (estado === 'en_curso') patch.validadoEn = i.validadoEn || AHORA();
+    if (['graduado', 'suspendido'].includes(estado)) patch.resultado = estado;
+    await store.eduInscripciones.actualizar(i.id, patch);
+    res.json({ ok: true, code: i.code, estado });
+  });
+  router.post('/rsp/edu/api/inscripciones/:code/penalizar', async (req, res) => {
+    const lista = await store.eduInscripciones.listar();
+    const i = lista.find((x) => String(x.code).toUpperCase() === String(req.params.code).toUpperCase());
+    if (!i) return res.status(404).json({ error: 'Inscripción no encontrada' });
+    const criteriaId = String(req.body?.criteriaId || '');
+    const nota = String(req.body?.nota || 'Criterio penalizado');
+    const pts = Number(EDU_CRITERIA[criteriaId] || req.body?.pointsToDeduct || 0);
+    const criterios = (i.criterios || []).filter((cid) => cid !== criteriaId);
+    const penalizaciones = [...(i.penalizaciones || []), { criteriaId, nota, fecha: AHORA() }];
+    await store.eduInscripciones.actualizar(i.id, { criterios, penalizaciones, puntos: Math.max(0, Number(i.puntos || 0) - pts), actualizadoEn: AHORA() });
+    res.json({ ok: true, code: i.code, puntos: Math.max(0, Number(i.puntos || 0) - pts) });
+  });
+  router.post('/rsp/edu/api/inscripciones/:code/certificado', async (req, res) => {
+    const lista = await store.eduInscripciones.listar();
+    const i = lista.find((x) => String(x.code).toUpperCase() === String(req.params.code).toUpperCase());
+    if (!i) return res.status(404).json({ error: 'Inscripción no encontrada' });
+    await store.eduInscripciones.actualizar(i.id, { urlCertificado: String(req.body?.url || ''), actualizadoEn: AHORA() });
+    res.json({ ok: true, code: i.code });
+  });
+
+  // ── Público (lo consume edu.laplaceta.org y el espacio de Placeta Joven) ──
+  const corsPublicoEdu = (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', process.env.PUBLIC_CORS_ORIGIN || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Placeta-Joven-Key');
+    if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return; }
+    next();
+  };
+  router.use('/publico/edu', corsPublicoEdu);
+  router.get('/publico/edu/cursos', async (_req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', process.env.PUBLIC_CORS_ORIGIN || '*');
+    const lista = await store.eduCursos.listar();
+    const activos = (lista || []).filter((c) => c.activo !== false && !c.oculto).sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99));
+    res.json(activos.map(cursoPublico));
+  });
+  router.get('/publico/edu/cursos/:id', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', process.env.PUBLIC_CORS_ORIGIN || '*');
+    const c = await store.eduCursos.obtener(req.params.id);
+    if (!c || c.activo === false || c.oculto) return res.status(404).json({ error: 'Curso no encontrado' });
+    res.json(cursoPublico(c));
+  });
+  // Alta de inscripción pública. Si procede de Placeta Joven (procedencia o
+  // cabecera X-Placeta-Joven-Key con PLACETA_JOVEN_API_KEY) se añade el criterio
+  // 'placeta-joven' (+20) automáticamente para que el beneficio funcione.
+  router.post('/publico/edu/inscripciones', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', process.env.PUBLIC_CORS_ORIGIN || '*');
+    const d = req.body || {};
+    const curso = await store.eduCursos.obtener(d.courseId);
+    if (!curso || curso.activo === false || curso.oculto) return res.status(404).json({ error: 'curso_no_disponible' });
+    if (!d.name || !d.dni || !d.email) return res.status(400).json({ error: 'name, dni y email requeridos' });
+    if (Number(curso.inscritos || 0) >= Number(curso.plazas || 0)) return res.status(409).json({ error: 'curso_completo' });
+
+    let criterios = Array.isArray(d.criterias) ? d.criterias.map((x) => String(x)) : [];
+    const esPlacetaJoven = d.procedencia === 'placeta-joven' || d.placetaJoven === true ||
+      (process.env.PLACETA_JOVEN_API_KEY && req.headers['x-placeta-joven-key'] === process.env.PLACETA_JOVEN_API_KEY);
+    if (esPlacetaJoven && !criterios.includes('placeta-joven')) criterios.push('placeta-joven');
+    const puntos = criterios.reduce((s, id) => s + Number(EDU_CRITERIA[id] || 0), 0);
+
+    const code = genCodigoEdu();
+    const fila = {
+      code, nombre: String(d.name).trim(), dni: String(d.dni).trim(), email: String(d.email || '').trim(),
+      cursoId: Number(curso.id), cursoTitulo: curso.titulo, convocatoria: curso.convocatoria || '',
+      franja: d.franja || '', franjaLabel: d.franjaLabel || '',
+      criterios, ficheros: Array.isArray(d.files) ? d.files : [],
+      puntos, placetaJoven: esPlacetaJoven, procedencia: esPlacetaJoven ? 'placeta-joven' : 'web',
+      estado: 'pendiente', fecha: hoy(), resultado: 'en_curso', historialEstado: [],
+      penalizaciones: [], inicioBeca: curso.inicioCurso || '', finBeca: curso.finCurso || '',
+      creadoEn: AHORA(), actualizadoEn: AHORA(),
+    };
+    const creada = await store.eduInscripciones.insertar(fila);
+    await store.eduCursos.actualizar(curso.id, { inscritos: Number(curso.inscritos || 0) + 1, actualizadoEn: AHORA() });
+    res.status(201).json({ ok: true, code, puntos, placetaJoven: esPlacetaJoven, estado: 'pendiente', cursoId: Number(curso.id) });
+  });
+  // Seguimiento público por código (expediente del alumno).
+  router.get('/publico/edu/inscripciones/:code', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', process.env.PUBLIC_CORS_ORIGIN || '*');
+    const lista = await store.eduInscripciones.listar();
+    const i = lista.find((x) => String(x.code).toUpperCase() === String(req.params.code).toUpperCase());
+    if (!i) return res.status(404).json({ error: 'expediente_no_encontrado' });
+    res.json({
+      code: i.code, nombre: i.nombre, dni: i.dni, cursoId: i.cursoId, cursoTitulo: i.cursoTitulo,
+      convocatoria: i.convocatoria || '', puntos: i.puntos, placetaJoven: !!i.placetaJoven,
+      estado: i.estado, resultado: i.resultado, fecha: i.fecha, validadoEn: i.validadoEn || null,
+      urlCertificado: i.urlCertificado || null,
+    });
   });
 
   /* ── Firma vía PlacetaID Móvil ────────────────────────────────────── */
