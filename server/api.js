@@ -17,6 +17,7 @@ import { CATALOGO_BASE } from './tramites-catalogo.js';
 import PDFDocument from 'pdfkit';
 import { supabase } from './supabase.js';
 import * as valoresBop from './valores-bop.js';
+import { calcularValoracion, pmbPara, publicConfig } from './edu-becas.js';
 
 const AHORA = () => new Date().toISOString();
 const BOP_URL = (process.env.BOP_URL || 'https://bop.laplaceta.org').replace(/\/+$/, '');
@@ -50,6 +51,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     tramitesCatalogo: coleccion('rsp_tramites_catalogo'),
     eduCursos: coleccion('rsp_edu_cursos'),
     eduInscripciones: coleccion('rsp_edu_inscripciones', { orderCol: 'fecha' }),
+    eduBecaValoraciones: coleccion('rsp_edu_beca_valoraciones', { orderCol: 'actualizado_en' }),
     subvenciones: coleccion('rsp_subvenciones'),
     bonos: coleccion('rsp_bonos'),
     operaciones: coleccion('rsp_operaciones'),
@@ -686,6 +688,29 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     next();
   };
   router.use('/publico/edu', corsPublicoEdu);
+  router.get('/rsp/edu/api/becas/config', (_req, res) => res.json(publicConfig()));
+  router.get('/rsp/edu/api/becas/valoraciones', async (req, res) => {
+    const lista = await store.eduBecaValoraciones.listar({ filtros: req.query.dip ? { dip: String(req.query.dip).toUpperCase() } : {} });
+    res.json(lista);
+  });
+  router.post('/rsp/edu/api/becas/valoraciones', async (req, res) => {
+    const d = req.body || {};
+    const dip = String(d.dip || '').trim().toUpperCase();
+    if (!dip || !d.indicadores || typeof d.indicadores !== 'object') return res.status(400).json({ error: 'dip e indicadores requeridos' });
+    const valoracion = calcularValoracion(d.indicadores);
+    const fila = { id: `BECA-${dip}-${Date.now()}`, dip, indicadores: d.indicadores, ...valoracion, fuente: String(d.fuente || 'RSP / Junta'), notas: String(d.notas || ''), actualizadoEn: AHORA() };
+    await store.eduBecaValoraciones.insertar(fila);
+    res.status(201).json({ ok: true, valoracion: fila });
+  });
+  router.get('/publico/edu/placeta-joven/becas/valoracion', async (req, res) => {
+    if (!process.env.PLACETA_JOVEN_API_KEY || req.headers['x-placeta-joven-key'] !== process.env.PLACETA_JOVEN_API_KEY) return res.status(401).json({ error: 'api_key_invalida' });
+    const dip = String(req.query.dip || '').trim().toUpperCase();
+    const elementoId = String(req.query.elementoId || '').trim();
+    const lista = await store.eduBecaValoraciones.listar({ filtros: { dip } });
+    const valoracion = lista[0];
+    if (!valoracion) return res.status(404).json({ error: 'valoracion_no_disponible' });
+    res.json({ indicadores: valoracion.indicadores, inb: valoracion.inb, nivel: valoracion.nivel, porcentajeReconocido: valoracion.porcentajeReconocido, detalle: valoracion.detalle, baremoVersion: valoracion.baremoVersion, pmb: pmbPara(elementoId), fuente: valoracion.fuente || 'RSP' });
+  });
   router.get('/publico/edu/cursos', async (_req, res) => {
     res.setHeader('Access-Control-Allow-Origin', process.env.PUBLIC_CORS_ORIGIN || '*');
     const lista = await store.eduCursos.listar();
