@@ -143,6 +143,56 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     res.status(201).json({ ok: true, tramite: t, pdf_url: `/publico/documentos/${encodeURIComponent(pdfToken)}` });
   });
 
+  // Integración interna Banco -> RSP tras una apertura Business firmada.
+  // El endpoint es idempotente por cuenta bancaria y solo concede la oferta
+  // si el banco devuelve una cuenta Business con EIP verificable.
+  router.post('/api/integraciones/banco/apertura-firmada', async (req, res) => {
+    const key = process.env.RSP_INTEGRATION_KEY || process.env.GDLP_RSP_API_KEY || '';
+    if (!key || req.headers['x-integration-key'] !== key) return res.status(401).json({ error: 'integracion_no_autorizada' });
+    const d = req.body || {};
+    const accountId = String(d.accountId || '').trim();
+    const eip = String(d.eip || '').trim().toUpperCase();
+    const fechaFin = String(d.promocionEmpresa?.fechaFin || process.env.EMPRESA_SUBVENCION_FECHA_FIN || '2026-12-31');
+    const importe = Number(d.promocionEmpresa?.importePz || 5000);
+    if (!accountId || !eip || importe !== 5000) return res.status(422).json({ error: 'promocion_empresa_invalida' });
+    if (Date.now() > new Date(`${fechaFin}T23:59:59.999Z`).getTime()) return res.status(410).json({ error: 'promocion_empresa_expirada', fechaFin });
+
+    const cuentas = await listarCuentas();
+    const cuenta = cuentas.find((item) => item.id === accountId);
+    if (!cuenta || cuenta.tipo.toLowerCase() !== 'business' || cuenta.eip !== eip) return res.status(422).json({ error: 'eip_no_verificado_en_la_cuenta' });
+
+    const existentes = await store.subvenciones.listar();
+    const idempotente = (existentes || []).find((item) => item.origenCuentaId === accountId && item.concepto === 'Oferta alta empresa Banco de La Placeta');
+    if (idempotente) return res.json({ ok: true, idempotente: true, subvencion: idempotente });
+
+    const id = `SUB-${Date.now()}`;
+    const subvencion = {
+      id,
+      emisorEip: 'TGLP',
+      emisorNombre: 'Banco de La Placeta',
+      receptorEip: eip,
+      receptorNombre: cuenta.nombre,
+      importe,
+      importeRestante: importe,
+      concepto: 'Oferta alta empresa Banco de La Placeta',
+      estado: 'concedida',
+      fechaConcesion: AHORA().slice(0, 10),
+      fechaFin,
+      publicada: false,
+      origenCuentaId: accountId,
+    };
+    const detalle = {
+      ...subvencion,
+      documentosRequeridos: ['Justificante de pago de impuestos emitido por RSP'],
+      gastos: [], justificaciones: [], reversiones: [],
+      categoriasCubiertas: ['tributos'], tiposAptos: ['Tax', 'IrmCharge', 'IvaAdjustment'],
+      promocion: { limite: fechaFin, cuentaId: accountId, eipVerificado: eip },
+    };
+    await store.subvenciones.insertar({ ...subvencion, detalle });
+    store.subvencionesDetalle[id] = detalle;
+    res.status(201).json({ ok: true, idempotente: false, subvencion });
+  });
+
   router.get('/publico/documentos/:token', (req, res) => {
     const pdf = store.documentosPublicos.get(req.params.token);
     if (!pdf) return res.status(404).json({ error: 'Documento no encontrado' });
@@ -2492,6 +2542,85 @@ export function createApiRouter({ getBankState, mutarBanco }) {
       }
       res.json({ ok: true, mes, ejecutar, accesoBanco: !!mutarBanco, plan, resultados });
     } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+
+  function generarPdfFacturacion(documento, tipoDocumento = 'factura') {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 52, size: 'A4' });
+      const chunks = [];
+      doc.on('data', (chunk) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const esRecibo = tipoDocumento === 'recibo';
+      const titulo = esRecibo ? 'RECIBO DE PAGO' : 'FACTURA';
+      const numero = documento.numero || documento.id || '—';
+      const importe = Number(documento.importe || documento.total || 0);
+      const base = Number(documento.base ?? importe - Number(documento.iva || 0));
+      const iva = Number(documento.iva || 0);
+      const pagos = Array.isArray(documento.pagos) ? documento.pagos : [];
+      const pagado = Number(documento.totalPagado || pagos.reduce((sum, pago) => sum + Number(pago.importe || 0), 0) || (documento.cobro?.importe || 0));
+      const pendiente = Math.max(0, round2(importe - pagado));
+
+      doc.fillColor('#3f00d8').fontSize(19).font('Helvetica-Bold').text('BANCO DE LA PLACETA', { align: 'center' });
+      doc.moveDown(0.35).fillColor('#111827').fontSize(16).text(titulo, { align: 'center' });
+      doc.moveDown().fontSize(10).font('Helvetica').fillColor('#4b5563')
+        .text(`Documento: ${numero}`)
+        .text(`Emisión: ${documento.fecha || documento.creadoEn || new Date().toISOString().slice(0, 10)}`)
+        .text(`Estado: ${String(documento.estado || 'emitida').toUpperCase()}`);
+      doc.moveDown().fillColor('#111827').fontSize(11).font('Helvetica-Bold').text('Partes');
+      doc.font('Helvetica').fontSize(10)
+        .text(`Emisor: ${documento.nombre || documento.eip || 'Grupo de La Placeta'}`)
+        .text(`Receptor: ${documento.receptor || documento.cliente || documento.cuentaDebito?.id || '—'}`)
+        .text(`Referencia fiscal: ${documento.eip || documento.id || '—'}`);
+
+      doc.moveDown().font('Helvetica-Bold').fontSize(11).text('Detalle');
+      doc.font('Helvetica').fontSize(10)
+        .text(`Concepto: ${documento.concepto || documento.tipo || 'Operación económica'}`)
+        .text(`Base imponible: ${base.toFixed(2)} Pz`)
+        .text(`IVA: ${iva.toFixed(2)} Pz`)
+        .text(`Total: ${importe.toFixed(2)} Pz`);
+
+      if (esRecibo) {
+        doc.moveDown().font('Helvetica-Bold').text('Pago recibido');
+        doc.font('Helvetica')
+          .text(`Importe recibido: ${pagado.toFixed(2)} Pz`)
+          .text(`Pendiente: ${pendiente.toFixed(2)} Pz`)
+          .text(`Operación Banco: ${documento.cobro?.transaccionId || documento.transaccionId || '—'}`)
+          .text(`Fecha de pago: ${documento.cobro?.fecha || documento.fechaPago || '—'}`);
+      } else {
+        doc.moveDown().font('Helvetica-Bold').text('Estado de cobro');
+        doc.font('Helvetica')
+          .text(`Pagado: ${pagado.toFixed(2)} Pz`)
+          .text(`Pendiente: ${pendiente.toFixed(2)} Pz`)
+          .text(`Operación relacionada: ${documento.paymentOperationId || documento.transaccionId || '—'}`);
+      }
+
+      doc.moveDown(2).fontSize(8).fillColor('#6b7280')
+        .text('Documento generado por el Backend oficial de facturación. La factura/recibo y el movimiento Banco son registros relacionados, pero independientes.', { align: 'left' });
+      doc.end();
+    });
+  }
+
+  async function responderPdfFacturacion(req, res, tipoDocumento) {
+    const documento = await store.facturacion.obtener(req.params.id);
+    if (!documento) return res.status(404).json({ error: 'Documento de facturación no encontrado' });
+    if (tipoDocumento === 'recibo' && !['recibo', 'factura'].includes(documento.documento)) {
+      return res.status(409).json({ error: 'El documento no admite recibo de pago' });
+    }
+    const pdf = await generarPdfFacturacion(documento, tipoDocumento);
+    const filename = `${tipoDocumento}-${documento.numero || documento.id}.pdf`;
+    res.type('application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).send(pdf);
+  }
+
+  // PDFs oficiales generados en backend, nunca en el navegador.
+  router.get('/rsp/facturacion/api/:id/pdf', async (req, res) => {
+    try { await responderPdfFacturacion(req, res, 'factura'); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  });
+  router.get('/rsp/facturacion/api/:id/recibo.pdf', async (req, res) => {
+    try { await responderPdfFacturacion(req, res, 'recibo'); }
+    catch (e) { res.status(500).json({ error: e.message }); }
   });
 
   router.post('/rsp/facturacion/api/:id/estado', async (req, res) => {

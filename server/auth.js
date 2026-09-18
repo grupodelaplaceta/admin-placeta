@@ -282,6 +282,7 @@ export function requiereSesion(req, res, next) {
   // autenticadas por la clave de integración de GDLP (la validación se hace
   // dentro de createApiRouter).
   if (req.path.startsWith('/publico/oportunidades') || req.path.startsWith('/publico/tramites') || req.path.startsWith('/publico/documentos')) return next();
+  if (req.path.startsWith('/api/integraciones/')) return next();
   // DevAI es un formulario público de envío a moderación. La excepción es
   // deliberadamente exacta: no abre ninguna otra mutación del API.
   if (req.method === 'POST' && req.path === '/api/junior/actividades') return next();
