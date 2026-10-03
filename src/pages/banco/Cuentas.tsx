@@ -13,6 +13,15 @@ const TIPO_TONE: Record<string, 'brand' | 'info' | 'success' | 'warning' | 'neut
 
 const TIPOS_ABRIR = ['Current', 'Savings', 'Child', 'Business', 'Investment'];
 
+function cuentaVisible(c: CuentaBancaria | { id?: string; dip?: string; tipo?: string }) {
+  const raw = (c as any)?.iban || (c as any)?.id || '';
+  if (!raw) return '—';
+  if (raw.startsWith('acc-') || raw.startsWith('acct-') || raw.startsWith('u-') || raw.startsWith('CAPITALIA') || raw.startsWith('TGLP') || raw.startsWith('FUND-')) {
+    return `IBAN / cuenta visible · ${c.dip || 'Cuenta cliente'}`;
+  }
+  return raw;
+}
+
 type ModalState =
   | { kind: 'abrir' }
   | { kind: 'tipo'; cuenta: CuentaBancaria }
@@ -101,7 +110,7 @@ export default function Cuentas() {
   }
 
   const columns: Column<CuentaBancaria>[] = [
-    { key: 'id', header: 'Cuenta', render: (c) => <span className="u-mono">{c.id}</span>, width: '180px' },
+    { key: 'id', header: 'Cuenta', render: (c) => <span className="u-mono">{cuentaVisible(c)}</span>, width: '220px' },
     { key: 'nombre', header: 'Titular', render: (c) => <strong>{c.nombre}</strong> },
     { key: 'tipo', header: 'Tipo', render: (c) => <Badge tone={TIPO_TONE[c.tipo] ?? 'neutral'}>{c.tipo}{c.esFundacion ? ' · Fundación' : ''}</Badge> },
     { key: 'dip', header: 'DIP', render: (c) => <span className="u-mono">{c.dip || '—'}</span> },

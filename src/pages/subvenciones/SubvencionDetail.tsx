@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { provider } from '../../api';
@@ -64,6 +65,20 @@ export default function SubvencionDetail() {
     }
   }
 
+  // Devolución: si la justificación no corresponde al fin de la subvención,
+  // se revierte y el importe vuelve al fondo (dinero de vuelta al Banco).
+  async function revertir(gastoId: string) {
+    if (!det) return;
+    if (!window.confirm('¿Reversar esta justificación? El importe vuelve al fondo de la subvención y el gasto deja de estar justificado.')) return;
+    try {
+      const r = await provider.revertirJustificacionSubvencion(det.id, { gastoId, motivo: 'Reversión manual (no corresponde al fin de la subvención)' });
+      toast(`Reversado ${r.importe} Pz · restante ${r.importeRestante} Pz`, 'success');
+      cargar();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    }
+  }
+
   async function descargarPdf() {
     if (!det) return;
     await generarPdfSubvencion(det);
@@ -109,6 +124,14 @@ export default function SubvencionDetail() {
       </div>
 
       <Card style={{ marginBottom: 'var(--sp-4)' }}>
+        <CardHeader title="Cobertura de la subvención" subtitle="Qué pagos se pueden justificar: facturas, IVA, tributos, IRM/IGF… Vacío = cualquier categoría." />
+        {!det.categoriasCubiertas || det.categoriasCubiertas.length === 0 ? (
+          <p className="u-muted">Cubre cualquier categoría de gasto.</p>
+        ) : (
+          <div className="u-row u-wrap">
+            {det.categoriasCubiertas.map((c) => <Badge key={c} tone="brand">{c}</Badge>)}
+          </div>
+        )}
         <CardHeader title="Tipos de transacción justificables (aptos)" subtitle="Solo estos tipos del banco se pueden justificar como gasto." />
         {det.tiposAptos.length === 0 ? (
           <p className="u-muted">Cualquier tipo de transacción es apto (sin restricción).</p>
@@ -157,8 +180,11 @@ export default function SubvencionDetail() {
                   onChange={(e) => setGastosSel((prev) => e.target.checked ? [...prev, g.id] : prev.filter((x) => x !== g.id))}
                 />
                 <span>{g.concepto} · <span className="u-muted">{g.fecha}</span></span>
+                <Badge tone={g.categoria === 'iva' ? 'brand' : g.categoria === 'tributos' || g.categoria === 'irm_igf' ? 'info' : 'neutral'}>{g.categoria}</Badge>
                 <strong style={{ marginLeft: 'auto' }}>{g.importe} Pz</strong>
-                {g.justificado && <Badge tone="success">justificado</Badge>}
+                {g.justificado
+                  ? <><Badge tone="success">justificado</Badge><Button size="sm" variant="outline" onClick={() => revertir(g.id)}>Devolver</Button></>
+                  : undefined}
               </li>
             ))}
           </ul>
@@ -177,6 +203,24 @@ export default function SubvencionDetail() {
                 <span>{j.importe} Pz</span>
                 <span className="u-mono">TRF: {j.transferenciaId}</span>
                 <Badge tone="info">{j.fecha}</Badge>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card style={{ marginTop: 'var(--sp-4)' }}>
+        <CardHeader title="Devoluciones (reversiones)" subtitle="Justificaciones revertidas por fraude o no conformidad: el importe vuelve a la EIP que concedió la subvención (emisor)." />
+        {det.reversiones.length === 0 ? (
+          <p className="u-muted">Sin devoluciones registradas.</p>
+        ) : (
+          <ul className="rsp-doclist">
+            {det.reversiones.map((rv) => (
+              <li key={rv.id} className="rsp-doc">
+                <Icon name="alert" size={16} />
+                <span>{rv.importe} Pz</span>
+                <span style={{ flex: 1 }}>{rv.motivo} · devuelto a <span className="u-mono">{rv.devueltoA ?? det.emisorEip}</span></span>
+                <Badge tone="danger">{rv.fecha}</Badge>
               </li>
             ))}
           </ul>

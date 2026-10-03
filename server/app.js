@@ -9,6 +9,7 @@ import cors from 'cors';
 import { authRouter, requiereSesion } from './auth.js';
 import { createApiRouter } from './api.js';
 import { juniorRouter } from './junior.js';
+import { nominasBancoRouter } from './nominas.js';
 import { facturacionPublicoRouter } from './facturacion-publico.js';
 import { calcularContribuyentes, calcularReconciliacion } from './tributos.js';
 import { registrarFirma } from './firmas.js';
@@ -455,6 +456,9 @@ export function createApp() {
 
   // A partir de aquí, todo exige sesión válida (cookie httpOnly).
   app.use(requiereSesion);
+  // Nóminas: proxy autenticado al motor del Banco (salario base + complementos
+  // de cargo y de actividad + plazo global + cierre y pago automáticos).
+  app.use('/rsp/nominas/banco', nominasBancoRouter());
   app.use(createApiRouter({ getBankState: obtenerEstadoBanco, mutarBanco: postBanco }));
 
   // ── Boletín Oficial: CNIC vigentes + tarifas + subvenciones ────────

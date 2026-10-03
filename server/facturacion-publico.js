@@ -27,6 +27,7 @@ const mesActual = () => new Date().toISOString().slice(0, 7);
 export function facturacionPublicoRouter({ getBankState, cargarCnic }) {
   const router = Router();
   const storeFacturacion = coleccion('rsp_facturacion');
+  const storeSubvenciones = coleccion('rsp_subvenciones');
 
   // Autenticación por clave compartida (servidor a servidor). El gateway de
   // tributos de backend-banco llama con `X-API-Key: TRIBUTOS_API_KEY`.
@@ -44,6 +45,47 @@ export function facturacionPublicoRouter({ getBankState, cargarCnic }) {
     const ciclo = calcularCicloFacturacion({ state, contribuyentes, mes, cnic });
     return { state, ciclo };
   }
+
+  // Consulta bancaria de subvenciones vinculadas a una empresa. El gateway
+  // ya autentica al banco por clave compartida; aquí limitamos la respuesta
+  // a la EIP solicitada y no exponemos detalles ni expedientes de terceros.
+  router.get('/subvenciones', async (req, res) => {
+    try {
+      const eip = String(req.query.eip || '').trim().toUpperCase();
+      if (!/^[A-Z0-9][A-Z0-9-]{2,39}$/.test(eip)) return res.status(400).json({ error: 'eip_invalida' });
+      const filas = await storeSubvenciones.listar();
+      const data = (filas || []).filter((s) => {
+        const emisorEip = String(s.emisorEip || s.emisor_eip || '').toUpperCase();
+        const receptorEip = String(s.receptorEip || s.receptor_eip || '').toUpperCase();
+        return emisorEip === eip || receptorEip === eip;
+      }).map((s) => {
+        const emisorEip = String(s.emisorEip || s.emisor_eip || '').toUpperCase();
+        const receptorEip = String(s.receptorEip || s.receptor_eip || '').toUpperCase();
+        const rol = receptorEip === eip ? 'beneficiaria' : 'subvencionadora';
+        const detalle = s.detalle && typeof s.detalle === 'object' ? s.detalle : {};
+        return {
+          id: s.id,
+          emisor_eip: emisorEip,
+          emisor_nombre: s.emisorNombre || s.emisor_nombre || '',
+          receptor_eip: receptorEip,
+          receptor_nombre: s.receptorNombre || s.receptor_nombre || '',
+          importe: Number(s.importe || 0),
+          importe_restante: Number(s.importeRestante ?? s.importe_restante ?? detalle.importeRestante ?? s.importe ?? 0),
+          concepto: s.concepto || s.nombre || '',
+          estado: s.estado || '',
+          rol,
+          fecha_concesion: s.fechaConcesion || s.fecha_concesion || null,
+          fecha_limite: s.fechaLimite || s.fecha_limite || detalle.fechaFin || null,
+          justificaciones: Array.isArray(detalle.justificaciones) ? detalle.justificaciones.length : 0,
+          pdf_concesion: s.pdfConcesion || s.pdf_concesion || null,
+          pdf_cierre: s.pdfCierre || s.pdf_cierre || null,
+        };
+      });
+      return res.json({ ok: true, eip, data });
+    } catch (error) {
+      return res.status(502).json({ error: 'subvenciones_no_disponibles' });
+    }
+  });
 
   // Marca y persiste las facturas de la empresa cuyo IVA ya se pagó por una
   // transferencia REAL del Banco a TGLP (canal ciudadano). Idempotente.

@@ -24,6 +24,10 @@ function fmt(n: number): string {
   return `${Number(n || 0).toLocaleString('es-ES')} Pz`;
 }
 
+function abrirPdf(id: string, recibo = false) {
+  window.open(`/rsp/facturacion/api/${encodeURIComponent(id)}/${recibo ? 'recibo.pdf' : 'pdf'}`, '_blank', 'noopener,noreferrer');
+}
+
 export default function Facturacion() {
   const [mes, setMes] = useState(MES_ACTUAL);
   const [ciclo, setCiclo] = useState<CicloFacturacion | null>(null);
@@ -100,7 +104,7 @@ export default function Facturacion() {
 
   const cols: Column<EmpresaCiclo>[] = [
     { key: 'empresa', header: 'Empresa', render: (e) => <><strong>{e.nombre}</strong><div className="u-mono u-muted">{e.eip}</div></> },
-    { key: 'recibo', header: 'Recibo', render: (e) => e.recibo.importe > 0 ? <span className="u-mono">{e.recibo.id}</span> : <span className="u-muted">—</span> },
+    { key: 'recibo', header: 'Recibo', render: (e) => e.recibo.importe > 0 ? <span className="u-row" style={{ gap: 6 }}><span className="u-mono">{e.recibo.id}</span><Button size="sm" variant="ghost" onClick={() => abrirPdf(e.recibo.id, true)}>PDF</Button></span> : <span className="u-muted">—</span> },
     { key: 'irm', header: 'IRM', render: (e) => fmt(e.recibo.irm) },
     { key: 'igf', header: 'IGF', render: (e) => fmt(e.recibo.igf) },
     { key: 'iva', header: 'IVA ventas', render: (e) => fmt(e.totalIvaVentas) },
@@ -128,6 +132,7 @@ export default function Facturacion() {
       ? <Badge tone="success">{f.fechaPagoIva ? `pagado ${f.fechaPagoIva}` : 'pagado'}</Badge>
       : <Badge tone="warning">pendiente</Badge>) },
     { key: 'total', header: 'Total', render: (f) => <strong>{fmt(f.bruto)}</strong> },
+    { key: 'pdf', header: 'Documento', render: (f) => <Button size="sm" variant="ghost" onClick={() => abrirPdf(f.id)}>Factura PDF</Button> },
     { key: 'estado', header: 'Estado', render: (f) => <Badge tone="success">{f.estado}</Badge> },
   ];
 

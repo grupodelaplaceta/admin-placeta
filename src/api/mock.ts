@@ -14,6 +14,7 @@ import type {
   DesgloseFiscal, CuentaSugerencia, RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   Votacion, VotoRegistro, Junta, Encuesta, FacturaEmitida, ParticipacionEmpresa, Nomina, RequisitoBono, BopDocumento, Propuesta, EstadoPropuesta,
+  NominaConfig, NominaContrato, NominaEstadoBanco,
   CicloFacturacion, EmpresaCiclo, PlanCierre,
 } from '../types';
 import { TIPOS_TRAMITE, ANONIMATO_DIAS } from '../types';
@@ -482,6 +483,15 @@ const JUNIOR_DIPLOMAS: DiplomaJunior[] = [];
 const JUNIOR_CODIGOS: CodigoJunior[] = [];
 const JUNIOR_SUBAPARTADOS: Subapartado[] = [];
 const NOMINAS: Nomina[] = [];
+
+// Regla "TODO DATOS REALES": sin motor del banco no hay contratos. El mock solo
+// existe para los tests, así que arranca vacío y con la configuración pactada.
+const CONTRATO_NOMINA_VACIO: NominaContrato = {
+  id: '', companyAccountId: '', employeeAccountId: '', employeeDip: '',
+  employeeName: '', roleTitle: '', grossSalaryPz: 0, frequency: 'Monthly',
+  status: 'Active', complementos: [],
+};
+const CONFIG_NOMINAS: NominaConfig = { cutoffDay: 25, autoPago: true, retencionPct: 10, activo: true };
 const FACTURAS_ENTIDAD: FacturaEmitida[] = [];
 
 function filtro<T>(items: T[], f?: Filtros): T[] {
@@ -1307,6 +1317,45 @@ export const mockProvider: Provider = {
   },
   async listarNominas() {
     return NOMINAS;
+  },
+  async estadoNominasBanco(periodo) {
+    const p = periodo || new Date().toISOString().slice(0, 7);
+    const estado: NominaEstadoBanco = {
+      config: CONFIG_NOMINAS,
+      periodo: p,
+      fechaLimite: `${p}-${String(CONFIG_NOMINAS.cutoffDay).padStart(2, '0')}T23:59:59.000Z`,
+      plazoVencido: false,
+      contratos: [],
+      resumenes: [],
+      periodos: [],
+    };
+    return estado;
+  },
+  async guardarConfigNominas(datos) {
+    return { ...CONFIG_NOMINAS, ...datos };
+  },
+  async guardarContratoNomina(contrato) {
+    return { ok: true, contrato: { ...CONTRATO_NOMINA_VACIO, ...contrato, id: contrato.id || `pc-${Date.now()}` } };
+  },
+  async borrarContratoNomina(id) {
+    return { deleted: true, id };
+  },
+  async confirmarActividadesNomina(datos) {
+    return { ok: true, confirmadas: Object.keys(datos.confirmadas || {}).length };
+  },
+  async cerrarPeriodoNominas(datos) {
+    return { periodo: datos.periodo, pagar: !!datos.pagar, contratos: 0, resultados: [] };
+  },
+  async pagarPeriodoNominas(datos) {
+    const periodo = String(datos?.periodo || new Date().toISOString().slice(0, 7));
+    return {
+      ok: true,
+      periodo,
+      pagadas: 1,
+      importe: 100,
+      penalizacion: 100,
+      motivo: 'sin_motor_en_mock',
+    };
   },
   async crearNomina(datos) {
     const n: Nomina = {

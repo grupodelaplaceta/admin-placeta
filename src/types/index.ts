@@ -527,6 +527,124 @@ export interface Nomina {
   actualizadoEn: string;
 }
 
+/* ── Nóminas del Banco (motor: base + complementos + plazo global) ─────
+   El motor vive en backend-banco. Un complemento de tipo `cargo` se cobra
+   por tener un cargo (si es anual, se reparte en 12); uno de tipo
+   `actividad` es puntual y SOLO se paga si la empresa confirma, antes del
+   plazo global, que el trabajador la hizo. Al vencer el plazo el banco
+   cierra y paga automáticamente desde la cuenta de la empresa. */
+export type NominaComplementoTipo = 'cargo' | 'actividad';
+export type NominaComplementoPeriodicidad = 'mensual' | 'anual' | 'unica';
+
+export interface NominaComplemento {
+  id: string;
+  concepto: string;
+  tipo: NominaComplementoTipo;
+  periodicidad: NominaComplementoPeriodicidad;
+  importePz: number;
+  activo: boolean;
+}
+
+export interface NominaContrato {
+  id: string;
+  companyAccountId: string;
+  employeeAccountId: string;
+  employeeDip: string;
+  employeeName: string;
+  roleTitle: string;
+  grossSalaryPz: number;
+  workloadPct?: number;
+  frequency: string;
+  status: string;
+  startDate?: string;
+  endDate?: string | null;
+  complementos: NominaComplemento[];
+}
+
+export interface NominaLinea {
+  concepto: string;
+  tipo: 'base' | NominaComplementoTipo;
+  aplicado: boolean;
+  importePz: number;
+  estado?: 'confirmada' | 'no_confirmada';
+  complementoId?: string;
+  periodicidad?: NominaComplementoPeriodicidad;
+  importeAnualPz?: number | null;
+}
+
+export interface NominaConfig {
+  cutoffDay: number;
+  autoPago: boolean;
+  retencionPct: number;
+  smiMensualPz?: number;
+  activo: boolean;
+}
+
+export interface NominaIAL {
+  salarioPz: number;
+  totalPz: number;
+  empleador: { totalPz: number; valorizacionPz: number; bancoPz: number };
+  trabajador: { totalPz: number; antiguedadPz: number; bancoPz: number };
+}
+
+export interface NominaPeriodoBanco {
+  id: string;
+  periodo: string;
+  contractId: string;
+  companyAccountId: string;
+  employeeAccountId: string;
+  employeeDip: string;
+  employeeName?: string;
+  roleTitle?: string;
+  label?: string;
+  basePz: number;
+  complementosFijosPz: number;
+  complementosActividadPz: number;
+  brutoPz: number;
+  retencionPct: number;
+  retencionesPz: number;
+  netoPz: number;
+  lineas?: NominaLinea[];
+  status: string;
+  fechaLimite?: string;
+  generadoEn?: string;
+  closedAt?: string;
+  paidAt?: string | null;
+  transactionId?: string | null;
+  motivo?: string | null;
+  ial?: NominaIAL;
+  ialOperationId?: string | null;
+}
+
+export interface NominaResumen {
+  contrato: NominaContrato;
+  periodo: string;
+  cutoffDay: number;
+  fechaLimite: string;
+  plazoVencido: boolean;
+  confirmadas: string[];
+  basePz: number;
+  complementosFijosPz: number;
+  complementosActividadPz: number;
+  brutoPz: number;
+  retencionPct: number;
+  retencionesPz: number;
+  netoPz: number;
+  lineas: NominaLinea[];
+  estado: string;
+  periodoDoc: NominaPeriodoBanco | null;
+}
+
+export interface NominaEstadoBanco {
+  config: NominaConfig;
+  periodo: string;
+  fechaLimite: string;
+  plazoVencido: boolean;
+  contratos: NominaContrato[];
+  resumenes: NominaResumen[];
+  periodos: NominaPeriodoBanco[];
+}
+
 export interface Solicitud2FA {
   id: string;
   estado: 'pendiente';

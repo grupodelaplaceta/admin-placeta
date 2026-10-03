@@ -64,7 +64,11 @@ export default function Tarjetas() {
         );
       },
     },
-    { key: 'cuenta', header: 'Cuenta asociada', render: (t) => <span className="u-mono">{t.accountId || 'libre'}</span> },
+    {
+      key: 'cuenta',
+      header: 'Cuenta asociada',
+      render: (t) => <span className="u-mono">{t.accountId ? (t.accountId.startsWith('acc-') || t.accountId.startsWith('acct-') ? 'IBAN / cuenta visible' : t.accountId) : 'Sin cuenta asociada'}</span>,
+    },
     { key: 'tier', header: 'Nivel', render: (t) => <Badge tone={t.tier === 'Business' ? 'info' : 'brand'}>{t.tier}</Badge> },
     { key: 'limites', header: 'Límites', render: (t) => <span className="u-muted">contactless {t.contactlessLimitPz ?? 500} · semanal {t.weeklyLimitPz ?? 1000} Pz</span> },
     { key: 'estado', header: 'Estado', render: (t) => t.frozen ? <Badge tone="warning">congelada</Badge> : <Badge tone="success">activa</Badge> },

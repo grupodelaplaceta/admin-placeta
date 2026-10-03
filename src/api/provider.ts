@@ -16,6 +16,7 @@ import type {
   RegimenBono, BonoDetalle, Baremo, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   FacturaEmitida, ParticipacionEmpresa, Nomina,
+  NominaConfig, NominaContrato, NominaEstadoBanco,
   Votacion, VotoRegistro, Junta, Encuesta, RequisitoBono, Propuesta,
   BopDocumento,
 } from '../types';
@@ -98,6 +99,15 @@ export interface Provider {
   // Nóminas
   listarNominas(): Promise<Nomina[]>;
   crearNomina(datos: { dip: string; nombre?: string; periodo?: string; bruto: number; retenciones?: number; neto?: number; cuentaBanco?: string }): Promise<Nomina>;
+
+  // Nóminas del Banco (motor: base + complementos + plazo global + cierre y pago)
+  estadoNominasBanco(periodo?: string): Promise<NominaEstadoBanco>;
+  guardarConfigNominas(datos: Partial<NominaConfig>): Promise<NominaConfig>;
+  guardarContratoNomina(contrato: Partial<NominaContrato>): Promise<{ ok: boolean; contrato: NominaContrato }>;
+  borrarContratoNomina(id: string): Promise<{ deleted: boolean; id: string }>;
+  confirmarActividadesNomina(datos: { periodo: string; contractId: string; confirmadas: Record<string, boolean> }): Promise<{ ok: boolean; confirmadas: number }>;
+  cerrarPeriodoNominas(datos: { periodo: string; pagar?: boolean }): Promise<{ periodo: string; pagar: boolean; contratos: number; resultados: unknown[] }>;
+  pagarPeriodoNominas(datos: { periodoId?: string; periodo?: string }): Promise<unknown>;
 
   // Bonificaciones (empresa → particular, bajo regímenes de bono)
   listarBonos(): Promise<RegimenBono[]>;

@@ -34,6 +34,7 @@ import BeneficiariosSubvenciones from './pages/subvenciones/BeneficiariosSubvenc
 import Bonificaciones from './pages/bonos/Bonificaciones';
 import BonoDetail from './pages/bonos/BonoDetail';
 import Cuentas from './pages/banco/Cuentas';
+import Nominas from './pages/nominas/Nominas';
 import Tarjetas from './pages/banco/Tarjetas';
 import Junior from './pages/junior/Junior';
 import VoleyClub from './pages/voleyclub/VoleyClub';
@@ -95,6 +96,7 @@ export default function App() {
               <Route path="/bonos" element={permiso('ver_bonos', <Bonificaciones />)} />
               <Route path="/bonos/:id" element={permiso('ver_bonos', <BonoDetail />)} />
               <Route path="/banco/cuentas" element={permiso('ver_cuentas', <Cuentas />)} />
+          <Route path="/nominas" element={permiso('ver_nominas', <Nominas />)} />
               <Route path="/banco/tarjetas" element={permiso('ver_tarjetas', <Tarjetas />)} />
               <Route path="/junior" element={permiso('ver_junior', <Junior />)} />
               <Route path="/voleyclub" element={permiso('ver_voleyclub', <VoleyClub />)} />

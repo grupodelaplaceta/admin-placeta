@@ -18,6 +18,7 @@ import type {
   RegimenBono, BonoDetalle, CuentaBancaria, TarjetaDigital,
   ActividadJunior, ColaboradorJunior, DiplomaJunior, CodigoJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior,
   FacturaEmitida, Nomina,
+  NominaConfig, NominaContrato, NominaEstadoBanco,
   Votacion, VotoRegistro, Junta, Encuesta, Propuesta,
   BopDocumento,
 } from '../types';
@@ -347,6 +348,29 @@ export const httpProvider: Provider = {
   },
   async crearNomina(datos) {
     return http.post<Nomina>('/rsp/nominas/api', datos);
+  },
+  // ── Nóminas del Banco (motor) ───────────────────────────────────────
+  async estadoNominasBanco(periodo) {
+    const q = periodo ? `?periodo=${encodeURIComponent(periodo)}` : '';
+    return http.get<NominaEstadoBanco>(`/rsp/nominas/banco/estado${q}`);
+  },
+  async guardarConfigNominas(datos) {
+    return http.post<NominaConfig>('/rsp/nominas/banco/config', datos);
+  },
+  async guardarContratoNomina(contrato) {
+    return http.post<{ ok: boolean; contrato: NominaContrato }>('/rsp/nominas/banco/contratos', contrato);
+  },
+  async borrarContratoNomina(id) {
+    return http.delete<{ deleted: boolean; id: string }>(`/rsp/nominas/banco/contratos/${encodeURIComponent(id)}`);
+  },
+  async confirmarActividadesNomina(datos) {
+    return http.post<{ ok: boolean; confirmadas: number }>('/rsp/nominas/banco/confirmar-lote', datos);
+  },
+  async cerrarPeriodoNominas(datos) {
+    return http.post<{ periodo: string; pagar: boolean; contratos: number; resultados: unknown[] }>('/rsp/nominas/banco/cerrar', datos);
+  },
+  async pagarPeriodoNominas(datos) {
+    return http.post<unknown>('/rsp/nominas/banco/pagar', datos);
   },
   // ── Bonificaciones ─────────────────────────────────────────────────
   async listarBonos() {

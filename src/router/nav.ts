@@ -64,6 +64,7 @@ export const NAV_SECTIONS: NavSection[] = [
     links: [
       { to: '/banco/cuentas', label: 'Cuentas', icon: 'wallet', permiso: 'ver_cuentas' },
       { to: '/banco/tarjetas', label: 'Tarjetas', icon: 'creditCard', permiso: 'ver_tarjetas' },
+      { to: '/nominas', label: 'Nóminas', icon: 'banknote', permiso: 'ver_nominas' },
     ],
   },
   {
