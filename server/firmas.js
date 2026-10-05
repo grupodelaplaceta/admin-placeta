@@ -13,7 +13,7 @@
 import { createHash, randomUUID } from 'crypto';
 import { coleccion } from './db.js';
 
-const PLACETAID_API = process.env.PLACETAID_API_URL || 'https://id.laplaceta.org/api';
+const PLACETAID_API = (process.env.PLACETAID_API_URL || 'https://placetaid-web-2027.vercel.app/api').replace(/\/+$/, '');
 // Para enviar documentos de firma se usa la clave de ADMINISTRACIÓN de
 // PlacetaID (X-API-Key), distinta del client_id del SSO.
 const PLACETAID_ADMIN_KEY = process.env.PLACETAID_ADMIN_KEY || '';
@@ -36,11 +36,13 @@ export async function crearYEnviarFirma({ titulo, tipo = 'resolucion', dip, tram
     tramiteId: tramiteId || null,
     accion: accion || null,
     dip: dip || null,
+    contenido: contenido || null,
     estado: 'pendiente',
     firmado: false,
     creadoEn: new Date().toISOString(),
   };
-  await documentos.insertar(doc);
+  const inserted = await documentos.insertar(doc);
+  if (inserted?.__dbError) throw new Error(`No se pudo guardar el documento en rsp_documentos: ${inserted.__dbError}`);
 
   let enviado = false;
   if (PLACETAID_ADMIN_KEY) {
@@ -66,7 +68,10 @@ export async function crearYEnviarFirma({ titulo, tipo = 'resolucion', dip, tram
   } else {
     console.warn('[FirmaPlacetaID] PLACETAID_ADMIN_KEY no configurada: el documento no se envía a la app móvil.');
   }
-  if (enviado) await documentos.actualizar(docId, { estado: 'enviada' });
+  if (enviado) {
+    const updated = await documentos.actualizar(docId, { estado: 'enviada' });
+    if (updated?.ok === false) throw new Error(`No se pudo actualizar el estado del documento: ${updated.error}`);
+  }
   return { id: docId, csv, hash, enviado, titulo, tipo, contenido: contenido || '' };
 }
 
@@ -96,7 +101,8 @@ export async function registrarFirma(docId, { dip, firmaBase64 }) {
     fechaFirma: new Date().toISOString(),
   };
   if (firmaBase64) patch.firmaBase64 = firmaBase64;
-  await documentos.actualizar(docId, patch);
+  const result = await documentos.actualizar(docId, patch);
+  if (result?.ok === false) throw new Error(`No se pudo guardar la firma en rsp_documentos: ${result.error}`);
   return { ...d, ...patch };
 }
 
