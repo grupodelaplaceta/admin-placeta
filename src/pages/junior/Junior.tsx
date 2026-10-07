@@ -58,9 +58,9 @@ export default function Junior() {
   const [editActividad, setEditActividad] = useState<ActividadJunior | null>(null);
   const [fAct, setFAct] = useState({ titulo: '', descripcion: '', categoria: 'General', tipo: 'test', idioma: 'es' as string, edadMin: '6', edadMax: '17', dificultad: 'Media', fechaPublicacion: '', precioLicencia: '0', precioIntento: '0', recompensa: '0', portadaUrl: '', miniaturaUrl: '', codigoDevai: '', traduccionesJson: '{}', subvencionada: false, contenidoJson: createEmptyActivityContent() });
   const [langPicker, setLangPicker] = useState('ca');
-  const [customLang, setCustomLang] = useState('');
   const traducciones = parseTraduccionesJunior(fAct.traduccionesJson);
   const idiomasDeTraduccion = Object.keys(traducciones).sort((a, b) => a.localeCompare(b));
+  const idiomasDisponibles = IDIOMAS_JUNIOR.filter((lang) => !idiomasDeTraduccion.includes(lang.id));
 
   function actualizarTraduccion(locale: string, campo: keyof ReturnType<typeof traduccionesVacías>, valor: string) {
     const next = { ...traducciones };
@@ -360,11 +360,17 @@ export default function Junior() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.75rem' }}>
             <strong>Traducciones por idioma</strong>
             <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <select value={langPicker} onChange={e => setLangPicker(e.target.value)}>
-                {IDIOMAS_JUNIOR.filter((lang) => !idiomasDeTraduccion.includes(lang.id)).map((lang) => <option key={lang.id} value={lang.id}>{lang.flag} {lang.label}</option>)}
+              <select
+                value={idiomasDisponibles.some((lang) => lang.id === langPicker) ? langPicker : idiomasDisponibles[0]?.id ?? ''}
+                onChange={e => setLangPicker(e.target.value)}
+                disabled={idiomasDisponibles.length === 0}
+              >
+                {idiomasDisponibles.length === 0 ? <option value="">Sin más idiomas</option> : idiomasDisponibles.map((lang) => <option key={lang.id} value={lang.id}>{lang.flag} {lang.label}</option>)}
               </select>
-              <input value={customLang} onChange={e => setCustomLang(e.target.value)} placeholder="Otro idioma..." style={{ minWidth: '120px' }} />
-              <Button size="sm" variant="outline" onClick={() => anadirIdiomaTraduccion(customLang.trim() || langPicker)}>Añadir idioma</Button>
+              <Button size="sm" variant="outline" disabled={idiomasDisponibles.length === 0} onClick={() => {
+                const locale = idiomasDisponibles.some((lang) => lang.id === langPicker) ? langPicker : idiomasDisponibles[0]?.id;
+                if (locale) anadirIdiomaTraduccion(locale);
+              }}>Añadir idioma</Button>
             </div>
           </div>
           <small style={{ display: 'block', marginBottom: '.75rem', color: '#64748b' }}>Si un campo de un idioma queda vacío, la actividad usa el texto base en español. Puedes añadir más idiomas sin tocar los existentes.</small>
