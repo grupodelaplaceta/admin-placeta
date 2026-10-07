@@ -56,10 +56,10 @@ export function resolveActivityLocale(
   }
 
   const missing = actualLocale !== 'es'
-    ? ['titulo', 'descripcion', 'categoria'].filter((key) => {
+    ? (['titulo', 'descripcion', 'categoria'] as const).filter((key) => {
         const translatedValue = translation[key];
         const baseValue = baseValues[key];
-        return typeof translatedValue !== 'string' || !translatedValue.trim() && !!String(baseValue ?? '').trim();
+        return typeof translatedValue !== 'string' || (!translatedValue.trim() && !!String(baseValue ?? '').trim());
       })
     : [];
 
