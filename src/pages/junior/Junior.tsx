@@ -363,7 +363,7 @@ export default function Junior() {
               <select value={langPicker} onChange={e => setLangPicker(e.target.value)}>
                 {IDIOMAS_JUNIOR.filter((lang) => !idiomasDeTraduccion.includes(lang.id)).map((lang) => <option key={lang.id} value={lang.id}>{lang.flag} {lang.label}</option>)}
               </select>
-              <input value={customLang} onChange={e => setCustomLang(e.target.value)} placeholder="o código manual: fr" style={{ minWidth: '120px' }} />
+              <input value={customLang} onChange={e => setCustomLang(e.target.value)} placeholder="Otro idioma..." style={{ minWidth: '120px' }} />
               <Button size="sm" variant="outline" onClick={() => anadirIdiomaTraduccion(customLang.trim() || langPicker)}>Añadir idioma</Button>
             </div>
           </div>
@@ -372,21 +372,32 @@ export default function Junior() {
             const lang = IDIOMAS_JUNIOR.find((item) => item.id === locale) ?? { id: locale, label: locale.toUpperCase(), flag: '🌍' };
             const value = traducciones[locale] ?? traduccionesVacías();
             return (
-              <div key={locale} style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '10px', padding: '.75rem', marginBottom: '.75rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' }}>
-                  <strong>{lang.flag} {lang.label}</strong>
+              <div key={locale} style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '10px', padding: '.75rem', marginBottom: '.75rem', background: 'rgba(148, 163, 184, 0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', fontWeight: 600 }}>
+                    <span>{lang.flag}</span>
+                    <span>{lang.label}</span>
+                  </div>
                   <Button size="sm" variant="outline" onClick={() => quitarIdiomaTraduccion(locale)}>Quitar</Button>
                 </div>
-                <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.75rem' }}>
                   <Field label="Título"><input value={value.titulo} onChange={e => actualizarTraduccion(locale, 'titulo', e.target.value)} /></Field>
                   <Field label="Categoría"><input value={value.categoria} onChange={e => actualizarTraduccion(locale, 'categoria', e.target.value)} /></Field>
-                  <Field label="Portada URL"><input value={value.portadaUrl} onChange={e => actualizarTraduccion(locale, 'portadaUrl', e.target.value)} /></Field>
-                  <Field label="Miniatura URL"><input value={value.miniaturaUrl} onChange={e => actualizarTraduccion(locale, 'miniaturaUrl', e.target.value)} /></Field>
+                  <Field label="Carátula (URL)"><input value={value.portadaUrl} onChange={e => actualizarTraduccion(locale, 'portadaUrl', e.target.value)} /></Field>
+                  <Field label="Miniatura (URL)"><input value={value.miniaturaUrl} onChange={e => actualizarTraduccion(locale, 'miniaturaUrl', e.target.value)} /></Field>
                 </div>
                 <Field label="Descripción"><textarea rows={2} value={value.descripcion} onChange={e => actualizarTraduccion(locale, 'descripcion', e.target.value)} /></Field>
               </div>
             );
           })}
+          <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap', marginTop: '.5rem' }}>
+            <span style={{ fontWeight: 600 }}>Idioma base</span>
+            <span style={{ fontSize: '0.9rem', color: '#475569' }}>🇪🇸 Español</span>
+            <span style={{ fontSize: '0.9rem', color: '#475569' }}>🇦🇩 Català</span>
+            <span style={{ fontSize: '0.9rem', color: '#475569' }}>🇪🇺 Euskara</span>
+            <span style={{ fontSize: '0.9rem', color: '#475569' }}>🇪🇸 Valencià</span>
+            <span style={{ fontSize: '0.9rem', color: '#475569' }}>🇬🇧 English</span>
+          </div>
         </div>
         <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', margin: '0.75rem 0' }}><input type="checkbox" checked={fAct.subvencionada} onChange={e => setFAct({ ...fAct, subvencionada: e.target.checked })} /> Actividad subvencionada (gratuita para el junior)</label>
         <JuniorActivityStudio value={fAct.contenidoJson} onChange={contenidoJson => setFAct(prev => ({ ...prev, contenidoJson }))} />
