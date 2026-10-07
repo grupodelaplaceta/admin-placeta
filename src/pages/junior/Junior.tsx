@@ -58,7 +58,7 @@ export default function Junior() {
   const [editActividad, setEditActividad] = useState<ActividadJunior | null>(null);
   const [fAct, setFAct] = useState({ titulo: '', descripcion: '', categoria: 'General', tipo: 'test', idioma: 'es' as string, edadMin: '6', edadMax: '17', dificultad: 'Media', fechaPublicacion: '', precioLicencia: '0', precioIntento: '0', recompensa: '0', portadaUrl: '', miniaturaUrl: '', codigoDevai: '', traduccionesJson: '{}', subvencionada: false, contenidoJson: createEmptyActivityContent() });
   const [langPicker, setLangPicker] = useState('ca');
-  const [customLang, setCustomLang] = useState('fr');
+  const [customLang, setCustomLang] = useState('');
   const traducciones = parseTraduccionesJunior(fAct.traduccionesJson);
   const idiomasDeTraduccion = Object.keys(traducciones).sort((a, b) => a.localeCompare(b));
 
