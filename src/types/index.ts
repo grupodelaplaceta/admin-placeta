@@ -857,12 +857,16 @@ export interface ActividadJunior {
   descripcion?: string;
   categoria?: string;
   tipo?: string;
+  idioma?: 'es' | 'ca' | 'eu' | 'val' | 'en';
   portadaUrl?: string;
+  miniaturaUrl?: string;
+  codigoDevai?: string;
   fechaPublicacion?: string | null;
   precioLicencia?: number;
   precioIntento?: number;
   subvencionada?: boolean;
   contenido?: Record<string, unknown>;
+  traducciones?: Record<string, Record<string, string | undefined>>;
 }
 
 export interface CategoriaJunior { id: string; nombre: string; descripcion?: string; activa: boolean; orden: number; }
