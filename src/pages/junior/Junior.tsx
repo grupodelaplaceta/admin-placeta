@@ -14,6 +14,36 @@ const NORMATIVA_JUNIOR = [
   { clave: 'Academia', valor: 'Precios con IVA 12% incluido; Capitalia abona el IVA a TGLP. Puntos verdes/rojos y diplomas.' },
 ];
 
+const IDIOMAS_JUNIOR = [
+  { id: 'es', label: 'Español', flag: '🇪🇸' },
+  { id: 'ca', label: 'Català', flag: '🇦🇩' },
+  { id: 'eu', label: 'Euskara', flag: '🇪🇺' },
+  { id: 'val', label: 'Valencià', flag: '🇪🇸' },
+  { id: 'en', label: 'English', flag: '🇬🇧' },
+];
+
+const traduccionesVacías = () => ({ titulo: '', descripcion: '', categoria: '', portadaUrl: '', miniaturaUrl: '' });
+
+function parseTraduccionesJunior(raw: string): Record<string, Record<string, string>> {
+  if (!raw || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).map(([locale, value]) => {
+      const entrada = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+      return [String(locale), {
+        titulo: typeof entrada.titulo === 'string' ? entrada.titulo : '',
+        descripcion: typeof entrada.descripcion === 'string' ? entrada.descripcion : '',
+        categoria: typeof entrada.categoria === 'string' ? entrada.categoria : '',
+        portadaUrl: typeof entrada.portadaUrl === 'string' ? entrada.portadaUrl : '',
+        miniaturaUrl: typeof entrada.miniaturaUrl === 'string' ? entrada.miniaturaUrl : '',
+      }];
+    }));
+  } catch {
+    return {};
+  }
+}
+
 export default function Junior() {
   const [actividades, setActividades] = useState<ActividadJunior[] | null>(null);
   const [colaboradores, setColaboradores] = useState<ColaboradorJunior[] | null>(null);
@@ -26,7 +56,31 @@ export default function Junior() {
   const [finanzas, setFinanzas] = useState<FinanzasJunior[]>([]);
   const [modal, setModal] = useState<null | 'codigo' | 'actividad' | 'categoria' | 'bundle' | { kind: 'subapartados'; actividad: ActividadJunior }>(null);
   const [editActividad, setEditActividad] = useState<ActividadJunior | null>(null);
-  const [fAct, setFAct] = useState({ titulo: '', descripcion: '', categoria: 'General', tipo: 'test', idioma: 'es' as 'es' | 'ca' | 'eu' | 'val' | 'en', edadMin: '6', edadMax: '17', dificultad: 'Media', fechaPublicacion: '', precioLicencia: '0', precioIntento: '0', recompensa: '0', portadaUrl: '', miniaturaUrl: '', codigoDevai: '', traduccionesJson: '{}', subvencionada: false, contenidoJson: createEmptyActivityContent() });
+  const [fAct, setFAct] = useState({ titulo: '', descripcion: '', categoria: 'General', tipo: 'test', idioma: 'es' as string, edadMin: '6', edadMax: '17', dificultad: 'Media', fechaPublicacion: '', precioLicencia: '0', precioIntento: '0', recompensa: '0', portadaUrl: '', miniaturaUrl: '', codigoDevai: '', traduccionesJson: '{}', subvencionada: false, contenidoJson: createEmptyActivityContent() });
+  const [langPicker, setLangPicker] = useState('ca');
+  const [customLang, setCustomLang] = useState('fr');
+  const traducciones = parseTraduccionesJunior(fAct.traduccionesJson);
+  const idiomasDeTraduccion = Object.keys(traducciones).sort((a, b) => a.localeCompare(b));
+
+  function actualizarTraduccion(locale: string, campo: keyof ReturnType<typeof traduccionesVacías>, valor: string) {
+    const next = { ...traducciones };
+    const entrada = next[locale] ?? traduccionesVacías();
+    next[locale] = { ...entrada, [campo]: valor };
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+  }
+
+  function anadirIdiomaTraduccion(locale: string) {
+    const codigo = String(locale || '').trim().toLowerCase();
+    if (!codigo || traducciones[codigo]) return;
+    const next = { ...traducciones, [codigo]: traduccionesVacías() };
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+  }
+
+  function quitarIdiomaTraduccion(locale: string) {
+    const next = { ...traducciones };
+    delete next[locale];
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+  }
   const [fCat, setFCat] = useState({ nombre: '', descripcion: '' });
   const [fBundle, setFBundle] = useState({ nombre: '', descripcion: '', precioLicencia: '0', precioIntento: '0', actividadIds: [] as string[], fechaPublicacion: '' });
   const [fCod, setFCod] = useState({ tipo: 'recarga' as 'recarga' | 'un_uso' | 'actividades', valor: '0', actividadIds: [] as string[], demo: false });
@@ -295,14 +349,45 @@ export default function Junior() {
         <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
           <Field label="Edad mínima"><input type="number" min="3" max="17" value={fAct.edadMin} onChange={e => setFAct({ ...fAct, edadMin: e.target.value })} /></Field>
           <Field label="Edad máxima"><input type="number" min="3" max="17" value={fAct.edadMax} onChange={e => setFAct({ ...fAct, edadMax: e.target.value })} /></Field>
-          <Field label="Idioma base"><select value={fAct.idioma} onChange={e => setFAct({ ...fAct, idioma: e.target.value as 'es' | 'ca' | 'eu' | 'val' | 'en' })}><option value="es">Español</option><option value="ca">Català</option><option value="eu">Euskara</option><option value="val">Valencià</option><option value="en">English</option></select></Field>
+          <Field label="Idioma base"><select value={fAct.idioma} onChange={e => setFAct({ ...fAct, idioma: e.target.value })}>{IDIOMAS_JUNIOR.map((lang) => <option key={lang.id} value={lang.id}>{lang.flag} {lang.label}</option>)}<option value="__custom">Otro idioma...</option></select></Field>
         </div>
         <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
           <Field label="Carátula (URL)"><input value={fAct.portadaUrl} onChange={e => setFAct({ ...fAct, portadaUrl: e.target.value, miniaturaUrl: e.target.value || fAct.miniaturaUrl })} /></Field>
           <Field label="Miniatura (URL)"><input value={fAct.miniaturaUrl} onChange={e => setFAct({ ...fAct, miniaturaUrl: e.target.value, portadaUrl: e.target.value || fAct.portadaUrl })} /></Field>
         </div>
         <Field label="Código DevAI (idiomas)"><textarea rows={3} value={fAct.codigoDevai} onChange={e => setFAct({ ...fAct, codigoDevai: e.target.value })} placeholder="Pega el código generado por DevAI para esta actividad; puedes reutilizarlo y traducirlo por idioma." /></Field>
-        <Field label="Traducciones por idioma (JSON)"><textarea rows={6} value={fAct.traduccionesJson} onChange={e => setFAct({ ...fAct, traduccionesJson: e.target.value })} placeholder='{"ca":{"titulo":"...","descripcion":"...","categoria":"..."}}' /></Field>
+        <div style={{ border: '1px solid rgba(148,163,184,0.5)', borderRadius: '12px', padding: '1rem', margin: '0.75rem 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.75rem' }}>
+            <strong>Traducciones por idioma</strong>
+            <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select value={langPicker} onChange={e => setLangPicker(e.target.value)}>
+                {IDIOMAS_JUNIOR.filter((lang) => !idiomasDeTraduccion.includes(lang.id)).map((lang) => <option key={lang.id} value={lang.id}>{lang.flag} {lang.label}</option>)}
+              </select>
+              <input value={customLang} onChange={e => setCustomLang(e.target.value)} placeholder="o código manual: fr" style={{ minWidth: '120px' }} />
+              <Button size="sm" variant="outline" onClick={() => anadirIdiomaTraduccion(customLang.trim() || langPicker)}>Añadir idioma</Button>
+            </div>
+          </div>
+          <small style={{ display: 'block', marginBottom: '.75rem', color: '#64748b' }}>Si un campo de un idioma queda vacío, la actividad usa el texto base en español. Puedes añadir más idiomas sin tocar los existentes.</small>
+          {idiomasDeTraduccion.length === 0 ? <p style={{ margin: 0, color: '#64748b' }}>Todavía no has añadido ninguna traducción adicional.</p> : idiomasDeTraduccion.map((locale) => {
+            const lang = IDIOMAS_JUNIOR.find((item) => item.id === locale) ?? { id: locale, label: locale.toUpperCase(), flag: '🌍' };
+            const value = traducciones[locale] ?? traduccionesVacías();
+            return (
+              <div key={locale} style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '10px', padding: '.75rem', marginBottom: '.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.5rem' }}>
+                  <strong>{lang.flag} {lang.label}</strong>
+                  <Button size="sm" variant="outline" onClick={() => quitarIdiomaTraduccion(locale)}>Quitar</Button>
+                </div>
+                <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+                  <Field label="Título"><input value={value.titulo} onChange={e => actualizarTraduccion(locale, 'titulo', e.target.value)} /></Field>
+                  <Field label="Categoría"><input value={value.categoria} onChange={e => actualizarTraduccion(locale, 'categoria', e.target.value)} /></Field>
+                  <Field label="Portada URL"><input value={value.portadaUrl} onChange={e => actualizarTraduccion(locale, 'portadaUrl', e.target.value)} /></Field>
+                  <Field label="Miniatura URL"><input value={value.miniaturaUrl} onChange={e => actualizarTraduccion(locale, 'miniaturaUrl', e.target.value)} /></Field>
+                </div>
+                <Field label="Descripción"><textarea rows={2} value={value.descripcion} onChange={e => actualizarTraduccion(locale, 'descripcion', e.target.value)} /></Field>
+              </div>
+            );
+          })}
+        </div>
         <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', margin: '0.75rem 0' }}><input type="checkbox" checked={fAct.subvencionada} onChange={e => setFAct({ ...fAct, subvencionada: e.target.checked })} /> Actividad subvencionada (gratuita para el junior)</label>
         <JuniorActivityStudio value={fAct.contenidoJson} onChange={contenidoJson => setFAct(prev => ({ ...prev, contenidoJson }))} />
         <Field label="Publicar el (opcional)"><input type="datetime-local" value={fAct.fechaPublicacion} onChange={e => setFAct({ ...fAct, fechaPublicacion: e.target.value })} /></Field>

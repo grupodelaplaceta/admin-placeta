@@ -17,6 +17,14 @@ export const JUNIOR_LANGUAGES = [
   { id: 'en', label: 'English', flag: '🇬🇧' },
 ] as const;
 
+export function normalizeJuniorLocale(locale?: string | null): string {
+  const normalized = String(locale ?? '').trim().toLowerCase();
+  if (!normalized) return 'es';
+  if (JUNIOR_LANGUAGES.some((option) => option.id === normalized)) return normalized;
+  if (/^[a-z]{2,5}$/i.test(normalized)) return normalized;
+  return 'es';
+}
+
 export type JuniorActivityType = (typeof JUNIOR_ACTIVITY_TYPES)[number]['id'];
 export type JuniorLanguage = (typeof JUNIOR_LANGUAGES)[number]['id'];
 
@@ -34,8 +42,10 @@ export function resolveActivityLocale(
   activity: Partial<{ idioma: string; titulo: string; descripcion: string; categoria: string; portadaUrl: string; miniaturaUrl: string; detalles: string; traducciones: Record<string, JuniorActivityLocaleText> }> | null | undefined,
   locale?: string,
 ) {
-  const requested = locale && typeof locale === 'string' && locale.trim() ? locale.trim() : (activity?.idioma ?? 'es');
-  const actualLocale = JUNIOR_LANGUAGES.some((lang) => lang.id === requested) ? requested : 'es';
+  const translations = activity?.traducciones ?? {};
+  const requested = normalizeJuniorLocale(locale && typeof locale === 'string' ? locale : activity?.idioma);
+  const availableLocales = new Set(['es', ...Object.keys(translations).map((key) => normalizeJuniorLocale(key))]);
+  const actualLocale = availableLocales.has(requested) ? requested : 'es';
   const baseValues = {
     titulo: activity?.titulo ?? '',
     descripcion: activity?.descripcion ?? '',
@@ -44,7 +54,7 @@ export function resolveActivityLocale(
     miniaturaUrl: activity?.miniaturaUrl ?? activity?.portadaUrl ?? '',
     detalles: activity?.detalles ?? '',
   };
-  const translation = activity?.traducciones?.[actualLocale] ?? {};
+  const translation = translations[actualLocale] ?? translations[normalizeJuniorLocale(actualLocale)] ?? {};
   const resolved = { ...baseValues };
 
   const keys = Object.keys(baseValues) as Array<keyof typeof baseValues>;

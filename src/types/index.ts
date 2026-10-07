@@ -857,7 +857,7 @@ export interface ActividadJunior {
   descripcion?: string;
   categoria?: string;
   tipo?: string;
-  idioma?: 'es' | 'ca' | 'eu' | 'val' | 'en';
+  idioma?: string;
   portadaUrl?: string;
   miniaturaUrl?: string;
   codigoDevai?: string;
