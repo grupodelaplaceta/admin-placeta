@@ -1,0 +1,157 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   RSP Web · Detalle de trámite (stepper, checklist, timeline, formularios)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Stepper */
+.rsp-stepper {
+  display: flex;
+  list-style: none;
+  margin: 0 0 var(--sp-5);
+  padding: 0;
+  gap: 0;
+  overflow-x: auto;
+}
+.rsp-step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+  min-width: 96px;
+  color: var(--text-3);
+}
+.rsp-step:not(:last-child)::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin: 0 var(--sp-2);
+}
+.rsp-step-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  background: var(--surface-3);
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.rsp-step-label { font-size: var(--fs-xs); white-space: nowrap; }
+.rsp-step-done { color: var(--success); }
+.rsp-step-done .rsp-step-dot { background: var(--success); color: #fff; }
+.rsp-step-done:not(:last-child)::after { background: var(--success); }
+.rsp-step-current { color: var(--c-primary); font-weight: 700; }
+.rsp-step-current .rsp-step-dot { background: var(--c-primary); color: #fff; box-shadow: var(--sh-glow); }
+
+/* Checklist de subsanación */
+.rsp-checklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.rsp-check {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.rsp-check input { accent-color: var(--c-primary); width: 16px; height: 16px; }
+.rsp-check-ok { color: var(--success); }
+
+/* Timeline de actuaciones */
+.rsp-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.rsp-timeline-item { position: relative; padding: 0 0 var(--sp-4) var(--sp-6); border-left: 2px solid var(--border); margin-left: 6px; }
+.rsp-timeline-item:last-child { padding-bottom: 0; }
+.rsp-timeline-dot {
+  position: absolute;
+  left: -7px;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  border: 2px solid var(--surface);
+}
+.rsp-timeline-item:first-child .rsp-timeline-dot { background: var(--success); }
+.rsp-timeline-meta { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); }
+
+/* Documentos vinculados */
+.rsp-doclist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.rsp-doc {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+/* Formularios en grid */
+.rsp-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.rsp-form-grid .rsp-field:last-child { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .rsp-form-grid { grid-template-columns: 1fr; }
+}
+
+/* Panel de acción destacado */
+.rsp-action-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+
+/* Chips de filtro por estado */
+.rsp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.rsp-chip {
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: var(--r-full);
+  padding: 6px 14px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.rsp-chip:hover { border-color: var(--c-primary); color: var(--c-primary); }
+.rsp-chip-active { background: var(--grad); color: #fff; border-color: transparent; }
+
+/* Inputs de formulario: unificar textarea con input/select */
+.rsp-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  resize: vertical;
+}
+.rsp-field textarea:focus {
+  outline: none;
+  border-color: var(--c-primary);
+  box-shadow: var(--sh-glow);
+}
+
+/* Tarjeta de confirmación 2FA (PlacetaID móvil) */
+.rsp-2fa-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--brand-200);
+  border-radius: var(--r-lg);
+  background: var(--brand-100);
+  color: var(--brand-900);
+}

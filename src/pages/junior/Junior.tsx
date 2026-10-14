@@ -1,0 +1,498 @@
+import { useEffect, useState } from 'react';
+import { provider } from '../../api';
+import { Badge, Button, Card, Empty, Field, KPI, Modal, PageHeader, Spinner, Table, Tabs, useToast, type Column } from '../../components/ui';
+import { generarPdfDiplomaJunior } from '../../lib/pdf';
+import type { ActividadJunior, CodigoJunior, ColaboradorJunior, DiplomaJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior } from '../../types';
+import JuniorActivityStudio from './JuniorActivityStudio';
+import { createEmptyActivityContent, parseActivityContent, validateActivityContent } from './activityStudioModel';
+import { IDIOMAS_JUNIOR, buildTranslationPrompt, esCodigoIdioma, mergeTranslations, nombreIdioma, parseTranslationsJson } from './traduccionesModel';
+
+const NORMATIVA_JUNIOR = [
+  { clave: 'Franjas', valor: 'Menor de 16: tutelada básica (500 Pz / 50 Pz día). 16-17: tutelada senior (1.000 Pz / 100 Pz día).' },
+  { clave: 'Bono bienvenida', valor: '750 Pz (<16) · 500 Pz (resto). Intransferible 30 días.' },
+  { clave: 'RBU', valor: '5 Pz semanales, reclamo manual, caduca si no se reclama.' },
+  { clave: 'Tributos', valor: 'Los menores tributan; Capitalia (CAPITALIA_BANK) paga IVA/IRM/IGF hasta los 16 (Art. 5).' },
+  { clave: 'Academia', valor: 'Precios con IVA 12% incluido; Capitalia abona el IVA a TGLP. Puntos verdes/rojos y diplomas.' },
+];
+
+const traduccionesVacías = () => ({ titulo: '', descripcion: '', categoria: '', portadaUrl: '', miniaturaUrl: '' });
+
+function parseTraduccionesJunior(raw: string): Record<string, Record<string, string>> {
+  if (!raw || !raw.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).map(([locale, value]) => {
+      const entrada = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+      return [String(locale), {
+        titulo: typeof entrada.titulo === 'string' ? entrada.titulo : '',
+        descripcion: typeof entrada.descripcion === 'string' ? entrada.descripcion : '',
+        categoria: typeof entrada.categoria === 'string' ? entrada.categoria : '',
+        portadaUrl: typeof entrada.portadaUrl === 'string' ? entrada.portadaUrl : '',
+        miniaturaUrl: typeof entrada.miniaturaUrl === 'string' ? entrada.miniaturaUrl : '',
+      }];
+    }));
+  } catch {
+    return {};
+  }
+}
+
+export default function Junior() {
+  const [actividades, setActividades] = useState<ActividadJunior[] | null>(null);
+  const [colaboradores, setColaboradores] = useState<ColaboradorJunior[] | null>(null);
+  const [diplomas, setDiplomas] = useState<DiplomaJunior[] | null>(null);
+  const [codigos, setCodigos] = useState<CodigoJunior[] | null>(null);
+  const [subapartados, setSubapartados] = useState<Subapartado[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaJunior[]>([]);
+  const [bundles, setBundles] = useState<BundleJunior[]>([]);
+  const [estadisticas, setEstadisticas] = useState<EstadisticasJunior[]>([]);
+  const [finanzas, setFinanzas] = useState<FinanzasJunior[]>([]);
+  const [modal, setModal] = useState<null | 'codigo' | 'actividad' | 'categoria' | 'bundle' | { kind: 'subapartados'; actividad: ActividadJunior }>(null);
+  const [editActividad, setEditActividad] = useState<ActividadJunior | null>(null);
+  const [fAct, setFAct] = useState({ titulo: '', descripcion: '', categoria: 'General', tipo: 'test', idioma: 'es' as string, edadMin: '6', edadMax: '17', dificultad: 'Media', fechaPublicacion: '', precioLicencia: '0', precioIntento: '0', recompensa: '0', portadaUrl: '', miniaturaUrl: '', codigoDevai: '', traduccionesJson: '{}', subvencionada: false, contenidoJson: createEmptyActivityContent() });
+  const [langPicker, setLangPicker] = useState('ca');
+  const [langsIA, setLangsIA] = useState<string[]>(['ca', 'en']);
+  const [langIACustom, setLangIACustom] = useState('');
+  const [jsonIA, setJsonIA] = useState('');
+  const traducciones = parseTraduccionesJunior(fAct.traduccionesJson);
+  const idiomasDeTraduccion = Object.keys(traducciones).sort((a, b) => a.localeCompare(b));
+  const idiomasDisponibles = IDIOMAS_JUNIOR.filter((lang) => lang.id !== 'es' && !idiomasDeTraduccion.includes(lang.id));
+
+  function actualizarTraduccion(locale: string, campo: keyof ReturnType<typeof traduccionesVacías>, valor: string) {
+    const next = { ...traducciones };
+    const entrada = next[locale] ?? traduccionesVacías();
+    next[locale] = { ...entrada, [campo]: valor };
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+  }
+
+  function anadirIdiomaTraduccion(locale: string) {
+    const codigo = String(locale || '').trim().toLowerCase();
+    if (!codigo || traducciones[codigo]) return;
+    const next = { ...traducciones, [codigo]: traduccionesVacías() };
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+  }
+
+  function quitarIdiomaTraduccion(locale: string) {
+    const next = { ...traducciones };
+    delete next[locale];
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+  }
+  function copiarTextoBase(locale: string) {
+    const next = { ...traducciones, [locale]: {
+      ...(traducciones[locale] ?? traduccionesVacías()),
+      titulo: fAct.titulo, descripcion: fAct.descripcion, categoria: fAct.categoria,
+      portadaUrl: fAct.portadaUrl, miniaturaUrl: fAct.miniaturaUrl,
+    } };
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+  }
+  const promptIA = buildTranslationPrompt({ titulo: fAct.titulo, descripcion: fAct.descripcion, categoria: fAct.categoria, idiomaBase: fAct.idioma, idiomas: langsIA });
+
+  function alternarIdiomaIA(locale: string) {
+    setLangsIA((prev) => prev.includes(locale) ? prev.filter((x) => x !== locale) : [...prev, locale]);
+  }
+
+  function anadirIdiomaIAPersonalizado() {
+    const codigo = langIACustom.trim().toLowerCase();
+    if (!esCodigoIdioma(codigo) || codigo === 'es') { toast('Usa un código de 2 a 5 letras (ej. fr, pt, val). El español es el idioma base.', 'error'); return; }
+    setLangsIA((prev) => prev.includes(codigo) ? prev : [...prev, codigo]);
+    setLangIACustom('');
+  }
+
+  async function copiarPromptIA() {
+    if (!langsIA.length) { toast('Elige al menos un idioma', 'error'); return; }
+    if (!fAct.titulo.trim()) { toast('Escribe antes el título base de la actividad', 'error'); return; }
+    try { await navigator.clipboard.writeText(promptIA); toast('Prompt copiado. Pégalo en tu IA y vuelve con el JSON.', 'success'); }
+    catch { toast('No se pudo copiar automáticamente: selecciona el texto y cópialo.', 'error'); }
+  }
+
+  function aplicarJsonIA() {
+    const resultado = parseTranslationsJson(jsonIA);
+    if (!resultado.ok) { toast(resultado.error, 'error'); return; }
+    const next = mergeTranslations(traducciones, resultado.traducciones);
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+    setJsonIA('');
+    const n = Object.keys(resultado.traducciones).length;
+    toast(`${n} ${n === 1 ? 'idioma aplicado' : 'idiomas aplicados'}${resultado.ignorados.length ? ` · ignorados: ${resultado.ignorados.join(', ')}` : ''}`, 'success');
+  }
+
+  function estadoTraduccion(locale: string) {
+    const value = traducciones[locale] ?? traduccionesVacías();
+    const campos = ['titulo', 'descripcion', 'categoria'] as const;
+    const completos = campos.filter((campo) => String(value[campo] || '').trim()).length;
+    return { completos, total: campos.length, porcentaje: Math.round(completos / campos.length * 100) };
+  }
+  const [fCat, setFCat] = useState({ nombre: '', descripcion: '' });
+  const [fBundle, setFBundle] = useState({ nombre: '', descripcion: '', precioLicencia: '0', precioIntento: '0', actividadIds: [] as string[], fechaPublicacion: '' });
+  const [fCod, setFCod] = useState({ tipo: 'recarga' as 'recarga' | 'un_uso' | 'actividades', valor: '0', actividadIds: [] as string[], demo: false });
+  const [fSub, setFSub] = useState({ titulo: '', tipo: 'diapositiva', recompensa: '0', contenidoJson: '{\n  "version": 2,\n  "bloques": []\n}' });
+  const [tab, setTab] = useState('actividades');
+  const { toast } = useToast();
+
+  useEffect(() => {
+    provider.listarActividadesJunior().then(setActividades).catch(() => setActividades([]));
+    provider.listarColaboradoresJunior().then(setColaboradores).catch(() => setColaboradores([]));
+    provider.listarDiplomasJunior().then(setDiplomas).catch(() => setDiplomas([]));
+    provider.listarCodigosJunior().then(setCodigos).catch(() => setCodigos([]));
+    provider.listarCategoriasJunior().then(setCategorias).catch(() => setCategorias([]));
+    provider.listarBundlesJunior().then(setBundles).catch(() => setBundles([]));
+    provider.listarEstadisticasJunior().then(setEstadisticas).catch(() => setEstadisticas([]));
+    provider.listarFinanzasJunior().then(setFinanzas).catch(() => setFinanzas([]));
+  }, []);
+
+  async function cambiarEstadoActividad(id: string, estado: 'aprobada' | 'rechazada' | 'en_revision') {
+    try {
+      await provider.cambiarEstadoActividadJunior(id, estado);
+      toast(estado === 'aprobada' ? 'Actividad aprobada' : estado === 'rechazada' ? 'Actividad rechazada' : 'Actividad en revisión', 'success');
+      setActividades(await provider.listarActividadesJunior());
+    } catch {
+      toast('No se pudo actualizar el estado', 'error');
+    }
+  }
+
+  function abrirEditar(a: ActividadJunior) {
+    const traducciones = a.traducciones && Object.keys(a.traducciones).length ? a.traducciones : {};
+    setEditActividad(a); setFAct({ titulo: a.titulo, descripcion: a.descripcion || '', categoria: a.categoria || 'General', tipo: a.tipo || 'test', idioma: a.idioma || 'es', edadMin: String(a.edadMin), edadMax: String(a.edadMax), dificultad: a.complejidad || 'Media', fechaPublicacion: a.fechaPublicacion || '', precioLicencia: String(a.precioLicencia ?? 0), precioIntento: String(a.precioIntento ?? 0), recompensa: String(a.recompensa), portadaUrl: a.portadaUrl || '', miniaturaUrl: a.miniaturaUrl || a.portadaUrl || '', codigoDevai: a.codigoDevai || '', traduccionesJson: JSON.stringify(traducciones, null, 2), subvencionada: a.subvencionada === true || a.contenido?.subvencionada === true, contenidoJson: JSON.stringify(a.contenido || { version: 2, bloques: [] }, null, 2) }); setModal('actividad');
+  }
+  async function guardarActividad() {
+    try {
+      const contenido = parseActivityContent(fAct.contenidoJson);
+      const errores = validateActivityContent(contenido, { requireBlocks: !editActividad }); if (errores.length) throw new Error(errores.join('\n'));
+      let traducciones: Record<string, Record<string, string | undefined>> = {};
+      if (fAct.traduccionesJson.trim()) {
+        const parsed = JSON.parse(fAct.traduccionesJson);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('El JSON de traducciones debe ser un objeto.');
+        traducciones = parsed as Record<string, Record<string, string | undefined>>;
+      }
+      const datos = { ...fAct, contenido, edadMin: Number(fAct.edadMin), edadMax: Number(fAct.edadMax), complejidad: fAct.dificultad, precioLicencia: Number(fAct.precioLicencia), precioIntento: Number(fAct.precioIntento), recompensa: Number(fAct.recompensa), fechaPublicacion: fAct.fechaPublicacion || null, idioma: fAct.idioma, portadaUrl: fAct.portadaUrl || fAct.miniaturaUrl || '', miniaturaUrl: fAct.miniaturaUrl || fAct.portadaUrl || '', traducciones, codigoDevai: fAct.codigoDevai || undefined };
+      if (editActividad) await provider.editarActividadJunior(editActividad.id, datos); else await provider.crearActividadJunior(datos); toast('Actividad guardada', 'success'); setModal(null); setEditActividad(null); setActividades(await provider.listarActividadesJunior()); } catch (e) { toast(e instanceof Error ? e.message : 'No se pudo guardar la actividad', 'error'); }
+  }
+  function abrirNuevaActividad() { setEditActividad(null); setFAct({ titulo: '', descripcion: '', categoria: 'General', tipo: 'test', idioma: 'es', edadMin: '6', edadMax: '17', dificultad: 'Media', fechaPublicacion: '', precioLicencia: '0', precioIntento: '0', recompensa: '0', portadaUrl: '', miniaturaUrl: '', codigoDevai: '', traduccionesJson: '{}', subvencionada: false, contenidoJson: createEmptyActivityContent() }); setModal('actividad'); }
+  async function guardarCategoria() { try { await provider.crearCategoriaJunior(fCat); setCategorias(await provider.listarCategoriasJunior()); setFCat({ nombre: '', descripcion: '' }); setModal(null); toast('Categoría creada', 'success'); } catch { toast('No se pudo crear la categoría', 'error'); } }
+  async function guardarBundle() { try { await provider.crearBundleJunior({ ...fBundle, precioLicencia: Number(fBundle.precioLicencia), precioIntento: Number(fBundle.precioIntento), fechaPublicacion: fBundle.fechaPublicacion || null }); setBundles(await provider.listarBundlesJunior()); setModal(null); toast('Bundle creado', 'success'); } catch { toast('No se pudo crear el bundle', 'error'); } }
+  function descargarActividad(a: ActividadJunior) { const blob = new Blob([JSON.stringify(a, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `${a.id}-${a.titulo.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.json`; link.click(); URL.revokeObjectURL(url); }
+
+  function descargarDiploma(d: DiplomaJunior) {
+    generarPdfDiplomaJunior(d).catch(() => toast('No se pudo generar el PDF', 'error'));
+  }
+
+  async function cargarCodigos() {
+    setCodigos(await provider.listarCodigosJunior());
+  }
+
+  async function crearCodigo() {
+    try {
+      await provider.crearCodigoJunior({ tipo: fCod.tipo, valor: Number(fCod.valor), actividadIds: fCod.actividadIds, demo: fCod.demo });
+      toast('Código creado', 'success');
+      setModal(null);
+      setFCod({ tipo: 'recarga', valor: '0', actividadIds: [], demo: false });
+      cargarCodigos();
+    } catch { toast('No se pudo crear el código', 'error'); }
+  }
+
+  async function accionCodigo(id: string, accion: 'revocar' | 'desvincular' | 'eliminar') {
+    try {
+      await provider.accionCodigoJunior(id, accion);
+      toast(accion === 'revocar' ? 'Código revocado' : accion === 'desvincular' ? 'Código desvinculado' : 'Código demo eliminado', 'success');
+      cargarCodigos();
+    } catch { toast('No se pudo aplicar la acción', 'error'); }
+  }
+
+  async function abrirSubapartados(a: ActividadJunior) {
+    setModal({ kind: 'subapartados', actividad: a });
+    setSubapartados(await provider.listarSubapartados(a.id).catch(() => []));
+  }
+
+  async function crearSubapartado() {
+    if (!modal || typeof modal !== 'object') return;
+    try {
+      const contenido = JSON.parse(fSub.contenidoJson); if (!Array.isArray(contenido.bloques)) throw new Error('El nivel necesita contenido.bloques');
+      await provider.crearSubapartado(modal.actividad.id, { titulo: fSub.titulo, tipo: fSub.tipo, recompensa: Number(fSub.recompensa), contenido });
+      toast('Subapartado creado', 'success');
+      setFSub({ titulo: '', tipo: 'diapositiva', recompensa: '0', contenidoJson: '{\n  "version": 2,\n  "bloques": []\n}' });
+      setSubapartados(await provider.listarSubapartados(modal.actividad.id));
+    } catch { toast('No se pudo crear el subapartado', 'error'); }
+  }
+
+  async function desbloquearSubapartado(subId: string) {
+    if (!modal || typeof modal !== 'object') return;
+    try {
+      await provider.desbloquearSubapartado(modal.actividad.id, subId);
+      setSubapartados(await provider.listarSubapartados(modal.actividad.id));
+    } catch { toast('No se pudo desbloquear', 'error'); }
+  }
+
+  const aprobadas = actividades?.filter((a) => a.estado === 'aprobada').length ?? 0;
+
+  const colsAct: Column<ActividadJunior>[] = [
+    { key: 'titulo', header: 'Actividad', render: (a) => <strong>{a.titulo}</strong> },
+    { key: 'edad', header: 'Edad', render: (a) => `${a.edadMin}-${a.edadMax}` },
+    { key: 'complejidad', header: 'Complejidad', render: (a) => <Badge tone="neutral">{a.complejidad}</Badge> },
+    { key: 'precio', header: 'Precio (IVA incl.)', render: (a) => `${a.precio} Pz` },
+    { key: 'recompensa', header: 'Recompensa', render: (a) => `${a.recompensa} pts` },
+    { key: 'subvencionada', header: 'Financiación', render: (a) => (a.subvencionada || a.contenido?.subvencionada) ? <Badge tone="success">Subvencionada</Badge> : <Badge tone="neutral">Pago</Badge> },
+    { key: 'estado', header: 'Estado', render: (a) => <Badge tone={a.estado === 'aprobada' ? 'success' : a.estado === 'rechazada' ? 'danger' : 'warning'}>{a.estado}</Badge> },
+    { key: 'colaborador', header: 'Colaborador', render: (a) => a.colaborador },
+    { key: 'acciones', header: 'Gestión', render: (a) => (
+      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+        <Button size="sm" variant="outline" onClick={() => abrirEditar(a)}>Editar</Button><Button size="sm" variant="outline" onClick={() => descargarActividad(a)}>Descargar</Button><Button size="sm" variant="outline" onClick={() => abrirSubapartados(a)}>Diapositivas</Button>
+        {a.estado !== 'aprobada' && <Button size="sm" variant="outline" onClick={() => cambiarEstadoActividad(a.id, 'aprobada')}>Aprobar</Button>}
+        {a.estado !== 'rechazada' && <Button size="sm" variant="outline" onClick={() => cambiarEstadoActividad(a.id, 'rechazada')}>Rechazar</Button>}
+        {a.estado !== 'en_revision' && <Button size="sm" variant="outline" onClick={() => cambiarEstadoActividad(a.id, 'en_revision')}>Revisión</Button>}
+      </div>
+    ) },
+  ];
+
+  const colsCol: Column<ColaboradorJunior>[] = [
+    { key: 'nombre', header: 'Colaborador', render: (c) => <strong>{c.nombre}</strong> },
+    { key: 'dip', header: 'DIP', render: (c) => <span className="u-mono">{c.dip}</span> },
+    { key: 'acuerdo', header: 'Acuerdo firmado', render: (c) => c.acuerdoFirmado ? <Badge tone="success">sí</Badge> : <Badge tone="warning">no</Badge> },
+    { key: 'actividades', header: 'Actividades', render: (c) => c.actividades },
+    { key: 'puntos', header: 'Puntos', render: (c) => c.puntos },
+  ];
+
+  const colsDip: Column<DiplomaJunior>[] = [
+    { key: 'id', header: 'Diploma', render: (d) => <span className="u-mono">{d.id}</span> },
+    { key: 'nombre', header: 'Junior', render: (d) => <strong>{d.nombre}</strong> },
+    { key: 'dip', header: 'DIP', render: (d) => <span className="u-mono">{d.dip}</span> },
+    { key: 'actividad', header: 'Actividad', render: (d) => d.actividad },
+    { key: 'fecha', header: 'Fecha', render: (d) => d.fecha },
+    { key: 'pdf', header: '', render: (d) => <Button size="sm" variant="outline" onClick={() => descargarDiploma(d)}>PDF</Button> },
+  ];
+
+  const colsCod: Column<CodigoJunior>[] = [
+    { key: 'codigo', header: 'Código', render: (c) => <span className="u-mono">{c.codigo}</span> },
+    { key: 'tipo', header: 'Tipo', render: (c) => <Badge tone={c.tipo === 'recarga' ? 'info' : c.tipo === 'un_uso' ? 'warning' : 'brand'}>{c.tipo === 'un_uso' ? 'un uso' : c.tipo}</Badge> },
+    { key: 'valor', header: 'Valor', render: (c) => c.tipo === 'recarga' ? `${c.valor} Pz` : `${c.actividadIds.length} act.` },
+    { key: 'estado', header: 'Estado', render: (c) => <Badge tone={c.estado === 'disponible' ? 'success' : c.estado === 'canjeado' ? 'warning' : 'neutral'}>{c.estado}</Badge> },
+    { key: 'demo', header: 'Entorno', render: (c) => c.demo ? <Badge tone="info">demo</Badge> : 'producción' },
+    { key: 'dip', header: 'Cuenta vinculada', render: (c) => c.dipVinculado ? <span className="u-mono">{c.dipVinculado}</span> : '—' },
+    { key: 'acciones', header: '', render: (c) => (
+      <div style={{ display: 'flex', gap: '0.25rem' }}>
+        {c.estado === 'canjeado' && <Button size="sm" variant="outline" onClick={() => accionCodigo(c.id, 'desvincular')}>Desvincular</Button>}
+        {c.estado !== 'revocado' && <Button size="sm" variant="outline" onClick={() => accionCodigo(c.id, 'revocar')}>Revocar</Button>}
+        {c.demo && <Button size="sm" variant="outline" onClick={() => accionCodigo(c.id, 'eliminar')}>Eliminar</Button>}
+      </div>
+    ) },
+  ];
+
+  const colsSub: Column<Subapartado>[] = [
+    { key: 'orden', header: '#', width: '40px', render: (s) => s.orden },
+    { key: 'titulo', header: 'Diapositiva', render: (s) => <strong>{s.titulo}</strong> },
+    { key: 'tipo', header: 'Tipo', render: (s) => s.tipo },
+    { key: 'recompensa', header: 'Pts', render: (s) => s.recompensa },
+    { key: 'estado', header: 'Estado', render: (s) => s.desbloqueado ? <Badge tone="success">desbloqueado</Badge> : <Badge tone="warning">bloqueado</Badge> },
+    { key: 'acciones', header: '', render: (s) => !s.desbloqueado ? <Button size="sm" variant="outline" onClick={() => desbloquearSubapartado(s.id)}>Desbloquear</Button> : null },
+  ];
+
+  return (
+    <>
+      <PageHeader
+        title="Placeta Junior"
+        subtitle="Administración del programa educativo y bancario de menores (CNI Cap. III, Art. 5-6)."
+        breadcrumb="RSP / Junior"
+        actions={<div style={{ display: 'flex', gap: '.5rem' }}><Button icon="plus" onClick={abrirNuevaActividad}>Actividad / Studio / DevAI</Button><Button variant="outline" onClick={() => setModal('codigo')}>Código</Button></div>}
+      />
+      <div className="rsp-kpi-grid">
+        <KPI label="Actividades" value={actividades?.length ?? '—'} icon="sparkles" tone="brand" />
+        <KPI label="Aprobadas" value={aprobadas} icon="check" tone="success" />
+        <KPI label="Colaboradores" value={colaboradores?.length ?? '—'} icon="users" tone="info" />
+        <KPI label="Diplomas" value={diplomas?.length ?? '—'} icon="badgeCheck" tone="warning" />
+      </div>
+
+      <Card>
+        <Tabs
+          tabs={[
+            { id: 'actividades', label: 'Actividades' },
+            { id: 'colaboradores', label: 'Colaboradores' },
+            { id: 'diplomas', label: 'Diplomas' },
+            { id: 'codigos', label: 'Códigos' },
+            { id: 'categorias', label: `Categorías (${categorias.length})` },
+            { id: 'bundles', label: `Bundles (${bundles.length})` },
+            { id: 'estadisticas', label: 'Estadísticas' },
+            { id: 'finanzas', label: 'Facturado/regalado' },
+            { id: 'normativa', label: 'Normativa' },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+
+        {tab === 'actividades' && (actividades === null ? <Spinner label="Cargando actividades…" /> :
+          actividades.length === 0 ? <Empty icon="sparkles" title="Sin actividades" /> :
+            <Table columns={colsAct} rows={actividades} rowKey={(a) => a.id} />)}
+
+        {tab === 'colaboradores' && (colaboradores === null ? <Spinner label="Cargando colaboradores…" /> :
+          colaboradores.length === 0 ? <Empty icon="users" title="Sin colaboradores" /> :
+            <Table columns={colsCol} rows={colaboradores} rowKey={(c) => c.dip} />)}
+
+        {tab === 'diplomas' && (diplomas === null ? <Spinner label="Cargando diplomas…" /> :
+          diplomas.length === 0 ? <Empty icon="badgeCheck" title="Sin diplomas" /> :
+            <Table columns={colsDip} rows={diplomas} rowKey={(d) => d.id} />)}
+
+        {tab === 'codigos' && (codigos === null ? <Spinner label="Cargando códigos…" /> :
+          codigos.length === 0 ? <Empty icon="key" title="Sin códigos" hint="Crea códigos de recarga o de actividades" /> :
+            <Table columns={colsCod} rows={codigos} rowKey={(c) => c.id} />)}
+
+        {tab === 'categorias' && <><div style={{ padding: '1rem' }}><Button onClick={() => setModal('categoria')}>Crear categoría</Button></div><Table columns={[{ key: 'nombre', header: 'Categoría', render: (c: CategoriaJunior) => <strong>{c.nombre}</strong> }, { key: 'descripcion', header: 'Descripción' }, { key: 'activa', header: 'Estado', render: (c: CategoriaJunior) => c.activa ? 'Activa' : 'Inactiva' }]} rows={categorias} rowKey={(c) => c.id} /></>}
+        {tab === 'bundles' && <><div style={{ padding: '1rem' }}><Button onClick={() => setModal('bundle')}>Crear bundle</Button></div><Table columns={[{ key: 'nombre', header: 'Bundle', render: (b: BundleJunior) => <strong>{b.nombre}</strong> }, { key: 'actividadIds', header: 'Actividades', render: (b: BundleJunior) => b.actividadIds.length }, { key: 'precioLicencia', header: 'Licencia', render: (b: BundleJunior) => `${b.precioLicencia} Pz` }, { key: 'fechaPublicacion', header: 'Publicación', render: (b: BundleJunior) => b.fechaPublicacion || 'Inmediata' }]} rows={bundles} rowKey={(b) => b.id} /></>}
+        {tab === 'estadisticas' && <Table columns={[{ key: 'actividad', header: 'Actividad', render: (s: EstadisticasJunior) => s.actividad || s.actividadId || 'Total' }, { key: 'jugadas', header: 'Jugadas' }, { key: 'completadas', header: 'Completadas' }, { key: 'comprasLicencia', header: 'Licencias' }, { key: 'comprasIntento', header: 'Intentos' }, { key: 'recompensas', header: 'Recompensas' }]} rows={estadisticas} rowKey={(s) => s.actividadId || s.actividad || 'total'} />}
+        {tab === 'finanzas' && <Table columns={[{ key: 'concepto', header: 'Concepto' }, { key: 'tipo', header: 'Tipo', render: (f: FinanzasJunior) => f.tipo }, { key: 'origen', header: 'Origen' }, { key: 'cantidad', header: 'Pz', render: (f: FinanzasJunior) => f.cantidad }]} rows={finanzas} rowKey={(f) => `${f.fecha}-${f.concepto}`} />}
+
+        {tab === 'normativa' && (
+          <ul className="rsp-doclist">
+            {NORMATIVA_JUNIOR.map((n) => (
+              <li key={n.clave} className="rsp-doc">
+                <Badge tone="brand">{n.clave}</Badge>
+                <span>{n.valor}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Modal open={modal === 'codigo'} title="Crear código" onClose={() => setModal(null)} footer={<Button onClick={crearCodigo}>Crear código</Button>}>
+        <Field label="Tipo">
+          <select className="rsp-select" value={fCod.tipo} onChange={(e) => setFCod({ ...fCod, tipo: e.target.value as 'recarga' | 'un_uso' | 'actividades' })}>
+            <option value="recarga">Recarga (solo app)</option>
+            <option value="un_uso">Placetas de un uso</option>
+            <option value="actividades">Multi-actividad (desvinculable)</option>
+          </select>
+        </Field>
+        {fCod.tipo === 'recarga' ? (
+          <Field label="Valor (Pz)"><input type="number" value={fCod.valor} onChange={(e) => setFCod({ ...fCod, valor: e.target.value })} /></Field>
+        ) : (
+          <Field label={`Actividades (${fCod.actividadIds.length} seleccionadas)`}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '200px', overflow: 'auto' }}>
+              {actividades?.map((a) => (
+                <label key={a.id} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', fontSize: '0.875rem' }}>
+                  <input type="checkbox" checked={fCod.actividadIds.includes(a.id)} onChange={(e) => setFCod((prev) => ({ ...prev, actividadIds: e.target.checked ? [...prev.actividadIds, a.id] : prev.actividadIds.filter((x) => x !== a.id) }))} />
+                  {a.titulo}
+                </label>
+              ))}
+            </div>
+          </Field>
+        )}
+        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.75rem' }}><input type="checkbox" checked={fCod.demo} onChange={e => setFCod({ ...fCod, demo: e.target.checked })} /> Código demo (se podrá eliminar después)</label>
+      </Modal>
+
+      <Modal open={modal === 'actividad'} title={editActividad ? 'Edición completa de actividad' : 'Crear actividad'} onClose={() => setModal(null)} footer={<Button onClick={guardarActividad}>Guardar borrador</Button>}>
+        <div style={{ display: 'flex', gap: '.5rem', marginBottom: '.85rem', flexWrap: 'wrap' }}>
+          <Button size="sm" variant="outline" onClick={() => window.open('https://junior.laplaceta.org/studio', '_blank', 'noopener,noreferrer')}>Abrir Studio web</Button>
+          <Button size="sm" variant="outline" onClick={() => window.open('https://junior.laplaceta.org/devai', '_blank', 'noopener,noreferrer')}>Abrir DevAI</Button>
+        </div>
+        <Field label="Título de la actividad"><input value={fAct.titulo} onChange={e => setFAct({ ...fAct, titulo: e.target.value })} placeholder="Ej. Exploradores de la naturaleza" /></Field>
+        <Field label="Descripción"><textarea value={fAct.descripcion} onChange={e => setFAct({ ...fAct, descripcion: e.target.value })} placeholder="Cuenta brevemente qué aprenderá el alumno" /></Field>
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+          <Field label="Categoría"><input value={fAct.categoria} onChange={e => setFAct({ ...fAct, categoria: e.target.value })} /></Field>
+          <Field label="Tipo"><input value={fAct.tipo} onChange={e => setFAct({ ...fAct, tipo: e.target.value })} /></Field>
+          <Field label="Dificultad"><input value={fAct.dificultad} onChange={e => setFAct({ ...fAct, dificultad: e.target.value })} /></Field>
+        </div>
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+          <Field label="Edad mínima"><input type="number" min="3" max="17" value={fAct.edadMin} onChange={e => setFAct({ ...fAct, edadMin: e.target.value })} /></Field>
+          <Field label="Edad máxima"><input type="number" min="3" max="17" value={fAct.edadMax} onChange={e => setFAct({ ...fAct, edadMax: e.target.value })} /></Field>
+          <Field label="Idioma base"><select value={fAct.idioma} onChange={e => setFAct({ ...fAct, idioma: e.target.value })}>{IDIOMAS_JUNIOR.map((lang) => <option key={lang.id} value={lang.id}>{lang.flag} {lang.label}</option>)}</select></Field>
+        </div>
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+          <Field label="Carátula (URL)"><input value={fAct.portadaUrl} onChange={e => setFAct({ ...fAct, portadaUrl: e.target.value, miniaturaUrl: e.target.value || fAct.miniaturaUrl })} /></Field>
+          <Field label="Miniatura (URL)"><input value={fAct.miniaturaUrl} onChange={e => setFAct({ ...fAct, miniaturaUrl: e.target.value, portadaUrl: e.target.value || fAct.portadaUrl })} /></Field>
+        </div>
+        <Field label="Código DevAI (idiomas)"><textarea rows={3} value={fAct.codigoDevai} onChange={e => setFAct({ ...fAct, codigoDevai: e.target.value })} placeholder="Pega el código generado por DevAI para esta actividad; puedes reutilizarlo y traducirlo por idioma." /></Field>
+        <div style={{ border: '1px solid rgba(148,163,184,0.5)', borderRadius: '12px', padding: '1rem', margin: '0.75rem 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.75rem' }}>
+            <strong>Traducciones por idioma</strong>
+            <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                value={idiomasDisponibles.some((lang) => lang.id === langPicker) ? langPicker : idiomasDisponibles[0]?.id ?? ''}
+                onChange={e => setLangPicker(e.target.value)}
+                disabled={idiomasDisponibles.length === 0}
+              >
+                {idiomasDisponibles.length === 0 ? <option value="">Sin más idiomas</option> : idiomasDisponibles.map((lang) => <option key={lang.id} value={lang.id}>{lang.flag} {lang.label}</option>)}
+              </select>
+              <Button size="sm" variant="outline" disabled={idiomasDisponibles.length === 0} onClick={() => {
+                const locale = idiomasDisponibles.some((lang) => lang.id === langPicker) ? langPicker : idiomasDisponibles[0]?.id;
+                if (locale) anadirIdiomaTraduccion(locale);
+              }}>Añadir idioma</Button>
+            </div>
+          </div>
+          <small style={{ display: 'block', marginBottom: '.75rem', color: '#64748b' }}>Si un campo de un idioma queda vacío, la actividad usa el texto base en español. Puedes añadir más idiomas sin tocar los existentes.</small>
+          {idiomasDeTraduccion.length === 0 ? <p style={{ margin: 0, color: '#64748b' }}>Todavía no has añadido ninguna traducción adicional.</p> : idiomasDeTraduccion.map((locale) => {
+            const lang = IDIOMAS_JUNIOR.find((item) => item.id === locale) ?? { id: locale, label: nombreIdioma(locale), flag: '🌍' };
+            const value = traducciones[locale] ?? traduccionesVacías();
+            const progreso = estadoTraduccion(locale);
+            return (
+              <div key={locale} style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '10px', padding: '.75rem', marginBottom: '.75rem', background: 'rgba(148, 163, 184, 0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.75rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', fontWeight: 600 }}>
+                    <span>{lang.flag}</span>
+                    <span>{lang.label}</span><Badge tone={progreso.porcentaje === 100 ? 'success' : 'warning'}>{progreso.completos}/{progreso.total} textos</Badge>
+                  </div>
+                  <div style={{ display: 'flex', gap: '.4rem' }}><Button size="sm" variant="outline" onClick={() => copiarTextoBase(locale)}>Copiar base</Button><Button size="sm" variant="outline" onClick={() => quitarIdiomaTraduccion(locale)}>Quitar</Button></div>
+                </div>
+                <div style={{ height: 5, background: '#e2e8f0', borderRadius: 5, marginBottom: '.75rem' }}><div style={{ width: `${progreso.porcentaje}%`, height: '100%', background: progreso.porcentaje === 100 ? '#16a34a' : '#f59e0b', borderRadius: 5 }} /></div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.75rem' }}>
+                  <Field label="Título"><input value={value.titulo} onChange={e => actualizarTraduccion(locale, 'titulo', e.target.value)} /></Field>
+                  <Field label="Categoría"><input value={value.categoria} onChange={e => actualizarTraduccion(locale, 'categoria', e.target.value)} /></Field>
+                  <Field label="Carátula (URL)"><input value={value.portadaUrl} onChange={e => actualizarTraduccion(locale, 'portadaUrl', e.target.value)} /></Field>
+                  <Field label="Miniatura (URL)"><input value={value.miniaturaUrl} onChange={e => actualizarTraduccion(locale, 'miniaturaUrl', e.target.value)} /></Field>
+                </div>
+                <Field label="Descripción"><textarea rows={2} value={value.descripcion} onChange={e => actualizarTraduccion(locale, 'descripcion', e.target.value)} /></Field>
+              </div>
+            );
+          })}
+          <details style={{ border: '1px dashed rgba(148,163,184,0.7)', borderRadius: '10px', padding: '.75rem', marginTop: '.5rem' }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>✨ Generar varios idiomas de golpe con IA (prompt + JSON)</summary>
+            <ol style={{ margin: '.75rem 0', paddingLeft: '1.2rem', color: '#475569', fontSize: '.9rem', lineHeight: 1.5 }}>
+              <li>Escribe el título, la descripción y la categoría base (arriba) y elige los idiomas.</li>
+              <li>Pulsa <strong>Copiar prompt</strong> y pégalo en tu IA (ChatGPT, Claude, DevAI…).</li>
+              <li>Copia el JSON que te devuelva, pégalo abajo y pulsa <strong>Aplicar traducciones</strong>.</li>
+            </ol>
+            <div style={{ fontWeight: 600, marginBottom: '.35rem' }}>1 · Idiomas de destino</div>
+            <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', marginBottom: '.5rem' }}>
+              {[...IDIOMAS_JUNIOR.filter((lang) => lang.id !== 'es'), ...langsIA.filter((id) => !IDIOMAS_JUNIOR.some((lang) => lang.id === id)).map((id) => ({ id, label: nombreIdioma(id), flag: '🌍' }))].map((lang) => (
+                <label key={lang.id} style={{ display: 'inline-flex', gap: '.3rem', alignItems: 'center', fontSize: '.85rem', padding: '.2rem .5rem', border: '1px solid rgba(148,163,184,0.5)', borderRadius: 999, cursor: 'pointer', background: langsIA.includes(lang.id) ? 'rgba(59,130,246,0.12)' : 'transparent' }}>
+                  <input type="checkbox" checked={langsIA.includes(lang.id)} onChange={() => alternarIdiomaIA(lang.id)} /> {lang.flag} {lang.label} <code>{lang.id}</code>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '.75rem' }}>
+              <input value={langIACustom} maxLength={5} placeholder="Otro código (ej. nl)" style={{ width: 160 }} onChange={e => setLangIACustom(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); anadirIdiomaIAPersonalizado(); } }} />
+              <Button size="sm" variant="outline" onClick={anadirIdiomaIAPersonalizado}>Añadir otro idioma</Button>
+            </div>
+            <div style={{ fontWeight: 600, marginBottom: '.35rem' }}>2 · Prompt para la IA</div>
+            <textarea readOnly rows={8} value={promptIA} onFocus={e => e.currentTarget.select()} style={{ width: '100%', fontFamily: 'monospace', fontSize: '.8rem' }} />
+            <div style={{ margin: '.4rem 0 .75rem' }}><Button size="sm" onClick={copiarPromptIA}>Copiar prompt</Button></div>
+            <div style={{ fontWeight: 600, marginBottom: '.35rem' }}>3 · JSON devuelto por la IA</div>
+            <textarea rows={6} value={jsonIA} onChange={e => setJsonIA(e.target.value)} placeholder={'{\n  "ca": { "titulo": "…", "descripcion": "…", "categoria": "…", "portadaUrl": "", "miniaturaUrl": "" }\n}'} style={{ width: '100%', fontFamily: 'monospace', fontSize: '.8rem' }} />
+            <small style={{ display: 'block', color: '#64748b', margin: '.25rem 0 .5rem' }}>Se fusiona con lo que ya tienes: un campo vacío en el JSON nunca borra texto existente.</small>
+            <Button size="sm" onClick={aplicarJsonIA} disabled={!jsonIA.trim()}>Aplicar traducciones</Button>
+          </details>
+        </div>
+        <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', margin: '0.75rem 0' }}><input type="checkbox" checked={fAct.subvencionada} onChange={e => setFAct({ ...fAct, subvencionada: e.target.checked })} /> Actividad subvencionada (gratuita para el junior)</label>
+        <JuniorActivityStudio requireBlocks={!editActividad} value={fAct.contenidoJson} onChange={contenidoJson => setFAct(prev => ({ ...prev, contenidoJson }))} />
+        <Field label="Publicar el (opcional)"><input type="datetime-local" value={fAct.fechaPublicacion} onChange={e => setFAct({ ...fAct, fechaPublicacion: e.target.value })} /></Field>
+        <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
+          <Field label="Licencia Pz"><input type="number" min="0" value={fAct.precioLicencia} onChange={e => setFAct({ ...fAct, precioLicencia: e.target.value })} /></Field>
+          <Field label="Intento Pz"><input type="number" min="0" value={fAct.precioIntento} onChange={e => setFAct({ ...fAct, precioIntento: e.target.value })} /></Field>
+          <Field label="Recompensa"><input type="number" min="0" value={fAct.recompensa} onChange={e => setFAct({ ...fAct, recompensa: e.target.value })} /></Field>
+        </div>
+      </Modal>
+      <Modal open={modal === 'categoria'} title="Nueva categoría" onClose={() => setModal(null)} footer={<Button onClick={guardarCategoria}>Guardar</Button>}><Field label="Nombre"><input value={fCat.nombre} onChange={e => setFCat({ ...fCat, nombre: e.target.value })} /></Field><Field label="Descripción"><textarea value={fCat.descripcion} onChange={e => setFCat({ ...fCat, descripcion: e.target.value })} /></Field></Modal>
+      <Modal open={modal === 'bundle'} title="Nuevo bundle" onClose={() => setModal(null)} footer={<Button onClick={guardarBundle}>Guardar</Button>}><Field label="Nombre"><input value={fBundle.nombre} onChange={e => setFBundle({ ...fBundle, nombre: e.target.value })} /></Field><Field label="Descripción"><textarea value={fBundle.descripcion} onChange={e => setFBundle({ ...fBundle, descripcion: e.target.value })} /></Field><Field label="Publicar el (opcional)"><input type="datetime-local" value={fBundle.fechaPublicacion} onChange={e => setFBundle({ ...fBundle, fechaPublicacion: e.target.value })} /></Field><Field label="Actividades"><div style={{ maxHeight: 160, overflow: 'auto' }}>{actividades?.map(a => <label key={a.id} style={{ display: 'block' }}><input type="checkbox" checked={fBundle.actividadIds.includes(a.id)} onChange={e => setFBundle(p => ({ ...p, actividadIds: e.target.checked ? [...p.actividadIds, a.id] : p.actividadIds.filter(id => id !== a.id) }))} /> {a.titulo}</label>)}</div></Field></Modal>
+
+      <Modal
+        open={modal !== null && typeof modal === 'object'}
+        title={`Diapositivas · ${modal !== null && typeof modal === 'object' ? modal.actividad.titulo : ''}`}
+        onClose={() => setModal(null)}
+      >
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
+          <Field label="Título"><input value={fSub.titulo} onChange={(e) => setFSub({ ...fSub, titulo: e.target.value })} /></Field>
+          <Field label="Recompensa (pts)"><input type="number" value={fSub.recompensa} onChange={(e) => setFSub({ ...fSub, recompensa: e.target.value })} /></Field>
+          <Button onClick={crearSubapartado}>Añadir</Button>
+        </div>
+        <Field label="Contenido del nivel (JSON generado por Studio/DevAI)"><textarea rows={8} value={fSub.contenidoJson} onChange={(e) => setFSub({ ...fSub, contenidoJson: e.target.value })} /></Field>
+        {subapartados.length === 0 ? <Empty icon="file" title="Sin diapositivas" /> : (
+          <Table columns={colsSub} rows={subapartados} rowKey={(s) => s.id} />
+        )}
+      </Modal>
+    </>
+  );
+}

@@ -1,0 +1,26 @@
+/* Tipografía de marca:
+   - 'Baruta' (RNS Baruta Black, un único peso) — títulos y cifras destacadas.
+   - 'Plus Jakarta Sans' — resto de la interfaz y fuente de los PDF. */
+@font-face {
+  font-family: 'Baruta';
+  font-style: normal;
+  /* Un solo peso (negro): se declara para todo el rango y así el navegador
+     no sintetiza negritas falsas sobre los títulos. */
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/Baruta.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/PlusJakartaSans-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600 800;
+  font-display: swap;
+  src: url('/fonts/PlusJakartaSans-Bold.ttf') format('truetype');
+}
