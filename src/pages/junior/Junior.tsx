@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { provider } from '../../api';
 import { Badge, Button, Card, Empty, Field, KPI, Modal, PageHeader, Spinner, Table, Tabs, useToast, type Column } from '../../components/ui';
 import { generarPdfDiplomaJunior } from '../../lib/pdf';
 import type { ActividadJunior, CodigoJunior, ColaboradorJunior, DiplomaJunior, Subapartado, CategoriaJunior, BundleJunior, EstadisticasJunior, FinanzasJunior } from '../../types';
 import JuniorActivityStudio from './JuniorActivityStudio';
 import { createEmptyActivityContent, parseActivityContent, validateActivityContent } from './activityStudioModel';
-import { IDIOMAS_JUNIOR, buildTranslationPrompt, esCodigoIdioma, mergeTranslations, nombreIdioma, parseTranslationsJson } from './traduccionesModel';
+import { IDIOMAS_JUNIOR, buildTranslationPrompt, contarDesajustes, contenidoTraducible, esCodigoIdioma, mergeTranslations, nombreIdioma, parseTranslationsJson, tieneInterior, traduccionVacia, type TextoTraducido } from './traduccionesModel';
 
 const NORMATIVA_JUNIOR = [
   { clave: 'Franjas', valor: 'Menor de 16: tutelada básica (500 Pz / 50 Pz día). 16-17: tutelada senior (1.000 Pz / 100 Pz día).' },
@@ -15,9 +15,9 @@ const NORMATIVA_JUNIOR = [
   { clave: 'Academia', valor: 'Precios con IVA 12% incluido; Capitalia abona el IVA a TGLP. Puntos verdes/rojos y diplomas.' },
 ];
 
-const traduccionesVacías = () => ({ titulo: '', descripcion: '', categoria: '', portadaUrl: '', miniaturaUrl: '' });
+const traduccionesVacías = traduccionVacia;
 
-function parseTraduccionesJunior(raw: string): Record<string, Record<string, string>> {
+function parseTraduccionesJunior(raw: string): Record<string, TextoTraducido> {
   if (!raw || !raw.trim()) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -30,11 +30,34 @@ function parseTraduccionesJunior(raw: string): Record<string, Record<string, str
         categoria: typeof entrada.categoria === 'string' ? entrada.categoria : '',
         portadaUrl: typeof entrada.portadaUrl === 'string' ? entrada.portadaUrl : '',
         miniaturaUrl: typeof entrada.miniaturaUrl === 'string' ? entrada.miniaturaUrl : '',
+        ...(entrada.contenido && typeof entrada.contenido === 'object' && !Array.isArray(entrada.contenido) ? { contenido: entrada.contenido as Record<string, unknown> } : {}),
       }];
     }));
   } catch {
     return {};
   }
+}
+
+/** Editor de respaldo del interior traducido de un idioma (JSON). Se confirma al salir del campo. */
+function InteriorEditor({ value, onCommit }: { value?: Record<string, unknown>; onCommit: (next: Record<string, unknown> | undefined) => void }) {
+  const serializado = value ? JSON.stringify(value, null, 2) : '';
+  const [texto, setTexto] = useState(serializado);
+  const [error, setError] = useState('');
+  useEffect(() => { setTexto(serializado); setError(''); }, [serializado]);
+  function confirmar() {
+    if (!texto.trim()) { setError(''); onCommit(undefined); return; }
+    try {
+      const parsed = JSON.parse(texto);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Debe ser un objeto JSON.');
+      setError(''); onCommit(parsed as Record<string, unknown>);
+    } catch (e) { setError(e instanceof Error ? e.message : 'JSON no válido'); }
+  }
+  return (
+    <>
+      <textarea rows={10} value={texto} onChange={e => setTexto(e.target.value)} onBlur={confirmar} style={{ width: '100%', fontFamily: 'monospace', fontSize: '.8rem' }} placeholder="Interior traducido (misma estructura que el contenido base)" />
+      {error && <small style={{ color: '#dc2626' }}>{error}</small>}
+    </>
+  );
 }
 
 export default function Junior() {
@@ -54,6 +77,8 @@ export default function Junior() {
   const [langsIA, setLangsIA] = useState<string[]>(['ca', 'en']);
   const [langIACustom, setLangIACustom] = useState('');
   const [jsonIA, setJsonIA] = useState('');
+  const [incluirInterior, setIncluirInterior] = useState(true);
+  const [avisosIA, setAvisosIA] = useState<string[]>([]);
   const traducciones = parseTraduccionesJunior(fAct.traduccionesJson);
   const idiomasDeTraduccion = Object.keys(traducciones).sort((a, b) => a.localeCompare(b));
   const idiomasDisponibles = IDIOMAS_JUNIOR.filter((lang) => lang.id !== 'es' && !idiomasDeTraduccion.includes(lang.id));
@@ -82,10 +107,13 @@ export default function Junior() {
       ...(traducciones[locale] ?? traduccionesVacías()),
       titulo: fAct.titulo, descripcion: fAct.descripcion, categoria: fAct.categoria,
       portadaUrl: fAct.portadaUrl, miniaturaUrl: fAct.miniaturaUrl,
+      ...(hayInterior ? { contenido: contenidoTraducible(contenidoBase) ?? undefined } : {}),
     } };
     setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
   }
-  const promptIA = buildTranslationPrompt({ titulo: fAct.titulo, descripcion: fAct.descripcion, categoria: fAct.categoria, idiomaBase: fAct.idioma, idiomas: langsIA });
+  const contenidoBase = useMemo(() => { try { return parseActivityContent(fAct.contenidoJson) as Record<string, unknown>; } catch { return null; } }, [fAct.contenidoJson]);
+  const hayInterior = tieneInterior(contenidoBase);
+  const promptIA = buildTranslationPrompt({ titulo: fAct.titulo, descripcion: fAct.descripcion, categoria: fAct.categoria, idiomaBase: fAct.idioma, idiomas: langsIA, contenido: incluirInterior && hayInterior ? contenidoBase : null });
 
   function alternarIdiomaIA(locale: string) {
     setLangsIA((prev) => prev.includes(locale) ? prev.filter((x) => x !== locale) : [...prev, locale]);
@@ -107,12 +135,19 @@ export default function Junior() {
 
   function aplicarJsonIA() {
     const resultado = parseTranslationsJson(jsonIA);
-    if (!resultado.ok) { toast(resultado.error, 'error'); return; }
-    const next = mergeTranslations(traducciones, resultado.traducciones);
-    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(next, null, 2) }));
+    if (!resultado.ok) { toast(resultado.error, 'error'); setAvisosIA([]); return; }
+    const fusion = mergeTranslations(traducciones, resultado.traducciones, contenidoBase);
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify(fusion.traducciones, null, 2) }));
     setJsonIA('');
+    setAvisosIA([...resultado.ignorados.map((x) => `Clave ignorada: ${x}`), ...fusion.avisos]);
     const n = Object.keys(resultado.traducciones).length;
-    toast(`${n} ${n === 1 ? 'idioma aplicado' : 'idiomas aplicados'}${resultado.ignorados.length ? ` · ignorados: ${resultado.ignorados.join(', ')}` : ''}`, 'success');
+    toast(`${n} ${n === 1 ? 'idioma aplicado' : 'idiomas aplicados'}${fusion.interiores ? ` · interior traducido en ${fusion.interiores}` : ''}${fusion.avisos.length ? ` · ${fusion.avisos.length} avisos` : ''}`, fusion.avisos.length ? 'info' : 'success');
+  }
+
+  function actualizarInterior(locale: string, contenido: Record<string, unknown> | undefined) {
+    const entrada = { ...(traducciones[locale] ?? traduccionVacia()) };
+    if (contenido) entrada.contenido = contenido; else delete entrada.contenido;
+    setFAct((prev) => ({ ...prev, traduccionesJson: JSON.stringify({ ...traducciones, [locale]: entrada }, null, 2) }));
   }
 
   function estadoTraduccion(locale: string) {
@@ -150,8 +185,9 @@ export default function Junior() {
   }
 
   function abrirEditar(a: ActividadJunior) {
-    const traducciones = a.traducciones && Object.keys(a.traducciones).length ? a.traducciones : {};
-    setEditActividad(a); setFAct({ titulo: a.titulo, descripcion: a.descripcion || '', categoria: a.categoria || 'General', tipo: a.tipo || 'test', idioma: a.idioma || 'es', edadMin: String(a.edadMin), edadMax: String(a.edadMax), dificultad: a.complejidad || 'Media', fechaPublicacion: a.fechaPublicacion || '', precioLicencia: String(a.precioLicencia ?? 0), precioIntento: String(a.precioIntento ?? 0), recompensa: String(a.recompensa), portadaUrl: a.portadaUrl || '', miniaturaUrl: a.miniaturaUrl || a.portadaUrl || '', codigoDevai: a.codigoDevai || '', traduccionesJson: JSON.stringify(traducciones, null, 2), subvencionada: a.subvencionada === true || a.contenido?.subvencionada === true, contenidoJson: JSON.stringify(a.contenido || { version: 2, bloques: [] }, null, 2) }); setModal('actividad');
+    const { traducciones: trasGuardadas, idioma: idiomaGuardado, codigoDevai: devaiGuardado, ...contenidoLimpio } = (a.contenido ?? {}) as Record<string, unknown>;
+    const traducciones = a.traducciones && Object.keys(a.traducciones).length ? a.traducciones : (trasGuardadas && typeof trasGuardadas === 'object' ? trasGuardadas : {});
+    setEditActividad(a); setFAct({ titulo: a.titulo, descripcion: a.descripcion || '', categoria: a.categoria || 'General', tipo: a.tipo || 'test', idioma: a.idioma || (typeof idiomaGuardado === 'string' ? idiomaGuardado : 'es'), edadMin: String(a.edadMin), edadMax: String(a.edadMax), dificultad: a.complejidad || 'Media', fechaPublicacion: a.fechaPublicacion || '', precioLicencia: String(a.precioLicencia ?? 0), precioIntento: String(a.precioIntento ?? 0), recompensa: String(a.recompensa), portadaUrl: a.portadaUrl || '', miniaturaUrl: a.miniaturaUrl || a.portadaUrl || '', codigoDevai: a.codigoDevai || (typeof devaiGuardado === 'string' ? devaiGuardado : ''), traduccionesJson: JSON.stringify(traducciones, null, 2), subvencionada: a.subvencionada === true || a.contenido?.subvencionada === true, contenidoJson: JSON.stringify(a.contenido ? contenidoLimpio : { version: 2, bloques: [] }, null, 2) }); setModal('actividad');
   }
   async function guardarActividad() {
     try {
@@ -413,17 +449,21 @@ export default function Junior() {
               }}>Añadir idioma</Button>
             </div>
           </div>
-          <small style={{ display: 'block', marginBottom: '.75rem', color: '#64748b' }}>Si un campo de un idioma queda vacío, la actividad usa el texto base en español. Puedes añadir más idiomas sin tocar los existentes.</small>
+          <small style={{ display: 'block', marginBottom: '.75rem', color: '#64748b' }}>Si un texto de un idioma queda vacío, la actividad usa el texto base en español. Cada idioma puede traducir también el interior de la actividad. Puedes añadir más idiomas sin tocar los existentes.</small>
           {idiomasDeTraduccion.length === 0 ? <p style={{ margin: 0, color: '#64748b' }}>Todavía no has añadido ninguna traducción adicional.</p> : idiomasDeTraduccion.map((locale) => {
             const lang = IDIOMAS_JUNIOR.find((item) => item.id === locale) ?? { id: locale, label: nombreIdioma(locale), flag: '🌍' };
             const value = traducciones[locale] ?? traduccionesVacías();
             const progreso = estadoTraduccion(locale);
+            const desajustes = value.contenido ? contarDesajustes(contenidoBase, value.contenido) : 0;
             return (
               <div key={locale} style={{ border: '1px solid rgba(148,163,184,0.35)', borderRadius: '10px', padding: '.75rem', marginBottom: '.75rem', background: 'rgba(148, 163, 184, 0.03)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.75rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', fontWeight: 600 }}>
                     <span>{lang.flag}</span>
                     <span>{lang.label}</span><Badge tone={progreso.porcentaje === 100 ? 'success' : 'warning'}>{progreso.completos}/{progreso.total} textos</Badge>
+                    {hayInterior && (value.contenido
+                      ? (desajustes > 0 ? <Badge tone="danger">Interior desfasado ({desajustes})</Badge> : <Badge tone="success">Interior traducido</Badge>)
+                      : <Badge tone="warning">Interior sin traducir</Badge>)}
                   </div>
                   <div style={{ display: 'flex', gap: '.4rem' }}><Button size="sm" variant="outline" onClick={() => copiarTextoBase(locale)}>Copiar base</Button><Button size="sm" variant="outline" onClick={() => quitarIdiomaTraduccion(locale)}>Quitar</Button></div>
                 </div>
@@ -435,6 +475,19 @@ export default function Junior() {
                   <Field label="Miniatura (URL)"><input value={value.miniaturaUrl} onChange={e => actualizarTraduccion(locale, 'miniaturaUrl', e.target.value)} /></Field>
                 </div>
                 <Field label="Descripción"><textarea rows={2} value={value.descripcion} onChange={e => actualizarTraduccion(locale, 'descripcion', e.target.value)} /></Field>
+                {hayInterior && (
+                  <details style={{ marginTop: '.25rem' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Interior de la actividad en {lang.label} (retos, preguntas, opciones…)</summary>
+                    <small style={{ display: 'block', color: '#64748b', margin: '.4rem 0' }}>
+                      Es una copia del contenido base con los textos traducidos. Usa el panel de IA para generarlo o «Copiar interior base» para traducirlo a mano. Si cambias los retos del contenido base, vuelve a generarlo.
+                    </small>
+                    <div style={{ display: 'flex', gap: '.4rem', marginBottom: '.5rem', flexWrap: 'wrap' }}>
+                      <Button size="sm" variant="outline" onClick={() => actualizarInterior(locale, contenidoTraducible(contenidoBase) ?? undefined)}>Copiar interior base</Button>
+                      {value.contenido && <Button size="sm" variant="outline" onClick={() => actualizarInterior(locale, undefined)}>Quitar interior</Button>}
+                    </div>
+                    <InteriorEditor value={value.contenido} onCommit={(next) => actualizarInterior(locale, next)} />
+                  </details>
+                )}
               </div>
             );
           })}
@@ -457,6 +510,14 @@ export default function Junior() {
               <input value={langIACustom} maxLength={5} placeholder="Otro código (ej. nl)" style={{ width: 160 }} onChange={e => setLangIACustom(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); anadirIdiomaIAPersonalizado(); } }} />
               <Button size="sm" variant="outline" onClick={anadirIdiomaIAPersonalizado}>Añadir otro idioma</Button>
             </div>
+            <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', margin: '0 0 .75rem', opacity: hayInterior ? 1 : .6 }}>
+              <input type="checkbox" disabled={!hayInterior} checked={incluirInterior && hayInterior} onChange={e => setIncluirInterior(e.target.checked)} />
+              Traducir también el interior de la actividad (retos, preguntas, opciones, instrucciones…)
+            </label>
+            {!hayInterior && <small style={{ display: 'block', color: '#64748b', margin: '-.4rem 0 .75rem' }}>Añade primero algún reto en el Studio para poder traducir el interior.</small>}
+            {incluirInterior && hayInterior && langsIA.length > 2 && promptIA.length > 12000 && (
+              <small style={{ display: 'block', color: '#b45309', margin: '-.4rem 0 .75rem' }}>El prompt es largo ({Math.round(promptIA.length / 1000)} k caracteres) y pide el interior completo por idioma: si la IA se corta, genera los idiomas de uno en uno o de dos en dos.</small>
+            )}
             <div style={{ fontWeight: 600, marginBottom: '.35rem' }}>2 · Prompt para la IA</div>
             <textarea readOnly rows={8} value={promptIA} onFocus={e => e.currentTarget.select()} style={{ width: '100%', fontFamily: 'monospace', fontSize: '.8rem' }} />
             <div style={{ margin: '.4rem 0 .75rem' }}><Button size="sm" onClick={copiarPromptIA}>Copiar prompt</Button></div>
@@ -464,6 +525,12 @@ export default function Junior() {
             <textarea rows={6} value={jsonIA} onChange={e => setJsonIA(e.target.value)} placeholder={'{\n  "ca": { "titulo": "…", "descripcion": "…", "categoria": "…", "portadaUrl": "", "miniaturaUrl": "" }\n}'} style={{ width: '100%', fontFamily: 'monospace', fontSize: '.8rem' }} />
             <small style={{ display: 'block', color: '#64748b', margin: '.25rem 0 .5rem' }}>Se fusiona con lo que ya tienes: un campo vacío en el JSON nunca borra texto existente.</small>
             <Button size="sm" onClick={aplicarJsonIA} disabled={!jsonIA.trim()}>Aplicar traducciones</Button>
+            {avisosIA.length > 0 && (
+              <div style={{ marginTop: '.6rem', padding: '.6rem .75rem', border: '1px solid #f59e0b', borderRadius: 8, background: 'rgba(245,158,11,0.08)', fontSize: '.85rem' }}>
+                <strong>Revisa estos avisos:</strong>
+                <ul style={{ margin: '.3rem 0 0', paddingLeft: '1.1rem' }}>{avisosIA.map((aviso, i) => <li key={i}>{aviso}</li>)}</ul>
+              </div>
+            )}
           </details>
         </div>
         <label style={{ display: 'flex', gap: '.5rem', alignItems: 'center', margin: '0.75rem 0' }}><input type="checkbox" checked={fAct.subvencionada} onChange={e => setFAct({ ...fAct, subvencionada: e.target.checked })} /> Actividad subvencionada (gratuita para el junior)</label>

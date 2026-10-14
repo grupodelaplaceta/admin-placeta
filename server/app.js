@@ -93,7 +93,8 @@ export function createApp() {
     if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') return callback(null, true);
     return callback(new Error('Origen no permitido por CORS'));
   } }));
-  app.use(express.json());
+  // 2 MB: una actividad con el interior traducido a varios idiomas supera los 100 kB por defecto.
+  app.use(express.json({ limit: '2mb' }));
 
   // Público: health check (lo usa Vercel / uptime).
   app.get('/api/health', async (_req, res) => {

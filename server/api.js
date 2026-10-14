@@ -1501,7 +1501,8 @@ export function createApiRouter({ getBankState, mutarBanco }) {
           precioLicencia: (a.subvencionada === true || a.contenido?.subvencionada === true) ? 0 : Number(a.precioLicencia || 0), precioIntento: (a.subvencionada === true || a.contenido?.subvencionada === true) ? 0 : Number(a.precioIntento || 0),
           recompensa: Number(a.recompensa || a.contenido?.recompensa || 0),
           subvencionada: a.subvencionada === true || a.contenido?.subvencionada === true,
-          descripcion: a.descripcion || '', categoria: a.categoria || 'General', portadaUrl: a.portadaUrl || a.portada_url || a.contenido?.__rspPortadaUrl || '', fechaPublicacion: a.fechaPublicacion || a.contenido?.__rspFechaPublicacion || null, tipo: a.tipo || 'test', contenido: a.contenido || {},
+          descripcion: a.descripcion || '', categoria: a.categoria || 'General', portadaUrl: a.portadaUrl || a.portada_url || a.contenido?.__rspPortadaUrl || '', miniaturaUrl: a.miniaturaUrl || a.contenido?.__rspMiniaturaUrl || a.portadaUrl || a.portada_url || a.contenido?.__rspPortadaUrl || '', idioma: a.contenido?.idioma || 'es', codigoDevai: a.contenido?.codigoDevai || '', traducciones: a.contenido?.traducciones && typeof a.contenido.traducciones === 'object' ? a.contenido.traducciones : {},
+          fechaPublicacion: a.fechaPublicacion || a.contenido?.__rspFechaPublicacion || null, tipo: a.tipo || 'test', contenido: a.contenido || {},
           estado: a.publica ? 'aprobada' : (a.estado === 'rechazada' ? 'rechazada' : 'en_revision'),
           colaborador: a.autorNombre || '—',
         };
@@ -1729,6 +1730,33 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     res.json(oficial);
   });
 
+  // Metadatos de idioma de una actividad Junior. `junior_actividades` no tiene columnas
+  // para ellos, así que viajan dentro de `contenido` (igual que portada y fecha).
+  // `traducciones`: { ca: { titulo, descripcion, categoria, portadaUrl, miniaturaUrl, contenido } }
+  // donde `contenido` es una copia del interior de la actividad con los textos traducidos.
+  function aplicarMetadatosIdioma(contenido, d) {
+    if (d.idioma !== undefined) contenido.idioma = /^[a-z]{2,5}$/i.test(String(d.idioma)) ? String(d.idioma).toLowerCase() : 'es';
+    if (d.codigoDevai !== undefined) contenido.codigoDevai = String(d.codigoDevai || '').slice(0, 20000) || null;
+    if (d.miniaturaUrl !== undefined) contenido.__rspMiniaturaUrl = d.miniaturaUrl || null;
+    if (d.traducciones !== undefined) {
+      const salida = {};
+      const origen = d.traducciones && typeof d.traducciones === 'object' && !Array.isArray(d.traducciones) ? d.traducciones : {};
+      for (const [clave, v] of Object.entries(origen)) {
+        const locale = String(clave).trim().toLowerCase();
+        if (!/^[a-z]{2,5}$/.test(locale) || locale === 'es' || !v || typeof v !== 'object' || Array.isArray(v)) continue;
+        const t = {};
+        for (const campo of ['titulo', 'descripcion', 'categoria', 'portadaUrl', 'miniaturaUrl']) t[campo] = typeof v[campo] === 'string' ? v[campo].slice(0, 5000) : '';
+        if (v.contenido && typeof v.contenido === 'object' && !Array.isArray(v.contenido)) {
+          const { traducciones: _t, idioma: _i, codigoDevai: _c, ...interior } = v.contenido;
+          t.contenido = interior;
+        }
+        salida[locale] = t;
+      }
+      contenido.traducciones = salida;
+    }
+    return contenido;
+  }
+
   // Gestión de catálogo desde RSP. Las fechas futuras se guardan como
   // programadas y no se publican hasta que llegue la fecha indicada.
   router.post('/rsp/junior/api/actividades', async (req, res) => {
@@ -1737,6 +1765,7 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const fecha = d.fechaPublicacion || d.fecha_publicacion || null;
     const publica = d.estado === 'aprobada' && (!fecha || new Date(fecha) <= new Date());
     const contenido = { ...(d.contenido && typeof d.contenido === 'object' ? d.contenido : {}), ...(fecha ? { __rspFechaPublicacion: fecha } : {}), ...(d.portadaUrl ? { __rspPortadaUrl: d.portadaUrl } : {}), subvencionada: d.subvencionada === true };
+    aplicarMetadatosIdioma(contenido, d);
     const subvencionada = d.subvencionada === true;
     const a = { id: randomUUID(), titulo: String(d.titulo).trim(), descripcion: String(d.descripcion || ''), categoria: String(d.categoria || 'General'), tipo: String(d.tipo || 'test'), contenido, edadRecomendada: `${Number(d.edadMin) || 6}-${Number(d.edadMax) || 17}`, dificultad: String(d.complejidad || d.dificultad || 'Media'), precioLicencia: subvencionada ? 0 : Number(d.precioLicencia) || 0, precioIntento: subvencionada ? 0 : Number(d.precioIntento) || 0, recompensa: Number(d.recompensa) || 0, portadaUrl: d.portadaUrl || null, estado: publica ? 'aprobada' : (d.estado || 'en_revision'), publica, autorNombre: d.colaborador || req.user?.dip || 'RSP', creadoEn: AHORA() };
     const insertado = await store.juniorActividadesDb.insertar(a);
@@ -1752,6 +1781,10 @@ export function createApiRouter({ getBankState, mutarBanco }) {
     const patch = {};
     ['titulo', 'descripcion', 'categoria', 'tipo', 'dificultad', 'recompensa', 'destacada', 'precioLicencia', 'precioIntento'].forEach((key) => { if (d[key] !== undefined) patch[key] = d[key]; });
     if (d.subvencionada !== undefined) contenido.subvencionada = d.subvencionada === true;
+    // Un cliente que no envíe estos metadatos no debe borrar los ya guardados.
+    const previo = a.contenido && typeof a.contenido === 'object' ? a.contenido : {};
+    for (const clave of ['traducciones', 'idioma', 'codigoDevai', '__rspMiniaturaUrl']) if (contenido[clave] === undefined && previo[clave] !== undefined) contenido[clave] = previo[clave];
+    aplicarMetadatosIdioma(contenido, d);
     if (d.portadaUrl !== undefined) { contenido.__rspPortadaUrl = d.portadaUrl || null; patch.portadaUrl = d.portadaUrl || null; }
     if (d.edadMin !== undefined || d.edadMax !== undefined) patch.edadRecomendada = `${Number(d.edadMin ?? a.edadMin ?? 6)}-${Number(d.edadMax ?? a.edadMax ?? 17)}`;
     patch.contenido = contenido;
